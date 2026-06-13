@@ -1,8 +1,10 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
@@ -17,8 +19,16 @@ fun PlayModeScreen(
         Text(
             text = "Modo de jogo",
             color = DominoSemanticColors.primaryTextOnDark,
-            fontSize = 30.sp,
+            fontSize = 32.sp,
             fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+        )
+
+        Text(
+            text = "Escolha o fluxo da partida.",
+            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.78f),
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
         )
 
         PrimaryMenuButton(
