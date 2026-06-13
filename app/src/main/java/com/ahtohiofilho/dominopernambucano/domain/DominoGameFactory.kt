@@ -24,6 +24,7 @@ fun createInitialDominoGameState(): DominoGameState {
 
         gameWinnerTeamIndex = null,
 
+        consecutivePassTurns = 0,
         scoreMultiplier = 1,
         targetScore = 6,
     )
@@ -77,6 +78,7 @@ fun createNextRoundDominoGameState(
 
         gameWinnerTeamIndex = null,
 
+        consecutivePassTurns = 0,
         scoreMultiplier = nextScoreMultiplier,
         targetScore = previousState.targetScore,
     )

@@ -19,6 +19,7 @@ data class DominoGameState(
 
     val gameWinnerTeamIndex: Int?,
 
+    val consecutivePassTurns: Int = 0,
     val scoreMultiplier: Int = 1,
     val targetScore: Int = 6,
 )

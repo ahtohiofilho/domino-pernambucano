@@ -64,6 +64,7 @@ fun playMoveForCurrentPlayer(
         board = updatedBoard,
         players = updatedPlayers,
         lastMove = playedMove,
+        consecutivePassTurns = 0,
     )
 
     if (updatedPlayer.hand.isEmpty()) {
