@@ -1,15 +1,43 @@
+# Android Studio / IntelliJ
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/deviceManager.xml
+.idea/gradle.xml
+.idea/misc.xml
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local config
 local.properties
+/local.properties
+
+# Android build outputs
+captures/
+.externalNativeBuild/
+.cxx/
+
+*.apk
+*.aab
+*.ap_
+*.hprof
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Scripts locais de apoio
+concatenador_android.py
+app/concatenador_android.py
+
+# Arquivos gerados pelo concatenador
+scripts_concatenados_android_*.txt
+scripts_concatenados_android_tudo.txt
+scripts_concatenados_android_ranking.txt
