@@ -103,9 +103,9 @@ private fun PhaseActions(
                 fontWeight = FontWeight.Bold,
             )
 
-            PrimaryMenuButton(
-                text = "Continuar",
-                onClick = onPresentationFinished,
+            Text(
+                text = "Colocando peça na mesa...",
+                textAlign = TextAlign.Center,
             )
         }
 

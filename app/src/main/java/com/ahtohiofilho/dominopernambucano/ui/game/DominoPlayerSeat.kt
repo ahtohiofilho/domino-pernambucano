@@ -18,6 +18,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -31,6 +34,7 @@ fun DominoPlayerSeat(
     isCurrent: Boolean,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    onBoundsChanged: (Rect?) -> Unit = {},
 ) {
     val minWidth = if (compact) 70.dp else 104.dp
     val maxWidth = if (compact) 86.dp else 138.dp
@@ -39,10 +43,14 @@ fun DominoPlayerSeat(
     val verticalPadding = if (compact) 7.dp else 10.dp
 
     Card(
-        modifier = modifier.widthIn(
-            min = minWidth,
-            max = maxWidth,
-        ),
+        modifier = modifier
+            .widthIn(
+                min = minWidth,
+                max = maxWidth,
+            )
+            .onGloballyPositioned { coordinates ->
+                onBoundsChanged(coordinates.boundsInWindow())
+            },
         shape = RoundedCornerShape(
             if (compact) 14.dp else 18.dp,
         ),

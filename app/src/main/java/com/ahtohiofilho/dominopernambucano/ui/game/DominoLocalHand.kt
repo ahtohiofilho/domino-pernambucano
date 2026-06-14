@@ -48,6 +48,7 @@ fun DominoLocalHand(
     onPieceDragEnd: () -> Unit,
     onPieceDragCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    hiddenPiece: DominoPiece? = null,
 ) {
     val gameState = uiState.gameState
     val localPlayer = gameState.players.getOrNull(uiState.localPlayerIndex)
@@ -95,12 +96,20 @@ fun DominoLocalHand(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 localPlayer?.hand.orEmpty().forEach { piece ->
-                    val playableMove = playableMovesByPiece[piece]?.firstOrNull()
+                    val isHidden = piece == hiddenPiece
+
+                    val playableMove = if (isHidden) {
+                        null
+                    } else {
+                        playableMovesByPiece[piece]?.firstOrNull()
+                    }
+
                     val isPlayable = playableMove != null
 
                     LocalHandPiece(
                         piece = piece,
                         isPlayable = isPlayable,
+                        isHidden = isHidden,
                         playableMove = playableMove,
                         onLocalMoveSelected = onLocalMoveSelected,
                         onPieceDragStart = onPieceDragStart,
@@ -118,6 +127,7 @@ fun DominoLocalHand(
 private fun LocalHandPiece(
     piece: DominoPiece,
     isPlayable: Boolean,
+    isHidden: Boolean,
     playableMove: PlayableMove?,
     onLocalMoveSelected: (PlayableMove) -> Unit,
     onPieceDragStart: (DominoPiece, Offset) -> Unit,
@@ -129,7 +139,7 @@ private fun LocalHandPiece(
         mutableStateOf<Rect?>(null)
     }
 
-    val dragModifier = if (isPlayable) {
+    val dragModifier = if (isPlayable && !isHidden) {
         Modifier.pointerInput(piece) {
             detectDragGestures(
                 onDragStart = { startOffset ->
@@ -157,15 +167,25 @@ private fun LocalHandPiece(
         Modifier
     }
 
-    val visualModifier = if (isPlayable) {
-        Modifier.graphicsLayer {
-            shadowElevation = 8f
-            scaleX = 1.04f
-            scaleY = 1.04f
+    val visualModifier = when {
+        isHidden -> {
+            Modifier.graphicsLayer {
+                alpha = 0f
+            }
         }
-    } else {
-        Modifier.graphicsLayer {
-            alpha = 0.58f
+
+        isPlayable -> {
+            Modifier.graphicsLayer {
+                shadowElevation = 8f
+                scaleX = 1.04f
+                scaleY = 1.04f
+            }
+        }
+
+        else -> {
+            Modifier.graphicsLayer {
+                alpha = 0.58f
+            }
         }
     }
 
@@ -174,14 +194,14 @@ private fun LocalHandPiece(
         faceUp = true,
         width = LOCAL_HAND_PIECE_WIDTH,
         height = LOCAL_HAND_PIECE_HEIGHT,
-        isPlayable = isPlayable,
+        isPlayable = isPlayable && !isHidden,
         modifier = Modifier
             .onGloballyPositioned { coordinates ->
                 pieceBoundsInWindow = coordinates.boundsInWindow()
             }
             .then(visualModifier)
             .then(dragModifier),
-        onClick = if (playableMove != null) {
+        onClick = if (playableMove != null && !isHidden) {
             {
                 onLocalMoveSelected(playableMove)
             }

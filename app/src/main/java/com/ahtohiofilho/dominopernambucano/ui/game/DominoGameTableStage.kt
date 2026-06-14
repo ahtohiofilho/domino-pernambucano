@@ -2,8 +2,8 @@ package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
@@ -22,7 +23,10 @@ fun DominoGameTableStage(
     localPlayableMoves: List<PlayableMove>,
     showDropTargets: Boolean,
     highlightedDropSide: BoardSide?,
+    animatedPlayableMove: PlayableMove?,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit,
+    onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow?) -> Unit,
+    onPlayerSeatBoundsChanged: (Int, Rect?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(
@@ -54,6 +58,12 @@ fun DominoGameTableStage(
                 piecesCount = gameState.players.getOrNull(2)?.hand?.size ?: 0,
                 isCurrent = gameState.currentPlayerIndex == 2,
                 compact = useCompactSeats,
+                onBoundsChanged = { bounds ->
+                    onPlayerSeatBoundsChanged(
+                        2,
+                        bounds,
+                    )
+                },
             )
 
             Row(
@@ -70,6 +80,12 @@ fun DominoGameTableStage(
                     piecesCount = gameState.players.getOrNull(1)?.hand?.size ?: 0,
                     isCurrent = gameState.currentPlayerIndex == 1,
                     compact = true,
+                    onBoundsChanged = { bounds ->
+                        onPlayerSeatBoundsChanged(
+                            1,
+                            bounds,
+                        )
+                    },
                 )
 
                 DominoTableArea(
@@ -77,7 +93,9 @@ fun DominoGameTableStage(
                     localPlayableMoves = localPlayableMoves,
                     showDropTargets = showDropTargets,
                     highlightedDropSide = highlightedDropSide,
+                    animatedPlayableMove = animatedPlayableMove,
                     onDropTargetsChanged = onDropTargetsChanged,
+                    onAnimatedMoveTargetChanged = onAnimatedMoveTargetChanged,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
@@ -89,6 +107,12 @@ fun DominoGameTableStage(
                     piecesCount = gameState.players.getOrNull(3)?.hand?.size ?: 0,
                     isCurrent = gameState.currentPlayerIndex == 3,
                     compact = true,
+                    onBoundsChanged = { bounds ->
+                        onPlayerSeatBoundsChanged(
+                            3,
+                            bounds,
+                        )
+                    },
                 )
             }
         }

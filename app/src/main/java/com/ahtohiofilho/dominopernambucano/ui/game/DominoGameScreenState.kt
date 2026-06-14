@@ -14,6 +14,11 @@ data class DominoDropTargetInWindow(
     val positionInWindow: Offset,
 )
 
+data class DominoMoveTargetInWindow(
+    val positionInWindow: Offset,
+    val rotationDegrees: Float,
+)
+
 data class LocalDraggedPieceState(
     val piece: DominoPiece,
     val positionInWindow: Offset,

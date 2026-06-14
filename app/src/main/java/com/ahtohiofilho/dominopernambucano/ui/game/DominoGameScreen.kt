@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
@@ -45,8 +46,27 @@ fun DominoGameScreen(
         mutableStateOf<List<DominoDropTargetInWindow>>(emptyList())
     }
 
+    var animatedMoveTargetInWindow by remember {
+        mutableStateOf<DominoMoveTargetInWindow?>(null)
+    }
+
     var localHandBoundsInWindow by remember {
         mutableStateOf<Rect?>(null)
+    }
+
+    var playerSeatBoundsInWindow by remember {
+        mutableStateOf<Map<Int, Rect>>(emptyMap())
+    }
+
+    val presentingMovePhase = uiState.phase as? DominoMatchPhase.PresentingMove
+
+    val hiddenLocalAnimatedPiece = if (
+        presentingMovePhase != null &&
+        presentingMovePhase.playerIndex == uiState.localPlayerIndex
+    ) {
+        presentingMovePhase.move.piece
+    } else {
+        null
     }
 
     val dropTargetHitRadiusPx = with(density) {
@@ -90,6 +110,34 @@ fun DominoGameScreen(
         draggedPieceState = null
     }
 
+    fun updatePlayerSeatBounds(
+        playerIndex: Int,
+        bounds: Rect?,
+    ) {
+        playerSeatBoundsInWindow = if (bounds == null) {
+            playerSeatBoundsInWindow - playerIndex
+        } else {
+            playerSeatBoundsInWindow + (playerIndex to bounds)
+        }
+    }
+
+    fun getSourcePositionForPlayer(
+        playerIndex: Int,
+    ): Offset? {
+        val bounds = if (playerIndex == uiState.localPlayerIndex) {
+            localHandBoundsInWindow
+        } else {
+            playerSeatBoundsInWindow[playerIndex]
+        }
+
+        return bounds?.let { rect ->
+            Offset(
+                x = rect.left + rect.width / 2f,
+                y = rect.top + rect.height / 2f,
+            )
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -119,8 +167,18 @@ fun DominoGameScreen(
                 localPlayableMoves = uiState.localPlayableMoves,
                 showDropTargets = draggedPieceState != null,
                 highlightedDropSide = draggedPieceState?.highlightedSide,
+                animatedPlayableMove = presentingMovePhase?.move,
                 onDropTargetsChanged = { targets ->
                     dropTargetsInWindow = targets
+                },
+                onAnimatedMoveTargetChanged = { target ->
+                    animatedMoveTargetInWindow = target
+                },
+                onPlayerSeatBoundsChanged = { playerIndex, bounds ->
+                    updatePlayerSeatBounds(
+                        playerIndex = playerIndex,
+                        bounds = bounds,
+                    )
                 },
                 modifier = Modifier
                     .weight(1f)
@@ -130,6 +188,7 @@ fun DominoGameScreen(
 
             DominoLocalHand(
                 uiState = uiState,
+                hiddenPiece = hiddenLocalAnimatedPiece,
                 onLocalMoveSelected = onLocalMoveSelected,
                 onLocalHandBoundsChanged = { bounds ->
                     localHandBoundsInWindow = bounds
@@ -199,5 +258,16 @@ fun DominoGameScreen(
         DraggedPieceOverlay(
             draggedPieceState = draggedPieceState,
         )
+
+        if (presentingMovePhase != null) {
+            PlayedMoveAnimationOverlay(
+                move = presentingMovePhase.move,
+                sourcePositionInWindow = getSourcePositionForPlayer(
+                    playerIndex = presentingMovePhase.playerIndex,
+                ),
+                target = animatedMoveTargetInWindow,
+                onAnimationFinished = onPresentationFinished,
+            )
+        }
     }
 }

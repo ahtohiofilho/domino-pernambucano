@@ -50,7 +50,9 @@ fun DominoBoard(
     playableMoves: List<PlayableMove> = emptyList(),
     showDropTargets: Boolean = false,
     highlightedDropSide: BoardSide? = null,
+    animatedPlayableMove: PlayableMove? = null,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit = {},
+    onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow?) -> Unit = {},
 ) {
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
@@ -115,6 +117,24 @@ fun DominoBoard(
             )
         }
 
+        val animatedMoveTargets = remember(
+            boardChain,
+            animatedPlayableMove,
+            maxWidth,
+            maxHeight,
+            responsiveMetrics,
+        ) {
+            if (animatedPlayableMove == null) {
+                emptyList()
+            } else {
+                calculateDropTargets(
+                    boardChain = boardChain,
+                    playableMoves = listOf(animatedPlayableMove),
+                    metrics = layoutMetrics,
+                )
+            }
+        }
+
         LaunchedEffect(
             dropTargets,
             boardBoundsInWindow,
@@ -147,6 +167,39 @@ fun DominoBoard(
             }
 
             onDropTargetsChanged(targetsInWindow)
+        }
+
+        LaunchedEffect(
+            animatedMoveTargets,
+            boardBoundsInWindow,
+            density,
+        ) {
+            val bounds = boardBoundsInWindow
+            val target = animatedMoveTargets.firstOrNull()
+
+            if (bounds == null || target == null) {
+                onAnimatedMoveTargetChanged(null)
+                return@LaunchedEffect
+            }
+
+            val boardCenterInWindow = Offset(
+                x = bounds.left + bounds.width / 2f,
+                y = bounds.top + bounds.height / 2f,
+            )
+
+            val targetOffsetInPixels = with(density) {
+                Offset(
+                    x = target.centerX.dp.toPx(),
+                    y = target.centerY.dp.toPx(),
+                )
+            }
+
+            onAnimatedMoveTargetChanged(
+                DominoMoveTargetInWindow(
+                    positionInWindow = boardCenterInWindow + targetOffsetInPixels,
+                    rotationDegrees = target.rotationDegrees,
+                )
+            )
         }
 
         Box(
