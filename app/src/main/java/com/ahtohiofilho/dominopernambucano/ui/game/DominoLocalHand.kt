@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,11 +18,22 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
@@ -30,6 +42,11 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 fun DominoLocalHand(
     uiState: DominoGameUiState,
     onLocalMoveSelected: (PlayableMove) -> Unit,
+    onLocalHandBoundsChanged: (Rect?) -> Unit,
+    onPieceDragStart: (DominoPiece, Offset) -> Unit,
+    onPieceDrag: (Offset) -> Unit,
+    onPieceDragEnd: () -> Unit,
+    onPieceDragCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val gameState = uiState.gameState
@@ -39,7 +56,11 @@ fun DominoLocalHand(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { coordinates ->
+                onLocalHandBoundsChanged(coordinates.boundsInWindow())
+            },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = DominoColorTokens.PureWhite.copy(alpha = 0.11f),
@@ -77,24 +98,97 @@ fun DominoLocalHand(
                     val playableMove = playableMovesByPiece[piece]?.firstOrNull()
                     val isPlayable = playableMove != null
 
-                    DominoPieceView(
+                    LocalHandPiece(
                         piece = piece,
-                        faceUp = true,
-                        width = 66.dp,
-                        height = 40.dp,
                         isPlayable = isPlayable,
-                        onClick = if (playableMove != null) {
-                            {
-                                onLocalMoveSelected(playableMove)
-                            }
-                        } else {
-                            null
-                        },
+                        playableMove = playableMove,
+                        onLocalMoveSelected = onLocalMoveSelected,
+                        onPieceDragStart = onPieceDragStart,
+                        onPieceDrag = onPieceDrag,
+                        onPieceDragEnd = onPieceDragEnd,
+                        onPieceDragCancel = onPieceDragCancel,
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun LocalHandPiece(
+    piece: DominoPiece,
+    isPlayable: Boolean,
+    playableMove: PlayableMove?,
+    onLocalMoveSelected: (PlayableMove) -> Unit,
+    onPieceDragStart: (DominoPiece, Offset) -> Unit,
+    onPieceDrag: (Offset) -> Unit,
+    onPieceDragEnd: () -> Unit,
+    onPieceDragCancel: () -> Unit,
+) {
+    var pieceBoundsInWindow by remember(piece) {
+        mutableStateOf<Rect?>(null)
+    }
+
+    val dragModifier = if (isPlayable) {
+        Modifier.pointerInput(piece) {
+            detectDragGestures(
+                onDragStart = { startOffset ->
+                    val bounds = pieceBoundsInWindow
+                        ?: return@detectDragGestures
+
+                    onPieceDragStart(
+                        piece,
+                        bounds.topLeft + startOffset,
+                    )
+                },
+                onDrag = { change, dragAmount ->
+                    change.consume()
+                    onPieceDrag(dragAmount)
+                },
+                onDragEnd = {
+                    onPieceDragEnd()
+                },
+                onDragCancel = {
+                    onPieceDragCancel()
+                },
+            )
+        }
+    } else {
+        Modifier
+    }
+
+    val visualModifier = if (isPlayable) {
+        Modifier.graphicsLayer {
+            shadowElevation = 8f
+            scaleX = 1.04f
+            scaleY = 1.04f
+        }
+    } else {
+        Modifier.graphicsLayer {
+            alpha = 0.58f
+        }
+    }
+
+    DominoPieceView(
+        piece = piece,
+        faceUp = true,
+        width = LOCAL_HAND_PIECE_WIDTH,
+        height = LOCAL_HAND_PIECE_HEIGHT,
+        isPlayable = isPlayable,
+        modifier = Modifier
+            .onGloballyPositioned { coordinates ->
+                pieceBoundsInWindow = coordinates.boundsInWindow()
+            }
+            .then(visualModifier)
+            .then(dragModifier),
+        onClick = if (playableMove != null) {
+            {
+                onLocalMoveSelected(playableMove)
+            }
+        } else {
+            null
+        },
+    )
 }
 
 @Composable

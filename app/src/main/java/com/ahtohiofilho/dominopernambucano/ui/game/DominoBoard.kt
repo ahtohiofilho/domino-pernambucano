@@ -10,9 +10,18 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoBoardChain
@@ -36,12 +45,20 @@ fun DominoBoard(
     boardChain: DominoBoardChain,
     modifier: Modifier = Modifier,
     playableMoves: List<PlayableMove> = emptyList(),
+    showDropTargets: Boolean = false,
     highlightedDropSide: BoardSide? = null,
+    onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit = {},
 ) {
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
+        val density = LocalDensity.current
+
+        var boardBoundsInWindow by remember {
+            mutableStateOf<Rect?>(null)
+        }
+
         val metrics = DominoTableLayoutMetrics(
             boardWidth = maxWidth.value,
             boardHeight = maxHeight.value,
@@ -59,68 +76,121 @@ fun DominoBoard(
             lateralEscapeDistance = TABLE_PIECE_HEIGHT.value * LATERAL_ESCAPE_PIECE_COUNT,
         )
 
-        val placements = calculateTablePlacements(
-            boardChain = boardChain,
-            metrics = metrics,
-        )
+        val placements = remember(
+            boardChain,
+            maxWidth,
+            maxHeight,
+        ) {
+            calculateTablePlacements(
+                boardChain = boardChain,
+                metrics = metrics,
+            )
+        }
 
-        val dropTargets = calculateDropTargets(
-            boardChain = boardChain,
-            playableMoves = playableMoves,
-            metrics = metrics,
-        )
+        val dropTargets = remember(
+            boardChain,
+            playableMoves,
+            maxWidth,
+            maxHeight,
+        ) {
+            calculateDropTargets(
+                boardChain = boardChain,
+                playableMoves = playableMoves,
+                metrics = metrics,
+            )
+        }
+
+        LaunchedEffect(
+            dropTargets,
+            boardBoundsInWindow,
+            density,
+        ) {
+            val bounds = boardBoundsInWindow
+
+            if (bounds == null || dropTargets.isEmpty()) {
+                onDropTargetsChanged(emptyList())
+                return@LaunchedEffect
+            }
+
+            val boardCenterInWindow = Offset(
+                x = bounds.left + bounds.width / 2f,
+                y = bounds.top + bounds.height / 2f,
+            )
+
+            val targetsInWindow = dropTargets.map { target ->
+                val targetOffsetInPixels = with(density) {
+                    Offset(
+                        x = target.centerX.dp.toPx(),
+                        y = target.centerY.dp.toPx(),
+                    )
+                }
+
+                DominoDropTargetInWindow(
+                    side = target.side,
+                    positionInWindow = boardCenterInWindow + targetOffsetInPixels,
+                )
+            }
+
+            onDropTargetsChanged(targetsInWindow)
+        }
 
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { coordinates ->
+                    boardBoundsInWindow = coordinates.boundsInWindow()
+                },
             contentAlignment = Alignment.Center,
         ) {
-            dropTargets.forEach { target ->
-                val isHighlighted = target.side == highlightedDropSide
-                val normalizedRotation = ((target.rotationDegrees % 360f) + 360f) % 360f
-                val isSideways = normalizedRotation == 90f || normalizedRotation == 270f
+            if (showDropTargets) {
+                dropTargets.forEach { target ->
+                    val isHighlighted = target.side == highlightedDropSide
+                    val normalizedRotation = ((target.rotationDegrees % 360f) + 360f) % 360f
+                    val isSideways = normalizedRotation == 90f || normalizedRotation == 270f
 
-                val markerWidth = if (isSideways) {
-                    TABLE_PIECE_HEIGHT
-                } else {
-                    TABLE_PIECE_WIDTH
+                    val markerWidth = if (isSideways) {
+                        TABLE_PIECE_HEIGHT
+                    } else {
+                        TABLE_PIECE_WIDTH
+                    }
+
+                    val markerHeight = if (isSideways) {
+                        TABLE_PIECE_WIDTH
+                    } else {
+                        TABLE_PIECE_HEIGHT
+                    }
+
+                    val borderColor = if (isHighlighted) {
+                        DominoSemanticColors.scoreHighlight
+                    } else {
+                        DominoColorTokens.PureWhite.copy(alpha = 0.38f)
+                    }
+
+                    val backgroundColor = if (isHighlighted) {
+                        DominoSemanticColors.scoreHighlight.copy(alpha = 0.22f)
+                    } else {
+                        DominoColorTokens.PureWhite.copy(alpha = 0.08f)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .offset(
+                                x = target.centerX.dp,
+                                y = target.centerY.dp,
+                            )
+                            .width(markerWidth)
+                            .height(markerHeight)
+                            .background(
+                                color = backgroundColor,
+                                shape = RoundedCornerShape(5.dp),
+                            )
+                            .border(
+                                width = 2.dp,
+                                color = borderColor,
+                                shape = RoundedCornerShape(5.dp),
+                            ),
+                    )
                 }
-
-                val markerHeight = if (isSideways) {
-                    TABLE_PIECE_WIDTH
-                } else {
-                    TABLE_PIECE_HEIGHT
-                }
-
-                val borderColor = if (isHighlighted) {
-                    DominoSemanticColors.scoreHighlight
-                } else {
-                    DominoColorTokens.PureWhite.copy(alpha = 0.38f)
-                }
-
-                val backgroundColor = if (isHighlighted) {
-                    DominoSemanticColors.scoreHighlight.copy(alpha = 0.20f)
-                } else {
-                    Color.White.copy(alpha = 0.08f)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .offset(
-                            x = target.centerX.dp,
-                            y = target.centerY.dp,
-                        )
-                        .width(markerWidth)
-                        .height(markerHeight)
-                        .background(
-                            color = backgroundColor,
-                            shape = RoundedCornerShape(5.dp),
-                        )
-                        .border(
-                            width = 2.dp,
-                            color = borderColor,
-                            shape = RoundedCornerShape(5.dp),
-                        ),
-                )
             }
 
             placements.forEach { placement ->

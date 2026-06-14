@@ -18,16 +18,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
+import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
 @Composable
 fun DominoTableArea(
     gameState: DominoGameState,
+    localPlayableMoves: List<PlayableMove>,
+    showDropTargets: Boolean,
+    highlightedDropSide: BoardSide?,
+    onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val shouldShowBoard =
+        !gameState.boardChain.isEmpty() || localPlayableMoves.isNotEmpty()
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(34.dp))
@@ -44,14 +53,18 @@ fun DominoTableArea(
             .padding(10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        if (gameState.boardChain.isEmpty()) {
-            EmptyTableMessage(
-                openingPiece = gameState.openingPiece,
-            )
-        } else {
+        if (shouldShowBoard) {
             DominoBoard(
                 boardChain = gameState.boardChain,
+                playableMoves = localPlayableMoves,
+                showDropTargets = showDropTargets,
+                highlightedDropSide = highlightedDropSide,
+                onDropTargetsChanged = onDropTargetsChanged,
                 modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            EmptyTableMessage(
+                openingPiece = gameState.openingPiece,
             )
         }
     }
