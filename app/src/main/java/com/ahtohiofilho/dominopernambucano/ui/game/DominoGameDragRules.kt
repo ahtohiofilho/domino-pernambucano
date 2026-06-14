@@ -45,15 +45,23 @@ fun findPlayableMoveForDropSide(
     }
 }
 
-private fun findNearestDropSide(
+fun findNearestDropSide(
     positionInWindow: Offset,
     playableMoves: List<PlayableMove>,
     dropTargets: List<DominoDropTargetInWindow>,
-    maxDistancePx: Float,
+    maxDistancePx: Float? = null,
 ): BoardSide? {
     val playableSides = playableMoves
         .map { move -> move.side }
         .toSet()
+
+    if (playableSides.isEmpty()) {
+        return null
+    }
+
+    if (playableSides.size == 1) {
+        return playableSides.first()
+    }
 
     val nearestTarget = dropTargets
         .asSequence()
@@ -64,12 +72,14 @@ private fun findNearestDropSide(
                 second = target.positionInWindow,
             )
         }
-        .minByOrNull { (_, distance) -> distance }
+        .minByOrNull { (_, distance) ->
+            distance
+        }
         ?: return null
 
     val distance = nearestTarget.second
 
-    if (distance > maxDistancePx) {
+    if (maxDistancePx != null && distance > maxDistancePx) {
         return null
     }
 

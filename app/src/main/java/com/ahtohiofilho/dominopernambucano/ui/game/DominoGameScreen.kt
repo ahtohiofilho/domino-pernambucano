@@ -3,10 +3,8 @@ package com.ahtohiofilho.dominopernambucano.ui.game
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,6 +57,22 @@ fun DominoGameScreen(
     }
 
     val presentingMovePhase = uiState.phase as? DominoMatchPhase.PresentingMove
+    val presentingPassPhase = uiState.phase as? DominoMatchPhase.PresentingPass
+    val isRoundIntroPhase = uiState.phase == DominoMatchPhase.RoundIntro
+    val isRoundSummaryPhase = uiState.phase == DominoMatchPhase.RoundSummary
+    val isMatchFinishedPhase = uiState.phase == DominoMatchPhase.MatchFinished
+
+    val roundIntroTeams = remember(
+        gameState.players,
+        gameState.teamScores,
+        uiState.localPlayerIndex,
+    ) {
+        buildRoundIntroTeamPresentations(
+            players = gameState.players,
+            teamScores = gameState.teamScores,
+            localPlayerIndex = uiState.localPlayerIndex,
+        )
+    }
 
     val hiddenLocalAnimatedPiece = if (
         presentingMovePhase != null &&
@@ -70,7 +84,7 @@ fun DominoGameScreen(
     }
 
     val dropTargetHitRadiusPx = with(density) {
-        86.dp.toPx()
+        DominoGameVisualTokens.DropTargetHitRadius.toPx()
     }
 
     fun getPlayableMovesForPiece(
@@ -154,8 +168,8 @@ fun DominoGameScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
-                    horizontal = 14.dp,
-                    vertical = 12.dp,
+                    horizontal = 10.dp,
+                    vertical = 8.dp,
                 ),
         ) {
             DominoMatchHeader(
@@ -165,7 +179,10 @@ fun DominoGameScreen(
             DominoGameTableStage(
                 gameState = gameState,
                 localPlayableMoves = uiState.localPlayableMoves,
-                showDropTargets = draggedPieceState != null,
+                showDropTargets = draggedPieceState != null &&
+                        !isRoundIntroPhase &&
+                        !isRoundSummaryPhase &&
+                        !isMatchFinishedPhase,
                 highlightedDropSide = draggedPieceState?.highlightedSide,
                 animatedPlayableMove = presentingMovePhase?.move,
                 onDropTargetsChanged = { targets ->
@@ -183,7 +200,7 @@ fun DominoGameScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 4.dp),
             )
 
             DominoLocalHand(
@@ -194,6 +211,11 @@ fun DominoGameScreen(
                     localHandBoundsInWindow = bounds
                 },
                 onPieceDragStart = { piece, positionInWindow ->
+                    if (uiState.phase != DominoMatchPhase.WaitingForLocalMove) {
+                        clearDragState()
+                        return@DominoLocalHand
+                    }
+
                     val playableMoves = getPlayableMovesForPiece(piece)
 
                     if (playableMoves.isEmpty()) {
@@ -224,9 +246,26 @@ fun DominoGameScreen(
                     val currentDragState = draggedPieceState
                         ?: return@DominoLocalHand
 
+                    val shouldCancelMove = currentDragState.isOverLocalHand ||
+                            isPositionInsideRect(
+                                positionInWindow = currentDragState.positionInWindow,
+                                rect = localHandBoundsInWindow,
+                            )
+
+                    val selectedSide = if (shouldCancelMove) {
+                        null
+                    } else {
+                        currentDragState.highlightedSide
+                            ?: findNearestDropSide(
+                                positionInWindow = currentDragState.positionInWindow,
+                                playableMoves = currentDragState.playableMoves,
+                                dropTargets = dropTargetsInWindow,
+                            )
+                    }
+
                     val selectedMove = findPlayableMoveForDropSide(
                         playableMoves = currentDragState.playableMoves,
-                        dropSide = currentDragState.highlightedSide,
+                        dropSide = selectedSide,
                     )
 
                     clearDragState()
@@ -239,24 +278,20 @@ fun DominoGameScreen(
                     clearDragState()
                 },
             )
-
-            Spacer(
-                modifier = Modifier.height(10.dp),
-            )
-
-            DominoGameActionPanel(
-                uiState = uiState,
-                onBackToMenuClick = onBackToMenuClick,
-                onRoundIntroFinished = onRoundIntroFinished,
-                onLocalMoveSelected = onLocalMoveSelected,
-                onPresentationFinished = onPresentationFinished,
-                onStartNextRound = onStartNextRound,
-                onStartNewMatch = onStartNewMatch,
-            )
         }
 
         DraggedPieceOverlay(
-            draggedPieceState = draggedPieceState,
+            draggedPieceState = if (
+                presentingMovePhase == null &&
+                presentingPassPhase == null &&
+                !isRoundIntroPhase &&
+                !isRoundSummaryPhase &&
+                !isMatchFinishedPhase
+            ) {
+                draggedPieceState
+            } else {
+                null
+            },
         )
 
         if (presentingMovePhase != null) {
@@ -267,6 +302,37 @@ fun DominoGameScreen(
                 ),
                 target = animatedMoveTargetInWindow,
                 onAnimationFinished = onPresentationFinished,
+            )
+        }
+
+        if (presentingPassPhase != null) {
+            PassTurnKnockAnimationOverlay(
+                playerIndex = presentingPassPhase.playerIndex,
+                onAnimationFinished = onPresentationFinished,
+            )
+        }
+
+        if (isRoundIntroPhase) {
+            RoundIntroPresentationOverlay(
+                roundNumber = uiState.roundNumber,
+                teams = roundIntroTeams,
+                onAnimationFinished = onRoundIntroFinished,
+            )
+        }
+
+        if (isRoundSummaryPhase) {
+            RoundSummaryRevealOverlay(
+                gameState = gameState,
+                localPlayerIndex = uiState.localPlayerIndex,
+                onStartNextRound = onStartNextRound,
+            )
+        }
+
+        if (isMatchFinishedPhase) {
+            MatchFinishedActionOverlay(
+                uiState = uiState,
+                onStartNewMatch = onStartNewMatch,
+                onBackToMenuClick = onBackToMenuClick,
             )
         }
     }

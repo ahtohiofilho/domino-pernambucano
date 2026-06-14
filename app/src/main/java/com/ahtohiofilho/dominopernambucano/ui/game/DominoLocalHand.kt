@@ -1,6 +1,8 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +54,7 @@ fun DominoLocalHand(
 ) {
     val gameState = uiState.gameState
     val localPlayer = gameState.players.getOrNull(uiState.localPlayerIndex)
+
     val playableMovesByPiece = uiState.localPlayableMoves.groupBy { move ->
         move.piece
     }
@@ -62,15 +65,21 @@ fun DominoLocalHand(
             .onGloballyPositioned { coordinates ->
                 onLocalHandBoundsChanged(coordinates.boundsInWindow())
             },
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(
+            DominoGameVisualTokens.LocalHandCardCornerRadius,
+        ),
         colors = CardDefaults.cardColors(
-            containerColor = DominoColorTokens.PureWhite.copy(alpha = 0.11f),
+            containerColor = DominoColorTokens.PureWhite.copy(alpha = 0.10f),
             contentColor = DominoSemanticColors.primaryTextOnDark,
         ),
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(
+                DominoGameVisualTokens.LocalHandCardPadding,
+            ),
+            verticalArrangement = Arrangement.spacedBy(
+                DominoGameVisualTokens.LocalHandHeaderBottomGap,
+            ),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -79,8 +88,9 @@ fun DominoLocalHand(
             ) {
                 Text(
                     text = localPlayer?.name ?: "Você",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Black,
+                    color = DominoSemanticColors.primaryTextOnDark,
                 )
 
                 CurrentPlayerBadge(
@@ -92,23 +102,25 @@ fun DominoLocalHand(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(
+                    DominoGameVisualTokens.LocalHandPieceSpacing,
+                ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 localPlayer?.hand.orEmpty().forEach { piece ->
                     val isHidden = piece == hiddenPiece
 
-                    val playableMove = if (isHidden) {
-                        null
+                    val playableMoves = if (isHidden) {
+                        emptyList()
                     } else {
-                        playableMovesByPiece[piece]?.firstOrNull()
+                        playableMovesByPiece[piece].orEmpty()
                     }
 
-                    val isPlayable = playableMove != null
+                    val playableMove = playableMoves.firstOrNull()
 
                     LocalHandPiece(
                         piece = piece,
-                        isPlayable = isPlayable,
+                        isPlayable = playableMoves.isNotEmpty(),
                         isHidden = isHidden,
                         playableMove = playableMove,
                         onLocalMoveSelected = onLocalMoveSelected,
@@ -139,6 +151,26 @@ private fun LocalHandPiece(
         mutableStateOf<Rect?>(null)
     }
 
+    val targetAlpha = when {
+        isHidden -> DominoGameVisualTokens.LocalHiddenPieceAlpha
+        isPlayable -> DominoGameVisualTokens.LocalDefaultPieceAlpha
+        else -> DominoGameVisualTokens.LocalUnavailablePieceAlpha
+    }
+
+    val pieceAlpha by animateFloatAsState(
+        targetValue = targetAlpha,
+        label = "localHandPieceAlpha",
+    )
+
+    val pieceScale by animateFloatAsState(
+        targetValue = if (isPlayable && !isHidden) {
+            DominoGameVisualTokens.LocalPlayablePieceScale
+        } else {
+            1f
+        },
+        label = "localHandPieceScale",
+    )
+
     val dragModifier = if (isPlayable && !isHidden) {
         Modifier.pointerInput(piece) {
             detectDragGestures(
@@ -167,48 +199,60 @@ private fun LocalHandPiece(
         Modifier
     }
 
-    val visualModifier = when {
-        isHidden -> {
-            Modifier.graphicsLayer {
-                alpha = 0f
-            }
-        }
-
-        isPlayable -> {
-            Modifier.graphicsLayer {
-                shadowElevation = 8f
-                scaleX = 1.04f
-                scaleY = 1.04f
-            }
-        }
-
-        else -> {
-            Modifier.graphicsLayer {
-                alpha = 0.58f
-            }
-        }
+    val highlightModifier = if (isPlayable && !isHidden) {
+        Modifier
+            .background(
+                color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.16f),
+                shape = RoundedCornerShape(
+                    DominoGameVisualTokens.LocalPlayableHighlightCornerRadius,
+                ),
+            )
+            .border(
+                width = DominoGameVisualTokens.LocalPlayableBorderWidth,
+                color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.84f),
+                shape = RoundedCornerShape(
+                    DominoGameVisualTokens.LocalPlayableHighlightCornerRadius,
+                ),
+            )
+            .padding(DominoGameVisualTokens.LocalPlayableHighlightPadding)
+    } else {
+        Modifier
     }
 
-    DominoPieceView(
-        piece = piece,
-        faceUp = true,
-        width = LOCAL_HAND_PIECE_WIDTH,
-        height = LOCAL_HAND_PIECE_HEIGHT,
-        isPlayable = isPlayable && !isHidden,
+    Box(
         modifier = Modifier
             .onGloballyPositioned { coordinates ->
                 pieceBoundsInWindow = coordinates.boundsInWindow()
             }
-            .then(visualModifier)
-            .then(dragModifier),
-        onClick = if (playableMove != null && !isHidden) {
-            {
-                onLocalMoveSelected(playableMove)
+            .graphicsLayer {
+                alpha = pieceAlpha
+                scaleX = pieceScale
+                scaleY = pieceScale
+                shadowElevation = if (isPlayable && !isHidden) {
+                    DominoGameVisualTokens.LocalPlayableShadowElevation
+                } else {
+                    0f
+                }
             }
-        } else {
-            null
-        },
-    )
+            .then(highlightModifier)
+            .then(dragModifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        DominoPieceView(
+            piece = piece,
+            faceUp = true,
+            width = LOCAL_HAND_PIECE_WIDTH,
+            height = LOCAL_HAND_PIECE_HEIGHT,
+            isPlayable = false,
+            onClick = if (playableMove != null && !isHidden) {
+                {
+                    onLocalMoveSelected(playableMove)
+                }
+            } else {
+                null
+            },
+        )
+    }
 }
 
 @Composable
@@ -226,8 +270,8 @@ private fun CurrentPlayerBadge(
                 },
             )
             .padding(
-                horizontal = 10.dp,
-                vertical = 5.dp,
+                horizontal = 9.dp,
+                vertical = 4.dp,
             ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -246,13 +290,17 @@ private fun CurrentPlayerBadge(
         )
 
         Text(
-            text = if (isCurrent) "sua vez" else "aguardando",
+            text = if (isCurrent) {
+                "sua vez"
+            } else {
+                "aguardando"
+            },
             color = if (isCurrent) {
                 DominoColorTokens.InkBlue
             } else {
-                DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f)
+                DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.62f)
             },
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Black,
         )
     }

@@ -33,8 +33,6 @@ import com.ahtohiofilho.dominopernambucano.domain.calculateTablePlacements
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
-private const val PIECE_HEIGHT_RATIO = 1.83f
-
 private data class ResponsiveBoardVisualMetrics(
     val pieceWidth: Dp,
     val pieceHeight: Dp,
@@ -250,12 +248,16 @@ fun DominoBoard(
                             .height(markerHeight)
                             .background(
                                 color = backgroundColor,
-                                shape = RoundedCornerShape(5.dp),
+                                shape = RoundedCornerShape(
+                                    DominoGameVisualTokens.DropTargetCornerRadius,
+                                ),
                             )
                             .border(
-                                width = 2.dp,
+                                width = DominoGameVisualTokens.DropTargetBorderWidth,
                                 color = borderColor,
-                                shape = RoundedCornerShape(5.dp),
+                                shape = RoundedCornerShape(
+                                    DominoGameVisualTokens.DropTargetCornerRadius,
+                                ),
                             ),
                     )
                 }
@@ -268,6 +270,7 @@ fun DominoBoard(
                     width = responsiveMetrics.pieceWidth,
                     height = responsiveMetrics.pieceHeight,
                     rotationDegrees = placement.rotationDegrees,
+                    autoOrientToPieceOrder = false,
                     modifier = Modifier.offset(
                         x = placement.centerX.dp,
                         y = placement.centerY.dp,
@@ -297,40 +300,44 @@ private fun buildResponsiveBoardVisualMetrics(
     val narrowBoard = maxWidth.value < 300f
 
     val pieceWidthFactor = when {
-        compactBoard -> 0.070f
-        narrowBoard -> 0.074f
-        else -> 0.078f
+        compactBoard -> DominoGameVisualTokens.ResponsiveTablePieceWidthFactorCompact
+        narrowBoard -> DominoGameVisualTokens.ResponsiveTablePieceWidthFactorNarrow
+        else -> DominoGameVisualTokens.ResponsiveTablePieceWidthFactorDefault
     }
 
     val pieceWidthValue = (shortSide * pieceWidthFactor)
         .coerceIn(
-            minimumValue = 20f,
-            maximumValue = 31f,
+            minimumValue = DominoGameVisualTokens.ResponsiveTablePieceWidthMin,
+            maximumValue = DominoGameVisualTokens.ResponsiveTablePieceWidthMax,
         )
 
-    val pieceHeightValue = (pieceWidthValue * PIECE_HEIGHT_RATIO)
+    val pieceHeightValue = (
+            pieceWidthValue * DominoGameVisualTokens.TablePieceHeightRatio
+            )
         .coerceIn(
-            minimumValue = 38f,
-            maximumValue = 57f,
+            minimumValue = DominoGameVisualTokens.ResponsiveTablePieceHeightMin,
+            maximumValue = DominoGameVisualTokens.ResponsiveTablePieceHeightMax,
         )
 
-    val safeMarginValue = (shortSide * 0.014f)
+    val safeMarginValue = (
+            shortSide * DominoGameVisualTokens.ResponsiveTableSafeMarginFactor
+            )
         .coerceIn(
-            minimumValue = 2f,
-            maximumValue = 8f,
+            minimumValue = DominoGameVisualTokens.ResponsiveTableSafeMarginMin,
+            maximumValue = DominoGameVisualTokens.ResponsiveTableSafeMarginMax,
         )
 
     val lateralEscapePieceCount = when {
-        maxWidth.value < 260f -> 1.65f
-        maxWidth.value < 340f -> 2.15f
-        longSide < 520f -> 2.45f
-        else -> 2.85f
+        maxWidth.value < 260f -> DominoGameVisualTokens.LateralEscapePieceCountVeryNarrow
+        maxWidth.value < 340f -> DominoGameVisualTokens.LateralEscapePieceCountNarrow
+        longSide < 520f -> DominoGameVisualTokens.LateralEscapePieceCountCompact
+        else -> DominoGameVisualTokens.LateralEscapePieceCountDefault
     }
 
     return ResponsiveBoardVisualMetrics(
         pieceWidth = pieceWidthValue.dp,
         pieceHeight = pieceHeightValue.dp,
-        pieceGap = 0.dp,
+        pieceGap = DominoGameVisualTokens.TablePieceGap,
         safeMargin = safeMarginValue.dp,
         lateralEscapeDistance = (pieceHeightValue * lateralEscapePieceCount).dp,
     )

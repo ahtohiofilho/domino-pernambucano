@@ -1,11 +1,11 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
+import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.foundation.layout.offset
 import kotlin.math.roundToInt
 
 @Composable
@@ -38,10 +38,16 @@ fun DraggedPieceOverlay(
                 )
             }
             .graphicsLayer {
-                alpha = if (dragState.isOverLocalHand) 0.74f else 0.94f
-                shadowElevation = 18f
-                scaleX = 1.08f
-                scaleY = 1.08f
+                alpha = if (dragState.isOverLocalHand) {
+                    DominoGameVisualTokens.DraggedPieceOverHandAlpha
+                } else {
+                    DominoGameVisualTokens.DraggedPieceAlpha
+                }
+
+                shadowElevation = DominoGameVisualTokens.DraggedPieceShadowElevation
+                scaleX = DominoGameVisualTokens.DraggedPieceScale
+                scaleY = DominoGameVisualTokens.DraggedPieceScale
             },
+        onClick = null,
     )
 }

@@ -1,37 +1,143 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
-import kotlin.math.min
+
+private const val ATLAS_CELL_WIDTH_PX = 86
+private const val ATLAS_CELL_HEIGHT_PX = 158
+private const val ATLAS_COLUMNS = 7
+
+private val ATLAS_PIECES: List<DominoPiece?> = listOf(
+    DominoPiece(0, 0),
+    DominoPiece(0, 1),
+    DominoPiece(0, 2),
+    DominoPiece(0, 3),
+    DominoPiece(0, 4),
+    DominoPiece(0, 5),
+    DominoPiece(0, 6),
+
+    DominoPiece(1, 1),
+    DominoPiece(1, 2),
+    DominoPiece(1, 3),
+    DominoPiece(1, 4),
+    DominoPiece(1, 5),
+    DominoPiece(1, 6),
+    DominoPiece(2, 2),
+
+    DominoPiece(2, 3),
+    DominoPiece(2, 4),
+    DominoPiece(2, 5),
+    DominoPiece(2, 6),
+    DominoPiece(3, 3),
+    DominoPiece(3, 4),
+    DominoPiece(3, 5),
+
+    DominoPiece(3, 6),
+    DominoPiece(4, 4),
+    DominoPiece(4, 5),
+    DominoPiece(4, 6),
+    DominoPiece(5, 5),
+    DominoPiece(5, 6),
+    DominoPiece(6, 6),
+
+    null,
+)
 
 @Composable
 fun DominoPieceView(
     piece: DominoPiece,
     faceUp: Boolean,
     modifier: Modifier = Modifier,
-    width: Dp = 58.dp,
-    height: Dp = 34.dp,
+    width: Dp = 42.dp,
+    height: Dp = 77.dp,
     isPlayable: Boolean = false,
     rotationDegrees: Float = 0f,
+    autoOrientToPieceOrder: Boolean = true,
     onClick: (() -> Unit)? = null,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val atlas = ImageBitmap.imageResource(
+        id = R.drawable.domino_atlas,
+    )
+
+    val atlasCell = remember(
+        piece,
+        faceUp,
+    ) {
+        getAtlasCellForPiece(
+            piece = piece,
+            faceUp = faceUp,
+        )
+    }
+
+    val painter = remember(
+        atlas,
+        atlasCell,
+    ) {
+        BitmapPainter(
+            image = atlas,
+            srcOffset = IntOffset(
+                x = atlasCell.column * ATLAS_CELL_WIDTH_PX,
+                y = atlasCell.row * ATLAS_CELL_HEIGHT_PX,
+            ),
+            srcSize = IntSize(
+                width = ATLAS_CELL_WIDTH_PX,
+                height = ATLAS_CELL_HEIGHT_PX,
+            ),
+        )
+    }
+
+    val normalizedPiece = normalizePieceForAtlas(piece)
+
+    val shouldRotateHalfTurn =
+        autoOrientToPieceOrder &&
+                faceUp &&
+                normalizedPiece != piece
+
+    val finalRotation = rotationDegrees + if (shouldRotateHalfTurn) {
+        180f
+    } else {
+        0f
+    }
+
+    val normalizedRotation = ((rotationDegrees % 360f) + 360f) % 360f
+    val isSideways = normalizedRotation == 90f || normalizedRotation == 270f
+
+    val layoutWidth = if (isSideways) {
+        height
+    } else {
+        width
+    }
+
+    val layoutHeight = if (isSideways) {
+        width
+    } else {
+        height
+    }
 
     val clickableModifier = if (onClick != null) {
         Modifier.clickable(
@@ -43,186 +149,126 @@ fun DominoPieceView(
 
     Box(
         modifier = modifier
-            .graphicsLayer {
-                rotationZ = rotationDegrees
-            }
-            .width(width)
-            .height(height)
-            .clip(shape)
-            .border(
-                width = if (isPlayable) 2.dp else 1.dp,
-                color = if (isPlayable) {
-                    DominoSemanticColors.playableMove
-                } else {
-                    DominoColorTokens.InkBlue.copy(alpha = 0.22f)
-                },
-                shape = shape,
-            )
+            .width(layoutWidth)
+            .height(layoutHeight)
             .then(clickableModifier),
+        contentAlignment = Alignment.Center,
     ) {
-        Canvas(
-            modifier = Modifier
-                .width(width)
-                .height(height),
-        ) {
-            val backgroundColor = if (faceUp) {
-                DominoColorTokens.SurfaceWhite
-            } else {
-                DominoColorTokens.PernambucoBlue
-            }
-
-            drawRoundRect(
-                color = backgroundColor,
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(
-                    x = 8.dp.toPx(),
-                    y = 8.dp.toPx(),
-                ),
-            )
-
-            if (!faceUp) {
-                drawBackPattern()
-                return@Canvas
-            }
-
-            val dividerColor = DominoColorTokens.InkBlue.copy(alpha = 0.20f)
-            val pipColor = DominoColorTokens.InkBlue
-
-            drawLine(
-                color = dividerColor,
-                start = Offset(
-                    x = size.width / 2f,
-                    y = 5.dp.toPx(),
-                ),
-                end = Offset(
-                    x = size.width / 2f,
-                    y = size.height - 5.dp.toPx(),
-                ),
-                strokeWidth = 1.dp.toPx(),
-            )
-
-            drawPips(
-                value = piece.left,
-                left = 0f,
-                top = 0f,
-                width = size.width / 2f,
-                height = size.height,
-                color = pipColor,
-            )
-
-            drawPips(
-                value = piece.right,
-                left = size.width / 2f,
-                top = 0f,
-                width = size.width / 2f,
-                height = size.height,
-                color = pipColor,
-            )
-        }
+        DominoPieceAtlasImage(
+            painter = painter,
+            piece = piece,
+            faceUp = faceUp,
+            width = width,
+            height = height,
+            finalRotation = finalRotation,
+            isPlayable = isPlayable,
+        )
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBackPattern() {
-    val lineColor = DominoColorTokens.PureWhite.copy(alpha = 0.22f)
-
-    drawLine(
-        color = lineColor,
-        start = Offset(
-            x = size.width * 0.22f,
-            y = size.height * 0.20f,
-        ),
-        end = Offset(
-            x = size.width * 0.78f,
-            y = size.height * 0.80f,
-        ),
-        strokeWidth = 1.2.dp.toPx(),
-    )
-
-    drawLine(
-        color = lineColor,
-        start = Offset(
-            x = size.width * 0.78f,
-            y = size.height * 0.20f,
-        ),
-        end = Offset(
-            x = size.width * 0.22f,
-            y = size.height * 0.80f,
-        ),
-        strokeWidth = 1.2.dp.toPx(),
-    )
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPips(
-    value: Int,
-    left: Float,
-    top: Float,
-    width: Float,
-    height: Float,
-    color: Color,
+@Composable
+private fun DominoPieceAtlasImage(
+    painter: BitmapPainter,
+    piece: DominoPiece,
+    faceUp: Boolean,
+    width: Dp,
+    height: Dp,
+    finalRotation: Float,
+    isPlayable: Boolean,
 ) {
-    val radius = min(width, height) * 0.075f
+    val shape = RoundedCornerShape(5.dp)
 
-    val x1 = left + width * 0.28f
-    val x2 = left + width * 0.50f
-    val x3 = left + width * 0.72f
-
-    val y1 = top + height * 0.28f
-    val y2 = top + height * 0.50f
-    val y3 = top + height * 0.72f
-
-    fun pip(
-        x: Float,
-        y: Float,
-    ) {
-        drawCircle(
-            color = color,
-            radius = radius,
-            center = Offset(
-                x = x,
-                y = y,
-            ),
+    val borderModifier = if (isPlayable) {
+        Modifier.border(
+            width = 2.dp,
+            color = DominoSemanticColors.playableMove,
+            shape = shape,
+        )
+    } else {
+        Modifier.border(
+            width = 1.dp,
+            color = DominoColorTokens.InkBlue.copy(alpha = 0.18f),
+            shape = shape,
         )
     }
 
-    when (value) {
-        0 -> Unit
+    Box(
+        modifier = Modifier
+            .requiredWidth(width)
+            .requiredHeight(height)
+            .graphicsLayer {
+                rotationZ = finalRotation
+                clip = false
+            }
+            .clip(shape)
+            .then(borderModifier),
+    ) {
+        Image(
+            painter = painter,
+            contentDescription = if (faceUp) {
+                "Peça ${piece.left}-${piece.right}"
+            } else {
+                "Peça virada para baixo"
+            },
+            modifier = Modifier
+                .requiredWidth(width)
+                .requiredHeight(height),
+            contentScale = ContentScale.FillBounds,
+        )
+    }
+}
 
-        1 -> {
-            pip(x2, y2)
-        }
+private data class DominoAtlasCell(
+    val row: Int,
+    val column: Int,
+)
 
-        2 -> {
-            pip(x1, y1)
-            pip(x3, y3)
-        }
+private fun getAtlasCellForPiece(
+    piece: DominoPiece,
+    faceUp: Boolean,
+): DominoAtlasCell {
+    if (!faceUp) {
+        return getHiddenPieceAtlasCell()
+    }
 
-        3 -> {
-            pip(x1, y1)
-            pip(x2, y2)
-            pip(x3, y3)
-        }
+    val normalizedPiece = normalizePieceForAtlas(piece)
+    val pieceIndex = ATLAS_PIECES.indexOf(normalizedPiece)
 
-        4 -> {
-            pip(x1, y1)
-            pip(x3, y1)
-            pip(x1, y3)
-            pip(x3, y3)
-        }
+    if (pieceIndex == -1) {
+        return getHiddenPieceAtlasCell()
+    }
 
-        5 -> {
-            pip(x1, y1)
-            pip(x3, y1)
-            pip(x2, y2)
-            pip(x1, y3)
-            pip(x3, y3)
-        }
+    return getAtlasCellForIndex(pieceIndex)
+}
 
-        6 -> {
-            pip(x1, y1)
-            pip(x3, y1)
-            pip(x1, y2)
-            pip(x3, y2)
-            pip(x1, y3)
-            pip(x3, y3)
-        }
+private fun getHiddenPieceAtlasCell(): DominoAtlasCell {
+    val pieceIndex = ATLAS_PIECES.indexOf(null)
+
+    if (pieceIndex == -1) {
+        return DominoAtlasCell(
+            row = 4,
+            column = 0,
+        )
+    }
+
+    return getAtlasCellForIndex(pieceIndex)
+}
+
+private fun getAtlasCellForIndex(
+    pieceIndex: Int,
+): DominoAtlasCell {
+    return DominoAtlasCell(
+        row = pieceIndex / ATLAS_COLUMNS,
+        column = pieceIndex % ATLAS_COLUMNS,
+    )
+}
+
+private fun normalizePieceForAtlas(
+    piece: DominoPiece,
+): DominoPiece {
+    return if (piece.left <= piece.right) {
+        piece
+    } else {
+        piece.flipped()
     }
 }

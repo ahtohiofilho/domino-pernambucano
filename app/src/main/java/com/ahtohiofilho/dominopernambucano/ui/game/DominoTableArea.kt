@@ -41,20 +41,24 @@ fun DominoTableArea(
                 localPlayableMoves.isNotEmpty() ||
                 animatedPlayableMove != null
 
+    val tableShape = RoundedCornerShape(
+        DominoGameVisualTokens.TableAreaCornerRadius,
+    )
+
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(34.dp))
+            .clip(tableShape)
             .background(
-                color = DominoColorTokens.PernambucoBlue.copy(alpha = 0.34f),
+                color = DominoColorTokens.PernambucoBlue.copy(alpha = 0.30f),
             )
             .border(
                 border = BorderStroke(
-                    width = 1.dp,
-                    color = DominoColorTokens.PureWhite.copy(alpha = 0.20f),
+                    width = DominoGameVisualTokens.TableAreaBorderWidth,
+                    color = DominoColorTokens.PureWhite.copy(alpha = 0.18f),
                 ),
-                shape = RoundedCornerShape(34.dp),
+                shape = tableShape,
             )
-            .padding(10.dp),
+            .padding(DominoGameVisualTokens.TableAreaContentPadding),
         contentAlignment = Alignment.Center,
     ) {
         if (shouldShowBoard) {
@@ -96,8 +100,8 @@ private fun EmptyTableMessage(
             DominoPieceView(
                 piece = openingPiece,
                 faceUp = true,
-                width = 68.dp,
-                height = 40.dp,
+                width = DominoGameVisualTokens.TablePieceReferenceWidth,
+                height = DominoGameVisualTokens.TablePieceReferenceHeight,
                 isPlayable = true,
             )
 

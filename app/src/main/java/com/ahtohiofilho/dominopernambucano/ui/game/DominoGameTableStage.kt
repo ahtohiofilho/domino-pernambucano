@@ -37,15 +37,21 @@ fun DominoGameTableStage(
         val useCompactSeats = isCompactWidth || isCompactHeight
 
         val verticalGap = if (isCompactHeight) {
-            4.dp
+            2.dp
         } else {
-            8.dp
+            6.dp
+        }
+
+        val horizontalGap = if (isCompactWidth) {
+            2.dp
+        } else {
+            6.dp
         }
 
         val tableHorizontalPadding = if (isCompactWidth) {
-            4.dp
+            0.dp
         } else {
-            8.dp
+            4.dp
         }
 
         Column(
@@ -55,9 +61,11 @@ fun DominoGameTableStage(
         ) {
             DominoPlayerSeat(
                 name = gameState.players.getOrNull(2)?.name ?: "Jogador 3",
-                piecesCount = gameState.players.getOrNull(2)?.hand?.size ?: 0,
+                pieces = gameState.players.getOrNull(2)?.hand.orEmpty(),
                 isCurrent = gameState.currentPlayerIndex == 2,
+                orientation = DominoPlayerSeatOrientation.HORIZONTAL,
                 compact = useCompactSeats,
+                faceUp = false,
                 onBoundsChanged = { bounds ->
                     onPlayerSeatBoundsChanged(
                         2,
@@ -71,15 +79,15 @@ fun DominoGameTableStage(
                     .weight(1f)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(
-                    space = if (isCompactWidth) 4.dp else 8.dp,
-                ),
+                horizontalArrangement = Arrangement.spacedBy(horizontalGap),
             ) {
                 DominoPlayerSeat(
                     name = gameState.players.getOrNull(1)?.name ?: "Jogador 2",
-                    piecesCount = gameState.players.getOrNull(1)?.hand?.size ?: 0,
+                    pieces = gameState.players.getOrNull(1)?.hand.orEmpty(),
                     isCurrent = gameState.currentPlayerIndex == 1,
+                    orientation = DominoPlayerSeatOrientation.VERTICAL,
                     compact = true,
+                    faceUp = false,
                     onBoundsChanged = { bounds ->
                         onPlayerSeatBoundsChanged(
                             1,
@@ -104,9 +112,11 @@ fun DominoGameTableStage(
 
                 DominoPlayerSeat(
                     name = gameState.players.getOrNull(3)?.name ?: "Jogador 4",
-                    piecesCount = gameState.players.getOrNull(3)?.hand?.size ?: 0,
+                    pieces = gameState.players.getOrNull(3)?.hand.orEmpty(),
                     isCurrent = gameState.currentPlayerIndex == 3,
+                    orientation = DominoPlayerSeatOrientation.VERTICAL,
                     compact = true,
+                    faceUp = false,
                     onBoundsChanged = { bounds ->
                         onPlayerSeatBoundsChanged(
                             3,

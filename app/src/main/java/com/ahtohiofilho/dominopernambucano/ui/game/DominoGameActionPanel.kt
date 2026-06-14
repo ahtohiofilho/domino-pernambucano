@@ -46,9 +46,7 @@ fun DominoGameActionPanel(
         ) {
             PhaseActions(
                 uiState = uiState,
-                onRoundIntroFinished = onRoundIntroFinished,
                 onLocalMoveSelected = onLocalMoveSelected,
-                onPresentationFinished = onPresentationFinished,
                 onStartNextRound = onStartNextRound,
                 onStartNewMatch = onStartNewMatch,
             )
@@ -64,17 +62,21 @@ fun DominoGameActionPanel(
 @Composable
 private fun PhaseActions(
     uiState: DominoGameUiState,
-    onRoundIntroFinished: () -> Unit,
     onLocalMoveSelected: (PlayableMove) -> Unit,
-    onPresentationFinished: () -> Unit,
     onStartNextRound: () -> Unit,
     onStartNewMatch: () -> Unit,
 ) {
     when (val phase = uiState.phase) {
         DominoMatchPhase.RoundIntro -> {
-            PrimaryMenuButton(
-                text = "Iniciar rodada",
-                onClick = onRoundIntroFinished,
+            Text(
+                text = "Preparando rodada...",
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
+            )
+
+            Text(
+                text = "Apresentando placar.",
+                textAlign = TextAlign.Center,
             )
         }
 
@@ -116,17 +118,22 @@ private fun PhaseActions(
                 fontWeight = FontWeight.Bold,
             )
 
-            PrimaryMenuButton(
-                text = "Continuar",
-                onClick = onPresentationFinished,
+            Text(
+                text = "Apresentando toque...",
+                textAlign = TextAlign.Center,
             )
         }
 
         DominoMatchPhase.RoundSummary -> {
             Text(
-                text = "Rodada concluída.",
+                text = "Resumo da rodada.",
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Bold,
+            )
+
+            Text(
+                text = "Peças reveladas na mesa.",
+                textAlign = TextAlign.Center,
             )
 
             PrimaryMenuButton(

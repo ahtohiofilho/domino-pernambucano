@@ -1,13 +1,12 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 
-val LOCAL_HAND_PIECE_WIDTH = 66.dp
-val LOCAL_HAND_PIECE_HEIGHT = 40.dp
+val LOCAL_HAND_PIECE_WIDTH = DominoGameVisualTokens.LocalHandPieceWidth
+val LOCAL_HAND_PIECE_HEIGHT = DominoGameVisualTokens.LocalHandPieceHeight
 
 data class DominoDropTargetInWindow(
     val side: BoardSide,
