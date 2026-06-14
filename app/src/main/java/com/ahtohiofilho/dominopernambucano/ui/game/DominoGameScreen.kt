@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -86,8 +85,7 @@ fun DominoGameScreen(
                 name = gameState.players.getOrNull(2)?.name ?: "Jogador 3",
                 piecesCount = gameState.players.getOrNull(2)?.hand?.size ?: 0,
                 isCurrent = gameState.currentPlayerIndex == 2,
-                modifier = Modifier
-                    .align(Alignment.TopCenter),
+                modifier = Modifier.align(Alignment.TopCenter),
             )
 
             PlayerSeat(
@@ -211,16 +209,17 @@ private fun BoxScope.TableArea(
                 ),
                 shape = RoundedCornerShape(34.dp),
             )
-            .padding(18.dp),
+            .padding(10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        if (gameState.board.isEmpty()) {
+        if (gameState.boardChain.isEmpty()) {
             EmptyTableMessage(
                 openingPiece = gameState.openingPiece,
             )
         } else {
-            BoardPiecesRow(
-                board = gameState.board,
+            DominoBoard(
+                boardChain = gameState.boardChain,
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
@@ -256,28 +255,6 @@ private fun EmptyTableMessage(
                 color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.58f),
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-@Composable
-private fun BoardPiecesRow(
-    board: List<DominoPiece>,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        board.forEach { piece ->
-            DominoPieceView(
-                piece = piece,
-                faceUp = true,
-                width = 58.dp,
-                height = 34.dp,
             )
         }
     }

@@ -7,6 +7,7 @@ fun createInitialDominoGameState(): DominoGameState {
 
     return DominoGameState(
         board = emptyList(),
+        boardChain = DominoBoardChain(),
         players = players,
         sleepingPieces = shuffledPieces.drop(24).take(4),
 
@@ -61,6 +62,7 @@ fun createNextRoundDominoGameState(
 
     return DominoGameState(
         board = emptyList(),
+        boardChain = DominoBoardChain(),
         players = players,
         sleepingPieces = shuffledPieces.drop(24).take(4),
 

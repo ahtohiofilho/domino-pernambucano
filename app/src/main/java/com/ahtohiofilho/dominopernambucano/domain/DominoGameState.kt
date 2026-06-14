@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.domain
 
 data class DominoGameState(
     val board: List<DominoPiece>,
+    val boardChain: DominoBoardChain,
     val players: List<DominoPlayer>,
     val sleepingPieces: List<DominoPiece>,
 

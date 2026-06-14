@@ -36,6 +36,12 @@ fun playMoveForCurrentPlayer(
         BoardSide.RIGHT -> state.board + pieceToPlace
     }
 
+    val updatedBoardChain = addPieceToBoardChain(
+        chain = state.boardChain,
+        piece = pieceToPlace,
+        side = playableMove.side,
+    )
+
     val updatedPlayer = currentPlayer.copy(
         hand = currentPlayer.hand - playableMove.piece,
     )
@@ -62,6 +68,7 @@ fun playMoveForCurrentPlayer(
 
     val baseState = state.copy(
         board = updatedBoard,
+        boardChain = updatedBoardChain,
         players = updatedPlayers,
         lastMove = playedMove,
         consecutivePassTurns = 0,
