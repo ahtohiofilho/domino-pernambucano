@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoBoardChain
@@ -32,13 +33,15 @@ import com.ahtohiofilho.dominopernambucano.domain.calculateTablePlacements
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
-private val TABLE_PIECE_WIDTH = 30.dp
-private val TABLE_PIECE_HEIGHT = 55.dp
+private const val PIECE_HEIGHT_RATIO = 1.83f
 
-private val TABLE_PIECE_GAP = 0.dp
-private val TABLE_SAFE_MARGIN = 4.dp
-
-private const val LATERAL_ESCAPE_PIECE_COUNT = 3f
+private data class ResponsiveBoardVisualMetrics(
+    val pieceWidth: Dp,
+    val pieceHeight: Dp,
+    val pieceGap: Dp,
+    val safeMargin: Dp,
+    val lateralEscapeDistance: Dp,
+)
 
 @Composable
 fun DominoBoard(
@@ -59,31 +62,42 @@ fun DominoBoard(
             mutableStateOf<Rect?>(null)
         }
 
-        val metrics = DominoTableLayoutMetrics(
+        val responsiveMetrics = remember(
+            maxWidth,
+            maxHeight,
+        ) {
+            buildResponsiveBoardVisualMetrics(
+                maxWidth = maxWidth,
+                maxHeight = maxHeight,
+            )
+        }
+
+        val layoutMetrics = DominoTableLayoutMetrics(
             boardWidth = maxWidth.value,
             boardHeight = maxHeight.value,
 
-            pieceStandingWidth = TABLE_PIECE_WIDTH.value,
-            pieceStandingHeight = TABLE_PIECE_HEIGHT.value,
+            pieceStandingWidth = responsiveMetrics.pieceWidth.value,
+            pieceStandingHeight = responsiveMetrics.pieceHeight.value,
 
-            pieceGap = TABLE_PIECE_GAP.value,
+            pieceGap = responsiveMetrics.pieceGap.value,
 
-            safeMarginLeft = TABLE_SAFE_MARGIN.value,
-            safeMarginTop = TABLE_SAFE_MARGIN.value,
-            safeMarginRight = TABLE_SAFE_MARGIN.value,
-            safeMarginBottom = TABLE_SAFE_MARGIN.value,
+            safeMarginLeft = responsiveMetrics.safeMargin.value,
+            safeMarginTop = responsiveMetrics.safeMargin.value,
+            safeMarginRight = responsiveMetrics.safeMargin.value,
+            safeMarginBottom = responsiveMetrics.safeMargin.value,
 
-            lateralEscapeDistance = TABLE_PIECE_HEIGHT.value * LATERAL_ESCAPE_PIECE_COUNT,
+            lateralEscapeDistance = responsiveMetrics.lateralEscapeDistance.value,
         )
 
         val placements = remember(
             boardChain,
             maxWidth,
             maxHeight,
+            responsiveMetrics,
         ) {
             calculateTablePlacements(
                 boardChain = boardChain,
-                metrics = metrics,
+                metrics = layoutMetrics,
             )
         }
 
@@ -92,11 +106,12 @@ fun DominoBoard(
             playableMoves,
             maxWidth,
             maxHeight,
+            responsiveMetrics,
         ) {
             calculateDropTargets(
                 boardChain = boardChain,
                 playableMoves = playableMoves,
-                metrics = metrics,
+                metrics = layoutMetrics,
             )
         }
 
@@ -149,15 +164,15 @@ fun DominoBoard(
                     val isSideways = normalizedRotation == 90f || normalizedRotation == 270f
 
                     val markerWidth = if (isSideways) {
-                        TABLE_PIECE_HEIGHT
+                        responsiveMetrics.pieceHeight
                     } else {
-                        TABLE_PIECE_WIDTH
+                        responsiveMetrics.pieceWidth
                     }
 
                     val markerHeight = if (isSideways) {
-                        TABLE_PIECE_WIDTH
+                        responsiveMetrics.pieceWidth
                     } else {
-                        TABLE_PIECE_HEIGHT
+                        responsiveMetrics.pieceHeight
                     }
 
                     val borderColor = if (isHighlighted) {
@@ -197,8 +212,8 @@ fun DominoBoard(
                 DominoPieceView(
                     piece = placement.piece,
                     faceUp = true,
-                    width = TABLE_PIECE_WIDTH,
-                    height = TABLE_PIECE_HEIGHT,
+                    width = responsiveMetrics.pieceWidth,
+                    height = responsiveMetrics.pieceHeight,
                     rotationDegrees = placement.rotationDegrees,
                     modifier = Modifier.offset(
                         x = placement.centerX.dp,
@@ -209,4 +224,61 @@ fun DominoBoard(
             }
         }
     }
+}
+
+private fun buildResponsiveBoardVisualMetrics(
+    maxWidth: Dp,
+    maxHeight: Dp,
+): ResponsiveBoardVisualMetrics {
+    val shortSide = minOf(
+        maxWidth.value,
+        maxHeight.value,
+    )
+
+    val longSide = maxOf(
+        maxWidth.value,
+        maxHeight.value,
+    )
+
+    val compactBoard = shortSide < 230f
+    val narrowBoard = maxWidth.value < 300f
+
+    val pieceWidthFactor = when {
+        compactBoard -> 0.070f
+        narrowBoard -> 0.074f
+        else -> 0.078f
+    }
+
+    val pieceWidthValue = (shortSide * pieceWidthFactor)
+        .coerceIn(
+            minimumValue = 20f,
+            maximumValue = 31f,
+        )
+
+    val pieceHeightValue = (pieceWidthValue * PIECE_HEIGHT_RATIO)
+        .coerceIn(
+            minimumValue = 38f,
+            maximumValue = 57f,
+        )
+
+    val safeMarginValue = (shortSide * 0.014f)
+        .coerceIn(
+            minimumValue = 2f,
+            maximumValue = 8f,
+        )
+
+    val lateralEscapePieceCount = when {
+        maxWidth.value < 260f -> 1.65f
+        maxWidth.value < 340f -> 2.15f
+        longSide < 520f -> 2.45f
+        else -> 2.85f
+    }
+
+    return ResponsiveBoardVisualMetrics(
+        pieceWidth = pieceWidthValue.dp,
+        pieceHeight = pieceHeightValue.dp,
+        pieceGap = 0.dp,
+        safeMargin = safeMarginValue.dp,
+        lateralEscapeDistance = (pieceHeightValue * lateralEscapePieceCount).dp,
+    )
 }

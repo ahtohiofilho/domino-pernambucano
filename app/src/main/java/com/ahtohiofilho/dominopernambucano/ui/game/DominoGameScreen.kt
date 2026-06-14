@@ -4,18 +4,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -117,51 +114,19 @@ fun DominoGameScreen(
                 uiState = uiState,
             )
 
-            Box(
+            DominoGameTableStage(
+                gameState = gameState,
+                localPlayableMoves = uiState.localPlayableMoves,
+                showDropTargets = draggedPieceState != null,
+                highlightedDropSide = draggedPieceState?.highlightedSide,
+                onDropTargetsChanged = { targets ->
+                    dropTargetsInWindow = targets
+                },
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(vertical = 10.dp),
-            ) {
-                DominoPlayerSeat(
-                    name = gameState.players.getOrNull(2)?.name ?: "Jogador 3",
-                    piecesCount = gameState.players.getOrNull(2)?.hand?.size ?: 0,
-                    isCurrent = gameState.currentPlayerIndex == 2,
-                    modifier = Modifier.align(Alignment.TopCenter),
-                )
-
-                DominoPlayerSeat(
-                    name = gameState.players.getOrNull(1)?.name ?: "Jogador 2",
-                    piecesCount = gameState.players.getOrNull(1)?.hand?.size ?: 0,
-                    isCurrent = gameState.currentPlayerIndex == 1,
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .offset(x = 4.dp),
-                )
-
-                DominoPlayerSeat(
-                    name = gameState.players.getOrNull(3)?.name ?: "Jogador 4",
-                    piecesCount = gameState.players.getOrNull(3)?.hand?.size ?: 0,
-                    isCurrent = gameState.currentPlayerIndex == 3,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .offset(x = (-4).dp),
-                )
-
-                DominoTableArea(
-                    gameState = gameState,
-                    localPlayableMoves = uiState.localPlayableMoves,
-                    showDropTargets = draggedPieceState != null,
-                    highlightedDropSide = draggedPieceState?.highlightedSide,
-                    onDropTargetsChanged = { targets ->
-                        dropTargetsInWindow = targets
-                    },
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .fillMaxWidth(0.80f)
-                        .fillMaxHeight(0.62f),
-                )
-            }
+                    .padding(vertical = 8.dp),
+            )
 
             DominoLocalHand(
                 uiState = uiState,

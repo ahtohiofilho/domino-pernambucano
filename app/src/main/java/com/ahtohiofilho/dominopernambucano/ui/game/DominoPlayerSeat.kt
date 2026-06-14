@@ -30,13 +30,22 @@ fun DominoPlayerSeat(
     piecesCount: Int,
     isCurrent: Boolean,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
+    val minWidth = if (compact) 70.dp else 104.dp
+    val maxWidth = if (compact) 86.dp else 138.dp
+
+    val horizontalPadding = if (compact) 7.dp else 12.dp
+    val verticalPadding = if (compact) 7.dp else 10.dp
+
     Card(
         modifier = modifier.widthIn(
-            min = 104.dp,
-            max = 138.dp,
+            min = minWidth,
+            max = maxWidth,
         ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(
+            if (compact) 14.dp else 18.dp,
+        ),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrent) {
                 DominoSemanticColors.scoreHighlight.copy(alpha = 0.94f)
@@ -52,26 +61,36 @@ fun DominoPlayerSeat(
     ) {
         Column(
             modifier = Modifier.padding(
-                horizontal = 12.dp,
-                vertical = 10.dp,
+                horizontal = horizontalPadding,
+                vertical = verticalPadding,
             ),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(
+                if (compact) 4.dp else 6.dp,
+            ),
         ) {
             Text(
                 text = name,
-                style = MaterialTheme.typography.labelLarge,
+                style = if (compact) {
+                    MaterialTheme.typography.labelSmall
+                } else {
+                    MaterialTheme.typography.labelLarge
+                },
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
             )
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy((-5).dp),
+                horizontalArrangement = Arrangement.spacedBy(
+                    if (compact) (-6).dp else (-5).dp,
+                ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 repeat(piecesCount.coerceIn(0, 6)) {
-                    DominoPieceBackMini()
+                    DominoPieceBackMini(
+                        compact = compact,
+                    )
                 }
             }
 
@@ -87,19 +106,21 @@ fun DominoPlayerSeat(
 }
 
 @Composable
-private fun DominoPieceBackMini() {
+private fun DominoPieceBackMini(
+    compact: Boolean,
+) {
     Box(
         modifier = Modifier
             .size(
-                width = 18.dp,
-                height = 28.dp,
+                width = if (compact) 13.dp else 18.dp,
+                height = if (compact) 21.dp else 28.dp,
             )
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(if (compact) 3.dp else 4.dp))
             .background(DominoColorTokens.PernambucoBlue)
             .border(
                 width = 1.dp,
                 color = DominoColorTokens.PureWhite.copy(alpha = 0.26f),
-                shape = RoundedCornerShape(4.dp),
+                shape = RoundedCornerShape(if (compact) 3.dp else 4.dp),
             ),
     )
 }
