@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,11 +57,21 @@ fun DominoGameScreen(
         mutableStateOf<Map<Int, Rect>>(emptyMap())
     }
 
+    var localMoveSourcePositionInWindow by remember {
+        mutableStateOf<Offset?>(null)
+    }
+
     val presentingMovePhase = uiState.phase as? DominoMatchPhase.PresentingMove
     val presentingPassPhase = uiState.phase as? DominoMatchPhase.PresentingPass
     val isRoundIntroPhase = uiState.phase == DominoMatchPhase.RoundIntro
     val isRoundSummaryPhase = uiState.phase == DominoMatchPhase.RoundSummary
     val isMatchFinishedPhase = uiState.phase == DominoMatchPhase.MatchFinished
+
+    LaunchedEffect(uiState.phase) {
+        if (uiState.phase !is DominoMatchPhase.PresentingMove) {
+            localMoveSourcePositionInWindow = null
+        }
+    }
 
     val roundIntroTeams = remember(
         gameState.players,
@@ -138,18 +149,15 @@ fun DominoGameScreen(
     fun getSourcePositionForPlayer(
         playerIndex: Int,
     ): Offset? {
-        val bounds = if (playerIndex == uiState.localPlayerIndex) {
-            localHandBoundsInWindow
-        } else {
-            playerSeatBoundsInWindow[playerIndex]
+        if (playerIndex == uiState.localPlayerIndex) {
+            localMoveSourcePositionInWindow?.let { sourcePosition ->
+                return sourcePosition
+            }
+
+            return localHandBoundsInWindow?.centerOffset()
         }
 
-        return bounds?.let { rect ->
-            Offset(
-                x = rect.left + rect.width / 2f,
-                y = rect.top + rect.height / 2f,
-            )
-        }
+        return playerSeatBoundsInWindow[playerIndex]?.centerOffset()
     }
 
     Box(
@@ -206,7 +214,12 @@ fun DominoGameScreen(
             DominoLocalHand(
                 uiState = uiState,
                 hiddenPiece = hiddenLocalAnimatedPiece,
-                onLocalMoveSelected = onLocalMoveSelected,
+                onLocalMoveSelected = { move ->
+                    localMoveSourcePositionInWindow =
+                        localHandBoundsInWindow?.centerOffset()
+
+                    onLocalMoveSelected(move)
+                },
                 onLocalHandBoundsChanged = { bounds ->
                     localHandBoundsInWindow = bounds
                 },
@@ -267,6 +280,11 @@ fun DominoGameScreen(
                         playableMoves = currentDragState.playableMoves,
                         dropSide = selectedSide,
                     )
+
+                    if (selectedMove != null) {
+                        localMoveSourcePositionInWindow =
+                            currentDragState.positionInWindow
+                    }
 
                     clearDragState()
 
@@ -336,4 +354,11 @@ fun DominoGameScreen(
             )
         }
     }
+}
+
+private fun Rect.centerOffset(): Offset {
+    return Offset(
+        x = left + width / 2f,
+        y = top + height / 2f,
+    )
 }

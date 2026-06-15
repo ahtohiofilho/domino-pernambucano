@@ -9,16 +9,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private const val MOVE_ANIMATION_DURATION_MILLIS = 460
+private const val MOVE_ANIMATION_DURATION_MILLIS = 720
 private const val MISSING_TARGET_FALLBACK_MILLIS = 280L
-private const val AFTER_ANIMATION_SETTLE_MILLIS = 40L
 
 @Composable
 fun PlayedMoveAnimationOverlay(
@@ -28,48 +28,23 @@ fun PlayedMoveAnimationOverlay(
     onAnimationFinished: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val density = LocalDensity.current
+    val source = sourcePositionInWindow
+    val moveTarget = target
 
-    val progress = remember(
-        move,
-        sourcePositionInWindow,
-        target,
-    ) {
-        Animatable(0f)
-    }
-
-    LaunchedEffect(
-        move,
-        sourcePositionInWindow,
-        target,
-    ) {
-        val source = sourcePositionInWindow
-        val targetPosition = target?.positionInWindow
-
-        if (source == null || targetPosition == null) {
+    if (source == null || moveTarget == null) {
+        LaunchedEffect(
+            move,
+            sourcePositionInWindow,
+            target,
+        ) {
             delay(MISSING_TARGET_FALLBACK_MILLIS)
             onAnimationFinished()
-            return@LaunchedEffect
         }
 
-        progress.snapTo(0f)
-
-        progress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
-                easing = FastOutSlowInEasing,
-            ),
-        )
-
-        delay(AFTER_ANIMATION_SETTLE_MILLIS)
-
-        onAnimationFinished()
+        return
     }
 
-    val source = sourcePositionInWindow ?: return
-    val moveTarget = target ?: return
-    val targetPosition = moveTarget.positionInWindow
+    val density = LocalDensity.current
 
     val pieceWidthPx = with(density) {
         LOCAL_HAND_PIECE_WIDTH.toPx()
@@ -79,16 +54,78 @@ fun PlayedMoveAnimationOverlay(
         LOCAL_HAND_PIECE_HEIGHT.toPx()
     }
 
-    val animatedCenter = lerpOffset(
-        start = source,
-        end = targetPosition,
-        fraction = progress.value,
-    )
+    val animatedX = remember(
+        move,
+        source,
+        moveTarget,
+    ) {
+        Animatable(source.x)
+    }
 
-    val visualPiece = if (move.flipped) {
-        move.piece.flipped()
-    } else {
-        move.piece
+    val animatedY = remember(
+        move,
+        source,
+        moveTarget,
+    ) {
+        Animatable(source.y)
+    }
+
+    val animatedRotation = remember(
+        move,
+        source,
+        moveTarget,
+    ) {
+        Animatable(0f)
+    }
+
+    val visualPiece = remember(move) {
+        getVisualPieceForPlayedMove(move)
+    }
+
+    LaunchedEffect(
+        move,
+        source,
+        moveTarget,
+    ) {
+        animatedX.snapTo(source.x)
+        animatedY.snapTo(source.y)
+        animatedRotation.snapTo(0f)
+
+        val xJob = launch {
+            animatedX.animateTo(
+                targetValue = moveTarget.positionInWindow.x,
+                animationSpec = tween(
+                    durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        }
+
+        val yJob = launch {
+            animatedY.animateTo(
+                targetValue = moveTarget.positionInWindow.y,
+                animationSpec = tween(
+                    durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        }
+
+        val rotationJob = launch {
+            animatedRotation.animateTo(
+                targetValue = moveTarget.rotationDegrees,
+                animationSpec = tween(
+                    durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        }
+
+        xJob.join()
+        yJob.join()
+        rotationJob.join()
+
+        onAnimationFinished()
     }
 
     DominoPieceView(
@@ -96,47 +133,30 @@ fun PlayedMoveAnimationOverlay(
         faceUp = true,
         width = LOCAL_HAND_PIECE_WIDTH,
         height = LOCAL_HAND_PIECE_HEIGHT,
-        isPlayable = true,
-        rotationDegrees = moveTarget.rotationDegrees * progress.value,
-        modifier = modifier
-            .offset {
-                IntOffset(
-                    x = (animatedCenter.x - pieceWidthPx / 2f).roundToInt(),
-                    y = (animatedCenter.y - pieceHeightPx / 2f).roundToInt(),
-                )
-            }
-            .graphicsLayer {
-                alpha = 0.96f
-                shadowElevation = 22f
-                scaleX = 1.08f
-                scaleY = 1.08f
-            },
+        isPlayable = false,
+        rotationDegrees = animatedRotation.value,
+        autoOrientToPieceOrder = false,
+        modifier = modifier.offset {
+            IntOffset(
+                x = (animatedX.value - pieceWidthPx / 2f).roundToInt(),
+                y = (animatedY.value - pieceHeightPx / 2f).roundToInt(),
+            )
+        },
     )
 }
 
-private fun lerpOffset(
-    start: Offset,
-    end: Offset,
-    fraction: Float,
-): Offset {
-    return Offset(
-        x = lerpFloat(
-            start = start.x,
-            end = end.x,
-            fraction = fraction,
-        ),
-        y = lerpFloat(
-            start = start.y,
-            end = end.y,
-            fraction = fraction,
-        ),
-    )
-}
+private fun getVisualPieceForPlayedMove(
+    playableMove: PlayableMove,
+): DominoPiece {
+    val pieceToPlace = if (playableMove.flipped) {
+        playableMove.piece.flipped()
+    } else {
+        playableMove.piece
+    }
 
-private fun lerpFloat(
-    start: Float,
-    end: Float,
-    fraction: Float,
-): Float {
-    return start + ((end - start) * fraction)
+    return if (pieceToPlace.left <= pieceToPlace.right) {
+        pieceToPlace
+    } else {
+        pieceToPlace.flipped()
+    }
 }

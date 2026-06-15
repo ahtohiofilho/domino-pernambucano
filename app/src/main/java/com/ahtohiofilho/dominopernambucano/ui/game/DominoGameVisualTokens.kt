@@ -4,8 +4,7 @@ import androidx.compose.ui.unit.dp
 
 object DominoGameVisualTokens {
     /*
-     * Baseline visual herdado da versão antiga.
-     * A UI antiga é a referência de produto; estes tokens evitam
+     * Estes tokens evitam
      * que os valores fiquem espalhados pela tela nova.
      */
 
