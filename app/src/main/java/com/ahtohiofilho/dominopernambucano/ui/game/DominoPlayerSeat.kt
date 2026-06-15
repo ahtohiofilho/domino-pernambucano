@@ -39,6 +39,7 @@ fun DominoPlayerSeat(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     faceUp: Boolean = false,
+    isWinner: Boolean = false,
     onBoundsChanged: (Rect?) -> Unit = {},
 ) {
     val handPadding = if (compact) {
@@ -51,15 +52,21 @@ fun DominoPlayerSeat(
         DominoGameVisualTokens.OpponentHandHighlightCornerRadius,
     )
 
-    val highlightModifier = if (isCurrent) {
+    val shouldHighlight = isCurrent || isWinner
+
+    val highlightModifier = if (shouldHighlight) {
         Modifier
             .background(
-                color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.22f),
+                color = DominoSemanticColors.scoreHighlight.copy(
+                    alpha = if (isWinner) 0.26f else 0.22f,
+                ),
                 shape = highlightShape,
             )
             .border(
                 width = DominoGameVisualTokens.OpponentHandHighlightBorderWidth,
-                color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.88f),
+                color = DominoSemanticColors.scoreHighlight.copy(
+                    alpha = if (isWinner) 0.96f else 0.88f,
+                ),
                 shape = highlightShape,
             )
     } else {
@@ -81,6 +88,7 @@ fun DominoPlayerSeat(
         PlayerSeatName(
             name = name,
             isCurrent = isCurrent,
+            isWinner = isWinner,
             compact = compact,
         )
 
@@ -106,6 +114,10 @@ fun DominoPlayerSeat(
             CurrentTurnPill(
                 compact = compact,
             )
+        } else if (isWinner) {
+            WinnerPill(
+                compact = compact,
+            )
         }
     }
 }
@@ -114,11 +126,12 @@ fun DominoPlayerSeat(
 private fun PlayerSeatName(
     name: String,
     isCurrent: Boolean,
+    isWinner: Boolean,
     compact: Boolean,
 ) {
     Text(
         text = name,
-        color = if (isCurrent) {
+        color = if (isCurrent || isWinner) {
             DominoSemanticColors.scoreHighlight
         } else {
             DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.76f)
@@ -204,6 +217,32 @@ private fun OpponentVerticalPieces(
                 onClick = null,
             )
         }
+    }
+}
+
+@Composable
+private fun WinnerPill(
+    compact: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(
+                color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.92f),
+            )
+            .padding(
+                horizontal = if (compact) 7.dp else 9.dp,
+                vertical = if (compact) 3.dp else 4.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Text(
+            text = "★",
+            color = DominoColorTokens.InkBlue,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Black,
+        )
     }
 }
 

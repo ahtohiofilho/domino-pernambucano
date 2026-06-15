@@ -67,6 +67,8 @@ fun DominoGameScreen(
     val isRoundSummaryPhase = uiState.phase == DominoMatchPhase.RoundSummary
     val isMatchFinishedPhase = uiState.phase == DominoMatchPhase.MatchFinished
 
+    val shouldRevealRoundContext = isRoundSummaryPhase || isMatchFinishedPhase
+
     LaunchedEffect(uiState.phase) {
         if (uiState.phase !is DominoMatchPhase.PresentingMove) {
             localMoveSourcePositionInWindow = null
@@ -193,6 +195,12 @@ fun DominoGameScreen(
                         !isMatchFinishedPhase,
                 highlightedDropSide = draggedPieceState?.highlightedSide,
                 animatedPlayableMove = presentingMovePhase?.move,
+                revealOpponentHands = shouldRevealRoundContext,
+                roundWinnerPlayerIndex = if (shouldRevealRoundContext) {
+                    gameState.roundWinnerPlayerIndex
+                } else {
+                    null
+                },
                 onDropTargetsChanged = { targets ->
                     dropTargetsInWindow = targets
                 },

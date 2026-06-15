@@ -24,6 +24,8 @@ fun DominoGameTableStage(
     showDropTargets: Boolean,
     highlightedDropSide: BoardSide?,
     animatedPlayableMove: PlayableMove?,
+    revealOpponentHands: Boolean,
+    roundWinnerPlayerIndex: Int?,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit,
     onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow?) -> Unit,
     onPlayerSeatBoundsChanged: (Int, Rect?) -> Unit,
@@ -62,10 +64,11 @@ fun DominoGameTableStage(
             DominoPlayerSeat(
                 name = gameState.players.getOrNull(2)?.name ?: "Jogador 3",
                 pieces = gameState.players.getOrNull(2)?.hand.orEmpty(),
-                isCurrent = gameState.currentPlayerIndex == 2,
+                isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 2,
                 orientation = DominoPlayerSeatOrientation.HORIZONTAL,
                 compact = useCompactSeats,
-                faceUp = false,
+                faceUp = revealOpponentHands,
+                isWinner = roundWinnerPlayerIndex == 2,
                 onBoundsChanged = { bounds ->
                     onPlayerSeatBoundsChanged(
                         2,
@@ -84,10 +87,11 @@ fun DominoGameTableStage(
                 DominoPlayerSeat(
                     name = gameState.players.getOrNull(1)?.name ?: "Jogador 2",
                     pieces = gameState.players.getOrNull(1)?.hand.orEmpty(),
-                    isCurrent = gameState.currentPlayerIndex == 1,
+                    isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 1,
                     orientation = DominoPlayerSeatOrientation.VERTICAL,
                     compact = true,
-                    faceUp = false,
+                    faceUp = revealOpponentHands,
+                    isWinner = roundWinnerPlayerIndex == 1,
                     onBoundsChanged = { bounds ->
                         onPlayerSeatBoundsChanged(
                             1,
@@ -113,10 +117,11 @@ fun DominoGameTableStage(
                 DominoPlayerSeat(
                     name = gameState.players.getOrNull(3)?.name ?: "Jogador 4",
                     pieces = gameState.players.getOrNull(3)?.hand.orEmpty(),
-                    isCurrent = gameState.currentPlayerIndex == 3,
+                    isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 3,
                     orientation = DominoPlayerSeatOrientation.VERTICAL,
                     compact = true,
-                    faceUp = false,
+                    faceUp = revealOpponentHands,
+                    isWinner = roundWinnerPlayerIndex == 3,
                     onBoundsChanged = { bounds ->
                         onPlayerSeatBoundsChanged(
                             3,

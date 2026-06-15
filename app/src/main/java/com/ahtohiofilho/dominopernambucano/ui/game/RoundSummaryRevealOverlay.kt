@@ -5,7 +5,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,16 +26,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
-import com.ahtohiofilho.dominopernambucano.domain.DominoPlayer
 import com.ahtohiofilho.dominopernambucano.domain.RoundWinKind
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
-private const val ROUND_SUMMARY_ENTER_MILLIS = 280
-
-private val ROUND_SUMMARY_PANEL_RADIUS = 28.dp
-private val ROUND_SUMMARY_PANEL_PADDING = 16.dp
+private const val ROUND_SUMMARY_ENTER_MILLIS = 260
 
 @Composable
 fun RoundSummaryRevealOverlay(
@@ -51,12 +45,12 @@ fun RoundSummaryRevealOverlay(
     }
 
     val scaleAnim = remember(gameState.roundWinKind) {
-        Animatable(0.96f)
+        Animatable(0.98f)
     }
 
     LaunchedEffect(gameState.roundWinKind) {
         alphaAnim.snapTo(0f)
-        scaleAnim.snapTo(0.96f)
+        scaleAnim.snapTo(0.98f)
 
         alphaAnim.animateTo(
             targetValue = 1f,
@@ -78,52 +72,44 @@ fun RoundSummaryRevealOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(DominoColorTokens.InkBlue.copy(alpha = 0.62f))
-            .padding(14.dp),
-        contentAlignment = Alignment.Center,
+            .background(DominoColorTokens.InkBlue.copy(alpha = 0.18f))
+            .padding(12.dp),
     ) {
-        Column(
+        SleepingPiecesReveal(
+            pieces = gameState.sleepingPieces,
             modifier = Modifier
-                .fillMaxWidth()
+                .align(Alignment.TopEnd)
                 .graphicsLayer {
                     alpha = alphaAnim.value
                     scaleX = scaleAnim.value
                     scaleY = scaleAnim.value
-                }
-                .background(
-                    color = DominoColorTokens.PernambucoBlueDark.copy(alpha = 0.96f),
-                    shape = RoundedCornerShape(ROUND_SUMMARY_PANEL_RADIUS),
-                )
-                .border(
-                    width = 1.dp,
-                    color = DominoColorTokens.PureWhite.copy(alpha = 0.20f),
-                    shape = RoundedCornerShape(ROUND_SUMMARY_PANEL_RADIUS),
-                )
-                .padding(ROUND_SUMMARY_PANEL_PADDING),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                },
+        )
+
+        RoundSummaryTableReadBadge(
+            gameState = gameState,
+            localPlayerIndex = localPlayerIndex,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .graphicsLayer {
+                    alpha = alphaAnim.value
+                    scaleX = scaleAnim.value
+                    scaleY = scaleAnim.value
+                },
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(0.62f)
+                .graphicsLayer {
+                    alpha = alphaAnim.value
+                    scaleX = scaleAnim.value
+                    scaleY = scaleAnim.value
+                },
         ) {
-            RoundSummaryTitle(
-                gameState = gameState,
-            )
-
-            RoundSummaryScoreLine(
-                gameState = gameState,
-                localPlayerIndex = localPlayerIndex,
-            )
-
-            SleepingPiecesReveal(
-                pieces = gameState.sleepingPieces,
-            )
-
-            RoundSummaryPlayersReveal(
-                players = gameState.players,
-                localPlayerIndex = localPlayerIndex,
-                winnerPlayerIndex = gameState.roundWinnerPlayerIndex,
-            )
-
             PrimaryMenuButton(
-                text = "Próxima rodada",
+                text = "Próxima",
                 onClick = onStartNextRound,
             )
         }
@@ -131,35 +117,46 @@ fun RoundSummaryRevealOverlay(
 }
 
 @Composable
-private fun RoundSummaryTitle(
+private fun RoundSummaryTableReadBadge(
     gameState: DominoGameState,
+    localPlayerIndex: Int,
+    modifier: Modifier = Modifier,
 ) {
-    val title = getRoundSummaryTitle(
-        winKind = gameState.roundWinKind,
-    )
-
-    val subtitle = getRoundSummarySubtitle(
-        gameState = gameState,
-    )
-
     Column(
+        modifier = modifier
+            .background(
+                color = DominoColorTokens.PernambucoBlueDark.copy(alpha = 0.86f),
+                shape = RoundedCornerShape(22.dp),
+            )
+            .border(
+                width = 1.dp,
+                color = DominoColorTokens.PureWhite.copy(alpha = 0.18f),
+                shape = RoundedCornerShape(22.dp),
+            )
+            .padding(
+                horizontal = 16.dp,
+                vertical = 12.dp,
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = title,
+            text = getRoundSummaryTitle(
+                winKind = gameState.roundWinKind,
+            ),
             color = DominoSemanticColors.scoreHighlight,
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Black,
             textAlign = TextAlign.Center,
         )
 
-        Text(
-            text = subtitle,
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.78f),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
+        RoundSummaryScoreLine(
+            gameState = gameState,
+            localPlayerIndex = localPlayerIndex,
+        )
+
+        RoundSummaryMicroHint(
+            gameState = gameState,
         )
     }
 }
@@ -180,20 +177,6 @@ private fun RoundSummaryScoreLine(
     val opponentScore = gameState.teamScores.getOrElse(opponentTeamIndex) { 0 }
 
     Row(
-        modifier = Modifier
-            .background(
-                color = DominoColorTokens.PureWhite.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(18.dp),
-            )
-            .border(
-                width = 1.dp,
-                color = DominoColorTokens.PureWhite.copy(alpha = 0.16f),
-                shape = RoundedCornerShape(18.dp),
-            )
-            .padding(
-                horizontal = 20.dp,
-                vertical = 8.dp,
-            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -206,18 +189,36 @@ private fun RoundSummaryScoreLine(
 
         Text(
             text = "  ×  ",
-            color = DominoColorTokens.PureWhite.copy(alpha = 0.72f),
+            color = DominoColorTokens.PureWhite.copy(alpha = 0.70f),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Black,
         )
 
         Text(
             text = "$opponentScore",
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.82f),
+            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.86f),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Black,
         )
     }
+}
+
+@Composable
+private fun RoundSummaryMicroHint(
+    gameState: DominoGameState,
+) {
+    val hint = getRoundSummaryMicroHint(
+        gameState = gameState,
+    ) ?: return
+
+    Text(
+        text = hint,
+        color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.68f),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+    )
 }
 
 @Composable
@@ -227,7 +228,6 @@ private fun SleepingPiecesReveal(
 ) {
     Column(
         modifier = modifier
-            .fillMaxWidth()
             .background(
                 color = DominoColorTokens.PureWhite.copy(alpha = 0.10f),
                 shape = RoundedCornerShape(18.dp),
@@ -238,129 +238,30 @@ private fun SleepingPiecesReveal(
                 shape = RoundedCornerShape(18.dp),
             )
             .padding(
-                horizontal = 10.dp,
-                vertical = 9.dp,
+                horizontal = 9.dp,
+                vertical = 8.dp,
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
             text = "DORME",
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.76f),
-            style = MaterialTheme.typography.labelMedium,
+            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f),
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Black,
             textAlign = TextAlign.Center,
         )
 
         Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             pieces.forEach { piece ->
                 DominoPieceView(
                     piece = piece,
                     faceUp = true,
-                    width = DominoGameVisualTokens.TablePieceReferenceWidth,
-                    height = DominoGameVisualTokens.TablePieceReferenceHeight,
-                    onClick = null,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RoundSummaryPlayersReveal(
-    players: List<DominoPlayer>,
-    localPlayerIndex: Int,
-    winnerPlayerIndex: Int?,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        players.forEach { player ->
-            RoundSummaryPlayerHandReveal(
-                player = player,
-                isLocalPlayer = player.id == localPlayerIndex,
-                isWinner = player.id == winnerPlayerIndex,
-            )
-        }
-    }
-}
-
-@Composable
-private fun RoundSummaryPlayerHandReveal(
-    player: DominoPlayer,
-    isLocalPlayer: Boolean,
-    isWinner: Boolean,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                color = if (isWinner) {
-                    DominoSemanticColors.scoreHighlight.copy(alpha = 0.18f)
-                } else {
-                    DominoColorTokens.PureWhite.copy(alpha = 0.08f)
-                },
-                shape = RoundedCornerShape(16.dp),
-            )
-            .border(
-                width = if (isWinner) 2.dp else 1.dp,
-                color = if (isWinner) {
-                    DominoSemanticColors.scoreHighlight.copy(alpha = 0.88f)
-                } else {
-                    DominoColorTokens.PureWhite.copy(alpha = 0.13f)
-                },
-                shape = RoundedCornerShape(16.dp),
-            )
-            .padding(
-                horizontal = 10.dp,
-                vertical = 8.dp,
-            ),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = player.name,
-                color = DominoSemanticColors.primaryTextOnDark,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Black,
-            )
-
-            Text(
-                text = when {
-                    isWinner -> "venceu"
-                    isLocalPlayer -> "você"
-                    else -> "${player.hand.sumOf { piece -> piece.left + piece.right }} pts na mão"
-                },
-                color = if (isWinner) {
-                    DominoSemanticColors.scoreHighlight
-                } else {
-                    DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.62f)
-                },
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Black,
-            )
-        }
-
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            player.hand.forEach { piece ->
-                DominoPieceView(
-                    piece = piece,
-                    faceUp = true,
-                    width = 24.dp,
-                    height = 44.dp,
+                    width = 22.dp,
+                    height = 40.dp,
                     onClick = null,
                 )
             }
@@ -373,38 +274,25 @@ private fun getRoundSummaryTitle(
 ): String {
     return when (winKind) {
         RoundWinKind.COMMON -> "BATIDA"
-        RoundWinKind.DOUBLE -> "BATIDA DE CARROÇA"
+        RoundWinKind.DOUBLE -> "CARROÇA"
         RoundWinKind.LA_E_LO -> "LÁ E LÔ"
         RoundWinKind.CRUZADA -> "CRUZADA"
-        RoundWinKind.CLOSED -> "JOGO FECHADO"
-        RoundWinKind.CLOSED_TIE -> "EMPATE NO FECHADO"
-        null -> "RODADA CONCLUÍDA"
+        RoundWinKind.CLOSED -> "FECHOU"
+        RoundWinKind.CLOSED_TIE -> "EMPATE"
+        null -> "RODADA"
     }
 }
 
-private fun getRoundSummarySubtitle(
+private fun getRoundSummaryMicroHint(
     gameState: DominoGameState,
-): String {
-    val winnerName = gameState.roundWinnerPlayerIndex
-        ?.let { playerIndex -> gameState.players.getOrNull(playerIndex)?.name }
-
-    val multiplierText = if (gameState.scoreMultiplier > 1) {
-        " · valor x${gameState.scoreMultiplier}"
-    } else {
-        ""
+): String? {
+    if (gameState.scoreMultiplier > 1 && gameState.roundWinKind != RoundWinKind.CLOSED_TIE) {
+        return "x${gameState.scoreMultiplier}"
     }
 
-    return when {
-        gameState.roundWinKind == RoundWinKind.CLOSED_TIE -> {
-            "Ninguém pontuou. A próxima rodada aumenta o valor."
-        }
-
-        winnerName != null -> {
-            "$winnerName pontuou$multiplierText."
-        }
-
-        else -> {
-            "Confira as peças antes da próxima rodada."
-        }
+    return when (gameState.roundWinKind) {
+        RoundWinKind.CLOSED_TIE -> "próxima x${gameState.scoreMultiplier + 1}"
+        RoundWinKind.CLOSED -> "menor mão"
+        else -> null
     }
 }
