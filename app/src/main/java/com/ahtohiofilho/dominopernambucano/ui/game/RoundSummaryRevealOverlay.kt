@@ -75,10 +75,11 @@ fun RoundSummaryRevealOverlay(
             .background(DominoColorTokens.InkBlue.copy(alpha = 0.18f))
             .padding(12.dp),
     ) {
-        SleepingPiecesReveal(
-            pieces = gameState.sleepingPieces,
+        RoundSummaryTableReadBadge(
+            gameState = gameState,
+            localPlayerIndex = localPlayerIndex,
             modifier = Modifier
-                .align(Alignment.TopEnd)
+                .align(Alignment.Center)
                 .graphicsLayer {
                     alpha = alphaAnim.value
                     scaleX = scaleAnim.value
@@ -86,11 +87,14 @@ fun RoundSummaryRevealOverlay(
                 },
         )
 
-        RoundSummaryTableReadBadge(
-            gameState = gameState,
-            localPlayerIndex = localPlayerIndex,
+        SleepingPiecesReveal(
+            pieces = gameState.sleepingPieces,
             modifier = Modifier
-                .align(Alignment.Center)
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = 4.dp,
+                    bottom = 72.dp,
+                )
                 .graphicsLayer {
                     alpha = alphaAnim.value
                     scaleX = scaleAnim.value
@@ -273,11 +277,11 @@ private fun getRoundSummaryTitle(
     winKind: RoundWinKind?,
 ): String {
     return when (winKind) {
-        RoundWinKind.COMMON -> "BATIDA"
-        RoundWinKind.DOUBLE -> "CARROÇA"
+        RoundWinKind.COMMON -> "BATIDA SIMPLES"
+        RoundWinKind.DOUBLE -> "CARROÇADA"
         RoundWinKind.LA_E_LO -> "LÁ E LÔ"
         RoundWinKind.CRUZADA -> "CRUZADA"
-        RoundWinKind.CLOSED -> "FECHOU"
+        RoundWinKind.CLOSED -> "CONTAGEM DE PONTOS"
         RoundWinKind.CLOSED_TIE -> "EMPATE"
         null -> "RODADA"
     }
@@ -286,7 +290,10 @@ private fun getRoundSummaryTitle(
 private fun getRoundSummaryMicroHint(
     gameState: DominoGameState,
 ): String? {
-    if (gameState.scoreMultiplier > 1 && gameState.roundWinKind != RoundWinKind.CLOSED_TIE) {
+    if (
+        gameState.scoreMultiplier > 1 &&
+        gameState.roundWinKind != RoundWinKind.CLOSED_TIE
+    ) {
         return "x${gameState.scoreMultiplier}"
     }
 

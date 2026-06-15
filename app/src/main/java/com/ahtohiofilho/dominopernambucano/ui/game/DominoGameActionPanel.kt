@@ -69,7 +69,7 @@ private fun PhaseActions(
     when (val phase = uiState.phase) {
         DominoMatchPhase.RoundIntro -> {
             Text(
-                text = "Preparando rodada...",
+                text = "Preparando rodada.",
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Bold,
             )
@@ -85,7 +85,13 @@ private fun PhaseActions(
 
             if (firstMove == null) {
                 Text(
-                    text = "Nenhuma jogada disponível.",
+                    text = "Aguardando toque.",
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Text(
+                    text = "Nenhuma peça disponível.",
                     textAlign = TextAlign.Center,
                 )
             } else {
@@ -125,17 +131,6 @@ private fun PhaseActions(
         }
 
         DominoMatchPhase.RoundSummary -> {
-            Text(
-                text = "Resumo da rodada.",
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold,
-            )
-
-            Text(
-                text = "Peças reveladas na mesa.",
-                textAlign = TextAlign.Center,
-            )
-
             PrimaryMenuButton(
                 text = "Próxima rodada",
                 onClick = onStartNextRound,
