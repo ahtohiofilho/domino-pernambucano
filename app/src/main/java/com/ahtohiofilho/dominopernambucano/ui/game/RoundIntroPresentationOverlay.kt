@@ -39,10 +39,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private const val ROUND_INTRO_ENTER_MILLIS = 420
-private const val ROUND_INTRO_SCORE_MILLIS = 360
-private const val ROUND_INTRO_HOLD_MILLIS = 760L
-private const val ROUND_INTRO_EXIT_MILLIS = 320
+private const val ROUND_INTRO_ENTER_MILLIS = 620
+private const val ROUND_INTRO_SCORE_MILLIS = 520
+private const val ROUND_INTRO_HOLD_MILLIS = 1_050L
+private const val ROUND_INTRO_EXIT_MILLIS = 460
 
 private val ROUND_INTRO_PANEL_HORIZONTAL_PADDING = 22.dp
 private val ROUND_INTRO_PANEL_VERTICAL_PADDING = 24.dp

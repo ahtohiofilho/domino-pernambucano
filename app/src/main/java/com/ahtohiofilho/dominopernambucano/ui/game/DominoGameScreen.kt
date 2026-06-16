@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -12,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -21,8 +23,10 @@ import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+import kotlinx.coroutines.delay
 
 @Composable
 fun DominoGameScreen(
@@ -30,6 +34,8 @@ fun DominoGameScreen(
     onBackToMenuClick: () -> Unit,
     onRoundIntroFinished: () -> Unit,
     onLocalMoveSelected: (PlayableMove) -> Unit,
+    onTurnClockTick: (Long) -> Unit,
+    onBotDecisionReady: () -> Unit,
     onPresentationFinished: () -> Unit,
     onStartNextRound: () -> Unit,
     onStartNewMatch: () -> Unit,
@@ -72,6 +78,37 @@ fun DominoGameScreen(
     LaunchedEffect(uiState.phase) {
         if (uiState.phase !is DominoMatchPhase.PresentingMove) {
             localMoveSourcePositionInWindow = null
+        }
+    }
+
+    LaunchedEffect(
+        uiState.phase,
+        gameState.currentPlayerIndex,
+    ) {
+        if (uiState.phase == DominoMatchPhase.WaitingForLocalMove) {
+            while (true) {
+                delay(DominoMatchTiming.ClockTickMillis)
+
+                onTurnClockTick(
+                    DominoMatchTiming.ClockTickMillis,
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(
+        uiState.phase,
+        gameState.currentPlayerIndex,
+        uiState.localPlayerIndex,
+    ) {
+        val isBotDecisionTurn =
+            uiState.phase == DominoMatchPhase.WaitingForLocalMove &&
+                    gameState.currentPlayerIndex != uiState.localPlayerIndex
+
+        if (isBotDecisionTurn) {
+            delay(DominoMatchTiming.BotDecisionDelayMillis)
+
+            onBotDecisionReady()
         }
     }
 
@@ -182,9 +219,17 @@ fun DominoGameScreen(
                     vertical = 8.dp,
                 ),
         ) {
-            DominoMatchHeader(
-                uiState = uiState,
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(DominoGameVisualTokens.HeaderSlotHeight),
+                contentAlignment = Alignment.Center,
+            ) {
+                DominoMatchHeader(
+                    uiState = uiState,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             DominoGameTableStage(
                 gameState = gameState,
@@ -216,94 +261,104 @@ fun DominoGameScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .padding(
+                        vertical = DominoGameVisualTokens.TableStageVerticalPadding,
+                    ),
             )
 
-            DominoLocalHand(
-                uiState = uiState,
-                hiddenPiece = hiddenLocalAnimatedPiece,
-                onLocalMoveSelected = { move ->
-                    localMoveSourcePositionInWindow =
-                        localHandBoundsInWindow?.centerOffset()
-
-                    onLocalMoveSelected(move)
-                },
-                onLocalHandBoundsChanged = { bounds ->
-                    localHandBoundsInWindow = bounds
-                },
-                onPieceDragStart = { piece, positionInWindow ->
-                    if (uiState.phase != DominoMatchPhase.WaitingForLocalMove) {
-                        clearDragState()
-                        return@DominoLocalHand
-                    }
-
-                    val playableMoves = getPlayableMovesForPiece(piece)
-
-                    if (playableMoves.isEmpty()) {
-                        clearDragState()
-                        return@DominoLocalHand
-                    }
-
-                    draggedPieceState = buildDraggedPieceState(
-                        piece = piece,
-                        positionInWindow = positionInWindow,
-                        playableMoves = playableMoves,
-                    )
-                },
-                onPieceDrag = { dragAmount ->
-                    val currentDragState = draggedPieceState
-                        ?: return@DominoLocalHand
-
-                    val updatedPosition =
-                        currentDragState.positionInWindow + dragAmount
-
-                    draggedPieceState = buildDraggedPieceState(
-                        piece = currentDragState.piece,
-                        positionInWindow = updatedPosition,
-                        playableMoves = currentDragState.playableMoves,
-                    )
-                },
-                onPieceDragEnd = {
-                    val currentDragState = draggedPieceState
-                        ?: return@DominoLocalHand
-
-                    val shouldCancelMove = currentDragState.isOverLocalHand ||
-                            isPositionInsideRect(
-                                positionInWindow = currentDragState.positionInWindow,
-                                rect = localHandBoundsInWindow,
-                            )
-
-                    val selectedSide = if (shouldCancelMove) {
-                        null
-                    } else {
-                        currentDragState.highlightedSide
-                            ?: findNearestDropSide(
-                                positionInWindow = currentDragState.positionInWindow,
-                                playableMoves = currentDragState.playableMoves,
-                                dropTargets = dropTargetsInWindow,
-                            )
-                    }
-
-                    val selectedMove = findPlayableMoveForDropSide(
-                        playableMoves = currentDragState.playableMoves,
-                        dropSide = selectedSide,
-                    )
-
-                    if (selectedMove != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(DominoGameVisualTokens.LocalHandSlotHeight),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                DominoLocalHand(
+                    uiState = uiState,
+                    hiddenPiece = hiddenLocalAnimatedPiece,
+                    onLocalMoveSelected = { move ->
                         localMoveSourcePositionInWindow =
-                            currentDragState.positionInWindow
-                    }
+                            localHandBoundsInWindow?.centerOffset()
 
-                    clearDragState()
+                        onLocalMoveSelected(move)
+                    },
+                    onLocalHandBoundsChanged = { bounds ->
+                        localHandBoundsInWindow = bounds
+                    },
+                    onPieceDragStart = { piece, positionInWindow ->
+                        if (uiState.phase != DominoMatchPhase.WaitingForLocalMove) {
+                            clearDragState()
+                            return@DominoLocalHand
+                        }
 
-                    if (selectedMove != null) {
-                        onLocalMoveSelected(selectedMove)
-                    }
-                },
-                onPieceDragCancel = {
-                    clearDragState()
-                },
-            )
+                        val playableMoves = getPlayableMovesForPiece(piece)
+
+                        if (playableMoves.isEmpty()) {
+                            clearDragState()
+                            return@DominoLocalHand
+                        }
+
+                        draggedPieceState = buildDraggedPieceState(
+                            piece = piece,
+                            positionInWindow = positionInWindow,
+                            playableMoves = playableMoves,
+                        )
+                    },
+                    onPieceDrag = { dragAmount ->
+                        val currentDragState = draggedPieceState
+                            ?: return@DominoLocalHand
+
+                        val updatedPosition =
+                            currentDragState.positionInWindow + dragAmount
+
+                        draggedPieceState = buildDraggedPieceState(
+                            piece = currentDragState.piece,
+                            positionInWindow = updatedPosition,
+                            playableMoves = currentDragState.playableMoves,
+                        )
+                    },
+                    onPieceDragEnd = {
+                        val currentDragState = draggedPieceState
+                            ?: return@DominoLocalHand
+
+                        val shouldCancelMove = currentDragState.isOverLocalHand ||
+                                isPositionInsideRect(
+                                    positionInWindow = currentDragState.positionInWindow,
+                                    rect = localHandBoundsInWindow,
+                                )
+
+                        val selectedSide = if (shouldCancelMove) {
+                            null
+                        } else {
+                            currentDragState.highlightedSide
+                                ?: findNearestDropSide(
+                                    positionInWindow = currentDragState.positionInWindow,
+                                    playableMoves = currentDragState.playableMoves,
+                                    dropTargets = dropTargetsInWindow,
+                                )
+                        }
+
+                        val selectedMove = findPlayableMoveForDropSide(
+                            playableMoves = currentDragState.playableMoves,
+                            dropSide = selectedSide,
+                        )
+
+                        if (selectedMove != null) {
+                            localMoveSourcePositionInWindow =
+                                currentDragState.positionInWindow
+                        }
+
+                        clearDragState()
+
+                        if (selectedMove != null) {
+                            onLocalMoveSelected(selectedMove)
+                        }
+                    },
+                    onPieceDragCancel = {
+                        clearDragState()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         DraggedPieceOverlay(

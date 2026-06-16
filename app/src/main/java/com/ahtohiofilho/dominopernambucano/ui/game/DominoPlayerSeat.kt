@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,72 +74,47 @@ fun DominoPlayerSeat(
         Modifier
     }
 
-    Box(
+    Column(
         modifier = modifier
             .onGloballyPositioned { coordinates ->
                 onBoundsChanged(coordinates.boundsInWindow())
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier
-                .then(highlightModifier)
-                .padding(handPadding),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(
-                if (compact) 4.dp else 6.dp,
-            ),
-        ) {
-            PlayerSeatName(
-                name = name,
-                isCurrent = isCurrent,
-                isWinner = isWinner,
-                compact = compact,
-            )
-
-            when (orientation) {
-                DominoPlayerSeatOrientation.HORIZONTAL -> {
-                    OpponentHorizontalPieces(
-                        pieces = pieces,
-                        faceUp = faceUp,
-                        compact = compact,
-                    )
-                }
-
-                DominoPlayerSeatOrientation.VERTICAL -> {
-                    OpponentVerticalPieces(
-                        pieces = pieces,
-                        faceUp = faceUp,
-                        compact = compact,
-                    )
-                }
             }
-        }
+            .then(highlightModifier)
+            .padding(handPadding),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(
+            if (compact) 3.dp else 5.dp,
+        ),
+    ) {
+        PlayerSeatName(
+            name = name,
+            isCurrent = isCurrent,
+            isWinner = isWinner,
+            compact = compact,
+        )
 
-        val statusPillModifier = when (orientation) {
+        PlayerStatusIndicatorSlot(
+            isCurrent = isCurrent,
+            isWinner = isWinner,
+            compact = compact,
+        )
+
+        when (orientation) {
             DominoPlayerSeatOrientation.HORIZONTAL -> {
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(y = (-6).dp)
+                OpponentHorizontalPieces(
+                    pieces = pieces,
+                    faceUp = faceUp,
+                    compact = compact,
+                )
             }
 
             DominoPlayerSeatOrientation.VERTICAL -> {
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .offset(y = 8.dp)
+                OpponentVerticalPieces(
+                    pieces = pieces,
+                    faceUp = faceUp,
+                    compact = compact,
+                )
             }
-        }
-
-        if (isCurrent) {
-            CurrentTurnPill(
-                compact = compact,
-                modifier = statusPillModifier,
-            )
-        } else if (isWinner) {
-            WinnerPill(
-                compact = compact,
-                modifier = statusPillModifier,
-            )
         }
     }
 }
@@ -167,6 +142,34 @@ private fun PlayerSeatName(
         textAlign = TextAlign.Center,
         maxLines = 1,
     )
+}
+
+@Composable
+private fun PlayerStatusIndicatorSlot(
+    isCurrent: Boolean,
+    isWinner: Boolean,
+    compact: Boolean,
+) {
+    Box(
+        modifier = Modifier.height(
+            DominoGameVisualTokens.OpponentStatusIndicatorSlotHeight,
+        ),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            isWinner -> {
+                WinnerPill(
+                    compact = compact,
+                )
+            }
+
+            isCurrent -> {
+                CurrentTurnPill(
+                    compact = compact,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -245,10 +248,9 @@ private fun OpponentVerticalPieces(
 @Composable
 private fun WinnerPill(
     compact: Boolean,
-    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .clip(CircleShape)
             .background(
                 color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.92f),
@@ -272,33 +274,24 @@ private fun WinnerPill(
 @Composable
 private fun CurrentTurnPill(
     compact: Boolean,
-    modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
+    Box(
+        modifier = Modifier
             .clip(CircleShape)
             .background(
                 color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.92f),
             )
             .padding(
                 horizontal = if (compact) 7.dp else 9.dp,
-                vertical = if (compact) 3.dp else 4.dp,
+                vertical = if (compact) 4.dp else 5.dp,
             ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
                 .clip(CircleShape)
                 .background(DominoSemanticColors.playableMove)
-                .padding(3.dp),
-        )
-
-        Text(
-            text = "vez",
-            color = DominoColorTokens.InkBlue,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Black,
+                .padding(if (compact) 3.dp else 4.dp),
         )
     }
 }

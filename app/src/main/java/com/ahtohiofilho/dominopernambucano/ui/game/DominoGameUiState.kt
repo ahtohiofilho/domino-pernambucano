@@ -10,4 +10,5 @@ data class DominoGameUiState(
     val localPlayerIndex: Int,
     val phase: DominoMatchPhase,
     val localPlayableMoves: List<PlayableMove>,
+    val playerClockMillis: List<Long>,
 )

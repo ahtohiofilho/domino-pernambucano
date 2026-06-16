@@ -2,7 +2,6 @@ package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +33,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
@@ -199,32 +197,20 @@ private fun LocalHandPiece(
         Modifier
     }
 
-    val highlightModifier = if (isPlayable && !isHidden) {
-        Modifier
-            .background(
-                color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.16f),
-                shape = RoundedCornerShape(
-                    DominoGameVisualTokens.LocalPlayableHighlightCornerRadius,
-                ),
-            )
-            .border(
-                width = DominoGameVisualTokens.LocalPlayableBorderWidth,
-                color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.84f),
-                shape = RoundedCornerShape(
-                    DominoGameVisualTokens.LocalPlayableHighlightCornerRadius,
-                ),
-            )
-            .padding(DominoGameVisualTokens.LocalPlayableHighlightPadding)
-    } else {
-        Modifier
-    }
-
     Box(
         modifier = Modifier
+            .size(
+                width = DominoGameVisualTokens.LocalHandPieceSlotWidth,
+                height = DominoGameVisualTokens.LocalHandPieceSlotHeight,
+            )
             .onGloballyPositioned { coordinates ->
                 pieceBoundsInWindow = coordinates.boundsInWindow()
             }
-            .graphicsLayer {
+            .then(dragModifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier.graphicsLayer {
                 alpha = pieceAlpha
                 scaleX = pieceScale
                 scaleY = pieceScale
@@ -233,25 +219,24 @@ private fun LocalHandPiece(
                 } else {
                     0f
                 }
-            }
-            .then(highlightModifier)
-            .then(dragModifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        DominoPieceView(
-            piece = piece,
-            faceUp = true,
-            width = LOCAL_HAND_PIECE_WIDTH,
-            height = LOCAL_HAND_PIECE_HEIGHT,
-            isPlayable = false,
-            onClick = if (playableMove != null && !isHidden) {
-                {
-                    onLocalMoveSelected(playableMove)
-                }
-            } else {
-                null
             },
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            DominoPieceView(
+                piece = piece,
+                faceUp = true,
+                width = DominoGameVisualTokens.LocalHandPieceWidth,
+                height = DominoGameVisualTokens.LocalHandPieceHeight,
+                isPlayable = false,
+                onClick = if (playableMove != null && !isHidden) {
+                    {
+                        onLocalMoveSelected(playableMove)
+                    }
+                } else {
+                    null
+                },
+            )
+        }
     }
 }
 
@@ -259,49 +244,22 @@ private fun LocalHandPiece(
 private fun CurrentPlayerBadge(
     isCurrent: Boolean,
 ) {
-    Row(
+    Box(
         modifier = Modifier
+            .size(
+                size = if (isCurrent) {
+                    DominoGameVisualTokens.LocalCurrentTurnIndicatorSize
+                } else {
+                    DominoGameVisualTokens.LocalWaitingTurnIndicatorSize
+                },
+            )
             .clip(CircleShape)
             .background(
                 color = if (isCurrent) {
-                    DominoSemanticColors.scoreHighlight
+                    DominoSemanticColors.playableMove
                 } else {
-                    DominoColorTokens.PureWhite.copy(alpha = 0.12f)
+                    DominoColorTokens.PureWhite.copy(alpha = 0.28f)
                 },
-            )
-            .padding(
-                horizontal = 9.dp,
-                vertical = 4.dp,
             ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .clip(CircleShape)
-                .background(
-                    color = if (isCurrent) {
-                        DominoSemanticColors.playableMove
-                    } else {
-                        DominoColorTokens.PureWhite.copy(alpha = 0.42f)
-                    },
-                ),
-        )
-
-        Text(
-            text = if (isCurrent) {
-                "sua vez"
-            } else {
-                "aguardando"
-            },
-            color = if (isCurrent) {
-                DominoColorTokens.InkBlue
-            } else {
-                DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.62f)
-            },
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Black,
-        )
-    }
+    )
 }

@@ -7,4 +7,7 @@ data class DominoMatchRuntimeState(
     val roundNumber: Int,
     val localPlayerIndex: Int,
     val phase: DominoMatchPhase,
+    val playerClockMillis: List<Long> = createInitialPlayerClockMillis(
+        playerCount = gameState.players.size,
+    ),
 )

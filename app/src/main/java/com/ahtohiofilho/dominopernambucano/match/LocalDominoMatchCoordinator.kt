@@ -16,11 +16,8 @@ class LocalDominoMatchCoordinator(
     localPlayerIndex: Int = 0,
 ) : DominoMatchCoordinator {
     private val mutableState = MutableStateFlow(
-        DominoMatchRuntimeState(
-            gameState = createInitialDominoGameState(),
-            roundNumber = 1,
+        createInitialRuntimeState(
             localPlayerIndex = localPlayerIndex,
-            phase = DominoMatchPhase.RoundIntro,
         )
     )
 
@@ -40,6 +37,14 @@ class LocalDominoMatchCoordinator(
 
             is DominoMatchCommand.LocalMoveSelected -> {
                 handleLocalMoveSelected(command)
+            }
+
+            is DominoMatchCommand.TurnClockTick -> {
+                handleTurnClockTick(command)
+            }
+
+            DominoMatchCommand.BotDecisionReady -> {
+                handleBotDecisionReady()
             }
 
             DominoMatchCommand.PresentationFinished -> {
@@ -85,6 +90,17 @@ class LocalDominoMatchCoordinator(
             return
         }
 
+        val remainingMillis = runtimeState.playerClockMillis
+            .getOrNull(gameState.currentPlayerIndex)
+            ?: return
+
+        if (remainingMillis <= 0L) {
+            forceRandomMoveForCurrentPlayer(
+                runtimeState = runtimeState,
+            )
+            return
+        }
+
         val validMoves = getPlayableMoves(
             board = gameState.board,
             piece = command.move.piece,
@@ -101,6 +117,98 @@ class LocalDominoMatchCoordinator(
                 move = command.move,
             ),
         )
+    }
+
+    private fun handleTurnClockTick(
+        command: DominoMatchCommand.TurnClockTick,
+    ) {
+        if (command.elapsedMillis <= 0L) {
+            return
+        }
+
+        val runtimeState = mutableState.value
+
+        if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
+            return
+        }
+
+        val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
+        val currentRemainingMillis = runtimeState.playerClockMillis
+            .getOrNull(currentPlayerIndex)
+            ?: return
+
+        if (currentRemainingMillis <= 0L) {
+            forceRandomMoveForCurrentPlayer(
+                runtimeState = runtimeState,
+            )
+            return
+        }
+
+        val updatedClocks = decrementPlayerClockMillis(
+            clocks = runtimeState.playerClockMillis,
+            playerIndex = currentPlayerIndex,
+            elapsedMillis = command.elapsedMillis,
+        )
+
+        val updatedRuntimeState = runtimeState.copy(
+            playerClockMillis = updatedClocks,
+        )
+
+        val updatedRemainingMillis = updatedClocks
+            .getOrNull(currentPlayerIndex)
+            ?: return
+
+        if (updatedRemainingMillis <= 0L) {
+            forceRandomMoveForCurrentPlayer(
+                runtimeState = updatedRuntimeState,
+            )
+        } else {
+            mutableState.value = updatedRuntimeState
+        }
+    }
+
+    private fun handleBotDecisionReady() {
+        val runtimeState = mutableState.value
+
+        if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
+            return
+        }
+
+        val gameState = runtimeState.gameState
+
+        if (gameState.currentPlayerIndex == runtimeState.localPlayerIndex) {
+            return
+        }
+
+        val remainingMillis = runtimeState.playerClockMillis
+            .getOrNull(gameState.currentPlayerIndex)
+            ?: return
+
+        if (remainingMillis <= 0L) {
+            forceRandomMoveForCurrentPlayer(
+                runtimeState = runtimeState,
+            )
+            return
+        }
+
+        val botMove = findBasicBotMove(
+            state = gameState,
+        )
+
+        if (botMove != null) {
+            mutableState.value = runtimeState.copy(
+                phase = DominoMatchPhase.PresentingMove(
+                    playerIndex = gameState.currentPlayerIndex,
+                    move = botMove,
+                ),
+            )
+        } else {
+            mutableState.value = runtimeState.copy(
+                phase = DominoMatchPhase.PresentingPass(
+                    playerIndex = gameState.currentPlayerIndex,
+                ),
+            )
+        }
     }
 
     private fun handlePresentationFinished() {
@@ -158,24 +266,50 @@ class LocalDominoMatchCoordinator(
             return
         }
 
+        val nextRoundGameState = createNextRoundDominoGameState(
+            previousState = runtimeState.gameState,
+        )
+
         mutableState.value = runtimeState.copy(
-            gameState = createNextRoundDominoGameState(
-                previousState = runtimeState.gameState,
-            ),
+            gameState = nextRoundGameState,
             roundNumber = runtimeState.roundNumber + 1,
             phase = DominoMatchPhase.RoundIntro,
+            playerClockMillis = createInitialPlayerClockMillis(
+                playerCount = nextRoundGameState.players.size,
+            ),
         )
     }
 
     private fun handleStartNewMatch() {
         val runtimeState = mutableState.value
 
-        mutableState.value = DominoMatchRuntimeState(
-            gameState = createInitialDominoGameState(),
-            roundNumber = 1,
+        mutableState.value = createInitialRuntimeState(
             localPlayerIndex = runtimeState.localPlayerIndex,
-            phase = DominoMatchPhase.RoundIntro,
         )
+    }
+
+    private fun forceRandomMoveForCurrentPlayer(
+        runtimeState: DominoMatchRuntimeState,
+    ) {
+        val gameState = runtimeState.gameState
+        val randomMove = findRandomPlayableMove(
+            state = gameState,
+        )
+
+        if (randomMove != null) {
+            mutableState.value = runtimeState.copy(
+                phase = DominoMatchPhase.PresentingMove(
+                    playerIndex = gameState.currentPlayerIndex,
+                    move = randomMove,
+                ),
+            )
+        } else {
+            mutableState.value = runtimeState.copy(
+                phase = DominoMatchPhase.PresentingPass(
+                    playerIndex = gameState.currentPlayerIndex,
+                ),
+            )
+        }
     }
 
     private fun determineNextPhase(
@@ -203,23 +337,22 @@ class LocalDominoMatchCoordinator(
             )
         }
 
-        if (currentPlayerIndex == runtimeState.localPlayerIndex) {
-            return DominoMatchPhase.WaitingForLocalMove
-        }
-
-        val botMove = findBasicBotMove(
-            state = gameState,
-        )
-
-        if (botMove != null) {
-            return DominoMatchPhase.PresentingMove(
-                playerIndex = currentPlayerIndex,
-                move = botMove,
-            )
-        }
-
-        return DominoMatchPhase.PresentingPass(
-            playerIndex = currentPlayerIndex,
-        )
+        return DominoMatchPhase.WaitingForLocalMove
     }
+}
+
+private fun createInitialRuntimeState(
+    localPlayerIndex: Int,
+): DominoMatchRuntimeState {
+    val gameState = createInitialDominoGameState()
+
+    return DominoMatchRuntimeState(
+        gameState = gameState,
+        roundNumber = 1,
+        localPlayerIndex = localPlayerIndex,
+        phase = DominoMatchPhase.RoundIntro,
+        playerClockMillis = createInitialPlayerClockMillis(
+            playerCount = gameState.players.size,
+        ),
+    )
 }

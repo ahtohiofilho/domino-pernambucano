@@ -9,6 +9,12 @@ sealed interface DominoMatchCommand {
         val move: PlayableMove,
     ) : DominoMatchCommand
 
+    data class TurnClockTick(
+        val elapsedMillis: Long,
+    ) : DominoMatchCommand
+
+    data object BotDecisionReady : DominoMatchCommand
+
     data object PresentationFinished : DominoMatchCommand
 
     data object StartNextRound : DominoMatchCommand

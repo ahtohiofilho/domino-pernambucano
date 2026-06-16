@@ -27,9 +27,10 @@ import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.RoundWinKind
-import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+import kotlinx.coroutines.delay
 
 private const val ROUND_SUMMARY_ENTER_MILLIS = 260
 
@@ -48,7 +49,10 @@ fun RoundSummaryRevealOverlay(
         Animatable(0.98f)
     }
 
-    LaunchedEffect(gameState.roundWinKind) {
+    LaunchedEffect(
+        gameState.roundWinKind,
+        gameState.teamScores,
+    ) {
         alphaAnim.snapTo(0f)
         scaleAnim.snapTo(0.98f)
 
@@ -67,6 +71,10 @@ fun RoundSummaryRevealOverlay(
                 easing = FastOutSlowInEasing,
             ),
         )
+
+        delay(DominoMatchTiming.RoundSummaryAutoAdvanceMillis)
+
+        onStartNextRound()
     }
 
     Box(
@@ -101,22 +109,6 @@ fun RoundSummaryRevealOverlay(
                     scaleY = scaleAnim.value
                 },
         )
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth(0.62f)
-                .graphicsLayer {
-                    alpha = alphaAnim.value
-                    scaleX = scaleAnim.value
-                    scaleY = scaleAnim.value
-                },
-        ) {
-            PrimaryMenuButton(
-                text = "Próxima",
-                onClick = onStartNextRound,
-            )
-        }
     }
 }
 

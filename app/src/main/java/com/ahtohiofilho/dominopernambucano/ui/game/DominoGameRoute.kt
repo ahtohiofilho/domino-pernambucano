@@ -40,6 +40,7 @@ fun DominoGameRoute(
             localPlayerIndex = runtimeState.localPlayerIndex,
             phase = runtimeState.phase,
             localPlayableMoves = localPlayableMoves,
+            playerClockMillis = runtimeState.playerClockMillis,
         ),
         onBackToMenuClick = onBackToMenuClick,
         onRoundIntroFinished = {
@@ -52,6 +53,18 @@ fun DominoGameRoute(
                 DominoMatchCommand.LocalMoveSelected(
                     move = move,
                 )
+            )
+        },
+        onTurnClockTick = { elapsedMillis ->
+            matchCoordinator.dispatch(
+                DominoMatchCommand.TurnClockTick(
+                    elapsedMillis = elapsedMillis,
+                )
+            )
+        },
+        onBotDecisionReady = {
+            matchCoordinator.dispatch(
+                DominoMatchCommand.BotDecisionReady,
             )
         },
         onPresentationFinished = {

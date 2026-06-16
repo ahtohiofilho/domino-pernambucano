@@ -8,16 +8,32 @@ object DominoGameVisualTokens {
      * que os valores fiquem espalhados pela tela nova.
      */
 
+    val HeaderSlotHeight = 70.dp
+    val LocalHandSlotHeight = 126.dp
+
+    val TableStageHorizontalPadding = 6.dp
+    val TableStageVerticalPadding = 4.dp
+    val TableStageInnerHorizontalPadding = 4.dp
+
+    val OpponentTopSeatSlotHeight = 116.dp
+    val OpponentSideSeatSlotWidth = 70.dp
+    val OpponentStatusIndicatorSlotHeight = 16.dp
+
     val LocalHandPieceWidth = 48.dp
     val LocalHandPieceHeight = 88.dp
+
+    val LocalHandPieceSlotWidth = 58.dp
+    val LocalHandPieceSlotHeight = 98.dp
 
     val LocalHandCardCornerRadius = 18.dp
     val LocalHandCardPadding = 8.dp
     val LocalHandHeaderBottomGap = 6.dp
     val LocalHandPieceSpacing = 5.dp
 
+    val LocalCurrentTurnIndicatorSize = 13.dp
+    val LocalWaitingTurnIndicatorSize = 8.dp
+
     val LocalPlayableHighlightCornerRadius = 7.dp
-    val LocalPlayableHighlightPadding = 2.dp
     val LocalPlayableBorderWidth = 2.dp
 
     const val LocalPlayablePieceScale = 1.06f

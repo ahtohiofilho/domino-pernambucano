@@ -1,13 +1,15 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,71 +36,66 @@ fun DominoGameTableStage(
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
-        val isCompactWidth = maxWidth < 430.dp
-        val isCompactHeight = maxHeight < 430.dp
-        val useCompactSeats = isCompactWidth || isCompactHeight
-
-        val verticalGap = if (isCompactHeight) {
-            2.dp
-        } else {
-            6.dp
-        }
-
-        val horizontalGap = if (isCompactWidth) {
-            2.dp
-        } else {
-            6.dp
-        }
-
-        val tableHorizontalPadding = if (isCompactWidth) {
-            0.dp
-        } else {
-            4.dp
-        }
+        val compact = maxWidth < 390.dp || maxHeight < 650.dp
 
         Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(verticalGap),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    horizontal = DominoGameVisualTokens.TableStageHorizontalPadding,
+                ),
         ) {
-            DominoPlayerSeat(
-                name = gameState.players.getOrNull(2)?.name ?: "Jogador 3",
-                pieces = gameState.players.getOrNull(2)?.hand.orEmpty(),
-                isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 2,
-                orientation = DominoPlayerSeatOrientation.HORIZONTAL,
-                compact = useCompactSeats,
-                faceUp = revealOpponentHands,
-                isWinner = roundWinnerPlayerIndex == 2,
-                onBoundsChanged = { bounds ->
-                    onPlayerSeatBoundsChanged(
-                        2,
-                        bounds,
-                    )
-                },
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(DominoGameVisualTokens.OpponentTopSeatSlotHeight),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                DominoPlayerSeat(
+                    name = gameState.players.getOrNull(2)?.name ?: "Jogador 3",
+                    pieces = gameState.players.getOrNull(2)?.hand.orEmpty(),
+                    isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 2,
+                    orientation = DominoPlayerSeatOrientation.HORIZONTAL,
+                    compact = compact,
+                    faceUp = revealOpponentHands,
+                    isWinner = roundWinnerPlayerIndex == 2,
+                    onBoundsChanged = { bounds ->
+                        onPlayerSeatBoundsChanged(
+                            2,
+                            bounds,
+                        )
+                    },
+                )
+            }
 
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(horizontalGap),
             ) {
-                DominoPlayerSeat(
-                    name = gameState.players.getOrNull(1)?.name ?: "Jogador 2",
-                    pieces = gameState.players.getOrNull(1)?.hand.orEmpty(),
-                    isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 1,
-                    orientation = DominoPlayerSeatOrientation.VERTICAL,
-                    compact = true,
-                    faceUp = revealOpponentHands,
-                    isWinner = roundWinnerPlayerIndex == 1,
-                    onBoundsChanged = { bounds ->
-                        onPlayerSeatBoundsChanged(
-                            1,
-                            bounds,
-                        )
-                    },
-                )
+                Box(
+                    modifier = Modifier
+                        .width(DominoGameVisualTokens.OpponentSideSeatSlotWidth)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    DominoPlayerSeat(
+                        name = gameState.players.getOrNull(1)?.name ?: "Jogador 2",
+                        pieces = gameState.players.getOrNull(1)?.hand.orEmpty(),
+                        isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 1,
+                        orientation = DominoPlayerSeatOrientation.VERTICAL,
+                        compact = true,
+                        faceUp = revealOpponentHands,
+                        isWinner = roundWinnerPlayerIndex == 1,
+                        onBoundsChanged = { bounds ->
+                            onPlayerSeatBoundsChanged(
+                                1,
+                                bounds,
+                            )
+                        },
+                    )
+                }
 
                 DominoTableArea(
                     gameState = gameState,
@@ -111,24 +108,33 @@ fun DominoGameTableStage(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .padding(horizontal = tableHorizontalPadding),
+                        .padding(
+                            horizontal = DominoGameVisualTokens.TableStageInnerHorizontalPadding,
+                        ),
                 )
 
-                DominoPlayerSeat(
-                    name = gameState.players.getOrNull(3)?.name ?: "Jogador 4",
-                    pieces = gameState.players.getOrNull(3)?.hand.orEmpty(),
-                    isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 3,
-                    orientation = DominoPlayerSeatOrientation.VERTICAL,
-                    compact = true,
-                    faceUp = revealOpponentHands,
-                    isWinner = roundWinnerPlayerIndex == 3,
-                    onBoundsChanged = { bounds ->
-                        onPlayerSeatBoundsChanged(
-                            3,
-                            bounds,
-                        )
-                    },
-                )
+                Box(
+                    modifier = Modifier
+                        .width(DominoGameVisualTokens.OpponentSideSeatSlotWidth)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    DominoPlayerSeat(
+                        name = gameState.players.getOrNull(3)?.name ?: "Jogador 4",
+                        pieces = gameState.players.getOrNull(3)?.hand.orEmpty(),
+                        isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 3,
+                        orientation = DominoPlayerSeatOrientation.VERTICAL,
+                        compact = true,
+                        faceUp = revealOpponentHands,
+                        isWinner = roundWinnerPlayerIndex == 3,
+                        onBoundsChanged = { bounds ->
+                            onPlayerSeatBoundsChanged(
+                                3,
+                                bounds,
+                            )
+                        },
+                    )
+                }
             }
         }
     }
