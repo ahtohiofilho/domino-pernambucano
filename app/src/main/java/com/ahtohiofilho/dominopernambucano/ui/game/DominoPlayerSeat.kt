@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -73,50 +74,71 @@ fun DominoPlayerSeat(
         Modifier
     }
 
-    Column(
+    Box(
         modifier = modifier
             .onGloballyPositioned { coordinates ->
                 onBoundsChanged(coordinates.boundsInWindow())
-            }
-            .then(highlightModifier)
-            .padding(handPadding),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(
-            if (compact) 4.dp else 6.dp,
-        ),
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        PlayerSeatName(
-            name = name,
-            isCurrent = isCurrent,
-            isWinner = isWinner,
-            compact = compact,
-        )
+        Column(
+            modifier = Modifier
+                .then(highlightModifier)
+                .padding(handPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(
+                if (compact) 4.dp else 6.dp,
+            ),
+        ) {
+            PlayerSeatName(
+                name = name,
+                isCurrent = isCurrent,
+                isWinner = isWinner,
+                compact = compact,
+            )
 
-        when (orientation) {
+            when (orientation) {
+                DominoPlayerSeatOrientation.HORIZONTAL -> {
+                    OpponentHorizontalPieces(
+                        pieces = pieces,
+                        faceUp = faceUp,
+                        compact = compact,
+                    )
+                }
+
+                DominoPlayerSeatOrientation.VERTICAL -> {
+                    OpponentVerticalPieces(
+                        pieces = pieces,
+                        faceUp = faceUp,
+                        compact = compact,
+                    )
+                }
+            }
+        }
+
+        val statusPillModifier = when (orientation) {
             DominoPlayerSeatOrientation.HORIZONTAL -> {
-                OpponentHorizontalPieces(
-                    pieces = pieces,
-                    faceUp = faceUp,
-                    compact = compact,
-                )
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = (-6).dp)
             }
 
             DominoPlayerSeatOrientation.VERTICAL -> {
-                OpponentVerticalPieces(
-                    pieces = pieces,
-                    faceUp = faceUp,
-                    compact = compact,
-                )
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset(y = 8.dp)
             }
         }
 
         if (isCurrent) {
             CurrentTurnPill(
                 compact = compact,
+                modifier = statusPillModifier,
             )
         } else if (isWinner) {
             WinnerPill(
                 compact = compact,
+                modifier = statusPillModifier,
             )
         }
     }
@@ -223,9 +245,10 @@ private fun OpponentVerticalPieces(
 @Composable
 private fun WinnerPill(
     compact: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .clip(CircleShape)
             .background(
                 color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.92f),
@@ -249,9 +272,10 @@ private fun WinnerPill(
 @Composable
 private fun CurrentTurnPill(
     compact: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .clip(CircleShape)
             .background(
                 color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.92f),

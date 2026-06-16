@@ -26,30 +26,30 @@ object DominoGameVisualTokens {
     const val LocalDefaultPieceAlpha = 1f
     const val LocalHiddenPieceAlpha = 0f
 
-    val TablePieceReferenceWidth = 30.dp
-    val TablePieceReferenceHeight = 55.dp
+    val TablePieceReferenceWidth = 33.dp
+    val TablePieceReferenceHeight = 60.dp
 
     const val TablePieceHeightRatio = 1.83f
 
-    const val ResponsiveTablePieceWidthMin = 20f
-    const val ResponsiveTablePieceWidthMax = 31f
+    const val ResponsiveTablePieceWidthMin = 23f
+    const val ResponsiveTablePieceWidthMax = 35f
 
-    const val ResponsiveTablePieceHeightMin = 38f
-    const val ResponsiveTablePieceHeightMax = 57f
+    const val ResponsiveTablePieceHeightMin = 42f
+    const val ResponsiveTablePieceHeightMax = 64f
 
     const val ResponsiveTableSafeMarginMin = 2f
     const val ResponsiveTableSafeMarginMax = 8f
 
     const val ResponsiveTableSafeMarginFactor = 0.014f
 
-    const val ResponsiveTablePieceWidthFactorCompact = 0.070f
-    const val ResponsiveTablePieceWidthFactorNarrow = 0.074f
-    const val ResponsiveTablePieceWidthFactorDefault = 0.078f
+    const val ResponsiveTablePieceWidthFactorCompact = 0.077f
+    const val ResponsiveTablePieceWidthFactorNarrow = 0.082f
+    const val ResponsiveTablePieceWidthFactorDefault = 0.086f
 
-    const val LateralEscapePieceCountVeryNarrow = 1.65f
-    const val LateralEscapePieceCountNarrow = 2.15f
-    const val LateralEscapePieceCountCompact = 2.45f
-    const val LateralEscapePieceCountDefault = 2.85f
+    const val LateralEscapePieceCountVeryNarrow = 1.85f
+    const val LateralEscapePieceCountNarrow = 2.45f
+    const val LateralEscapePieceCountCompact = 2.85f
+    const val LateralEscapePieceCountDefault = 3.35f
 
     val TablePieceGap = 0.dp
 
