@@ -13,11 +13,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class LocalDominoMatchCoordinator(
-    localPlayerIndex: Int = 0,
+    private val localPlayerIndex: Int = 0,
+    private val clockPolicy: DominoMatchClockPolicy = DominoMatchClockPolicy.Disabled,
 ) : DominoMatchCoordinator {
     private val mutableState = MutableStateFlow(
         createInitialRuntimeState(
             localPlayerIndex = localPlayerIndex,
+            clockPolicy = clockPolicy,
         )
     )
 
@@ -90,11 +92,13 @@ class LocalDominoMatchCoordinator(
             return
         }
 
-        val remainingMillis = runtimeState.playerClockMillis
-            .getOrNull(gameState.currentPlayerIndex)
-            ?: return
-
-        if (remainingMillis <= 0L) {
+        if (
+            runtimeState.clockPolicy.enabled &&
+            isPlayerClockExpired(
+                clocks = runtimeState.playerClockMillis,
+                playerIndex = gameState.currentPlayerIndex,
+            )
+        ) {
             forceRandomMoveForCurrentPlayer(
                 runtimeState = runtimeState,
             )
@@ -128,16 +132,22 @@ class LocalDominoMatchCoordinator(
 
         val runtimeState = mutableState.value
 
+        if (!runtimeState.clockPolicy.enabled) {
+            return
+        }
+
         if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
             return
         }
 
         val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
-        val currentRemainingMillis = runtimeState.playerClockMillis
-            .getOrNull(currentPlayerIndex)
-            ?: return
 
-        if (currentRemainingMillis <= 0L) {
+        if (
+            isPlayerClockExpired(
+                clocks = runtimeState.playerClockMillis,
+                playerIndex = currentPlayerIndex,
+            )
+        ) {
             forceRandomMoveForCurrentPlayer(
                 runtimeState = runtimeState,
             )
@@ -154,11 +164,12 @@ class LocalDominoMatchCoordinator(
             playerClockMillis = updatedClocks,
         )
 
-        val updatedRemainingMillis = updatedClocks
-            .getOrNull(currentPlayerIndex)
-            ?: return
-
-        if (updatedRemainingMillis <= 0L) {
+        if (
+            isPlayerClockExpired(
+                clocks = updatedClocks,
+                playerIndex = currentPlayerIndex,
+            )
+        ) {
             forceRandomMoveForCurrentPlayer(
                 runtimeState = updatedRuntimeState,
             )
@@ -180,11 +191,13 @@ class LocalDominoMatchCoordinator(
             return
         }
 
-        val remainingMillis = runtimeState.playerClockMillis
-            .getOrNull(gameState.currentPlayerIndex)
-            ?: return
-
-        if (remainingMillis <= 0L) {
+        if (
+            runtimeState.clockPolicy.enabled &&
+            isPlayerClockExpired(
+                clocks = runtimeState.playerClockMillis,
+                playerIndex = gameState.currentPlayerIndex,
+            )
+        ) {
             forceRandomMoveForCurrentPlayer(
                 runtimeState = runtimeState,
             )
@@ -276,6 +289,7 @@ class LocalDominoMatchCoordinator(
             phase = DominoMatchPhase.RoundIntro,
             playerClockMillis = createInitialPlayerClockMillis(
                 playerCount = nextRoundGameState.players.size,
+                clockPolicy = runtimeState.clockPolicy,
             ),
         )
     }
@@ -285,6 +299,7 @@ class LocalDominoMatchCoordinator(
 
         mutableState.value = createInitialRuntimeState(
             localPlayerIndex = runtimeState.localPlayerIndex,
+            clockPolicy = runtimeState.clockPolicy,
         )
     }
 
@@ -292,6 +307,7 @@ class LocalDominoMatchCoordinator(
         runtimeState: DominoMatchRuntimeState,
     ) {
         val gameState = runtimeState.gameState
+
         val randomMove = findRandomPlayableMove(
             state = gameState,
         )
@@ -343,6 +359,7 @@ class LocalDominoMatchCoordinator(
 
 private fun createInitialRuntimeState(
     localPlayerIndex: Int,
+    clockPolicy: DominoMatchClockPolicy,
 ): DominoMatchRuntimeState {
     val gameState = createInitialDominoGameState()
 
@@ -351,8 +368,10 @@ private fun createInitialRuntimeState(
         roundNumber = 1,
         localPlayerIndex = localPlayerIndex,
         phase = DominoMatchPhase.RoundIntro,
+        clockPolicy = clockPolicy,
         playerClockMillis = createInitialPlayerClockMillis(
             playerCount = gameState.players.size,
+            clockPolicy = clockPolicy,
         ),
     )
 }

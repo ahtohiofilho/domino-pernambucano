@@ -1,9 +1,12 @@
 package com.ahtohiofilho.dominopernambucano.session
 
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+private const val ENABLE_OFFLINE_CLOCK_DEBUG = true
 
 class LocalDominoSessionCoordinator : DominoSessionCoordinator {
     private val mutableState = MutableStateFlow<DominoSessionState>(
@@ -26,7 +29,7 @@ class LocalDominoSessionCoordinator : DominoSessionCoordinator {
 
             DominoSessionCommand.StartLocalMatch -> {
                 mutableState.value = DominoSessionState.LocalMatch(
-                    matchCoordinator = LocalDominoMatchCoordinator(),
+                    matchCoordinator = createLocalMatchCoordinator(),
                 )
             }
 
@@ -47,4 +50,16 @@ class LocalDominoSessionCoordinator : DominoSessionCoordinator {
             }
         }
     }
+}
+
+private fun createLocalMatchCoordinator(): LocalDominoMatchCoordinator {
+    val clockPolicy = if (ENABLE_OFFLINE_CLOCK_DEBUG) {
+        DominoMatchClockPolicy.OnlinePerPlayerRound
+    } else {
+        DominoMatchClockPolicy.Disabled
+    }
+
+    return LocalDominoMatchCoordinator(
+        clockPolicy = clockPolicy,
+    )
 }

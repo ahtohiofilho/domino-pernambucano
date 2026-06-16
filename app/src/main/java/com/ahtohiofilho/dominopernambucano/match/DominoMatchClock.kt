@@ -2,9 +2,14 @@ package com.ahtohiofilho.dominopernambucano.match
 
 fun createInitialPlayerClockMillis(
     playerCount: Int,
+    clockPolicy: DominoMatchClockPolicy,
 ): List<Long> {
+    if (!clockPolicy.enabled) {
+        return emptyList()
+    }
+
     return List(playerCount) {
-        DominoMatchTiming.PlayerRoundTimeMillis
+        clockPolicy.playerRoundTimeMillis
     }
 }
 
@@ -24,4 +29,13 @@ fun decrementPlayerClockMillis(
             remainingMillis
         }
     }
+}
+
+fun isPlayerClockExpired(
+    clocks: List<Long>,
+    playerIndex: Int,
+): Boolean {
+    val remainingMillis = clocks.getOrNull(playerIndex) ?: return false
+
+    return remainingMillis <= 0L
 }

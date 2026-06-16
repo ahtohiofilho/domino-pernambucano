@@ -82,17 +82,24 @@ fun DominoGameScreen(
     }
 
     LaunchedEffect(
+        uiState.isTurnClockEnabled,
         uiState.phase,
         gameState.currentPlayerIndex,
     ) {
-        if (uiState.phase == DominoMatchPhase.WaitingForLocalMove) {
-            while (true) {
-                delay(DominoMatchTiming.ClockTickMillis)
+        if (!uiState.isTurnClockEnabled) {
+            return@LaunchedEffect
+        }
 
-                onTurnClockTick(
-                    DominoMatchTiming.ClockTickMillis,
-                )
-            }
+        if (uiState.phase != DominoMatchPhase.WaitingForLocalMove) {
+            return@LaunchedEffect
+        }
+
+        while (true) {
+            delay(DominoMatchTiming.ClockTickMillis)
+
+            onTurnClockTick(
+                DominoMatchTiming.ClockTickMillis,
+            )
         }
     }
 
@@ -360,6 +367,11 @@ fun DominoGameScreen(
                 )
             }
         }
+
+        DominoTurnCountdownHud(
+            uiState = uiState,
+            modifier = Modifier.fillMaxSize(),
+        )
 
         DraggedPieceOverlay(
             draggedPieceState = if (

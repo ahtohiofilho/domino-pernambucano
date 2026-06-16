@@ -16,11 +16,14 @@ fun DominoGameRoute(
     val runtimeState by matchCoordinator.state.collectAsState()
     val gameState = runtimeState.gameState
 
-    val localPlayer = gameState.players[runtimeState.localPlayerIndex]
+    val localPlayer = gameState.players.getOrNull(
+        runtimeState.localPlayerIndex,
+    )
 
     val localPlayableMoves = if (
         runtimeState.phase == DominoMatchPhase.WaitingForLocalMove &&
-        gameState.currentPlayerIndex == runtimeState.localPlayerIndex
+        gameState.currentPlayerIndex == runtimeState.localPlayerIndex &&
+        localPlayer != null
     ) {
         localPlayer.hand.flatMap { piece ->
             getPlayableMoves(
@@ -41,6 +44,8 @@ fun DominoGameRoute(
             phase = runtimeState.phase,
             localPlayableMoves = localPlayableMoves,
             playerClockMillis = runtimeState.playerClockMillis,
+            isTurnClockEnabled = runtimeState.clockPolicy.enabled,
+            turnClockTotalMillis = runtimeState.clockPolicy.playerRoundTimeMillis,
         ),
         onBackToMenuClick = onBackToMenuClick,
         onRoundIntroFinished = {

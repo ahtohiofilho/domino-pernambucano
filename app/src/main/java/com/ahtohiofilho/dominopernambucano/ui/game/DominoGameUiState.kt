@@ -11,4 +11,6 @@ data class DominoGameUiState(
     val phase: DominoMatchPhase,
     val localPlayableMoves: List<PlayableMove>,
     val playerClockMillis: List<Long>,
+    val isTurnClockEnabled: Boolean,
+    val turnClockTotalMillis: Long,
 )
