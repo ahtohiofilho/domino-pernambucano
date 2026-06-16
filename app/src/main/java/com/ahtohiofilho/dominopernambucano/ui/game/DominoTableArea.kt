@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
-import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 
@@ -64,27 +63,6 @@ fun DominoTableArea(
                 onAnimatedMoveTargetChanged = onAnimatedMoveTargetChanged,
                 modifier = Modifier.fillMaxSize(),
             )
-        } else {
-            EmptyTableOpeningPiece(
-                openingPiece = gameState.openingPiece,
-            )
         }
     }
-}
-
-@Composable
-private fun EmptyTableOpeningPiece(
-    openingPiece: DominoPiece?,
-) {
-    if (openingPiece == null) {
-        return
-    }
-
-    DominoPieceView(
-        piece = openingPiece,
-        faceUp = true,
-        width = DominoGameVisualTokens.TablePieceReferenceWidth,
-        height = DominoGameVisualTokens.TablePieceReferenceHeight,
-        isPlayable = true,
-    )
 }

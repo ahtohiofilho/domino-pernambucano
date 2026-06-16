@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.ui.game
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
@@ -21,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
+private const val CountdownLateralOffsetFraction = 0.18f
+
 @Composable
 fun DominoTurnCountdownHud(
     uiState: DominoGameUiState,
@@ -37,9 +40,12 @@ fun DominoTurnCountdownHud(
 
     val currentPlayerIndex = uiState.gameState.currentPlayerIndex
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier,
     ) {
+        val horizontalLateralOffset = maxWidth * CountdownLateralOffsetFraction
+        val verticalLateralOffset = maxHeight * CountdownLateralOffsetFraction
+
         CountdownNumber(
             playerIndex = topPlayerIndex,
             uiState = uiState,
@@ -49,7 +55,9 @@ fun DominoTurnCountdownHud(
                 .padding(
                     top = DominoGameVisualTokens.HeaderSlotHeight + 6.dp,
                 )
-                .offset(x = 62.dp),
+                .offset(
+                    x = horizontalLateralOffset,
+                ),
         )
 
         CountdownNumber(
@@ -58,8 +66,12 @@ fun DominoTurnCountdownHud(
             isCurrent = currentPlayerIndex == leftPlayerIndex,
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(start = 10.dp)
-                .offset(y = (-72).dp),
+                .padding(
+                    start = 10.dp,
+                )
+                .offset(
+                    y = -verticalLateralOffset,
+                ),
         )
 
         CountdownNumber(
@@ -68,8 +80,12 @@ fun DominoTurnCountdownHud(
             isCurrent = currentPlayerIndex == rightPlayerIndex,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 10.dp)
-                .offset(y = 72.dp),
+                .padding(
+                    end = 10.dp,
+                )
+                .offset(
+                    y = verticalLateralOffset,
+                ),
         )
 
         CountdownNumber(
@@ -81,7 +97,9 @@ fun DominoTurnCountdownHud(
                 .padding(
                     bottom = DominoGameVisualTokens.LocalHandSlotHeight + 8.dp,
                 )
-                .offset(x = 76.dp),
+                .offset(
+                    x = horizontalLateralOffset,
+                ),
         )
     }
 }

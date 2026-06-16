@@ -75,6 +75,15 @@ fun DominoGameScreen(
 
     val shouldRevealRoundContext = isRoundSummaryPhase || isMatchFinishedPhase
 
+    val localVisualHandPieces = getVisualHandPieces(
+        playerIndex = uiState.localPlayerIndex,
+        pieces = gameState.players
+            .getOrNull(uiState.localPlayerIndex)
+            ?.hand
+            .orEmpty(),
+        presentingMovePhase = presentingMovePhase,
+    )
+
     LaunchedEffect(uiState.phase) {
         if (uiState.phase !is DominoMatchPhase.PresentingMove) {
             localMoveSourcePositionInWindow = null
@@ -129,15 +138,6 @@ fun DominoGameScreen(
             teamScores = gameState.teamScores,
             localPlayerIndex = uiState.localPlayerIndex,
         )
-    }
-
-    val hiddenLocalAnimatedPiece = if (
-        presentingMovePhase != null &&
-        presentingMovePhase.playerIndex == uiState.localPlayerIndex
-    ) {
-        presentingMovePhase.move.piece
-    } else {
-        null
     }
 
     val dropTargetHitRadiusPx = with(density) {
@@ -206,6 +206,19 @@ fun DominoGameScreen(
         return playerSeatBoundsInWindow[playerIndex]?.centerOffset()
     }
 
+    fun getVisualPiecesForPlayer(
+        playerIndex: Int,
+    ): List<DominoPiece> {
+        return getVisualHandPieces(
+            playerIndex = playerIndex,
+            pieces = gameState.players
+                .getOrNull(playerIndex)
+                ?.hand
+                .orEmpty(),
+            presentingMovePhase = presentingMovePhase,
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -253,6 +266,11 @@ fun DominoGameScreen(
                 } else {
                     null
                 },
+                visualPiecesForPlayer = { playerIndex ->
+                    getVisualPiecesForPlayer(
+                        playerIndex = playerIndex,
+                    )
+                },
                 onDropTargetsChanged = { targets ->
                     dropTargetsInWindow = targets
                 },
@@ -281,7 +299,7 @@ fun DominoGameScreen(
             ) {
                 DominoLocalHand(
                     uiState = uiState,
-                    hiddenPiece = hiddenLocalAnimatedPiece,
+                    pieces = localVisualHandPieces,
                     onLocalMoveSelected = { move ->
                         localMoveSourcePositionInWindow =
                             localHandBoundsInWindow?.centerOffset()
@@ -427,6 +445,35 @@ fun DominoGameScreen(
                 onStartNewMatch = onStartNewMatch,
                 onBackToMenuClick = onBackToMenuClick,
             )
+        }
+    }
+}
+
+private fun getVisualHandPieces(
+    playerIndex: Int,
+    pieces: List<DominoPiece>,
+    presentingMovePhase: DominoMatchPhase.PresentingMove?,
+): List<DominoPiece> {
+    if (presentingMovePhase?.playerIndex != playerIndex) {
+        return pieces
+    }
+
+    return pieces.withoutFirst(
+        pieceToRemove = presentingMovePhase.move.piece,
+    )
+}
+
+private fun List<DominoPiece>.withoutFirst(
+    pieceToRemove: DominoPiece,
+): List<DominoPiece> {
+    var wasRemoved = false
+
+    return filter { piece ->
+        if (!wasRemoved && piece == pieceToRemove) {
+            wasRemoved = true
+            false
+        } else {
+            true
         }
     }
 }

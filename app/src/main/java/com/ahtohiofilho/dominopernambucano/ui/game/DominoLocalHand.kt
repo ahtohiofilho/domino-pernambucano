@@ -35,12 +35,14 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
 @Composable
 fun DominoLocalHand(
     uiState: DominoGameUiState,
+    pieces: List<DominoPiece>,
     onLocalMoveSelected: (PlayableMove) -> Unit,
     onLocalHandBoundsChanged: (Rect?) -> Unit,
     onPieceDragStart: (DominoPiece, Offset) -> Unit,
@@ -48,10 +50,13 @@ fun DominoLocalHand(
     onPieceDragEnd: () -> Unit,
     onPieceDragCancel: () -> Unit,
     modifier: Modifier = Modifier,
-    hiddenPiece: DominoPiece? = null,
 ) {
     val gameState = uiState.gameState
     val localPlayer = gameState.players.getOrNull(uiState.localPlayerIndex)
+
+    val canInteractWithHand =
+        uiState.phase == DominoMatchPhase.WaitingForLocalMove &&
+                gameState.currentPlayerIndex == uiState.localPlayerIndex
 
     val playableMovesByPiece = uiState.localPlayableMoves.groupBy { move ->
         move.piece
@@ -105,13 +110,11 @@ fun DominoLocalHand(
                 ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                localPlayer?.hand.orEmpty().forEach { piece ->
-                    val isHidden = piece == hiddenPiece
-
-                    val playableMoves = if (isHidden) {
-                        emptyList()
-                    } else {
+                pieces.forEach { piece ->
+                    val playableMoves = if (canInteractWithHand) {
                         playableMovesByPiece[piece].orEmpty()
+                    } else {
+                        emptyList()
                     }
 
                     val playableMove = playableMoves.firstOrNull()
@@ -119,7 +122,6 @@ fun DominoLocalHand(
                     LocalHandPiece(
                         piece = piece,
                         isPlayable = playableMoves.isNotEmpty(),
-                        isHidden = isHidden,
                         playableMove = playableMove,
                         onLocalMoveSelected = onLocalMoveSelected,
                         onPieceDragStart = onPieceDragStart,
@@ -137,7 +139,6 @@ fun DominoLocalHand(
 private fun LocalHandPiece(
     piece: DominoPiece,
     isPlayable: Boolean,
-    isHidden: Boolean,
     playableMove: PlayableMove?,
     onLocalMoveSelected: (PlayableMove) -> Unit,
     onPieceDragStart: (DominoPiece, Offset) -> Unit,
@@ -149,10 +150,10 @@ private fun LocalHandPiece(
         mutableStateOf<Rect?>(null)
     }
 
-    val targetAlpha = when {
-        isHidden -> DominoGameVisualTokens.LocalHiddenPieceAlpha
-        isPlayable -> DominoGameVisualTokens.LocalDefaultPieceAlpha
-        else -> DominoGameVisualTokens.LocalUnavailablePieceAlpha
+    val targetAlpha = if (isPlayable) {
+        DominoGameVisualTokens.LocalDefaultPieceAlpha
+    } else {
+        DominoGameVisualTokens.LocalUnavailablePieceAlpha
     }
 
     val pieceAlpha by animateFloatAsState(
@@ -161,7 +162,7 @@ private fun LocalHandPiece(
     )
 
     val pieceScale by animateFloatAsState(
-        targetValue = if (isPlayable && !isHidden) {
+        targetValue = if (isPlayable) {
             DominoGameVisualTokens.LocalPlayablePieceScale
         } else {
             1f
@@ -169,7 +170,7 @@ private fun LocalHandPiece(
         label = "localHandPieceScale",
     )
 
-    val dragModifier = if (isPlayable && !isHidden) {
+    val dragModifier = if (isPlayable) {
         Modifier.pointerInput(piece) {
             detectDragGestures(
                 onDragStart = { startOffset ->
@@ -214,7 +215,7 @@ private fun LocalHandPiece(
                 alpha = pieceAlpha
                 scaleX = pieceScale
                 scaleY = pieceScale
-                shadowElevation = if (isPlayable && !isHidden) {
+                shadowElevation = if (isPlayable) {
                     DominoGameVisualTokens.LocalPlayableShadowElevation
                 } else {
                     0f
@@ -228,7 +229,7 @@ private fun LocalHandPiece(
                 width = DominoGameVisualTokens.LocalHandPieceWidth,
                 height = DominoGameVisualTokens.LocalHandPieceHeight,
                 isPlayable = false,
-                onClick = if (playableMove != null && !isHidden) {
+                onClick = if (playableMove != null) {
                     {
                         onLocalMoveSelected(playableMove)
                     }

@@ -19,6 +19,15 @@ object DominoGameVisualTokens {
     val OpponentSideSeatSlotWidth = 70.dp
     val OpponentStatusIndicatorSlotHeight = 16.dp
 
+    val TurnCountdownHudEdgePadding = 10.dp
+    val TurnCountdownHudLateralOffset = 100.dp
+    val TurnCountdownHudTopGap = 6.dp
+    val TurnCountdownHudLocalGap = 8.dp
+    val TurnCountdownHudMinWidth = 34.dp
+    val TurnCountdownHudMinHeight = 34.dp
+    val TurnCountdownHudHorizontalPadding = 9.dp
+    val TurnCountdownHudVerticalPadding = 6.dp
+
     val LocalHandPieceWidth = 48.dp
     val LocalHandPieceHeight = 88.dp
 

@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
+import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 
 @Composable
@@ -28,6 +29,7 @@ fun DominoGameTableStage(
     animatedPlayableMove: PlayableMove?,
     revealOpponentHands: Boolean,
     roundWinnerPlayerIndex: Int?,
+    visualPiecesForPlayer: (Int) -> List<DominoPiece>,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit,
     onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow?) -> Unit,
     onPlayerSeatBoundsChanged: (Int, Rect?) -> Unit,
@@ -53,8 +55,9 @@ fun DominoGameTableStage(
             ) {
                 DominoPlayerSeat(
                     name = gameState.players.getOrNull(2)?.name ?: "Jogador 3",
-                    pieces = gameState.players.getOrNull(2)?.hand.orEmpty(),
-                    isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 2,
+                    pieces = visualPiecesForPlayer(2),
+                    isCurrent = !revealOpponentHands &&
+                            gameState.currentPlayerIndex == 2,
                     orientation = DominoPlayerSeatOrientation.HORIZONTAL,
                     compact = compact,
                     faceUp = revealOpponentHands,
@@ -82,8 +85,9 @@ fun DominoGameTableStage(
                 ) {
                     DominoPlayerSeat(
                         name = gameState.players.getOrNull(1)?.name ?: "Jogador 2",
-                        pieces = gameState.players.getOrNull(1)?.hand.orEmpty(),
-                        isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 1,
+                        pieces = visualPiecesForPlayer(1),
+                        isCurrent = !revealOpponentHands &&
+                                gameState.currentPlayerIndex == 1,
                         orientation = DominoPlayerSeatOrientation.VERTICAL,
                         compact = true,
                         faceUp = revealOpponentHands,
@@ -121,8 +125,9 @@ fun DominoGameTableStage(
                 ) {
                     DominoPlayerSeat(
                         name = gameState.players.getOrNull(3)?.name ?: "Jogador 4",
-                        pieces = gameState.players.getOrNull(3)?.hand.orEmpty(),
-                        isCurrent = !revealOpponentHands && gameState.currentPlayerIndex == 3,
+                        pieces = visualPiecesForPlayer(3),
+                        isCurrent = !revealOpponentHands &&
+                                gameState.currentPlayerIndex == 3,
                         orientation = DominoPlayerSeatOrientation.VERTICAL,
                         compact = true,
                         faceUp = revealOpponentHands,
