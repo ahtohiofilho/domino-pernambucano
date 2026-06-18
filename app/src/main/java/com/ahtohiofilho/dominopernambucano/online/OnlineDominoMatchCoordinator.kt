@@ -2,8 +2,10 @@ package com.ahtohiofilho.dominopernambucano.online
 
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,16 +22,16 @@ class OnlineDominoMatchCoordinator(
     initialSnapshot: OnlineMatchSnapshotDto,
 ) : DominoMatchCoordinator {
     private val coordinatorScope = CoroutineScope(
-        SupervisorJob(),
+        SupervisorJob() + Dispatchers.Main.immediate,
     )
-
-    private var latestRevision: Long = initialSnapshot.revision
 
     private val mutableState = MutableStateFlow(
         initialSnapshot.toRuntimeState(
             localPlayerIndex = localPlayerIndex,
         )
     )
+
+    private var latestRevision = initialSnapshot.revision
 
     override val state: StateFlow<DominoMatchRuntimeState> =
         mutableState.asStateFlow()
@@ -73,23 +75,40 @@ class OnlineDominoMatchCoordinator(
             }
 
             DominoMatchCommand.RoundIntroFinished,
-            DominoMatchCommand.BotDecisionReady,
-            DominoMatchCommand.PresentationFinished -> {
-                /*
-                 * No online, essas fases devem ser consumidas como apresentação local.
-                 * A evolução oficial da partida virá por snapshot remoto.
-                 */
+            DominoMatchCommand.BotDecisionReady -> {
+                requestSnapshot()
             }
 
-            DominoMatchCommand.StartNextRound,
+            DominoMatchCommand.PresentationFinished -> {
+                handlePresentationFinished()
+            }
+
+            DominoMatchCommand.StartNextRound -> {
+                submitStartNextRound()
+            }
+
             DominoMatchCommand.StartNewMatch -> {
-                requestSnapshot()
+                submitStartNewMatch()
             }
         }
     }
 
     fun dispose() {
         coordinatorScope.cancel()
+    }
+
+    private fun handlePresentationFinished() {
+        val phase = currentState.phase
+
+        if (
+            phase is DominoMatchPhase.PresentingPass &&
+            phase.playerIndex == localPlayerIndex
+        ) {
+            submitPassTurn()
+            return
+        }
+
+        requestSnapshot()
     }
 
     private fun submitMove(
@@ -103,11 +122,40 @@ class OnlineDominoMatchCoordinator(
             move = command.move,
         )
 
-        coordinatorScope.launch {
-            repository.submitAction(
-                action = action,
-            )
-        }
+        submitAction(action)
+    }
+
+    private fun submitPassTurn() {
+        val action = createOnlinePassTurnAction(
+            roomId = roomId,
+            matchId = matchId,
+            playerId = localPlayerId,
+            revision = latestRevision,
+        )
+
+        submitAction(action)
+    }
+
+    private fun submitStartNextRound() {
+        val action = createOnlineStartNextRoundAction(
+            roomId = roomId,
+            matchId = matchId,
+            playerId = localPlayerId,
+            revision = latestRevision,
+        )
+
+        submitAction(action)
+    }
+
+    private fun submitStartNewMatch() {
+        val action = createOnlineStartNewMatchAction(
+            roomId = roomId,
+            matchId = matchId,
+            playerId = localPlayerId,
+            revision = latestRevision,
+        )
+
+        submitAction(action)
     }
 
     private fun requestSnapshot() {
@@ -118,6 +166,12 @@ class OnlineDominoMatchCoordinator(
             revision = latestRevision,
         )
 
+        submitAction(action)
+    }
+
+    private fun submitAction(
+        action: OnlinePlayerActionDto,
+    ) {
         coordinatorScope.launch {
             repository.submitAction(
                 action = action,

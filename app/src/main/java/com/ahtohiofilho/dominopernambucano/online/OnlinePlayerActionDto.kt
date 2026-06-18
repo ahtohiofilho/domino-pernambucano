@@ -7,6 +7,8 @@ import kotlinx.serialization.Serializable
 enum class OnlinePlayerActionTypeDto {
     PLAY_MOVE,
     PASS_TURN,
+    START_NEXT_ROUND,
+    START_NEW_MATCH,
     REQUEST_SNAPSHOT,
     LEAVE_ROOM,
 }
@@ -57,6 +59,36 @@ fun createOnlinePassTurnAction(
         playerId = playerId,
         revision = revision,
         type = OnlinePlayerActionTypeDto.PASS_TURN,
+    )
+}
+
+fun createOnlineStartNextRoundAction(
+    roomId: String,
+    matchId: String,
+    playerId: String,
+    revision: Long,
+): OnlinePlayerActionDto {
+    return OnlinePlayerActionDto(
+        roomId = roomId,
+        matchId = matchId,
+        playerId = playerId,
+        revision = revision,
+        type = OnlinePlayerActionTypeDto.START_NEXT_ROUND,
+    )
+}
+
+fun createOnlineStartNewMatchAction(
+    roomId: String,
+    matchId: String,
+    playerId: String,
+    revision: Long,
+): OnlinePlayerActionDto {
+    return OnlinePlayerActionDto(
+        roomId = roomId,
+        matchId = matchId,
+        playerId = playerId,
+        revision = revision,
+        type = OnlinePlayerActionTypeDto.START_NEW_MATCH,
     )
 }
 

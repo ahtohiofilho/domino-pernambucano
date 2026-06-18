@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.online
 
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
+import com.ahtohiofilho.dominopernambucano.domain.createNextRoundDominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.getPlayableMoves
 import com.ahtohiofilho.dominopernambucano.domain.hasPlayablePiece
 import com.ahtohiofilho.dominopernambucano.domain.isGameFinished
@@ -248,6 +249,22 @@ class FakeOnlineRoomRepository(
                 )
             }
 
+            OnlinePlayerActionTypeDto.START_NEXT_ROUND -> {
+                submitStartNextRound(
+                    action = action,
+                    currentRoom = currentRoom,
+                    currentSnapshot = currentSnapshot,
+                )
+            }
+
+            OnlinePlayerActionTypeDto.START_NEW_MATCH -> {
+                submitStartNewMatch(
+                    action = action,
+                    currentRoom = currentRoom,
+                    currentSnapshot = currentSnapshot,
+                )
+            }
+
             OnlinePlayerActionTypeDto.PLAY_MOVE,
             OnlinePlayerActionTypeDto.PASS_TURN -> {
                 submitGameAction(
@@ -280,21 +297,9 @@ class FakeOnlineRoomRepository(
         room: OnlineRoomSnapshotDto,
         matchId: String,
     ) {
-        val initialGameState = createInitialDominoGameState()
-        val playersBySeat = room.players.associateBy { player ->
-            player.seatIndex
-        }
-
-        val namedPlayers = initialGameState.players.mapIndexed { index, player ->
-            val roomPlayer = playersBySeat[index]
-
-            player.copy(
-                name = roomPlayer?.name ?: player.name,
-            )
-        }
-
-        val gameState = initialGameState.copy(
-            players = namedPlayers,
+        val gameState = applyRoomPlayerNames(
+            gameState = createInitialDominoGameState(),
+            room = room,
         )
 
         val initialRuntimeState = DominoMatchRuntimeState(
@@ -398,7 +403,9 @@ class FakeOnlineRoomRepository(
             }
 
             OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT,
-            OnlinePlayerActionTypeDto.LEAVE_ROOM -> {
+            OnlinePlayerActionTypeDto.LEAVE_ROOM,
+            OnlinePlayerActionTypeDto.START_NEXT_ROUND,
+            OnlinePlayerActionTypeDto.START_NEW_MATCH -> {
                 gameState
             }
         }
@@ -418,6 +425,138 @@ class FakeOnlineRoomRepository(
         return publishMatchSnapshot(
             previousSnapshot = currentSnapshot,
             runtimeState = normalizedRuntimeState,
+        )
+    }
+
+    private fun submitStartNextRound(
+        action: OnlinePlayerActionDto,
+        currentRoom: OnlineRoomSnapshotDto,
+        currentSnapshot: OnlineMatchSnapshotDto,
+    ): OnlineActionResultDto {
+        if (action.revision != currentSnapshot.revision) {
+            return rejectedAction(
+                reason = "Snapshot desatualizado.",
+                revision = currentSnapshot.revision,
+            )
+        }
+
+        val runtimeState = currentSnapshot.toRuntimeState(
+            localPlayerIndex = 0,
+        )
+
+        if (!isRoundFinished(runtimeState.gameState)) {
+            return rejectedAction(
+                reason = "A rodada ainda não terminou.",
+                revision = currentSnapshot.revision,
+            )
+        }
+
+        if (isGameFinished(runtimeState.gameState)) {
+            return rejectedAction(
+                reason = "A partida já terminou.",
+                revision = currentSnapshot.revision,
+            )
+        }
+
+        val nextRoundGameState = createNextRoundDominoGameState(
+            previousState = runtimeState.gameState,
+        )
+
+        val namedGameState = applyRoomPlayerNames(
+            gameState = nextRoundGameState,
+            room = currentRoom,
+        )
+
+        val nextRuntimeState = runtimeState.copy(
+            gameState = namedGameState,
+            roundNumber = runtimeState.roundNumber + 1,
+            phase = determineNextPhase(
+                gameState = namedGameState,
+            ),
+            playerClockMillis = createInitialPlayerClockMillis(
+                playerCount = namedGameState.players.size,
+                clockPolicy = runtimeState.clockPolicy,
+            ),
+        )
+
+        val normalizedRuntimeState = advanceFakeTurnsIfNeeded(
+            room = currentRoom,
+            runtimeState = nextRuntimeState,
+        )
+
+        return publishMatchSnapshot(
+            previousSnapshot = currentSnapshot,
+            runtimeState = normalizedRuntimeState,
+        )
+    }
+
+    private fun submitStartNewMatch(
+        action: OnlinePlayerActionDto,
+        currentRoom: OnlineRoomSnapshotDto,
+        currentSnapshot: OnlineMatchSnapshotDto,
+    ): OnlineActionResultDto {
+        if (action.revision != currentSnapshot.revision) {
+            return rejectedAction(
+                reason = "Snapshot desatualizado.",
+                revision = currentSnapshot.revision,
+            )
+        }
+
+        val freshGameState = applyRoomPlayerNames(
+            gameState = createInitialDominoGameState(),
+            room = currentRoom,
+        )
+
+        val runtimeState = currentSnapshot.toRuntimeState(
+            localPlayerIndex = 0,
+        )
+
+        val freshRuntimeState = runtimeState.copy(
+            gameState = freshGameState,
+            roundNumber = 1,
+            phase = determineNextPhase(
+                gameState = freshGameState,
+            ),
+            playerClockMillis = createInitialPlayerClockMillis(
+                playerCount = freshGameState.players.size,
+                clockPolicy = runtimeState.clockPolicy,
+            ),
+        )
+
+        val normalizedRuntimeState = advanceFakeTurnsIfNeeded(
+            room = currentRoom,
+            runtimeState = freshRuntimeState,
+        )
+
+        mutableRoomSnapshot.value = currentRoom.copy(
+            status = OnlineRoomStatusDto.IN_MATCH,
+            updatedAtEpochMillis = nowEpochMillis(),
+        )
+
+        return publishMatchSnapshot(
+            previousSnapshot = currentSnapshot,
+            runtimeState = normalizedRuntimeState,
+        )
+    }
+
+    private fun applyRoomPlayerNames(
+        gameState: DominoGameState,
+        room: OnlineRoomSnapshotDto,
+    ): DominoGameState {
+        val playersBySeat = room.players.associateBy { player ->
+            player.seatIndex
+        }
+
+        val namedPlayers = gameState.players.mapIndexed { index, player ->
+            val roomPlayer = playersBySeat[index]
+
+            player.copy(
+                name = roomPlayer?.name ?: player.name,
+            )
+        }
+
+        return gameState.copy(
+            players = namedPlayers,
         )
     }
 
