@@ -1,0 +1,502 @@
+package com.ahtohiofilho.dominopernambucano.online
+
+import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
+import com.ahtohiofilho.dominopernambucano.domain.getPlayableMoves
+import com.ahtohiofilho.dominopernambucano.domain.hasPlayablePiece
+import com.ahtohiofilho.dominopernambucano.domain.isGameFinished
+import com.ahtohiofilho.dominopernambucano.domain.isRoundFinished
+import com.ahtohiofilho.dominopernambucano.domain.passTurn
+import com.ahtohiofilho.dominopernambucano.domain.playMoveForCurrentPlayer
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
+import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+class FakeOnlineRoomRepository(
+    private val clockPolicy: DominoMatchClockPolicy =
+        DominoMatchClockPolicy.OnlinePerPlayerRound,
+    private val nowEpochMillis: () -> Long = {
+        System.currentTimeMillis()
+    },
+) : OnlineRoomRepository {
+    private val mutableRoomSnapshot =
+        MutableStateFlow<OnlineRoomSnapshotDto?>(null)
+
+    private val mutableMatchSnapshot =
+        MutableStateFlow<OnlineMatchSnapshotDto?>(null)
+
+    private var nextRoomSequence = 1
+    private var nextMatchSequence = 1
+    private var revision = 0L
+
+    override val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?> =
+        mutableRoomSnapshot.asStateFlow()
+
+    override val matchSnapshot: StateFlow<OnlineMatchSnapshotDto?> =
+        mutableMatchSnapshot.asStateFlow()
+
+    override suspend fun createRoom(
+        request: CreateOnlineRoomRequestDto,
+    ): OnlineRoomOperationResultDto {
+        val roomSequence = nextRoomSequence++
+        val roomId = "fake-room-$roomSequence"
+        val roomCode = roomSequence.toString().padStart(
+            length = 4,
+            padChar = '0',
+        )
+
+        revision = 0L
+        mutableMatchSnapshot.value = null
+
+        val snapshot = OnlineRoomSnapshotDto(
+            roomId = roomId,
+            roomCode = roomCode,
+            hostPlayerId = request.localPlayerId,
+            status = OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+            players = listOf(
+                OnlineRoomPlayerDto(
+                    playerId = request.localPlayerId,
+                    name = request.playerName,
+                    seatIndex = 0,
+                    connected = true,
+                )
+            ),
+            matchId = null,
+            createdAtEpochMillis = nowEpochMillis(),
+            updatedAtEpochMillis = nowEpochMillis(),
+        )
+
+        mutableRoomSnapshot.value = snapshot
+
+        return OnlineRoomOperationResultDto(
+            accepted = true,
+            roomSnapshot = snapshot,
+            localSeatIndex = 0,
+        )
+    }
+
+    override suspend fun joinRoom(
+        request: JoinOnlineRoomRequestDto,
+    ): OnlineRoomOperationResultDto {
+        val currentRoom = mutableRoomSnapshot.value
+            ?: return rejectedRoomOperation(
+                reason = "Nenhuma sala fake foi criada."
+            )
+
+        if (currentRoom.roomCode != request.roomCode) {
+            return rejectedRoomOperation(
+                reason = "Código de sala inválido."
+            )
+        }
+
+        if (
+            currentRoom.status == OnlineRoomStatusDto.CLOSED ||
+            currentRoom.status == OnlineRoomStatusDto.FINISHED
+        ) {
+            return rejectedRoomOperation(
+                reason = "A sala não está mais disponível."
+            )
+        }
+
+        val existingPlayer = currentRoom.players.firstOrNull { player ->
+            player.playerId == request.localPlayerId
+        }
+
+        if (existingPlayer != null) {
+            val updatedPlayers = currentRoom.players.map { player ->
+                if (player.playerId == request.localPlayerId) {
+                    player.copy(
+                        name = request.playerName,
+                        connected = true,
+                    )
+                } else {
+                    player
+                }
+            }
+
+            val updatedRoom = currentRoom.copy(
+                players = updatedPlayers,
+                updatedAtEpochMillis = nowEpochMillis(),
+            )
+
+            mutableRoomSnapshot.value = updatedRoom
+
+            return OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = updatedRoom,
+                localSeatIndex = existingPlayer.seatIndex,
+            )
+        }
+
+        if (currentRoom.status == OnlineRoomStatusDto.IN_MATCH) {
+            return rejectedRoomOperation(
+                reason = "A partida já foi iniciada."
+            )
+        }
+
+        val occupiedSeats = currentRoom.players
+            .mapNotNull { player -> player.seatIndex }
+            .toSet()
+
+        val nextSeatIndex = (0..3).firstOrNull { seatIndex ->
+            seatIndex !in occupiedSeats
+        } ?: return rejectedRoomOperation(
+            reason = "A sala já está cheia."
+        )
+
+        val updatedPlayers = currentRoom.players + OnlineRoomPlayerDto(
+            playerId = request.localPlayerId,
+            name = request.playerName,
+            seatIndex = nextSeatIndex,
+            connected = true,
+        )
+
+        val shouldStartMatch = updatedPlayers.size >= 4
+        val nextMatchId = if (shouldStartMatch) {
+            "fake-match-${nextMatchSequence++}"
+        } else {
+            null
+        }
+
+        val updatedRoom = currentRoom.copy(
+            status = if (shouldStartMatch) {
+                OnlineRoomStatusDto.IN_MATCH
+            } else {
+                OnlineRoomStatusDto.WAITING_FOR_PLAYERS
+            },
+            players = updatedPlayers,
+            matchId = nextMatchId,
+            updatedAtEpochMillis = nowEpochMillis(),
+        )
+
+        mutableRoomSnapshot.value = updatedRoom
+
+        if (shouldStartMatch && nextMatchId != null) {
+            startMatch(
+                room = updatedRoom,
+                matchId = nextMatchId,
+            )
+        }
+
+        return OnlineRoomOperationResultDto(
+            accepted = true,
+            roomSnapshot = updatedRoom,
+            localSeatIndex = nextSeatIndex,
+        )
+    }
+
+    override suspend fun submitAction(
+        action: OnlinePlayerActionDto,
+    ): OnlineActionResultDto {
+        val currentRoom = mutableRoomSnapshot.value
+            ?: return rejectedAction(
+                reason = "Nenhuma sala ativa."
+            )
+
+        val currentSnapshot = mutableMatchSnapshot.value
+            ?: return rejectedAction(
+                reason = "A partida ainda não foi iniciada."
+            )
+
+        if (action.roomId != currentRoom.roomId) {
+            return rejectedAction(
+                reason = "Sala inválida."
+            )
+        }
+
+        if (action.matchId != currentSnapshot.matchId) {
+            return rejectedAction(
+                reason = "Partida inválida."
+            )
+        }
+
+        val roomPlayer = currentRoom.players.firstOrNull { player ->
+            player.playerId == action.playerId
+        } ?: return rejectedAction(
+            reason = "Jogador não encontrado na sala."
+        )
+
+        val seatIndex = roomPlayer.seatIndex
+            ?: return rejectedAction(
+                reason = "Jogador sem assento definido."
+            )
+
+        return when (action.type) {
+            OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT -> {
+                OnlineActionResultDto(
+                    accepted = true,
+                    revision = currentSnapshot.revision,
+                )
+            }
+
+            OnlinePlayerActionTypeDto.LEAVE_ROOM -> {
+                markPlayerDisconnected(
+                    playerId = action.playerId,
+                )
+
+                OnlineActionResultDto(
+                    accepted = true,
+                    revision = currentSnapshot.revision,
+                )
+            }
+
+            OnlinePlayerActionTypeDto.PLAY_MOVE,
+            OnlinePlayerActionTypeDto.PASS_TURN -> {
+                submitGameAction(
+                    action = action,
+                    currentSnapshot = currentSnapshot,
+                    seatIndex = seatIndex,
+                )
+            }
+        }
+    }
+
+    override suspend fun leaveRoom() {
+        val currentRoom = mutableRoomSnapshot.value ?: return
+
+        mutableRoomSnapshot.value = currentRoom.copy(
+            status = OnlineRoomStatusDto.CLOSED,
+            players = currentRoom.players.map { player ->
+                player.copy(
+                    connected = false,
+                )
+            },
+            updatedAtEpochMillis = nowEpochMillis(),
+        )
+
+        mutableMatchSnapshot.value = null
+    }
+
+    private fun startMatch(
+        room: OnlineRoomSnapshotDto,
+        matchId: String,
+    ) {
+        val initialGameState = createInitialDominoGameState()
+        val playersBySeat = room.players.associateBy { player ->
+            player.seatIndex
+        }
+
+        val namedPlayers = initialGameState.players.mapIndexed { index, player ->
+            val roomPlayer = playersBySeat[index]
+
+            player.copy(
+                name = roomPlayer?.name ?: player.name,
+            )
+        }
+
+        val gameState = initialGameState.copy(
+            players = namedPlayers,
+        )
+
+        val runtimeState = DominoMatchRuntimeState(
+            gameState = gameState,
+            roundNumber = 1,
+            localPlayerIndex = 0,
+            phase = determineNextPhase(
+                gameState = gameState,
+            ),
+            clockPolicy = clockPolicy,
+            playerClockMillis = createInitialPlayerClockMillis(
+                playerCount = gameState.players.size,
+                clockPolicy = clockPolicy,
+            ),
+        )
+
+        revision = 1L
+
+        mutableMatchSnapshot.value = runtimeState.toOnlineSnapshotDto(
+            roomId = room.roomId,
+            matchId = matchId,
+            revision = revision,
+            serverEpochMillis = nowEpochMillis(),
+        )
+    }
+
+    private fun submitGameAction(
+        action: OnlinePlayerActionDto,
+        currentSnapshot: OnlineMatchSnapshotDto,
+        seatIndex: Int,
+    ): OnlineActionResultDto {
+        if (action.revision != currentSnapshot.revision) {
+            return rejectedAction(
+                reason = "Snapshot desatualizado.",
+                revision = currentSnapshot.revision,
+            )
+        }
+
+        val runtimeState = currentSnapshot.toRuntimeState(
+            localPlayerIndex = seatIndex,
+        )
+
+        val gameState = runtimeState.gameState
+
+        if (gameState.currentPlayerIndex != seatIndex) {
+            return rejectedAction(
+                reason = "Não é a vez deste jogador.",
+                revision = currentSnapshot.revision,
+            )
+        }
+
+        val updatedGameState = when (action.type) {
+            OnlinePlayerActionTypeDto.PLAY_MOVE -> {
+                val move = action.move?.toDomain()
+                    ?: return rejectedAction(
+                        reason = "Jogada sem peça informada.",
+                        revision = currentSnapshot.revision,
+                    )
+
+                val validMoves = getPlayableMoves(
+                    board = gameState.board,
+                    piece = move.piece,
+                    openingPiece = gameState.openingPiece,
+                )
+
+                if (!validMoves.contains(move)) {
+                    return rejectedAction(
+                        reason = "Jogada inválida para o estado atual.",
+                        revision = currentSnapshot.revision,
+                    )
+                }
+
+                playMoveForCurrentPlayer(
+                    state = gameState,
+                    playableMove = move,
+                )
+            }
+
+            OnlinePlayerActionTypeDto.PASS_TURN -> {
+                if (
+                    hasPlayablePiece(
+                        state = gameState,
+                        playerIndex = seatIndex,
+                    )
+                ) {
+                    return rejectedAction(
+                        reason = "O jogador ainda possui peça jogável.",
+                        revision = currentSnapshot.revision,
+                    )
+                }
+
+                passTurn(
+                    state = gameState,
+                )
+            }
+
+            OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT,
+            OnlinePlayerActionTypeDto.LEAVE_ROOM -> {
+                gameState
+            }
+        }
+
+        val updatedRuntimeState = runtimeState.copy(
+            gameState = updatedGameState,
+            phase = determineNextPhase(
+                gameState = updatedGameState,
+            ),
+        )
+
+        return publishMatchSnapshot(
+            previousSnapshot = currentSnapshot,
+            runtimeState = updatedRuntimeState,
+        )
+    }
+
+    private fun publishMatchSnapshot(
+        previousSnapshot: OnlineMatchSnapshotDto,
+        runtimeState: DominoMatchRuntimeState,
+    ): OnlineActionResultDto {
+        revision = previousSnapshot.revision + 1L
+
+        val updatedSnapshot = runtimeState.toOnlineSnapshotDto(
+            roomId = previousSnapshot.roomId,
+            matchId = previousSnapshot.matchId,
+            revision = revision,
+            serverEpochMillis = nowEpochMillis(),
+        )
+
+        mutableMatchSnapshot.value = updatedSnapshot
+
+        mutableRoomSnapshot.value = mutableRoomSnapshot.value?.copy(
+            status = if (runtimeState.gameState.gameWinnerTeamIndex != null) {
+                OnlineRoomStatusDto.FINISHED
+            } else {
+                OnlineRoomStatusDto.IN_MATCH
+            },
+            updatedAtEpochMillis = nowEpochMillis(),
+        )
+
+        return OnlineActionResultDto(
+            accepted = true,
+            revision = revision,
+        )
+    }
+
+    private fun markPlayerDisconnected(
+        playerId: String,
+    ) {
+        val currentRoom = mutableRoomSnapshot.value ?: return
+
+        mutableRoomSnapshot.value = currentRoom.copy(
+            players = currentRoom.players.map { player ->
+                if (player.playerId == playerId) {
+                    player.copy(
+                        connected = false,
+                    )
+                } else {
+                    player
+                }
+            },
+            updatedAtEpochMillis = nowEpochMillis(),
+        )
+    }
+
+    private fun determineNextPhase(
+        gameState: com.ahtohiofilho.dominopernambucano.domain.DominoGameState,
+    ): DominoMatchPhase {
+        if (isGameFinished(gameState)) {
+            return DominoMatchPhase.MatchFinished
+        }
+
+        if (isRoundFinished(gameState)) {
+            return DominoMatchPhase.RoundSummary
+        }
+
+        val currentPlayerIndex = gameState.currentPlayerIndex
+
+        if (
+            !hasPlayablePiece(
+                state = gameState,
+                playerIndex = currentPlayerIndex,
+            )
+        ) {
+            return DominoMatchPhase.PresentingPass(
+                playerIndex = currentPlayerIndex,
+            )
+        }
+
+        return DominoMatchPhase.WaitingForLocalMove
+    }
+
+    private fun rejectedRoomOperation(
+        reason: String,
+    ): OnlineRoomOperationResultDto {
+        return OnlineRoomOperationResultDto(
+            accepted = false,
+            reason = reason,
+        )
+    }
+
+    private fun rejectedAction(
+        reason: String,
+        revision: Long? = mutableMatchSnapshot.value?.revision,
+    ): OnlineActionResultDto {
+        return OnlineActionResultDto(
+            accepted = false,
+            revision = revision,
+            reason = reason,
+        )
+    }
+}
