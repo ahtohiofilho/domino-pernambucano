@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 private const val FAKE_PLAYER_ID_PREFIX = "fake-player-"
-private const val MAX_FAKE_TURN_ADVANCES = 64
 
 class FakeOnlineRoomRepository(
     private val clockPolicy: DominoMatchClockPolicy =
@@ -232,9 +231,9 @@ class FakeOnlineRoomRepository(
 
         return when (action.type) {
             OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT -> {
-                OnlineActionResultDto(
-                    accepted = true,
-                    revision = currentSnapshot.revision,
+                submitSnapshotRequest(
+                    currentRoom = currentRoom,
+                    currentSnapshot = currentSnapshot,
                 )
             }
 
@@ -316,18 +315,59 @@ class FakeOnlineRoomRepository(
             ),
         )
 
-        val normalizedRuntimeState = advanceFakeTurnsIfNeeded(
-            room = room,
-            runtimeState = initialRuntimeState,
-        )
-
         revision = 1L
 
-        mutableMatchSnapshot.value = normalizedRuntimeState.toOnlineSnapshotDto(
+        mutableMatchSnapshot.value = initialRuntimeState.toOnlineSnapshotDto(
             roomId = room.roomId,
             matchId = matchId,
             revision = revision,
             serverEpochMillis = nowEpochMillis(),
+        )
+    }
+
+    private fun submitSnapshotRequest(
+        currentRoom: OnlineRoomSnapshotDto,
+        currentSnapshot: OnlineMatchSnapshotDto,
+    ): OnlineActionResultDto {
+        val runtimeState = currentSnapshot.toRuntimeState(
+            localPlayerIndex = 0,
+        )
+
+        val gameState = runtimeState.gameState
+
+        if (isRoundFinished(gameState) || isGameFinished(gameState)) {
+            return OnlineActionResultDto(
+                accepted = true,
+                revision = currentSnapshot.revision,
+            )
+        }
+
+        val currentPlayerId = findPlayerIdForSeat(
+            room = currentRoom,
+            seatIndex = gameState.currentPlayerIndex,
+        )
+
+        if (currentPlayerId == null || !isFakePlayerId(currentPlayerId)) {
+            return OnlineActionResultDto(
+                accepted = true,
+                revision = currentSnapshot.revision,
+            )
+        }
+
+        val updatedGameState = advanceSingleFakeTurn(
+            gameState = gameState,
+        )
+
+        val updatedRuntimeState = runtimeState.copy(
+            gameState = updatedGameState,
+            phase = determineNextPhase(
+                gameState = updatedGameState,
+            ),
+        )
+
+        return publishMatchSnapshot(
+            previousSnapshot = currentSnapshot,
+            runtimeState = updatedRuntimeState,
         )
     }
 
@@ -417,14 +457,9 @@ class FakeOnlineRoomRepository(
             ),
         )
 
-        val normalizedRuntimeState = advanceFakeTurnsIfNeeded(
-            room = currentRoom,
-            runtimeState = updatedRuntimeState,
-        )
-
         return publishMatchSnapshot(
             previousSnapshot = currentSnapshot,
-            runtimeState = normalizedRuntimeState,
+            runtimeState = updatedRuntimeState,
         )
     }
 
@@ -479,14 +514,9 @@ class FakeOnlineRoomRepository(
             ),
         )
 
-        val normalizedRuntimeState = advanceFakeTurnsIfNeeded(
-            room = currentRoom,
-            runtimeState = nextRuntimeState,
-        )
-
         return publishMatchSnapshot(
             previousSnapshot = currentSnapshot,
-            runtimeState = normalizedRuntimeState,
+            runtimeState = nextRuntimeState,
         )
     }
 
@@ -523,11 +553,6 @@ class FakeOnlineRoomRepository(
             ),
         )
 
-        val normalizedRuntimeState = advanceFakeTurnsIfNeeded(
-            room = currentRoom,
-            runtimeState = freshRuntimeState,
-        )
-
         mutableRoomSnapshot.value = currentRoom.copy(
             status = OnlineRoomStatusDto.IN_MATCH,
             updatedAtEpochMillis = nowEpochMillis(),
@@ -535,7 +560,7 @@ class FakeOnlineRoomRepository(
 
         return publishMatchSnapshot(
             previousSnapshot = currentSnapshot,
-            runtimeState = normalizedRuntimeState,
+            runtimeState = freshRuntimeState,
         )
     }
 
@@ -558,55 +583,6 @@ class FakeOnlineRoomRepository(
         return gameState.copy(
             players = namedPlayers,
         )
-    }
-
-    private fun advanceFakeTurnsIfNeeded(
-        room: OnlineRoomSnapshotDto,
-        runtimeState: DominoMatchRuntimeState,
-    ): DominoMatchRuntimeState {
-        var currentRuntimeState = runtimeState.copy(
-            phase = determineNextPhase(
-                gameState = runtimeState.gameState,
-            ),
-        )
-
-        repeat(MAX_FAKE_TURN_ADVANCES) {
-            val gameState = currentRuntimeState.gameState
-
-            if (isRoundFinished(gameState) || isGameFinished(gameState)) {
-                return currentRuntimeState.copy(
-                    phase = determineNextPhase(
-                        gameState = gameState,
-                    ),
-                )
-            }
-
-            val currentPlayerId = findPlayerIdForSeat(
-                room = room,
-                seatIndex = gameState.currentPlayerIndex,
-            ) ?: return currentRuntimeState
-
-            if (!isFakePlayerId(currentPlayerId)) {
-                return currentRuntimeState.copy(
-                    phase = determineNextPhase(
-                        gameState = gameState,
-                    ),
-                )
-            }
-
-            val advancedGameState = advanceSingleFakeTurn(
-                gameState = gameState,
-            )
-
-            currentRuntimeState = currentRuntimeState.copy(
-                gameState = advancedGameState,
-                phase = determineNextPhase(
-                    gameState = advancedGameState,
-                ),
-            )
-        }
-
-        return currentRuntimeState
     }
 
     private fun advanceSingleFakeTurn(
