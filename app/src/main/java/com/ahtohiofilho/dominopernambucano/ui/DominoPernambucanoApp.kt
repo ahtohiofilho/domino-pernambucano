@@ -4,7 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import com.ahtohiofilho.dominopernambucano.online.FakeOnlineRoomRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
+import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
+import com.ahtohiofilho.dominopernambucano.online.createDefaultOnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
 import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
@@ -21,7 +23,15 @@ fun DominoPernambucanoApp() {
     }
 
     val onlineRoomRepository = remember {
-        FakeOnlineRoomRepository()
+        OnlineRepositoryFactory.create()
+    }
+
+    val onlinePlayerIdentity = remember {
+        createDefaultOnlinePlayerIdentity()
+    }
+
+    val onlineDebugOptions = remember {
+        OnlineDebugOptions.FakeBackend
     }
 
     val sessionState by sessionCoordinator.state.collectAsState()
@@ -76,6 +86,8 @@ fun DominoPernambucanoApp() {
         DominoSessionState.OnlineCreateRoom -> {
             OnlineCreateRoomRoute(
                 roomRepository = onlineRoomRepository,
+                localPlayerIdentity = onlinePlayerIdentity,
+                debugOptions = onlineDebugOptions,
                 onStartOnlineMatch = { matchCoordinator ->
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.StartOnlineMatch(
@@ -94,6 +106,8 @@ fun DominoPernambucanoApp() {
         DominoSessionState.OnlineJoinRoom -> {
             OnlineJoinRoomRoute(
                 roomRepository = onlineRoomRepository,
+                localPlayerIdentity = onlinePlayerIdentity,
+                debugOptions = onlineDebugOptions,
                 onStartOnlineMatch = { matchCoordinator ->
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.StartOnlineMatch(

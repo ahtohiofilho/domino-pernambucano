@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,11 +33,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
+import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerId
+import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerIdentity
+import com.ahtohiofilho.dominopernambucano.online.createDebugHostOnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.ui.menu.MenuScaffold
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
@@ -48,6 +53,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun OnlineJoinRoomRoute(
     roomRepository: OnlineRoomRepository,
+    localPlayerIdentity: OnlinePlayerIdentity,
+    debugOptions: OnlineDebugOptions,
     onStartOnlineMatch: (OnlineDominoMatchCoordinator) -> Unit,
     onBackClick: () -> Unit,
 ) {
@@ -56,13 +63,8 @@ fun OnlineJoinRoomRoute(
 
     val coroutineScope = rememberCoroutineScope()
 
-    val localPlayerId = remember {
-        "joining-local-player"
-    }
-
-    val localPlayerName = remember {
-        "Você"
-    }
+    val localPlayerId = localPlayerIdentity.playerId
+    val localPlayerName = localPlayerIdentity.playerName
 
     var roomCodeInput by remember {
         mutableStateOf("")
@@ -138,6 +140,8 @@ fun OnlineJoinRoomRoute(
         roomCodeInput = roomCodeInput,
         hasJoinedRoom = hasJoinedRoom,
         feedbackMessage = feedbackMessage,
+        allowDemoRoomCreation = debugOptions.allowDemoRoomCreation,
+        allowFakePlayerCompletion = debugOptions.allowFakePlayerCompletion,
         onRoomCodeChange = { value ->
             roomCodeInput = value
                 .filter { char -> char.isLetterOrDigit() }
@@ -145,11 +149,18 @@ fun OnlineJoinRoomRoute(
                 .take(8)
         },
         onCreateDemoRoomClick = {
+            if (!debugOptions.allowDemoRoomCreation) {
+                feedbackMessage = "Criação de sala fake está desabilitada neste ambiente."
+                return@OnlineJoinRoomScreen
+            }
+
             coroutineScope.launch {
+                val debugHostIdentity = createDebugHostOnlinePlayerIdentity()
+
                 val result = roomRepository.createRoom(
                     CreateOnlineRoomRequestDto(
-                        localPlayerId = "fake-host",
-                        playerName = "Anfitrião fake",
+                        localPlayerId = debugHostIdentity.playerId,
+                        playerName = debugHostIdentity.playerName,
                     )
                 )
 
@@ -191,6 +202,11 @@ fun OnlineJoinRoomRoute(
             }
         },
         onCompleteWithFakePlayersClick = {
+            if (!debugOptions.allowFakePlayerCompletion) {
+                feedbackMessage = "Completar mesa com fakes está desabilitado neste ambiente."
+                return@OnlineJoinRoomScreen
+            }
+
             coroutineScope.launch {
                 var workingSnapshot = roomRepository.roomSnapshot.value
                     ?: return@launch
@@ -204,11 +220,15 @@ fun OnlineJoinRoomRoute(
                         preferredNumber = nextFakePlayerNumber,
                     )
 
+                    val fakePlayerIdentity = createDebugFakeOnlinePlayerIdentity(
+                        fakePlayerNumber = fakePlayerNumber,
+                    )
+
                     val result = roomRepository.joinRoom(
                         JoinOnlineRoomRequestDto(
                             roomCode = workingSnapshot.roomCode,
-                            localPlayerId = "fake-player-$fakePlayerNumber",
-                            playerName = "Jogador $fakePlayerNumber",
+                            localPlayerId = fakePlayerIdentity.playerId,
+                            playerName = fakePlayerIdentity.playerName,
                         )
                     )
 
@@ -246,6 +266,8 @@ private fun OnlineJoinRoomScreen(
     roomCodeInput: String,
     hasJoinedRoom: Boolean,
     feedbackMessage: String?,
+    allowDemoRoomCreation: Boolean,
+    allowFakePlayerCompletion: Boolean,
     onRoomCodeChange: (String) -> Unit,
     onCreateDemoRoomClick: () -> Unit,
     onJoinClick: () -> Unit,
@@ -267,9 +289,17 @@ private fun OnlineJoinRoomScreen(
 
         Text(
             text = if (hasJoinedRoom) {
-                "Você entrou na sala. Complete a mesa com jogadores fake para validar o fluxo ponta a ponta."
+                if (allowFakePlayerCompletion) {
+                    "Você entrou na sala. Complete a mesa com jogadores fake para validar o fluxo ponta a ponta."
+                } else {
+                    "Você entrou na sala. Aguarde os demais jogadores para iniciar a partida."
+                }
             } else {
-                "Fluxo fake em memória para validar entrada em sala antes do backend real."
+                if (allowDemoRoomCreation) {
+                    "Fluxo fake em memória para validar entrada em sala antes do backend real."
+                } else {
+                    "Informe o código da sala para entrar na partida online."
+                }
             },
             color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.78f),
             style = MaterialTheme.typography.bodyLarge,
@@ -303,10 +333,21 @@ private fun OnlineJoinRoomScreen(
                     )
                 }
 
-                if (roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS) {
+                if (
+                    roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
+                    allowFakePlayerCompletion
+                ) {
                     PrimaryMenuButton(
                         text = "Completar mesa com fakes",
                         onClick = onCompleteWithFakePlayersClick,
+                    )
+                } else if (roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS) {
+                    Text(
+                        text = "Aguardando jogadores.",
+                        color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
                     )
                 } else {
                     Text(
@@ -335,10 +376,12 @@ private fun OnlineJoinRoomScreen(
                 onClick = onJoinClick,
             )
 
-            SecondaryMenuButton(
-                text = "Criar sala fake de teste",
-                onClick = onCreateDemoRoomClick,
-            )
+            if (allowDemoRoomCreation) {
+                SecondaryMenuButton(
+                    text = "Criar sala fake de teste",
+                    onClick = onCreateDemoRoomClick,
+                )
+            }
         }
 
         SecondaryMenuButton(
@@ -589,7 +632,7 @@ private fun resolveNextFakePlayerNumber(
 
     while (
         players.any { player ->
-            player.playerId == "fake-player-$candidate"
+            player.playerId == createDebugFakeOnlinePlayerId(candidate)
         }
     ) {
         candidate += 1

@@ -29,12 +29,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
+import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
+import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerId
+import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.ui.menu.MenuScaffold
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
@@ -45,6 +49,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun OnlineCreateRoomRoute(
     roomRepository: OnlineRoomRepository,
+    localPlayerIdentity: OnlinePlayerIdentity,
+    debugOptions: OnlineDebugOptions,
     onStartOnlineMatch: (OnlineDominoMatchCoordinator) -> Unit,
     onBackClick: () -> Unit,
 ) {
@@ -53,13 +59,8 @@ fun OnlineCreateRoomRoute(
 
     val coroutineScope = rememberCoroutineScope()
 
-    val localPlayerId = remember {
-        "local-player"
-    }
-
-    val localPlayerName = remember {
-        "Você"
-    }
+    val localPlayerId = localPlayerIdentity.playerId
+    val localPlayerName = localPlayerIdentity.playerName
 
     var feedbackMessage by remember {
         mutableStateOf<String?>(null)
@@ -73,7 +74,11 @@ fun OnlineCreateRoomRoute(
         mutableStateOf(false)
     }
 
-    LaunchedEffect(roomRepository) {
+    LaunchedEffect(
+        roomRepository,
+        localPlayerId,
+        localPlayerName,
+    ) {
         val result = roomRepository.createRoom(
             CreateOnlineRoomRequestDto(
                 localPlayerId = localPlayerId,
@@ -127,7 +132,13 @@ fun OnlineCreateRoomRoute(
         roomSnapshot = roomSnapshot,
         matchRevision = matchSnapshot?.revision,
         feedbackMessage = feedbackMessage,
+        allowFakePlayerCompletion = debugOptions.allowFakePlayerCompletion,
         onCompleteWithFakePlayersClick = {
+            if (!debugOptions.allowFakePlayerCompletion) {
+                feedbackMessage = "Completar mesa com fakes está desabilitado neste ambiente."
+                return@OnlineLobbyScreen
+            }
+
             val snapshot = roomSnapshot ?: return@OnlineLobbyScreen
 
             coroutineScope.launch {
@@ -142,11 +153,15 @@ fun OnlineCreateRoomRoute(
                         preferredNumber = nextFakePlayerNumber,
                     )
 
+                    val fakePlayerIdentity = createDebugFakeOnlinePlayerIdentity(
+                        fakePlayerNumber = fakePlayerNumber,
+                    )
+
                     val result = roomRepository.joinRoom(
                         JoinOnlineRoomRequestDto(
                             roomCode = workingSnapshot.roomCode,
-                            localPlayerId = "fake-player-$fakePlayerNumber",
-                            playerName = "Jogador $fakePlayerNumber",
+                            localPlayerId = fakePlayerIdentity.playerId,
+                            playerName = fakePlayerIdentity.playerName,
                         )
                     )
 
@@ -180,6 +195,7 @@ private fun OnlineLobbyScreen(
     roomSnapshot: OnlineRoomSnapshotDto?,
     matchRevision: Long?,
     feedbackMessage: String?,
+    allowFakePlayerCompletion: Boolean,
     onCompleteWithFakePlayersClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
@@ -226,10 +242,21 @@ private fun OnlineLobbyScreen(
                 )
             }
 
-            if (roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS) {
+            if (
+                roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
+                allowFakePlayerCompletion
+            ) {
                 PrimaryMenuButton(
                     text = "Completar mesa com fakes",
                     onClick = onCompleteWithFakePlayersClick,
+                )
+            } else if (roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS) {
+                Text(
+                    text = "Aguardando jogadores.",
+                    color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                 )
             } else {
                 Text(
@@ -430,7 +457,7 @@ private fun resolveNextFakePlayerNumber(
 
     while (
         players.any { player ->
-            player.playerId == "fake-player-$candidate"
+            player.playerId == createDebugFakeOnlinePlayerId(candidate)
         }
     ) {
         candidate += 1
