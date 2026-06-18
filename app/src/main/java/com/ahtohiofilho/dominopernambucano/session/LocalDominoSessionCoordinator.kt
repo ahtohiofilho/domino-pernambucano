@@ -24,30 +24,58 @@ class LocalDominoSessionCoordinator : DominoSessionCoordinator {
     ) {
         when (command) {
             DominoSessionCommand.OpenPlayModeSelection -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
                 mutableState.value = DominoSessionState.PlayModeSelection
             }
 
             DominoSessionCommand.StartLocalMatch -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
                 mutableState.value = DominoSessionState.LocalMatch(
                     matchCoordinator = createLocalMatchCoordinator(),
                 )
             }
 
+            is DominoSessionCommand.StartOnlineMatch -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
+                mutableState.value = DominoSessionState.OnlineMatch(
+                    matchCoordinator = command.matchCoordinator,
+                )
+            }
+
             DominoSessionCommand.OpenOnlineCreateRoom -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
                 mutableState.value = DominoSessionState.OnlineCreateRoom
             }
 
             DominoSessionCommand.OpenOnlineJoinRoom -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
                 mutableState.value = DominoSessionState.OnlineJoinRoom
             }
 
             DominoSessionCommand.BackToMainMenu -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
                 mutableState.value = DominoSessionState.MainMenu
             }
 
             DominoSessionCommand.BackToPlayModeSelection -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
                 mutableState.value = DominoSessionState.PlayModeSelection
             }
+        }
+    }
+
+    private fun disposeCurrentOnlineCoordinatorIfNeeded() {
+        val state = mutableState.value
+
+        if (state is DominoSessionState.OnlineMatch) {
+            state.matchCoordinator.dispose()
         }
     }
 }

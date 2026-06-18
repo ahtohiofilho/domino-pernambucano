@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.getPlayableMoves
 import com.ahtohiofilho.dominopernambucano.domain.hasPlayablePiece
@@ -11,9 +12,13 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
+import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+private const val FAKE_PLAYER_ID_PREFIX = "fake-player-"
+private const val MAX_FAKE_TURN_ADVANCES = 64
 
 class FakeOnlineRoomRepository(
     private val clockPolicy: DominoMatchClockPolicy =
@@ -247,6 +252,7 @@ class FakeOnlineRoomRepository(
             OnlinePlayerActionTypeDto.PASS_TURN -> {
                 submitGameAction(
                     action = action,
+                    currentRoom = currentRoom,
                     currentSnapshot = currentSnapshot,
                     seatIndex = seatIndex,
                 )
@@ -291,7 +297,7 @@ class FakeOnlineRoomRepository(
             players = namedPlayers,
         )
 
-        val runtimeState = DominoMatchRuntimeState(
+        val initialRuntimeState = DominoMatchRuntimeState(
             gameState = gameState,
             roundNumber = 1,
             localPlayerIndex = 0,
@@ -305,9 +311,14 @@ class FakeOnlineRoomRepository(
             ),
         )
 
+        val normalizedRuntimeState = advanceFakeTurnsIfNeeded(
+            room = room,
+            runtimeState = initialRuntimeState,
+        )
+
         revision = 1L
 
-        mutableMatchSnapshot.value = runtimeState.toOnlineSnapshotDto(
+        mutableMatchSnapshot.value = normalizedRuntimeState.toOnlineSnapshotDto(
             roomId = room.roomId,
             matchId = matchId,
             revision = revision,
@@ -317,6 +328,7 @@ class FakeOnlineRoomRepository(
 
     private fun submitGameAction(
         action: OnlinePlayerActionDto,
+        currentRoom: OnlineRoomSnapshotDto,
         currentSnapshot: OnlineMatchSnapshotDto,
         seatIndex: Int,
     ): OnlineActionResultDto {
@@ -398,10 +410,94 @@ class FakeOnlineRoomRepository(
             ),
         )
 
-        return publishMatchSnapshot(
-            previousSnapshot = currentSnapshot,
+        val normalizedRuntimeState = advanceFakeTurnsIfNeeded(
+            room = currentRoom,
             runtimeState = updatedRuntimeState,
         )
+
+        return publishMatchSnapshot(
+            previousSnapshot = currentSnapshot,
+            runtimeState = normalizedRuntimeState,
+        )
+    }
+
+    private fun advanceFakeTurnsIfNeeded(
+        room: OnlineRoomSnapshotDto,
+        runtimeState: DominoMatchRuntimeState,
+    ): DominoMatchRuntimeState {
+        var currentRuntimeState = runtimeState.copy(
+            phase = determineNextPhase(
+                gameState = runtimeState.gameState,
+            ),
+        )
+
+        repeat(MAX_FAKE_TURN_ADVANCES) {
+            val gameState = currentRuntimeState.gameState
+
+            if (isRoundFinished(gameState) || isGameFinished(gameState)) {
+                return currentRuntimeState.copy(
+                    phase = determineNextPhase(
+                        gameState = gameState,
+                    ),
+                )
+            }
+
+            val currentPlayerId = findPlayerIdForSeat(
+                room = room,
+                seatIndex = gameState.currentPlayerIndex,
+            ) ?: return currentRuntimeState
+
+            if (!isFakePlayerId(currentPlayerId)) {
+                return currentRuntimeState.copy(
+                    phase = determineNextPhase(
+                        gameState = gameState,
+                    ),
+                )
+            }
+
+            val advancedGameState = advanceSingleFakeTurn(
+                gameState = gameState,
+            )
+
+            currentRuntimeState = currentRuntimeState.copy(
+                gameState = advancedGameState,
+                phase = determineNextPhase(
+                    gameState = advancedGameState,
+                ),
+            )
+        }
+
+        return currentRuntimeState
+    }
+
+    private fun advanceSingleFakeTurn(
+        gameState: DominoGameState,
+    ): DominoGameState {
+        if (
+            !hasPlayablePiece(
+                state = gameState,
+                playerIndex = gameState.currentPlayerIndex,
+            )
+        ) {
+            return passTurn(
+                state = gameState,
+            )
+        }
+
+        val botMove = findBasicBotMove(
+            state = gameState,
+        )
+
+        return if (botMove != null) {
+            playMoveForCurrentPlayer(
+                state = gameState,
+                playableMove = botMove,
+            )
+        } else {
+            passTurn(
+                state = gameState,
+            )
+        }
     }
 
     private fun publishMatchSnapshot(
@@ -454,7 +550,7 @@ class FakeOnlineRoomRepository(
     }
 
     private fun determineNextPhase(
-        gameState: com.ahtohiofilho.dominopernambucano.domain.DominoGameState,
+        gameState: DominoGameState,
     ): DominoMatchPhase {
         if (isGameFinished(gameState)) {
             return DominoMatchPhase.MatchFinished
@@ -478,6 +574,21 @@ class FakeOnlineRoomRepository(
         }
 
         return DominoMatchPhase.WaitingForLocalMove
+    }
+
+    private fun findPlayerIdForSeat(
+        room: OnlineRoomSnapshotDto,
+        seatIndex: Int,
+    ): String? {
+        return room.players.firstOrNull { player ->
+            player.seatIndex == seatIndex
+        }?.playerId
+    }
+
+    private fun isFakePlayerId(
+        playerId: String,
+    ): Boolean {
+        return playerId.startsWith(FAKE_PLAYER_ID_PREFIX)
     }
 
     private fun rejectedRoomOperation(
