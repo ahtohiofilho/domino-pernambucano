@@ -37,6 +37,8 @@ class FakeOnlineRoomRepository(
     private var nextMatchSequence = 1
     private var revision = 0L
 
+    private val actionResultsById = mutableMapOf<String, OnlineActionResultDto>()
+
     override val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?> =
         mutableRoomSnapshot.asStateFlow()
 
@@ -55,6 +57,7 @@ class FakeOnlineRoomRepository(
 
         revision = 0L
         mutableMatchSnapshot.value = null
+        actionResultsById.clear()
 
         val snapshot = OnlineRoomSnapshotDto(
             roomId = roomId,
@@ -196,40 +199,66 @@ class FakeOnlineRoomRepository(
     override suspend fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto {
+        actionResultsById[action.actionId]?.let { previousResult ->
+            return previousResult
+        }
+
         val currentRoom = mutableRoomSnapshot.value
-            ?: return rejectedAction(
-                reason = "Nenhuma sala ativa."
+            ?: return cacheActionResult(
+                action = action,
+                result = rejectedAction(
+                    reason = "Nenhuma sala ativa.",
+                ),
             )
 
         val currentSnapshot = mutableMatchSnapshot.value
-            ?: return rejectedAction(
-                reason = "A partida ainda não foi iniciada."
+            ?: return cacheActionResult(
+                action = action,
+                result = rejectedAction(
+                    reason = "A partida ainda não foi iniciada.",
+                ),
             )
 
         if (action.roomId != currentRoom.roomId) {
-            return rejectedAction(
-                reason = "Sala inválida."
+            return cacheActionResult(
+                action = action,
+                result = rejectedAction(
+                    reason = "Sala inválida.",
+                    revision = currentSnapshot.revision,
+                ),
             )
         }
 
         if (action.matchId != currentSnapshot.matchId) {
-            return rejectedAction(
-                reason = "Partida inválida."
+            return cacheActionResult(
+                action = action,
+                result = rejectedAction(
+                    reason = "Partida inválida.",
+                    revision = currentSnapshot.revision,
+                ),
             )
         }
 
         val roomPlayer = currentRoom.players.firstOrNull { player ->
             player.playerId == action.playerId
-        } ?: return rejectedAction(
-            reason = "Jogador não encontrado na sala."
+        } ?: return cacheActionResult(
+            action = action,
+            result = rejectedAction(
+                reason = "Jogador não encontrado na sala.",
+                revision = currentSnapshot.revision,
+            ),
         )
 
         val seatIndex = roomPlayer.seatIndex
-            ?: return rejectedAction(
-                reason = "Jogador sem assento definido."
+            ?: return cacheActionResult(
+                action = action,
+                result = rejectedAction(
+                    reason = "Jogador sem assento definido.",
+                    revision = currentSnapshot.revision,
+                ),
             )
 
-        return when (action.type) {
+        val result = when (action.type) {
             OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT -> {
                 submitSnapshotRequest(
                     currentRoom = currentRoom,
@@ -274,6 +303,11 @@ class FakeOnlineRoomRepository(
                 )
             }
         }
+
+        return cacheActionResult(
+            action = action,
+            result = result,
+        )
     }
 
     override suspend fun leaveRoom() {
@@ -704,6 +738,19 @@ class FakeOnlineRoomRepository(
         playerId: String,
     ): Boolean {
         return playerId.startsWith(FAKE_PLAYER_ID_PREFIX)
+    }
+
+    private fun cacheActionResult(
+        action: OnlinePlayerActionDto,
+        result: OnlineActionResultDto,
+    ): OnlineActionResultDto {
+        val resultWithActionId = result.copy(
+            actionId = action.actionId,
+        )
+
+        actionResultsById[action.actionId] = resultWithActionId
+
+        return resultWithActionId
     }
 
     private fun rejectedRoomOperation(

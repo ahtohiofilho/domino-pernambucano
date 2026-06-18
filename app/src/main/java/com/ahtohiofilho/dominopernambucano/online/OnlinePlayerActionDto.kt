@@ -20,6 +20,7 @@ data class OnlinePlayerActionDto(
     val playerId: String,
     val revision: Long,
     val type: OnlinePlayerActionTypeDto,
+    val actionId: String = createOnlineActionId(),
     val move: OnlinePlayableMoveDto? = null,
 )
 
@@ -27,6 +28,7 @@ data class OnlinePlayerActionDto(
 data class OnlineActionResultDto(
     val accepted: Boolean,
     val revision: Long? = null,
+    val actionId: String? = null,
     val reason: String? = null,
 )
 
@@ -36,6 +38,7 @@ fun createOnlinePlayMoveAction(
     playerId: String,
     revision: Long,
     move: PlayableMove,
+    actionId: String = createOnlineActionId(),
 ): OnlinePlayerActionDto {
     return OnlinePlayerActionDto(
         roomId = roomId,
@@ -43,6 +46,7 @@ fun createOnlinePlayMoveAction(
         playerId = playerId,
         revision = revision,
         type = OnlinePlayerActionTypeDto.PLAY_MOVE,
+        actionId = actionId,
         move = move.toOnlineDto(),
     )
 }
@@ -52,6 +56,7 @@ fun createOnlinePassTurnAction(
     matchId: String,
     playerId: String,
     revision: Long,
+    actionId: String = createOnlineActionId(),
 ): OnlinePlayerActionDto {
     return OnlinePlayerActionDto(
         roomId = roomId,
@@ -59,6 +64,7 @@ fun createOnlinePassTurnAction(
         playerId = playerId,
         revision = revision,
         type = OnlinePlayerActionTypeDto.PASS_TURN,
+        actionId = actionId,
     )
 }
 
@@ -67,6 +73,7 @@ fun createOnlineStartNextRoundAction(
     matchId: String,
     playerId: String,
     revision: Long,
+    actionId: String = createOnlineActionId(),
 ): OnlinePlayerActionDto {
     return OnlinePlayerActionDto(
         roomId = roomId,
@@ -74,6 +81,7 @@ fun createOnlineStartNextRoundAction(
         playerId = playerId,
         revision = revision,
         type = OnlinePlayerActionTypeDto.START_NEXT_ROUND,
+        actionId = actionId,
     )
 }
 
@@ -82,6 +90,7 @@ fun createOnlineStartNewMatchAction(
     matchId: String,
     playerId: String,
     revision: Long,
+    actionId: String = createOnlineActionId(),
 ): OnlinePlayerActionDto {
     return OnlinePlayerActionDto(
         roomId = roomId,
@@ -89,6 +98,7 @@ fun createOnlineStartNewMatchAction(
         playerId = playerId,
         revision = revision,
         type = OnlinePlayerActionTypeDto.START_NEW_MATCH,
+        actionId = actionId,
     )
 }
 
@@ -97,6 +107,7 @@ fun createOnlineSnapshotRequestAction(
     matchId: String,
     playerId: String,
     revision: Long,
+    actionId: String = createOnlineActionId(),
 ): OnlinePlayerActionDto {
     return OnlinePlayerActionDto(
         roomId = roomId,
@@ -104,6 +115,7 @@ fun createOnlineSnapshotRequestAction(
         playerId = playerId,
         revision = revision,
         type = OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT,
+        actionId = actionId,
     )
 }
 
@@ -112,6 +124,7 @@ fun createOnlineLeaveRoomAction(
     matchId: String,
     playerId: String,
     revision: Long,
+    actionId: String = createOnlineActionId(),
 ): OnlinePlayerActionDto {
     return OnlinePlayerActionDto(
         roomId = roomId,
@@ -119,5 +132,6 @@ fun createOnlineLeaveRoomAction(
         playerId = playerId,
         revision = revision,
         type = OnlinePlayerActionTypeDto.LEAVE_ROOM,
+        actionId = actionId,
     )
 }
