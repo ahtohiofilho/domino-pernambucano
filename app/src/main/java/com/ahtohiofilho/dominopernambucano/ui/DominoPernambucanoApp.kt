@@ -10,9 +10,9 @@ import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
 import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
 import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
-import com.ahtohiofilho.dominopernambucano.ui.menu.MenuPlaceholderScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.PlayModeScreen
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineCreateRoomRoute
+import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
 
 @Composable
 fun DominoPernambucanoApp() {
@@ -92,9 +92,15 @@ fun DominoPernambucanoApp() {
         }
 
         DominoSessionState.OnlineJoinRoom -> {
-            MenuPlaceholderScreen(
-                title = "Entrar em sala online",
-                description = "Fluxo reservado para conexão futura.",
+            OnlineJoinRoomRoute(
+                roomRepository = onlineRoomRepository,
+                onStartOnlineMatch = { matchCoordinator ->
+                    sessionCoordinator.dispatch(
+                        DominoSessionCommand.StartOnlineMatch(
+                            matchCoordinator = matchCoordinator,
+                        )
+                    )
+                },
                 onBackClick = {
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.BackToPlayModeSelection,

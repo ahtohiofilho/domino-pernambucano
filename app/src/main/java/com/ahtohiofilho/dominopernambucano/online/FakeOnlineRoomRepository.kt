@@ -258,6 +258,16 @@ class FakeOnlineRoomRepository(
                 ),
             )
 
+        if (!roomPlayer.connected) {
+            return cacheActionResult(
+                action = action,
+                result = rejectedAction(
+                    reason = "Jogador desconectado.",
+                    revision = currentSnapshot.revision,
+                ),
+            )
+        }
+
         val result = when (action.type) {
             OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT -> {
                 submitSnapshotRequest(
@@ -424,6 +434,20 @@ class FakeOnlineRoomRepository(
 
         val gameState = runtimeState.gameState
 
+        if (isGameFinished(gameState)) {
+            return rejectedAction(
+                reason = "A partida já terminou.",
+                revision = currentSnapshot.revision,
+            )
+        }
+
+        if (isRoundFinished(gameState)) {
+            return rejectedAction(
+                reason = "A rodada já terminou.",
+                revision = currentSnapshot.revision,
+            )
+        }
+
         if (gameState.currentPlayerIndex != seatIndex) {
             return rejectedAction(
                 reason = "Não é a vez deste jogador.",
@@ -566,13 +590,20 @@ class FakeOnlineRoomRepository(
             )
         }
 
+        val runtimeState = currentSnapshot.toRuntimeState(
+            localPlayerIndex = 0,
+        )
+
+        if (!isGameFinished(runtimeState.gameState)) {
+            return rejectedAction(
+                reason = "A partida ainda não terminou.",
+                revision = currentSnapshot.revision,
+            )
+        }
+
         val freshGameState = applyRoomPlayerNames(
             gameState = createInitialDominoGameState(),
             room = currentRoom,
-        )
-
-        val runtimeState = currentSnapshot.toRuntimeState(
-            localPlayerIndex = 0,
         )
 
         val freshRuntimeState = runtimeState.copy(
