@@ -4,6 +4,13 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+fun String.toBuildConfigString(): String {
+    val escapedValue = replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+
+    return "\"$escapedValue\""
+}
+
 android {
     namespace = "com.ahtohiofilho.dominopernambucano"
 
@@ -19,6 +26,28 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val onlineBackendMode = providers
+            .gradleProperty("onlineBackendMode")
+            .orElse("fake")
+            .get()
+
+        val onlineBackendBaseUrl = providers
+            .gradleProperty("onlineBackendBaseUrl")
+            .orElse("")
+            .get()
+
+        buildConfigField(
+            type = "String",
+            name = "ONLINE_BACKEND_MODE",
+            value = onlineBackendMode.toBuildConfigString(),
+        )
+
+        buildConfigField(
+            type = "String",
+            name = "ONLINE_BACKEND_BASE_URL",
+            value = onlineBackendBaseUrl.toBuildConfigString(),
+        )
     }
 
     buildTypes {
@@ -36,6 +65,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
