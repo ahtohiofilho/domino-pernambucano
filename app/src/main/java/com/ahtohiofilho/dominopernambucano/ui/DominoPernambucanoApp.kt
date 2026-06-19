@@ -4,7 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
+import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
+import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
 import com.ahtohiofilho.dominopernambucano.online.createDefaultOnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
@@ -17,22 +18,26 @@ import com.ahtohiofilho.dominopernambucano.ui.online.OnlineCreateRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
 
 @Composable
-fun DominoPernambucanoApp() {
+fun DominoPernambucanoApp(
+    onlineAppConfig: OnlineAppConfig = OnlineAppEnvironment.Current,
+) {
     val sessionCoordinator = remember {
         LocalDominoSessionCoordinator()
     }
 
-    val onlineRoomRepository = remember {
-        OnlineRepositoryFactory.create()
+    val onlineRoomRepository = remember(
+        onlineAppConfig.backendConfig,
+    ) {
+        OnlineRepositoryFactory.create(
+            config = onlineAppConfig.backendConfig,
+        )
     }
 
     val onlinePlayerIdentity = remember {
         createDefaultOnlinePlayerIdentity()
     }
 
-    val onlineDebugOptions = remember {
-        OnlineDebugOptions.FakeBackend
-    }
+    val onlineDebugOptions = onlineAppConfig.debugOptions
 
     val sessionState by sessionCoordinator.state.collectAsState()
 
