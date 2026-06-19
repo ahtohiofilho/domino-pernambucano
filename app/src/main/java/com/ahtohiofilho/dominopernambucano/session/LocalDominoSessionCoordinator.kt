@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-private const val ENABLE_OFFLINE_CLOCK_DEBUG = true
+private const val ENABLE_OFFLINE_CLOCK_DEBUG = false
 
 class LocalDominoSessionCoordinator : DominoSessionCoordinator {
     private val mutableState = MutableStateFlow<DominoSessionState>(

@@ -15,10 +15,6 @@ internal fun reduceOnlineAuthoritativeClock(
     runtimeState: DominoMatchRuntimeState,
     elapsedMillis: Long,
 ): DominoMatchRuntimeState {
-    if (elapsedMillis <= 0L) {
-        return runtimeState
-    }
-
     if (!runtimeState.clockPolicy.enabled) {
         return runtimeState
     }
@@ -34,6 +30,21 @@ internal fun reduceOnlineAuthoritativeClock(
     }
 
     val currentPlayerIndex = gameState.currentPlayerIndex
+
+    if (
+        isPlayerClockExpired(
+            clocks = runtimeState.playerClockMillis,
+            playerIndex = currentPlayerIndex,
+        )
+    ) {
+        return forceOnlineTurn(
+            runtimeState = runtimeState,
+        )
+    }
+
+    if (elapsedMillis <= 0L) {
+        return runtimeState
+    }
 
     val updatedClocks = decrementPlayerClockMillis(
         clocks = runtimeState.playerClockMillis,
@@ -54,11 +65,19 @@ internal fun reduceOnlineAuthoritativeClock(
         return clockedRuntimeState
     }
 
+    return forceOnlineTurn(
+        runtimeState = clockedRuntimeState,
+    )
+}
+
+private fun forceOnlineTurn(
+    runtimeState: DominoMatchRuntimeState,
+): DominoMatchRuntimeState {
     val forcedGameState = forceOnlineTurnForCurrentPlayer(
-        gameState = gameState,
+        gameState = runtimeState.gameState,
     )
 
-    return clockedRuntimeState.copy(
+    return runtimeState.copy(
         gameState = forcedGameState,
         phase = determineOnlineNextPhase(
             gameState = forcedGameState,

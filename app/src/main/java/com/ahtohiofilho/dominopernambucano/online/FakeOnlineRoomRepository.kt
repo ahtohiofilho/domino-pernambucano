@@ -1,9 +1,17 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
+import com.ahtohiofilho.dominopernambucano.domain.isGameFinished
+import com.ahtohiofilho.dominopernambucano.domain.isRoundFinished
+import com.ahtohiofilho.dominopernambucano.domain.passTurn
+import com.ahtohiofilho.dominopernambucano.domain.playMoveForCurrentPlayer
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
+import com.ahtohiofilho.dominopernambucano.match.findRandomPlayableMove
+import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +35,15 @@ class FakeOnlineRoomRepository(
 
     private val actionResultsById = mutableMapOf<String, OnlineActionResultDto>()
 
+    /*
+     * Jogadores que perderam controle manual por estouro de tempo na rodada atual.
+     *
+     * Esta flag é limpa ao iniciar uma nova rodada, criar sala, sair da sala
+     * ou iniciar uma nova partida. Assim, o estouro de tempo só automatiza
+     * o jogador até o fim da rodada em andamento.
+     */
+    private val automaticSeatIndexes = mutableSetOf<Int>()
+
     override val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?> =
         mutableRoomSnapshot.asStateFlow()
 
@@ -46,6 +63,7 @@ class FakeOnlineRoomRepository(
         revision = 0L
         mutableMatchSnapshot.value = null
         actionResultsById.clear()
+        automaticSeatIndexes.clear()
 
         val now = nowEpochMillis()
 
@@ -323,6 +341,7 @@ class FakeOnlineRoomRepository(
         )
 
         mutableMatchSnapshot.value = null
+        automaticSeatIndexes.clear()
     }
 
     private fun startMatch(
@@ -355,6 +374,7 @@ class FakeOnlineRoomRepository(
             matchId = matchId,
             revision = revision,
             serverEpochMillis = nowEpochMillis(),
+            automaticPlayerIndexes = automaticSeatIndexes.sorted(),
         )
     }
 
@@ -363,21 +383,38 @@ class FakeOnlineRoomRepository(
         currentSnapshot: OnlineMatchSnapshotDto,
     ): OnlineActionResultDto {
         val now = nowEpochMillis()
+
         val runtimeState = currentSnapshot.toRuntimeState(
             localPlayerIndex = 0,
         )
 
+        val clockReduction = reduceClockAndRegisterAutomaticPlayer(
+            runtimeState = runtimeState,
+            elapsedMillis = getElapsedMillisSinceSnapshot(
+                snapshot = currentSnapshot,
+                nowEpochMillis = now,
+            ),
+        )
+
+        if (clockReduction.turnWasResolved) {
+            return publishMatchSnapshot(
+                previousSnapshot = currentSnapshot,
+                runtimeState = clockReduction.runtimeState,
+                serverEpochMillis = now,
+            )
+        }
+
         if (
             shouldAdvanceFakePlayerForSnapshotRequest(
                 room = currentRoom,
-                gameState = runtimeState.gameState,
+                gameState = clockReduction.runtimeState.gameState,
             )
         ) {
             val updatedGameState = advanceSingleFakeTurn(
-                gameState = runtimeState.gameState,
+                gameState = clockReduction.runtimeState.gameState,
             )
 
-            val updatedRuntimeState = runtimeState.copy(
+            val updatedRuntimeState = clockReduction.runtimeState.copy(
                 gameState = updatedGameState,
                 phase = determineOnlineNextPhase(
                     gameState = updatedGameState,
@@ -391,18 +428,10 @@ class FakeOnlineRoomRepository(
             )
         }
 
-        val clockedRuntimeState = reduceOnlineAuthoritativeClock(
-            runtimeState = runtimeState,
-            elapsedMillis = getElapsedMillisSinceSnapshot(
-                snapshot = currentSnapshot,
-                nowEpochMillis = now,
-            ),
-        )
-
-        if (clockedRuntimeState != runtimeState) {
+        if (clockReduction.runtimeState.playerClockMillis != runtimeState.playerClockMillis) {
             return publishMatchSnapshot(
                 previousSnapshot = currentSnapshot,
-                runtimeState = clockedRuntimeState,
+                runtimeState = clockReduction.runtimeState,
                 serverEpochMillis = now,
             )
         }
@@ -419,11 +448,12 @@ class FakeOnlineRoomRepository(
         seatIndex: Int,
     ): OnlineActionResultDto {
         val now = nowEpochMillis()
+
         val runtimeState = currentSnapshot.toRuntimeState(
             localPlayerIndex = seatIndex,
         )
 
-        val clockedRuntimeState = reduceOnlineAuthoritativeClock(
+        val clockReduction = reduceClockAndRegisterAutomaticPlayer(
             runtimeState = runtimeState,
             elapsedMillis = getElapsedMillisSinceSnapshot(
                 snapshot = currentSnapshot,
@@ -431,24 +461,31 @@ class FakeOnlineRoomRepository(
             ),
         )
 
-        if (clockedRuntimeState.gameState != runtimeState.gameState) {
-            val timeoutResult = publishMatchSnapshot(
+        if (clockReduction.turnWasResolved) {
+            val automaticResult = publishMatchSnapshot(
                 previousSnapshot = currentSnapshot,
-                runtimeState = clockedRuntimeState,
+                runtimeState = clockReduction.runtimeState,
                 serverEpochMillis = now,
             )
 
-            return timeoutResult.copy(
+            val reason = if (seatIndex in automaticSeatIndexes) {
+                "Jogador em modo automático."
+            } else {
+                "Tempo esgotado."
+            }
+
+            return automaticResult.copy(
                 accepted = false,
-                reason = "Tempo esgotado.",
+                reason = reason,
             )
         }
 
-        val clockedSnapshot = clockedRuntimeState.toOnlineSnapshotDto(
+        val clockedSnapshot = clockReduction.runtimeState.toOnlineSnapshotDto(
             roomId = currentSnapshot.roomId,
             matchId = currentSnapshot.matchId,
             revision = currentSnapshot.revision,
             serverEpochMillis = now,
+            automaticPlayerIndexes = automaticSeatIndexes.sorted(),
         )
 
         return publishMatchReduction(
@@ -467,14 +504,29 @@ class FakeOnlineRoomRepository(
         currentRoom: OnlineRoomSnapshotDto,
         currentSnapshot: OnlineMatchSnapshotDto,
     ): OnlineActionResultDto {
-        return publishMatchReduction(
-            previousSnapshot = currentSnapshot,
-            reduction = reduceOnlineStartNextRoundAction(
-                action = action,
-                currentRoom = currentRoom,
-                currentSnapshot = currentSnapshot,
-            ),
+        val reduction = reduceOnlineStartNextRoundAction(
+            action = action,
+            currentRoom = currentRoom,
+            currentSnapshot = currentSnapshot,
         )
+
+        return when (reduction) {
+            is OnlineMatchActionReduction.Accepted -> {
+                automaticSeatIndexes.clear()
+
+                publishMatchSnapshot(
+                    previousSnapshot = currentSnapshot,
+                    runtimeState = reduction.runtimeState,
+                )
+            }
+
+            is OnlineMatchActionReduction.Rejected -> {
+                rejectedAction(
+                    reason = reduction.reason,
+                    revision = reduction.revision,
+                )
+            }
+        }
     }
 
     private fun submitStartNewMatch(
@@ -482,14 +534,201 @@ class FakeOnlineRoomRepository(
         currentRoom: OnlineRoomSnapshotDto,
         currentSnapshot: OnlineMatchSnapshotDto,
     ): OnlineActionResultDto {
-        return publishMatchReduction(
-            previousSnapshot = currentSnapshot,
-            reduction = reduceOnlineStartNewMatchAction(
-                action = action,
-                currentRoom = currentRoom,
-                currentSnapshot = currentSnapshot,
+        val reduction = reduceOnlineStartNewMatchAction(
+            action = action,
+            currentRoom = currentRoom,
+            currentSnapshot = currentSnapshot,
+        )
+
+        return when (reduction) {
+            is OnlineMatchActionReduction.Accepted -> {
+                automaticSeatIndexes.clear()
+
+                publishMatchSnapshot(
+                    previousSnapshot = currentSnapshot,
+                    runtimeState = reduction.runtimeState,
+                )
+            }
+
+            is OnlineMatchActionReduction.Rejected -> {
+                rejectedAction(
+                    reason = reduction.reason,
+                    revision = reduction.revision,
+                )
+            }
+        }
+    }
+
+    private data class ClockReductionResult(
+        val runtimeState: DominoMatchRuntimeState,
+        val turnWasResolved: Boolean,
+    )
+
+    private fun reduceClockAndRegisterAutomaticPlayer(
+        runtimeState: DominoMatchRuntimeState,
+        elapsedMillis: Long,
+    ): ClockReductionResult {
+        val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
+
+        if (shouldForceAutomaticTurnForMarkedCurrentPlayer(runtimeState)) {
+            return ClockReductionResult(
+                runtimeState = forceAutomaticTurnForCurrentPlayer(
+                    runtimeState = runtimeState,
+                ),
+                turnWasResolved = true,
+            )
+        }
+
+        val currentPlayerWasAlreadyExpired =
+            shouldForceAutomaticTurnForExpiredCurrentPlayer(runtimeState)
+
+        val clockedRuntimeState = reduceOnlineAuthoritativeClock(
+            runtimeState = runtimeState,
+            elapsedMillis = elapsedMillis,
+        )
+
+        val turnWasResolved =
+            wasTurnResolvedByClockOrTimeout(
+                previousRuntimeState = runtimeState,
+                updatedRuntimeState = clockedRuntimeState,
+            )
+
+        if (currentPlayerWasAlreadyExpired || turnWasResolved) {
+            automaticSeatIndexes.add(currentPlayerIndex)
+        }
+
+        if (turnWasResolved) {
+            return ClockReductionResult(
+                runtimeState = clockedRuntimeState,
+                turnWasResolved = true,
+            )
+        }
+
+        val currentPlayerIsNowExpired =
+            shouldForceAutomaticTurnForExpiredCurrentPlayer(clockedRuntimeState)
+
+        if (!currentPlayerIsNowExpired) {
+            return ClockReductionResult(
+                runtimeState = clockedRuntimeState,
+                turnWasResolved = false,
+            )
+        }
+
+        automaticSeatIndexes.add(currentPlayerIndex)
+
+        return ClockReductionResult(
+            runtimeState = forceAutomaticTurnForCurrentPlayer(
+                runtimeState = clockedRuntimeState,
+            ),
+            turnWasResolved = true,
+        )
+    }
+
+    private fun shouldForceAutomaticTurnForMarkedCurrentPlayer(
+        runtimeState: DominoMatchRuntimeState,
+    ): Boolean {
+        val gameState = runtimeState.gameState
+
+        if (isRoundFinished(gameState) || isGameFinished(gameState)) {
+            return false
+        }
+
+        if (gameState.currentPlayerIndex !in automaticSeatIndexes) {
+            return false
+        }
+
+        return when (val phase = runtimeState.phase) {
+            DominoMatchPhase.WaitingForLocalMove -> true
+
+            is DominoMatchPhase.PresentingPass -> {
+                phase.playerIndex == gameState.currentPlayerIndex
+            }
+
+            else -> false
+        }
+    }
+
+    private fun shouldForceAutomaticTurnForExpiredCurrentPlayer(
+        runtimeState: DominoMatchRuntimeState,
+    ): Boolean {
+        if (!runtimeState.clockPolicy.enabled) {
+            return false
+        }
+
+        if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
+            return false
+        }
+
+        val gameState = runtimeState.gameState
+
+        if (isRoundFinished(gameState) || isGameFinished(gameState)) {
+            return false
+        }
+
+        return isPlayerClockExpired(
+            clocks = runtimeState.playerClockMillis,
+            playerIndex = gameState.currentPlayerIndex,
+        )
+    }
+
+    private fun wasTurnResolvedByClockOrTimeout(
+        previousRuntimeState: DominoMatchRuntimeState,
+        updatedRuntimeState: DominoMatchRuntimeState,
+    ): Boolean {
+        return updatedRuntimeState.gameState != previousRuntimeState.gameState ||
+                updatedRuntimeState.phase != previousRuntimeState.phase
+    }
+
+    private fun forceAutomaticTurnForCurrentPlayer(
+        runtimeState: DominoMatchRuntimeState,
+    ): DominoMatchRuntimeState {
+        val forcedGameState = when (val phase = runtimeState.phase) {
+            DominoMatchPhase.WaitingForLocalMove -> {
+                forceRandomMoveOrPassForCurrentPlayer(
+                    gameState = runtimeState.gameState,
+                )
+            }
+
+            is DominoMatchPhase.PresentingPass -> {
+                if (phase.playerIndex == runtimeState.gameState.currentPlayerIndex) {
+                    passTurn(
+                        state = runtimeState.gameState,
+                    )
+                } else {
+                    runtimeState.gameState
+                }
+            }
+
+            else -> {
+                runtimeState.gameState
+            }
+        }
+
+        return runtimeState.copy(
+            gameState = forcedGameState,
+            phase = determineOnlineNextPhase(
+                gameState = forcedGameState,
             ),
         )
+    }
+
+    private fun forceRandomMoveOrPassForCurrentPlayer(
+        gameState: DominoGameState,
+    ): DominoGameState {
+        val move = findRandomPlayableMove(
+            state = gameState,
+        )
+
+        return if (move != null) {
+            playMoveForCurrentPlayer(
+                state = gameState,
+                playableMove = move,
+            )
+        } else {
+            passTurn(
+                state = gameState,
+            )
+        }
     }
 
     private fun publishMatchReduction(
@@ -527,6 +766,7 @@ class FakeOnlineRoomRepository(
             matchId = previousSnapshot.matchId,
             revision = revision,
             serverEpochMillis = serverEpochMillis,
+            automaticPlayerIndexes = automaticSeatIndexes.sorted(),
         )
 
         mutableMatchSnapshot.value = updatedSnapshot

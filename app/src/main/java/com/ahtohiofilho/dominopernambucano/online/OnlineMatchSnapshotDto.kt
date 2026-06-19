@@ -24,6 +24,16 @@ data class OnlineMatchSnapshotDto(
     val playerClockMillis: List<Long>,
 
     val serverEpochMillis: Long? = null,
+
+    /*
+     * Jogadores que perderam o controle manual por estouro de tempo.
+     *
+     * Esse estado precisa viajar no snapshot porque o client/coordinator
+     * não pode depender apenas do relógio local. Ao iniciar uma nova rodada,
+     * os relógios voltam cheios, mas o jogador ainda deve continuar em modo
+     * automático até a partida terminar ou uma nova partida ser iniciada.
+     */
+    val automaticPlayerIndexes: List<Int> = emptyList(),
 )
 
 fun DominoMatchClockPolicy.toOnlineDto(): OnlineMatchClockPolicyDto {
@@ -49,6 +59,7 @@ fun DominoMatchRuntimeState.toOnlineSnapshotDto(
     matchId: String,
     revision: Long,
     serverEpochMillis: Long? = null,
+    automaticPlayerIndexes: List<Int> = emptyList(),
 ): OnlineMatchSnapshotDto {
     return OnlineMatchSnapshotDto(
         roomId = roomId,
@@ -60,6 +71,7 @@ fun DominoMatchRuntimeState.toOnlineSnapshotDto(
         clockPolicy = clockPolicy.toOnlineDto(),
         playerClockMillis = playerClockMillis,
         serverEpochMillis = serverEpochMillis,
+        automaticPlayerIndexes = automaticPlayerIndexes,
     )
 }
 

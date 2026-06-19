@@ -49,6 +49,9 @@ class OnlineDominoMatchCoordinator(
     private var latestRevision = initialSnapshot.revision
     private var lastConsumedRevision = initialSnapshot.revision
 
+    private var automaticPlayerIndexes: Set<Int> =
+        initialSnapshot.automaticPlayerIndexes.toSet()
+
     override val state: StateFlow<DominoMatchRuntimeState> =
         mutableState.asStateFlow()
 
@@ -72,6 +75,7 @@ class OnlineDominoMatchCoordinator(
 
                 lastConsumedRevision = snapshot.revision
                 latestRevision = snapshot.revision
+                automaticPlayerIndexes = snapshot.automaticPlayerIndexes.toSet()
 
                 handleRemoteSnapshot(
                     remoteRuntimeState = snapshot.toRuntimeState(
@@ -128,6 +132,11 @@ class OnlineDominoMatchCoordinator(
         }
 
         val runtimeState = mutableState.value
+
+        if (shouldRequestAutomaticLocalTurn(runtimeState)) {
+            requestSnapshot()
+            return
+        }
 
         if (!runtimeState.clockPolicy.enabled) {
             return
@@ -217,7 +226,15 @@ class OnlineDominoMatchCoordinator(
                 }
 
                 if (phase.playerIndex == localPlayerIndex) {
-                    submitPassTurn()
+                    if (
+                        shouldRequestAutomaticLocalPassResolution(
+                            runtimeState = currentState,
+                        )
+                    ) {
+                        requestSnapshot()
+                    } else {
+                        submitPassTurn()
+                    }
                 } else {
                     requestSnapshot()
                 }
@@ -237,12 +254,23 @@ class OnlineDominoMatchCoordinator(
         stableRuntimeState = runtimeState
         pendingRuntimeStateAfterPresentation = null
         mutableState.value = runtimeState
+
+        requestSnapshotIfLocalAutomaticTurn(
+            runtimeState = runtimeState,
+        )
     }
 
     private fun submitMove(
         command: DominoMatchCommand.LocalMoveSelected,
     ) {
         val runtimeState = stableRuntimeState
+
+        if (isLocalPlayerAutomatic()) {
+            requestSnapshotIfLocalAutomaticTurn(
+                runtimeState = runtimeState,
+            )
+            return
+        }
 
         if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
             return
@@ -264,6 +292,15 @@ class OnlineDominoMatchCoordinator(
     }
 
     private fun submitPassTurn() {
+        val runtimeState = stableRuntimeState
+
+        if (isLocalPlayerAutomatic()) {
+            requestSnapshotIfLocalAutomaticTurn(
+                runtimeState = runtimeState,
+            )
+            return
+        }
+
         val action = createOnlinePassTurnAction(
             roomId = roomId,
             matchId = matchId,
@@ -294,6 +331,51 @@ class OnlineDominoMatchCoordinator(
         )
 
         submitAction(action)
+    }
+
+    private fun isLocalPlayerAutomatic(): Boolean {
+        return localPlayerIndex in automaticPlayerIndexes
+    }
+
+    private fun shouldRequestAutomaticLocalTurn(
+        runtimeState: DominoMatchRuntimeState,
+    ): Boolean {
+        if (!isLocalPlayerAutomatic()) {
+            return false
+        }
+
+        if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
+            return false
+        }
+
+        return runtimeState.gameState.currentPlayerIndex == localPlayerIndex
+    }
+
+    private fun shouldRequestAutomaticLocalPassResolution(
+        runtimeState: DominoMatchRuntimeState,
+    ): Boolean {
+        if (!isLocalPlayerAutomatic()) {
+            return false
+        }
+
+        val phase = runtimeState.phase
+
+        if (phase !is DominoMatchPhase.PresentingPass) {
+            return false
+        }
+
+        return phase.playerIndex == localPlayerIndex &&
+                runtimeState.gameState.currentPlayerIndex == localPlayerIndex
+    }
+
+    private fun requestSnapshotIfLocalAutomaticTurn(
+        runtimeState: DominoMatchRuntimeState,
+    ) {
+        if (!shouldRequestAutomaticLocalTurn(runtimeState)) {
+            return
+        }
+
+        requestSnapshot()
     }
 
     private fun requestSnapshot() {
