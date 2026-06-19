@@ -25,14 +25,16 @@ data class OnlineAppConfig(
 
 object OnlineAppEnvironment {
     /*
-     * Ponto único de troca do ambiente online.
-     *
-     * Para continuar no backend fake:
+     * Backend fake:
      * Current = OnlineAppConfig.Fake
      *
-     * Para testar com backend local no emulador Android:
+     * Backend local no emulador Android:
      * Current = OnlineAppConfig.remote("http://10.0.2.2:8080")
+     *
+     * Observação:
+     * 10.0.2.2 é o alias usado pelo emulador Android para acessar
+     * o localhost da máquina host.
      */
     val Current: OnlineAppConfig =
-        OnlineAppConfig.Fake
+        OnlineAppConfig.remote("http://10.0.2.2:8080")
 }

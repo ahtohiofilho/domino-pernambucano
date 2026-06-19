@@ -1,18 +1,35 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 class RemoteOnlineRoomRepository(
     private val config: OnlineBackendConfig,
     private val apiClient: RemoteOnlineApiClient? = createApiClientOrNull(config),
+    private val pollingPolicy: OnlineRemotePollingPolicy =
+        OnlineRemotePollingPolicy.Disabled,
 ) : OnlineRoomRepository {
+    private val repositoryScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate,
+    )
+
     private val mutableRoomSnapshot =
         MutableStateFlow<OnlineRoomSnapshotDto?>(null)
 
     private val mutableMatchSnapshot =
         MutableStateFlow<OnlineMatchSnapshotDto?>(null)
+
+    private var pollingJob: Job? = null
+    private var pollingRoomId: String? = null
 
     override val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?> =
         mutableRoomSnapshot.asStateFlow()
@@ -114,6 +131,8 @@ class RemoteOnlineRoomRepository(
     }
 
     override suspend fun leaveRoom() {
+        stopPolling()
+
         val client = apiClient
         val currentSnapshot = mutableMatchSnapshot.value
         val currentRoom = mutableRoomSnapshot.value
@@ -150,6 +169,13 @@ class RemoteOnlineRoomRepository(
 
         mutableRoomSnapshot.value = room
 
+        if (result.accepted) {
+            startPolling(
+                roomId = room.roomId,
+                client = client,
+            )
+        }
+
         val matchId = room.matchId
         if (result.accepted && matchId != null) {
             runCatching {
@@ -164,14 +190,69 @@ class RemoteOnlineRoomRepository(
         client: RemoteOnlineApiClient,
         action: OnlinePlayerActionDto,
     ) {
-        runCatching {
-            client.fetchRoomSnapshot(action.roomId)
-        }.onSuccess { room ->
-            mutableRoomSnapshot.value = room
+        refreshSnapshots(
+            client = client,
+            roomId = action.roomId,
+            fallbackMatchId = action.matchId,
+        )
+    }
+
+    private fun startPolling(
+        roomId: String,
+        client: RemoteOnlineApiClient,
+    ) {
+        if (!pollingPolicy.enabled) {
+            return
         }
 
+        if (
+            pollingRoomId == roomId &&
+            pollingJob?.isActive == true
+        ) {
+            return
+        }
+
+        stopPolling()
+
+        pollingRoomId = roomId
+
+        pollingJob = repositoryScope.launch {
+            while (isActive) {
+                delay(pollingPolicy.intervalMillis)
+
+                refreshSnapshots(
+                    client = client,
+                    roomId = roomId,
+                    fallbackMatchId = mutableMatchSnapshot.value?.matchId,
+                )
+            }
+        }
+    }
+
+    private fun stopPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
+        pollingRoomId = null
+    }
+
+    private suspend fun refreshSnapshots(
+        client: RemoteOnlineApiClient,
+        roomId: String,
+        fallbackMatchId: String?,
+    ) {
+        var latestMatchId = fallbackMatchId
+
         runCatching {
-            client.fetchMatchSnapshot(action.matchId)
+            client.fetchRoomSnapshot(roomId)
+        }.onSuccess { room ->
+            mutableRoomSnapshot.value = room
+            latestMatchId = room.matchId ?: latestMatchId
+        }
+
+        val matchId = latestMatchId ?: return
+
+        runCatching {
+            client.fetchMatchSnapshot(matchId)
         }.onSuccess { match ->
             mutableMatchSnapshot.value = match
         }

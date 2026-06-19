@@ -12,6 +12,7 @@ object OnlineRepositoryFactory {
             OnlineBackendMode.REMOTE -> {
                 RemoteOnlineRoomRepository(
                     config = config,
+                    pollingPolicy = OnlineRemotePollingPolicy.Default,
                 )
             }
         }
