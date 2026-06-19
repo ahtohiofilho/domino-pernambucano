@@ -15,38 +15,24 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 class KtorRemoteOnlineApiClient(
-    private val config: OnlineBackendConfig,
+    config: OnlineBackendConfig,
+    private val httpClient: HttpClient = createDefaultOnlineHttpClient(
+        config = config,
+    ),
 ) : RemoteOnlineApiClient {
     private val baseUrl: String =
         requireNotNull(config.baseUrl) {
             "Remote backend baseUrl não configurada."
         }.trimEnd('/')
 
-    private val client = HttpClient(Android) {
-        expectSuccess = true
-
-        install(HttpTimeout) {
-            connectTimeoutMillis = config.connectTimeoutMillis
-            requestTimeoutMillis = config.requestTimeoutMillis
-        }
-
-        install(ContentNegotiation) {
-            json(
-                Json {
-                    ignoreUnknownKeys = true
-                    encodeDefaults = true
-                }
-            )
-        }
-    }
-
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
-        return client.post(
+        return httpClient.post(
             urlString = endpoint("rooms"),
         ) {
             contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
             setBody(request)
         }.body()
     }
@@ -54,10 +40,11 @@ class KtorRemoteOnlineApiClient(
     override suspend fun joinRoom(
         request: JoinOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
-        return client.post(
+        return httpClient.post(
             urlString = endpoint("rooms/join"),
         ) {
             contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
             setBody(request)
         }.body()
     }
@@ -65,10 +52,11 @@ class KtorRemoteOnlineApiClient(
     override suspend fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto {
-        return client.post(
+        return httpClient.post(
             urlString = endpoint("matches/actions"),
         ) {
             contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
             setBody(action)
         }.body()
     }
@@ -76,7 +64,7 @@ class KtorRemoteOnlineApiClient(
     override suspend fun fetchRoomSnapshot(
         roomId: String,
     ): OnlineRoomSnapshotDto {
-        return client.get(
+        return httpClient.get(
             urlString = endpoint("rooms/$roomId"),
         ) {
             accept(ContentType.Application.Json)
@@ -86,7 +74,7 @@ class KtorRemoteOnlineApiClient(
     override suspend fun fetchMatchSnapshot(
         matchId: String,
     ): OnlineMatchSnapshotDto {
-        return client.get(
+        return httpClient.get(
             urlString = endpoint("matches/$matchId"),
         ) {
             accept(ContentType.Application.Json)
@@ -97,5 +85,31 @@ class KtorRemoteOnlineApiClient(
         path: String,
     ): String {
         return "$baseUrl/${path.trimStart('/')}"
+    }
+}
+
+private fun createDefaultOnlineHttpClient(
+    config: OnlineBackendConfig,
+): HttpClient {
+    return HttpClient(Android) {
+        expectSuccess = true
+
+        install(HttpTimeout) {
+            connectTimeoutMillis = config.connectTimeoutMillis
+            requestTimeoutMillis = config.requestTimeoutMillis
+        }
+
+        install(ContentNegotiation) {
+            json(
+                createOnlineJson(),
+            )
+        }
+    }
+}
+
+internal fun createOnlineJson(): Json {
+    return Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
     }
 }
