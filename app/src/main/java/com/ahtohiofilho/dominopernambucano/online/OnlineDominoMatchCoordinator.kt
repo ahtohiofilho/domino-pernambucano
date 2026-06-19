@@ -8,6 +8,8 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
+import com.ahtohiofilho.dominopernambucano.match.decrementPlayerClockMillis
+import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -93,11 +95,7 @@ class OnlineDominoMatchCoordinator(
             }
 
             is DominoMatchCommand.TurnClockTick -> {
-                /*
-                 * No online, o clock precisa ser tratado como responsabilidade
-                 * autoritativa do backend. Por enquanto o fake repository não
-                 * decide timeout por tick local.
-                 */
+                handleTurnClockTick(command)
             }
 
             DominoMatchCommand.BotDecisionReady -> {
@@ -120,6 +118,54 @@ class OnlineDominoMatchCoordinator(
 
     fun dispose() {
         coordinatorScope.cancel()
+    }
+
+    private fun handleTurnClockTick(
+        command: DominoMatchCommand.TurnClockTick,
+    ) {
+        if (command.elapsedMillis <= 0L) {
+            return
+        }
+
+        val runtimeState = mutableState.value
+
+        if (!runtimeState.clockPolicy.enabled) {
+            return
+        }
+
+        if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
+            return
+        }
+
+        val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
+
+        if (
+            isPlayerClockExpired(
+                clocks = runtimeState.playerClockMillis,
+                playerIndex = currentPlayerIndex,
+            )
+        ) {
+            return
+        }
+
+        val updatedClocks = decrementPlayerClockMillis(
+            clocks = runtimeState.playerClockMillis,
+            playerIndex = currentPlayerIndex,
+            elapsedMillis = command.elapsedMillis,
+        )
+
+        mutableState.value = runtimeState.copy(
+            playerClockMillis = updatedClocks,
+        )
+
+        if (
+            isPlayerClockExpired(
+                clocks = updatedClocks,
+                playerIndex = currentPlayerIndex,
+            )
+        ) {
+            requestSnapshot()
+        }
     }
 
     private fun handleRemoteSnapshot(

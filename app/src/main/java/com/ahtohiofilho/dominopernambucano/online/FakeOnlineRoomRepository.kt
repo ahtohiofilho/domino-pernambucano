@@ -47,6 +47,8 @@ class FakeOnlineRoomRepository(
         mutableMatchSnapshot.value = null
         actionResultsById.clear()
 
+        val now = nowEpochMillis()
+
         val snapshot = OnlineRoomSnapshotDto(
             roomId = roomId,
             roomCode = roomCode,
@@ -61,8 +63,8 @@ class FakeOnlineRoomRepository(
                 )
             ),
             matchId = null,
-            createdAtEpochMillis = nowEpochMillis(),
-            updatedAtEpochMillis = nowEpochMillis(),
+            createdAtEpochMillis = now,
+            updatedAtEpochMillis = now,
         )
 
         mutableRoomSnapshot.value = snapshot
@@ -360,36 +362,54 @@ class FakeOnlineRoomRepository(
         currentRoom: OnlineRoomSnapshotDto,
         currentSnapshot: OnlineMatchSnapshotDto,
     ): OnlineActionResultDto {
+        val now = nowEpochMillis()
         val runtimeState = currentSnapshot.toRuntimeState(
             localPlayerIndex = 0,
         )
 
         if (
-            !shouldAdvanceFakePlayerForSnapshotRequest(
+            shouldAdvanceFakePlayerForSnapshotRequest(
                 room = currentRoom,
                 gameState = runtimeState.gameState,
             )
         ) {
-            return OnlineActionResultDto(
-                accepted = true,
-                revision = currentSnapshot.revision,
+            val updatedGameState = advanceSingleFakeTurn(
+                gameState = runtimeState.gameState,
+            )
+
+            val updatedRuntimeState = runtimeState.copy(
+                gameState = updatedGameState,
+                phase = determineOnlineNextPhase(
+                    gameState = updatedGameState,
+                ),
+            )
+
+            return publishMatchSnapshot(
+                previousSnapshot = currentSnapshot,
+                runtimeState = updatedRuntimeState,
+                serverEpochMillis = now,
             )
         }
 
-        val updatedGameState = advanceSingleFakeTurn(
-            gameState = runtimeState.gameState,
-        )
-
-        val updatedRuntimeState = runtimeState.copy(
-            gameState = updatedGameState,
-            phase = determineOnlineNextPhase(
-                gameState = updatedGameState,
+        val clockedRuntimeState = reduceOnlineAuthoritativeClock(
+            runtimeState = runtimeState,
+            elapsedMillis = getElapsedMillisSinceSnapshot(
+                snapshot = currentSnapshot,
+                nowEpochMillis = now,
             ),
         )
 
-        return publishMatchSnapshot(
-            previousSnapshot = currentSnapshot,
-            runtimeState = updatedRuntimeState,
+        if (clockedRuntimeState != runtimeState) {
+            return publishMatchSnapshot(
+                previousSnapshot = currentSnapshot,
+                runtimeState = clockedRuntimeState,
+                serverEpochMillis = now,
+            )
+        }
+
+        return OnlineActionResultDto(
+            accepted = true,
+            revision = currentSnapshot.revision,
         )
     }
 
@@ -398,13 +418,47 @@ class FakeOnlineRoomRepository(
         currentSnapshot: OnlineMatchSnapshotDto,
         seatIndex: Int,
     ): OnlineActionResultDto {
+        val now = nowEpochMillis()
+        val runtimeState = currentSnapshot.toRuntimeState(
+            localPlayerIndex = seatIndex,
+        )
+
+        val clockedRuntimeState = reduceOnlineAuthoritativeClock(
+            runtimeState = runtimeState,
+            elapsedMillis = getElapsedMillisSinceSnapshot(
+                snapshot = currentSnapshot,
+                nowEpochMillis = now,
+            ),
+        )
+
+        if (clockedRuntimeState.gameState != runtimeState.gameState) {
+            val timeoutResult = publishMatchSnapshot(
+                previousSnapshot = currentSnapshot,
+                runtimeState = clockedRuntimeState,
+                serverEpochMillis = now,
+            )
+
+            return timeoutResult.copy(
+                accepted = false,
+                reason = "Tempo esgotado.",
+            )
+        }
+
+        val clockedSnapshot = clockedRuntimeState.toOnlineSnapshotDto(
+            roomId = currentSnapshot.roomId,
+            matchId = currentSnapshot.matchId,
+            revision = currentSnapshot.revision,
+            serverEpochMillis = now,
+        )
+
         return publishMatchReduction(
-            previousSnapshot = currentSnapshot,
+            previousSnapshot = clockedSnapshot,
             reduction = reduceOnlineGameAction(
                 action = action,
-                currentSnapshot = currentSnapshot,
+                currentSnapshot = clockedSnapshot,
                 seatIndex = seatIndex,
             ),
+            serverEpochMillis = now,
         )
     }
 
@@ -441,12 +495,14 @@ class FakeOnlineRoomRepository(
     private fun publishMatchReduction(
         previousSnapshot: OnlineMatchSnapshotDto,
         reduction: OnlineMatchActionReduction,
+        serverEpochMillis: Long = nowEpochMillis(),
     ): OnlineActionResultDto {
         return when (reduction) {
             is OnlineMatchActionReduction.Accepted -> {
                 publishMatchSnapshot(
                     previousSnapshot = previousSnapshot,
                     runtimeState = reduction.runtimeState,
+                    serverEpochMillis = serverEpochMillis,
                 )
             }
 
@@ -462,6 +518,7 @@ class FakeOnlineRoomRepository(
     private fun publishMatchSnapshot(
         previousSnapshot: OnlineMatchSnapshotDto,
         runtimeState: DominoMatchRuntimeState,
+        serverEpochMillis: Long = nowEpochMillis(),
     ): OnlineActionResultDto {
         revision = previousSnapshot.revision + 1L
 
@@ -469,7 +526,7 @@ class FakeOnlineRoomRepository(
             roomId = previousSnapshot.roomId,
             matchId = previousSnapshot.matchId,
             revision = revision,
-            serverEpochMillis = nowEpochMillis(),
+            serverEpochMillis = serverEpochMillis,
         )
 
         mutableMatchSnapshot.value = updatedSnapshot
@@ -480,13 +537,23 @@ class FakeOnlineRoomRepository(
             } else {
                 OnlineRoomStatusDto.IN_MATCH
             },
-            updatedAtEpochMillis = nowEpochMillis(),
+            updatedAtEpochMillis = serverEpochMillis,
         )
 
         return OnlineActionResultDto(
             accepted = true,
             revision = revision,
         )
+    }
+
+    private fun getElapsedMillisSinceSnapshot(
+        snapshot: OnlineMatchSnapshotDto,
+        nowEpochMillis: Long,
+    ): Long {
+        val previousEpochMillis = snapshot.serverEpochMillis
+            ?: return 0L
+
+        return (nowEpochMillis - previousEpochMillis).coerceAtLeast(0L)
     }
 
     private fun markPlayerDisconnected(
