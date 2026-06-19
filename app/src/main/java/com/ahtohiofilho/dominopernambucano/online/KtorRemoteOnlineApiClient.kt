@@ -29,7 +29,7 @@ class KtorRemoteOnlineApiClient(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
         return httpClient.post(
-            urlString = endpoint("rooms"),
+            urlString = endpoint(OnlineRemoteRoutes.CREATE_ROOM),
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
@@ -41,7 +41,7 @@ class KtorRemoteOnlineApiClient(
         request: JoinOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
         return httpClient.post(
-            urlString = endpoint("rooms/join"),
+            urlString = endpoint(OnlineRemoteRoutes.JOIN_ROOM),
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
@@ -53,7 +53,7 @@ class KtorRemoteOnlineApiClient(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto {
         return httpClient.post(
-            urlString = endpoint("matches/actions"),
+            urlString = endpoint(OnlineRemoteRoutes.SUBMIT_ACTION),
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
@@ -65,7 +65,9 @@ class KtorRemoteOnlineApiClient(
         roomId: String,
     ): OnlineRoomSnapshotDto {
         return httpClient.get(
-            urlString = endpoint("rooms/$roomId"),
+            urlString = endpoint(
+                OnlineRemoteRoutes.roomSnapshot(roomId),
+            ),
         ) {
             accept(ContentType.Application.Json)
         }.body()
@@ -75,7 +77,9 @@ class KtorRemoteOnlineApiClient(
         matchId: String,
     ): OnlineMatchSnapshotDto {
         return httpClient.get(
-            urlString = endpoint("matches/$matchId"),
+            urlString = endpoint(
+                OnlineRemoteRoutes.matchSnapshot(matchId),
+            ),
         ) {
             accept(ContentType.Application.Json)
         }.body()
