@@ -25,7 +25,8 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Domin\u00F3 Pernambucano"
+rootProject.name = "Dominó Pernambucano"
 
 include(":app")
+include(":game-core")
 include(":server")

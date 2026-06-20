@@ -15,6 +15,8 @@ application {
 }
 
 dependencies {
+    implementation(project(":game-core"))
+
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
     implementation(libs.ktor.server.content.negotiation)

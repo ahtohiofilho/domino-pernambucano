@@ -13,7 +13,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
 
-internal sealed interface OnlineMatchActionReduction {
+sealed interface OnlineMatchActionReduction {
     data class Accepted(
         val runtimeState: DominoMatchRuntimeState,
     ) : OnlineMatchActionReduction
@@ -24,7 +24,7 @@ internal sealed interface OnlineMatchActionReduction {
     ) : OnlineMatchActionReduction
 }
 
-internal fun reduceOnlineGameAction(
+fun reduceOnlineGameAction(
     action: OnlinePlayerActionDto,
     currentSnapshot: OnlineMatchSnapshotDto,
     seatIndex: Int,
@@ -129,7 +129,7 @@ internal fun reduceOnlineGameAction(
     )
 }
 
-internal fun reduceOnlineStartNextRoundAction(
+fun reduceOnlineStartNextRoundAction(
     action: OnlinePlayerActionDto,
     currentRoom: OnlineRoomSnapshotDto,
     currentSnapshot: OnlineMatchSnapshotDto,
@@ -183,7 +183,7 @@ internal fun reduceOnlineStartNextRoundAction(
     )
 }
 
-internal fun reduceOnlineStartNewMatchAction(
+fun reduceOnlineStartNewMatchAction(
     action: OnlinePlayerActionDto,
     currentRoom: OnlineRoomSnapshotDto,
     currentSnapshot: OnlineMatchSnapshotDto,
@@ -226,7 +226,7 @@ internal fun reduceOnlineStartNewMatchAction(
     )
 }
 
-internal fun determineOnlineNextPhase(
+fun determineOnlineNextPhase(
     gameState: DominoGameState,
 ): DominoMatchPhase {
     if (isGameFinished(gameState)) {
@@ -253,7 +253,7 @@ internal fun determineOnlineNextPhase(
     return DominoMatchPhase.WaitingForLocalMove
 }
 
-internal fun applyOnlineRoomPlayerNames(
+fun applyOnlineRoomPlayerNames(
     gameState: DominoGameState,
     room: OnlineRoomSnapshotDto,
 ): DominoGameState {

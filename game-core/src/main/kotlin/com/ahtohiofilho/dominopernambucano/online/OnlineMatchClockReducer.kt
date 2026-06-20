@@ -11,7 +11,7 @@ import com.ahtohiofilho.dominopernambucano.match.decrementPlayerClockMillis
 import com.ahtohiofilho.dominopernambucano.match.findRandomPlayableMove
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
 
-internal fun reduceOnlineAuthoritativeClock(
+fun reduceOnlineAuthoritativeClock(
     runtimeState: DominoMatchRuntimeState,
     elapsedMillis: Long,
 ): DominoMatchRuntimeState {
