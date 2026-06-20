@@ -1,3 +1,8 @@
-# Default ignored files
+# Arquivos locais padrão do Android Studio
 /shelf/
 /workspace.xml
+
+# Estado local da IDE, Gradle e compilador Kotlin
+/gradle.xml
+/kotlinc.xml
+/deploymentTargetSelector.xml
