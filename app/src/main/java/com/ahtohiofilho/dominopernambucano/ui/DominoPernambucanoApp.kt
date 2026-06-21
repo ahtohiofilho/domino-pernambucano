@@ -3,11 +3,14 @@ package com.ahtohiofilho.dominopernambucano.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
-import com.ahtohiofilho.dominopernambucano.online.createDefaultOnlinePlayerIdentity
+import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
 import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
@@ -21,6 +24,8 @@ import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
 fun DominoPernambucanoApp(
     onlineAppConfig: OnlineAppConfig = OnlineAppEnvironment.Current,
 ) {
+    val context = LocalContext.current
+
     val sessionCoordinator = remember {
         LocalDominoSessionCoordinator()
     }
@@ -33,8 +38,20 @@ fun DominoPernambucanoApp(
         )
     }
 
-    val onlinePlayerIdentity = remember {
-        createDefaultOnlinePlayerIdentity()
+    val onlinePlayerIdentityStore = remember(
+        context.applicationContext,
+    ) {
+        SharedPreferencesOnlinePlayerIdentityStore(
+            context = context.applicationContext,
+        )
+    }
+
+    var onlinePlayerIdentity by remember(
+        onlinePlayerIdentityStore,
+    ) {
+        mutableStateOf(
+            onlinePlayerIdentityStore.getOrCreate(),
+        )
     }
 
     val onlineDebugOptions = onlineAppConfig.debugOptions
@@ -54,6 +71,13 @@ fun DominoPernambucanoApp(
 
         DominoSessionState.PlayModeSelection -> {
             PlayModeScreen(
+                onlinePlayerName = onlinePlayerIdentity.playerName,
+                onOnlinePlayerNameChange = { playerName ->
+                    onlinePlayerIdentity =
+                        onlinePlayerIdentityStore.updatePlayerName(
+                            playerName = playerName,
+                        )
+                },
                 onBackClick = {
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.BackToMainMenu,
