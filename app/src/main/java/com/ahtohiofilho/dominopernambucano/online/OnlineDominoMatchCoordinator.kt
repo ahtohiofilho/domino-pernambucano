@@ -10,6 +10,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.decrementPlayerClockMillis
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,9 +27,11 @@ class OnlineDominoMatchCoordinator(
     private val localPlayerId: String,
     private val localPlayerIndex: Int,
     initialSnapshot: OnlineMatchSnapshotDto,
+    private val coroutineDispatcher: CoroutineDispatcher =
+        Dispatchers.Main.immediate,
 ) : DominoMatchCoordinator {
     private val coordinatorScope = CoroutineScope(
-        SupervisorJob() + Dispatchers.Main.immediate,
+        SupervisorJob() + coroutineDispatcher,
     )
 
     private val initialRuntimeState = initialSnapshot.toRuntimeState(
@@ -42,12 +45,20 @@ class OnlineDominoMatchCoordinator(
     )
 
     private var stableRuntimeState = initialRuntimeState
+    private var stableRevision = initialSnapshot.revision
 
-    private var pendingRuntimeStateAfterPresentation: DominoMatchRuntimeState? =
-        initialRuntimeState
+    /*
+     * Cada revisão remota precisa atravessar a camada de apresentação na mesma
+     * ordem em que foi recebida. Manter apenas um estado pendente fazia uma
+     * revisão nova substituir a anterior durante uma animação, pulando jogadas
+     * intermediárias na mesa.
+     */
+    private val pendingRemoteRuntimeStates =
+        ArrayDeque<QueuedOnlineRuntimeState>()
 
-    private var latestRevision = initialSnapshot.revision
-    private var lastConsumedRevision = initialSnapshot.revision
+    private var activePresentationRuntimeState: QueuedOnlineRuntimeState? = null
+
+    private var lastReceivedRevision = initialSnapshot.revision
 
     private var automaticPlayerIndexes: Set<Int> =
         initialSnapshot.automaticPlayerIndexes.toSet()
@@ -69,18 +80,18 @@ class OnlineDominoMatchCoordinator(
                     return@collect
                 }
 
-                if (snapshot.revision <= lastConsumedRevision) {
+                if (snapshot.revision <= lastReceivedRevision) {
                     return@collect
                 }
 
-                lastConsumedRevision = snapshot.revision
-                latestRevision = snapshot.revision
-                automaticPlayerIndexes = snapshot.automaticPlayerIndexes.toSet()
+                lastReceivedRevision = snapshot.revision
 
                 handleRemoteSnapshot(
                     remoteRuntimeState = snapshot.toRuntimeState(
                         localPlayerIndex = localPlayerIndex,
                     ),
+                    revision = snapshot.revision,
+                    automaticPlayerIndexes = snapshot.automaticPlayerIndexes.toSet(),
                 )
             }
         }
@@ -179,52 +190,55 @@ class OnlineDominoMatchCoordinator(
 
     private fun handleRemoteSnapshot(
         remoteRuntimeState: DominoMatchRuntimeState,
+        revision: Long,
+        automaticPlayerIndexes: Set<Int>,
     ) {
-        val presentation = buildPresentationBridge(
-            previousRuntimeState = stableRuntimeState,
-            remoteRuntimeState = remoteRuntimeState,
+        pendingRemoteRuntimeStates.addLast(
+            QueuedOnlineRuntimeState(
+                runtimeState = remoteRuntimeState,
+                revision = revision,
+                automaticPlayerIndexes = automaticPlayerIndexes,
+            ),
         )
 
-        if (presentation == null) {
-            promoteRuntimeState(remoteRuntimeState)
-            return
-        }
-
-        pendingRuntimeStateAfterPresentation = presentation.finalRuntimeState
-
-        mutableState.value = presentation.presentationRuntimeState
+        advancePresentationQueue()
     }
 
     private fun handleRoundIntroFinished() {
-        val pendingRuntimeState = pendingRuntimeStateAfterPresentation
-
-        if (pendingRuntimeState != null) {
-            promoteRuntimeState(pendingRuntimeState)
+        if (completeActivePresentation()) {
+            advancePresentationQueue()
             return
         }
 
-        requestSnapshot()
+        mutableState.value = stableRuntimeState
+
+        advancePresentationQueue()
     }
 
     private fun handlePresentationFinished() {
-        val phase = currentState.phase
-        val pendingRuntimeState = pendingRuntimeStateAfterPresentation
+        if (completeActivePresentation()) {
+            advancePresentationQueue()
+            return
+        }
 
-        when (phase) {
+        /*
+         * Uma passagem pode ser apresentada a partir de um snapshot já estável.
+         * Se a resolução autoritativa chegou durante essa animação, consuma-a
+         * antes de enviar uma nova ação ou pedir outro snapshot.
+         */
+        if (pendingRemoteRuntimeStates.isNotEmpty()) {
+            advancePresentationQueue(
+                allowCurrentPresentationCompletion = true,
+            )
+            return
+        }
+
+        when (val phase = currentState.phase) {
             is DominoMatchPhase.PresentingMove -> {
-                if (pendingRuntimeState != null) {
-                    promoteRuntimeState(pendingRuntimeState)
-                } else {
-                    requestSnapshot()
-                }
+                requestSnapshot()
             }
 
             is DominoMatchPhase.PresentingPass -> {
-                if (pendingRuntimeState != null) {
-                    promoteRuntimeState(pendingRuntimeState)
-                    return
-                }
-
                 if (phase.playerIndex == localPlayerIndex) {
                     if (
                         shouldRequestAutomaticLocalPassResolution(
@@ -240,24 +254,92 @@ class OnlineDominoMatchCoordinator(
                 }
             }
 
-            else -> {
-                if (pendingRuntimeState != null) {
-                    promoteRuntimeState(pendingRuntimeState)
-                }
-            }
+            else -> Unit
         }
     }
 
-    private fun promoteRuntimeState(
-        runtimeState: DominoMatchRuntimeState,
+    private fun advancePresentationQueue(
+        allowCurrentPresentationCompletion: Boolean = false,
     ) {
-        stableRuntimeState = runtimeState
-        pendingRuntimeStateAfterPresentation = null
-        mutableState.value = runtimeState
+        if (activePresentationRuntimeState != null) {
+            return
+        }
+
+        if (
+            !allowCurrentPresentationCompletion &&
+            isPresentationInProgress(
+                phase = currentState.phase,
+            )
+        ) {
+            return
+        }
+
+        while (pendingRemoteRuntimeStates.isNotEmpty()) {
+            val queuedRuntimeState = pendingRemoteRuntimeStates.first()
+
+            val presentation = buildPresentationBridge(
+                previousRuntimeState = stableRuntimeState,
+                remoteRuntimeState = queuedRuntimeState.runtimeState,
+            )
+
+            if (presentation == null) {
+                pendingRemoteRuntimeStates.removeFirst()
+
+                promoteRuntimeState(
+                    queuedRuntimeState = queuedRuntimeState,
+                )
+
+                continue
+            }
+
+            activePresentationRuntimeState = queuedRuntimeState
+
+            mutableState.value = presentation.presentationRuntimeState
+
+            return
+        }
 
         requestSnapshotIfLocalAutomaticTurn(
-            runtimeState = runtimeState,
+            runtimeState = stableRuntimeState,
         )
+    }
+
+    private fun completeActivePresentation(): Boolean {
+        val activeRuntimeState = activePresentationRuntimeState
+            ?: return false
+
+        val nextQueuedRuntimeState = pendingRemoteRuntimeStates.firstOrNull()
+
+        if (nextQueuedRuntimeState != activeRuntimeState) {
+            activePresentationRuntimeState = null
+            return false
+        }
+
+        pendingRemoteRuntimeStates.removeFirst()
+        activePresentationRuntimeState = null
+
+        promoteRuntimeState(
+            queuedRuntimeState = activeRuntimeState,
+        )
+
+        return true
+    }
+
+    private fun promoteRuntimeState(
+        queuedRuntimeState: QueuedOnlineRuntimeState,
+    ) {
+        stableRuntimeState = queuedRuntimeState.runtimeState
+        stableRevision = queuedRuntimeState.revision
+        automaticPlayerIndexes = queuedRuntimeState.automaticPlayerIndexes
+        mutableState.value = queuedRuntimeState.runtimeState
+    }
+
+    private fun isPresentationInProgress(
+        phase: DominoMatchPhase,
+    ): Boolean {
+        return phase == DominoMatchPhase.RoundIntro ||
+                phase is DominoMatchPhase.PresentingMove ||
+                phase is DominoMatchPhase.PresentingPass
     }
 
     private fun submitMove(
@@ -284,7 +366,7 @@ class OnlineDominoMatchCoordinator(
             roomId = roomId,
             matchId = matchId,
             playerId = localPlayerId,
-            revision = latestRevision,
+            revision = stableRevision,
             move = command.move,
         )
 
@@ -305,7 +387,7 @@ class OnlineDominoMatchCoordinator(
             roomId = roomId,
             matchId = matchId,
             playerId = localPlayerId,
-            revision = latestRevision,
+            revision = stableRevision,
         )
 
         submitAction(action)
@@ -316,7 +398,7 @@ class OnlineDominoMatchCoordinator(
             roomId = roomId,
             matchId = matchId,
             playerId = localPlayerId,
-            revision = latestRevision,
+            revision = stableRevision,
         )
 
         submitAction(action)
@@ -327,7 +409,7 @@ class OnlineDominoMatchCoordinator(
             roomId = roomId,
             matchId = matchId,
             playerId = localPlayerId,
-            revision = latestRevision,
+            revision = stableRevision,
         )
 
         submitAction(action)
@@ -383,7 +465,7 @@ class OnlineDominoMatchCoordinator(
             roomId = roomId,
             matchId = matchId,
             playerId = localPlayerId,
-            revision = latestRevision,
+            revision = stableRevision,
         )
 
         submitAction(action)
@@ -408,7 +490,6 @@ class OnlineDominoMatchCoordinator(
                 presentationRuntimeState = remoteRuntimeState.copy(
                     phase = DominoMatchPhase.RoundIntro,
                 ),
-                finalRuntimeState = remoteRuntimeState,
             )
         }
 
@@ -425,7 +506,6 @@ class OnlineDominoMatchCoordinator(
                         move = detectedMove.move,
                     ),
                 ),
-                finalRuntimeState = remoteRuntimeState,
             )
         }
 
@@ -441,7 +521,6 @@ class OnlineDominoMatchCoordinator(
                         playerIndex = detectedPassPlayerIndex,
                     ),
                 ),
-                finalRuntimeState = remoteRuntimeState,
             )
         }
 
@@ -588,9 +667,14 @@ class OnlineDominoMatchCoordinator(
     }
 }
 
+private data class QueuedOnlineRuntimeState(
+    val runtimeState: DominoMatchRuntimeState,
+    val revision: Long,
+    val automaticPlayerIndexes: Set<Int>,
+)
+
 private data class OnlinePresentationBridge(
     val presentationRuntimeState: DominoMatchRuntimeState,
-    val finalRuntimeState: DominoMatchRuntimeState,
 )
 
 private data class DetectedOnlineMove(
