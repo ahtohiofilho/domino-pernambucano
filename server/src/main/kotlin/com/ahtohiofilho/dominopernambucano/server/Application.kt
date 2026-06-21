@@ -24,6 +24,14 @@ fun main() {
 }
 
 fun Application.module() {
+    module(
+        store = InMemoryOnlineServerStore(),
+    )
+}
+
+fun Application.module(
+    store: InMemoryOnlineServerStore,
+) {
     install(ContentNegotiation) {
         json(
             Json {
@@ -41,6 +49,10 @@ fun Application.module() {
                 ),
             )
         }
+
+        onlineServerRoutes(
+            store = store,
+        )
     }
 }
 
