@@ -12,6 +12,9 @@ import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+private const val AUTO_FILL_BOTS_ENVIRONMENT_VARIABLE =
+    "DOMINO_AUTO_FILL_BOTS_AFTER_TWO_HUMANS"
+
 fun main() {
     embeddedServer(
         factory = Netty,
@@ -25,7 +28,10 @@ fun main() {
 
 fun Application.module() {
     module(
-        store = InMemoryOnlineServerStore(),
+        store = InMemoryOnlineServerStore(
+            autoFillDevelopmentBotsAfterTwoHumanPlayers =
+                shouldAutoFillDevelopmentBots(),
+        ),
     )
 }
 
@@ -54,6 +60,15 @@ fun Application.module(
             store = store,
         )
     }
+}
+
+private fun shouldAutoFillDevelopmentBots(): Boolean {
+    return System.getenv(
+        AUTO_FILL_BOTS_ENVIRONMENT_VARIABLE,
+    ).equals(
+        "true",
+        ignoreCase = true,
+    )
 }
 
 @Serializable

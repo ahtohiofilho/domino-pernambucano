@@ -9,6 +9,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
+import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.match.findRandomPlayableMove
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
@@ -31,9 +32,16 @@ import com.ahtohiofilho.dominopernambucano.online.reduceOnlineStartNextRoundActi
 import com.ahtohiofilho.dominopernambucano.online.toOnlineSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.toRuntimeState
 
+private const val DEVELOPMENT_BOT_PLAYER_ID_PREFIX =
+    "development-bot-seat-"
+
+private const val FIRST_DEVELOPMENT_BOT_SEAT_INDEX = 2
+private const val LAST_DEVELOPMENT_BOT_SEAT_INDEX = 3
+
 class InMemoryOnlineServerStore(
     private val clockPolicy: DominoMatchClockPolicy =
         DominoMatchClockPolicy.OnlinePerPlayerRound,
+    private val autoFillDevelopmentBotsAfterTwoHumanPlayers: Boolean = false,
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
@@ -43,6 +51,7 @@ class InMemoryOnlineServerStore(
         val matchId: String,
         var snapshot: OnlineMatchSnapshotDto,
         val automaticSeatIndexes: MutableSet<Int> = mutableSetOf(),
+        val developmentBotSeatIndexes: Set<Int> = emptySet(),
     )
 
     private data class ClockReductionResult(
@@ -194,11 +203,15 @@ class InMemoryOnlineServerStore(
                 reason = "A sala já está cheia.",
             )
 
-            val updatedPlayers = currentRoom.players + OnlineRoomPlayerDto(
+            val playersAfterHumanJoin = currentRoom.players + OnlineRoomPlayerDto(
                 playerId = request.localPlayerId,
                 name = request.playerName,
                 seatIndex = nextSeatIndex,
                 connected = true,
+            )
+
+            val updatedPlayers = addDevelopmentBotsIfNeeded(
+                players = playersAfterHumanJoin,
             )
 
             val shouldStartMatch = updatedPlayers.size == 4
@@ -374,6 +387,40 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    private fun addDevelopmentBotsIfNeeded(
+        players: List<OnlineRoomPlayerDto>,
+    ): List<OnlineRoomPlayerDto> {
+        if (!autoFillDevelopmentBotsAfterTwoHumanPlayers) {
+            return players
+        }
+
+        if (players.size != 2) {
+            return players
+        }
+
+        val occupiedSeatIndexes = players
+            .mapNotNull { player ->
+                player.seatIndex
+            }
+            .toSet()
+
+        val developmentBots =
+            (FIRST_DEVELOPMENT_BOT_SEAT_INDEX..LAST_DEVELOPMENT_BOT_SEAT_INDEX)
+                .filter { seatIndex ->
+                    seatIndex !in occupiedSeatIndexes
+                }
+                .map { seatIndex ->
+                    OnlineRoomPlayerDto(
+                        playerId = "$DEVELOPMENT_BOT_PLAYER_ID_PREFIX$seatIndex",
+                        name = "Bot ${seatIndex + 1}",
+                        seatIndex = seatIndex,
+                        connected = true,
+                    )
+                }
+
+        return players + developmentBots
+    }
+
     private fun createMatch(
         room: OnlineRoomSnapshotDto,
         matchId: String,
@@ -408,6 +455,16 @@ class InMemoryOnlineServerStore(
             roomId = room.roomId,
             matchId = matchId,
             snapshot = snapshot,
+            developmentBotSeatIndexes = room.players
+                .filter { player ->
+                    isDevelopmentBotPlayerId(
+                        playerId = player.playerId,
+                    )
+                }
+                .mapNotNull { player ->
+                    player.seatIndex
+                }
+                .toSet(),
         )
     }
 
@@ -428,17 +485,87 @@ class InMemoryOnlineServerStore(
             ),
         )
 
-        if (clockReduction.runtimeState == runtimeState) {
-            return OnlineActionResultDto(
-                accepted = true,
-                revision = currentSnapshot.revision,
+        /*
+         * Mantém uma única transição autoritativa por polling.
+         *
+         * Se o relógio resolveu a vez atual, este snapshot é publicado
+         * primeiro. O próximo polling poderá avançar um bot, preservando
+         * cadência para as animações dos clientes.
+         */
+        if (clockReduction.turnWasResolved) {
+            return publishMatchSnapshot(
+                matchRecord = matchRecord,
+                previousSnapshot = currentSnapshot,
+                runtimeState = clockReduction.runtimeState,
             )
         }
 
-        return publishMatchSnapshot(
-            matchRecord = matchRecord,
-            previousSnapshot = currentSnapshot,
-            runtimeState = clockReduction.runtimeState,
+        val runtimeStateAfterClock = clockReduction.runtimeState
+
+        val runtimeStateAfterBotTurn =
+            advanceDevelopmentBotTurnIfNeeded(
+                matchRecord = matchRecord,
+                runtimeState = runtimeStateAfterClock,
+            )
+
+        if (runtimeStateAfterBotTurn != runtimeStateAfterClock) {
+            return publishMatchSnapshot(
+                matchRecord = matchRecord,
+                previousSnapshot = currentSnapshot,
+                runtimeState = runtimeStateAfterBotTurn,
+            )
+        }
+
+        if (runtimeStateAfterClock != runtimeState) {
+            return publishMatchSnapshot(
+                matchRecord = matchRecord,
+                previousSnapshot = currentSnapshot,
+                runtimeState = runtimeStateAfterClock,
+            )
+        }
+
+        return OnlineActionResultDto(
+            accepted = true,
+            revision = currentSnapshot.revision,
+        )
+    }
+
+    private fun advanceDevelopmentBotTurnIfNeeded(
+        matchRecord: MatchRecord,
+        runtimeState: DominoMatchRuntimeState,
+    ): DominoMatchRuntimeState {
+        if (matchRecord.developmentBotSeatIndexes.isEmpty()) {
+            return runtimeState
+        }
+
+        val gameState = runtimeState.gameState
+
+        if (isRoundFinished(gameState) || isGameFinished(gameState)) {
+            return runtimeState
+        }
+
+        val currentPlayerIndex = gameState.currentPlayerIndex
+
+        if (currentPlayerIndex !in matchRecord.developmentBotSeatIndexes) {
+            return runtimeState
+        }
+
+        val updatedGameState = findBasicBotMove(
+            state = gameState,
+        )?.let { move ->
+            playMoveForCurrentPlayer(
+                state = gameState,
+                playableMove = move,
+            )
+        } ?: passTurn(
+            state = gameState,
+        )
+
+        return runtimeState.copy(
+            gameState = updatedGameState,
+            phase = determineOnlineNextPhase(
+                gameState = updatedGameState,
+            ),
         )
     }
 
@@ -849,6 +976,14 @@ class InMemoryOnlineServerStore(
             accepted = false,
             revision = revision,
             reason = reason,
+        )
+    }
+
+    private fun isDevelopmentBotPlayerId(
+        playerId: String,
+    ): Boolean {
+        return playerId.startsWith(
+            DEVELOPMENT_BOT_PLAYER_ID_PREFIX,
         )
     }
 }
