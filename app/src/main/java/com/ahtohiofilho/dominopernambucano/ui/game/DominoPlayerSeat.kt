@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -55,18 +56,30 @@ fun DominoPlayerSeat(
 
     val shouldHighlight = isCurrent || isWinner
 
+    val winnerAttention = rememberWinnerAttentionMotion(
+        isWinner = isWinner,
+    )
+
     val highlightModifier = if (shouldHighlight) {
         Modifier
             .background(
                 color = DominoSemanticColors.scoreHighlight.copy(
-                    alpha = if (isWinner) 0.26f else 0.22f,
+                    alpha = if (isWinner) {
+                        winnerAttention.containerAlpha
+                    } else {
+                        0.22f
+                    },
                 ),
                 shape = highlightShape,
             )
             .border(
                 width = DominoGameVisualTokens.OpponentHandHighlightBorderWidth,
                 color = DominoSemanticColors.scoreHighlight.copy(
-                    alpha = if (isWinner) 0.96f else 0.88f,
+                    alpha = if (isWinner) {
+                        winnerAttention.borderAlpha
+                    } else {
+                        0.88f
+                    },
                 ),
                 shape = highlightShape,
             )
@@ -76,6 +89,10 @@ fun DominoPlayerSeat(
 
     Column(
         modifier = modifier
+            .graphicsLayer {
+                scaleX = winnerAttention.scale
+                scaleY = winnerAttention.scale
+            }
             .onGloballyPositioned { coordinates ->
                 onBoundsChanged(coordinates.boundsInWindow())
             }
@@ -158,7 +175,7 @@ private fun PlayerStatusIndicatorSlot(
     ) {
         when {
             isWinner -> {
-                WinnerPill(
+                WinnerStatusPill(
                     compact = compact,
                 )
             }
@@ -242,32 +259,6 @@ private fun OpponentVerticalPieces(
                 onClick = null,
             )
         }
-    }
-}
-
-@Composable
-private fun WinnerPill(
-    compact: Boolean,
-) {
-    Row(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(
-                color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.92f),
-            )
-            .padding(
-                horizontal = if (compact) 7.dp else 9.dp,
-                vertical = if (compact) 3.dp else 4.dp,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        Text(
-            text = "★",
-            color = DominoColorTokens.InkBlue,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Black,
-        )
     }
 }
 

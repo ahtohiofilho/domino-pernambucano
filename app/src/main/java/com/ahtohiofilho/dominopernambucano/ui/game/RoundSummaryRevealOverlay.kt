@@ -146,6 +146,10 @@ private fun RoundSummaryTableReadBadge(
             textAlign = TextAlign.Center,
         )
 
+        RoundSummaryWinnerLine(
+            gameState = gameState,
+        )
+
         RoundSummaryScoreLine(
             gameState = gameState,
             localPlayerIndex = localPlayerIndex,
@@ -155,6 +159,29 @@ private fun RoundSummaryTableReadBadge(
             gameState = gameState,
         )
     }
+}
+
+@Composable
+private fun RoundSummaryWinnerLine(
+    gameState: DominoGameState,
+) {
+    val winnerPlayerIndex = gameState.roundWinnerPlayerIndex
+        ?: return
+
+    val winnerName = gameState.players
+        .getOrNull(winnerPlayerIndex)
+        ?.name
+        ?.ifBlank { null }
+        ?: "Jogador ${winnerPlayerIndex + 1}"
+
+    Text(
+        text = "$winnerName VENCEU",
+        color = DominoSemanticColors.primaryTextOnDark,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Black,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+    )
 }
 
 @Composable

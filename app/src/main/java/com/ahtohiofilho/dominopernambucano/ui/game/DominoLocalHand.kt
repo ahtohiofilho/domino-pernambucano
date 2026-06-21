@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
@@ -33,6 +34,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
@@ -43,6 +45,7 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 fun DominoLocalHand(
     uiState: DominoGameUiState,
     pieces: List<DominoPiece>,
+    isWinner: Boolean = false,
     onLocalMoveSelected: (PlayableMove) -> Unit,
     onLocalHandBoundsChanged: (Rect?) -> Unit,
     onPieceDragStart: (DominoPiece, Offset) -> Unit,
@@ -62,17 +65,43 @@ fun DominoLocalHand(
         move.piece
     }
 
+    val winnerAttention = rememberWinnerAttentionMotion(
+        isWinner = isWinner,
+    )
+
+    val handShape = RoundedCornerShape(
+        DominoGameVisualTokens.LocalHandCardCornerRadius,
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = winnerAttention.scale
+                scaleY = winnerAttention.scale
+            }
             .onGloballyPositioned { coordinates ->
                 onLocalHandBoundsChanged(coordinates.boundsInWindow())
             },
-        shape = RoundedCornerShape(
-            DominoGameVisualTokens.LocalHandCardCornerRadius,
-        ),
+        shape = handShape,
+        border = if (isWinner) {
+            BorderStroke(
+                width = 2.dp,
+                color = DominoSemanticColors.scoreHighlight.copy(
+                    alpha = winnerAttention.borderAlpha,
+                ),
+            )
+        } else {
+            null
+        },
         colors = CardDefaults.cardColors(
-            containerColor = DominoColorTokens.PureWhite.copy(alpha = 0.10f),
+            containerColor = if (isWinner) {
+                DominoSemanticColors.scoreHighlight.copy(
+                    alpha = winnerAttention.containerAlpha,
+                )
+            } else {
+                DominoColorTokens.PureWhite.copy(alpha = 0.10f)
+            },
             contentColor = DominoSemanticColors.primaryTextOnDark,
         ),
     ) {
@@ -96,8 +125,9 @@ fun DominoLocalHand(
                     color = DominoSemanticColors.primaryTextOnDark,
                 )
 
-                CurrentPlayerBadge(
+                LocalHandStatusIndicator(
                     isCurrent = gameState.currentPlayerIndex == uiState.localPlayerIndex,
+                    isWinner = isWinner,
                 )
             }
 
@@ -239,6 +269,23 @@ private fun LocalHandPiece(
             )
         }
     }
+}
+
+@Composable
+private fun LocalHandStatusIndicator(
+    isCurrent: Boolean,
+    isWinner: Boolean,
+) {
+    if (isWinner) {
+        WinnerStatusPill(
+            compact = false,
+        )
+        return
+    }
+
+    CurrentPlayerBadge(
+        isCurrent = isCurrent,
+    )
 }
 
 @Composable

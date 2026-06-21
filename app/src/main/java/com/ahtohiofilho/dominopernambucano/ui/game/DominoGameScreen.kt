@@ -301,6 +301,8 @@ fun DominoGameScreen(
                 DominoLocalHand(
                     uiState = uiState,
                     pieces = localVisualHandPieces,
+                    isWinner = shouldRevealRoundContext &&
+                            gameState.roundWinnerPlayerIndex == uiState.localPlayerIndex,
                     onLocalMoveSelected = { move ->
                         localMoveSourcePositionInWindow =
                             localHandBoundsInWindow?.centerOffset()
