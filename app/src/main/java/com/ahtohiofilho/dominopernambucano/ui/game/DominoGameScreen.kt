@@ -253,6 +253,7 @@ fun DominoGameScreen(
 
             DominoGameTableStage(
                 gameState = gameState,
+                localPlayerIndex = uiState.localPlayerIndex,
                 localPlayableMoves = uiState.localPlayableMoves,
                 showDropTargets = draggedPieceState != null &&
                         !isRoundIntroPhase &&

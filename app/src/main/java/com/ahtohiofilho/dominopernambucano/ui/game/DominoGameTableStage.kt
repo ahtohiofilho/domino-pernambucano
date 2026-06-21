@@ -23,6 +23,7 @@ import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 @Composable
 fun DominoGameTableStage(
     gameState: DominoGameState,
+    localPlayerIndex: Int,
     localPlayableMoves: List<PlayableMove>,
     showDropTargets: Boolean,
     highlightedDropSide: BoardSide?,
@@ -35,6 +36,15 @@ fun DominoGameTableStage(
     onPlayerSeatBoundsChanged: (Int, Rect?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val seatLayout = calculateDominoRelativeSeatLayout(
+        localPlayerIndex = localPlayerIndex,
+        playerCount = gameState.players.size,
+    )
+
+    val topPlayerIndex = seatLayout.topPlayerIndex
+    val leftPlayerIndex = seatLayout.leftPlayerIndex
+    val rightPlayerIndex = seatLayout.rightPlayerIndex
+
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
@@ -54,17 +64,20 @@ fun DominoGameTableStage(
                 contentAlignment = Alignment.TopCenter,
             ) {
                 DominoPlayerSeat(
-                    name = gameState.players.getOrNull(2)?.name ?: "Jogador 3",
-                    pieces = visualPiecesForPlayer(2),
+                    name = gameState.players
+                        .getOrNull(topPlayerIndex)
+                        ?.name
+                        ?: "Jogador ${topPlayerIndex + 1}",
+                    pieces = visualPiecesForPlayer(topPlayerIndex),
                     isCurrent = !revealOpponentHands &&
-                            gameState.currentPlayerIndex == 2,
+                            gameState.currentPlayerIndex == topPlayerIndex,
                     orientation = DominoPlayerSeatOrientation.HORIZONTAL,
                     compact = compact,
                     faceUp = revealOpponentHands,
-                    isWinner = roundWinnerPlayerIndex == 2,
+                    isWinner = roundWinnerPlayerIndex == topPlayerIndex,
                     onBoundsChanged = { bounds ->
                         onPlayerSeatBoundsChanged(
-                            2,
+                            topPlayerIndex,
                             bounds,
                         )
                     },
@@ -84,17 +97,20 @@ fun DominoGameTableStage(
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     DominoPlayerSeat(
-                        name = gameState.players.getOrNull(1)?.name ?: "Jogador 2",
-                        pieces = visualPiecesForPlayer(1),
+                        name = gameState.players
+                            .getOrNull(leftPlayerIndex)
+                            ?.name
+                            ?: "Jogador ${leftPlayerIndex + 1}",
+                        pieces = visualPiecesForPlayer(leftPlayerIndex),
                         isCurrent = !revealOpponentHands &&
-                                gameState.currentPlayerIndex == 1,
+                                gameState.currentPlayerIndex == leftPlayerIndex,
                         orientation = DominoPlayerSeatOrientation.VERTICAL,
                         compact = true,
                         faceUp = revealOpponentHands,
-                        isWinner = roundWinnerPlayerIndex == 1,
+                        isWinner = roundWinnerPlayerIndex == leftPlayerIndex,
                         onBoundsChanged = { bounds ->
                             onPlayerSeatBoundsChanged(
-                                1,
+                                leftPlayerIndex,
                                 bounds,
                             )
                         },
@@ -124,17 +140,20 @@ fun DominoGameTableStage(
                     contentAlignment = Alignment.CenterEnd,
                 ) {
                     DominoPlayerSeat(
-                        name = gameState.players.getOrNull(3)?.name ?: "Jogador 4",
-                        pieces = visualPiecesForPlayer(3),
+                        name = gameState.players
+                            .getOrNull(rightPlayerIndex)
+                            ?.name
+                            ?: "Jogador ${rightPlayerIndex + 1}",
+                        pieces = visualPiecesForPlayer(rightPlayerIndex),
                         isCurrent = !revealOpponentHands &&
-                                gameState.currentPlayerIndex == 3,
+                                gameState.currentPlayerIndex == rightPlayerIndex,
                         orientation = DominoPlayerSeatOrientation.VERTICAL,
                         compact = true,
                         faceUp = revealOpponentHands,
-                        isWinner = roundWinnerPlayerIndex == 3,
+                        isWinner = roundWinnerPlayerIndex == rightPlayerIndex,
                         onBoundsChanged = { bounds ->
                             onPlayerSeatBoundsChanged(
-                                3,
+                                rightPlayerIndex,
                                 bounds,
                             )
                         },
