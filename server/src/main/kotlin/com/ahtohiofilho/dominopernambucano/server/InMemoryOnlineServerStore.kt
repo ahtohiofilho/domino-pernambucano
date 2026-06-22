@@ -25,6 +25,12 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.applyOnlineRoomPlayerNames
 import com.ahtohiofilho.dominopernambucano.online.determineOnlineNextPhase
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceContext
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLevel
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceStateSummary
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import com.ahtohiofilho.dominopernambucano.online.reduceOnlineAuthoritativeClock
 import com.ahtohiofilho.dominopernambucano.online.reduceOnlineGameAction
 import com.ahtohiofilho.dominopernambucano.online.reduceOnlineStartNewMatchAction
@@ -45,6 +51,9 @@ class InMemoryOnlineServerStore(
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
+    private val traceLogger: OnlineTraceLogger = OnlineTraceLogger(
+        nowEpochMillis = nowEpochMillis,
+    ),
 ) {
     private data class MatchRecord(
         val roomId: String,
@@ -74,13 +83,17 @@ class InMemoryOnlineServerStore(
     ): OnlineRoomOperationResultDto {
         return synchronized(lock) {
             if (request.localPlayerId.isBlank()) {
-                return@synchronized rejectedRoomOperation(
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "create_room",
+                    playerId = request.localPlayerId,
                     reason = "Identificador do jogador não informado.",
                 )
             }
 
             if (request.playerName.isBlank()) {
-                return@synchronized rejectedRoomOperation(
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "create_room",
+                    playerId = request.localPlayerId,
                     reason = "Nome do jogador não informado.",
                 )
             }
@@ -114,6 +127,18 @@ class InMemoryOnlineServerStore(
             roomsById[roomId] = room
             roomIdsByCode[roomCode] = roomId
 
+            trace(
+                level = OnlineTraceLevel.INFO,
+                source = OnlineTraceSource.SERVER_STORE,
+                type = OnlineTraceType.ROOM_CREATED,
+                roomId = roomId,
+                playerId = request.localPlayerId,
+                localSeatIndex = 0,
+                attributes = room.traceAttributes() + mapOf(
+                    "operation" to "create_room",
+                ),
+            )
+
             OnlineRoomOperationResultDto(
                 accepted = true,
                 roomSnapshot = room,
@@ -129,12 +154,17 @@ class InMemoryOnlineServerStore(
             val normalizedRoomCode = request.roomCode.trim()
 
             val roomId = roomIdsByCode[normalizedRoomCode]
-                ?: return@synchronized rejectedRoomOperation(
+                ?: return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    playerId = request.localPlayerId,
                     reason = "Código de sala inválido.",
                 )
 
             val currentRoom = roomsById[roomId]
-                ?: return@synchronized rejectedRoomOperation(
+                ?: return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    roomId = roomId,
+                    playerId = request.localPlayerId,
                     reason = "Sala não encontrada.",
                 )
 
@@ -142,19 +172,30 @@ class InMemoryOnlineServerStore(
                 currentRoom.status == OnlineRoomStatusDto.CLOSED ||
                 currentRoom.status == OnlineRoomStatusDto.FINISHED
             ) {
-                return@synchronized rejectedRoomOperation(
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = request.localPlayerId,
                     reason = "A sala não está mais disponível.",
                 )
             }
 
             if (request.localPlayerId.isBlank()) {
-                return@synchronized rejectedRoomOperation(
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
                     reason = "Identificador do jogador não informado.",
                 )
             }
 
             if (request.playerName.isBlank()) {
-                return@synchronized rejectedRoomOperation(
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = request.localPlayerId,
                     reason = "Nome do jogador não informado.",
                 )
             }
@@ -180,6 +221,20 @@ class InMemoryOnlineServerStore(
 
                 roomsById[updatedRoom.roomId] = updatedRoom
 
+                trace(
+                    level = OnlineTraceLevel.INFO,
+                    source = OnlineTraceSource.SERVER_STORE,
+                    type = OnlineTraceType.ROOM_JOINED,
+                    roomId = updatedRoom.roomId,
+                    matchId = updatedRoom.matchId,
+                    playerId = request.localPlayerId,
+                    localSeatIndex = existingPlayer.seatIndex,
+                    attributes = updatedRoom.traceAttributes() + mapOf(
+                        "operation" to "join_room",
+                        "reconnected" to "true",
+                    ),
+                )
+
                 return@synchronized OnlineRoomOperationResultDto(
                     accepted = true,
                     roomSnapshot = updatedRoom,
@@ -188,7 +243,11 @@ class InMemoryOnlineServerStore(
             }
 
             if (currentRoom.status == OnlineRoomStatusDto.IN_MATCH) {
-                return@synchronized rejectedRoomOperation(
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = request.localPlayerId,
                     reason = "A partida já foi iniciada.",
                 )
             }
@@ -199,7 +258,11 @@ class InMemoryOnlineServerStore(
 
             val nextSeatIndex = (0..3).firstOrNull { seatIndex ->
                 seatIndex !in occupiedSeats
-            } ?: return@synchronized rejectedRoomOperation(
+            } ?: return@synchronized rejectedRoomOperationWithTrace(
+                operation = "join_room",
+                roomId = currentRoom.roomId,
+                matchId = currentRoom.matchId,
+                playerId = request.localPlayerId,
                 reason = "A sala já está cheia.",
             )
 
@@ -241,6 +304,21 @@ class InMemoryOnlineServerStore(
                 )
             }
 
+            trace(
+                level = OnlineTraceLevel.INFO,
+                source = OnlineTraceSource.SERVER_STORE,
+                type = OnlineTraceType.ROOM_JOINED,
+                roomId = updatedRoom.roomId,
+                matchId = updatedRoom.matchId,
+                playerId = request.localPlayerId,
+                localSeatIndex = nextSeatIndex,
+                attributes = updatedRoom.traceAttributes() + mapOf(
+                    "operation" to "join_room",
+                    "reconnected" to "false",
+                    "matchStarted" to shouldStartMatch.toString(),
+                ),
+            )
+
             OnlineRoomOperationResultDto(
                 accepted = true,
                 roomSnapshot = updatedRoom,
@@ -253,62 +331,69 @@ class InMemoryOnlineServerStore(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto {
         return synchronized(lock) {
+            trace(
+                level = OnlineTraceLevel.INFO,
+                source = OnlineTraceSource.SERVER_STORE,
+                type = OnlineTraceType.ACTION_SUBMITTED,
+                action = action,
+                attributes = action.traceAttributes(),
+            )
+
             actionResultsById[action.actionId]?.let { cachedResult ->
+                trace(
+                    level = OnlineTraceLevel.INFO,
+                    source = OnlineTraceSource.SERVER_STORE,
+                    type = OnlineTraceType.ACTION_DEDUPLICATED,
+                    action = action,
+                    snapshotRevision = cachedResult.revision,
+                    attributes = action.traceAttributes() + mapOf(
+                        "cachedAccepted" to cachedResult.accepted.toString(),
+                    ),
+                )
+
                 return@synchronized cachedResult
             }
 
             val currentRoom = roomsById[action.roomId]
-                ?: return@synchronized cacheActionResult(
+                ?: return@synchronized cacheRejectedAction(
                     action = action,
-                    result = rejectedAction(
-                        reason = "Sala inválida.",
-                    ),
+                    reason = "Sala inválida.",
                 )
 
             val matchRecord = matchesById[action.matchId]
-                ?: return@synchronized cacheActionResult(
+                ?: return@synchronized cacheRejectedAction(
                     action = action,
-                    result = rejectedAction(
-                        reason = "Partida inválida.",
-                    ),
+                    reason = "Partida inválida.",
                 )
 
             if (matchRecord.roomId != currentRoom.roomId) {
-                return@synchronized cacheActionResult(
+                return@synchronized cacheRejectedAction(
                     action = action,
-                    result = rejectedAction(
-                        reason = "A partida não pertence à sala informada.",
-                        revision = matchRecord.snapshot.revision,
-                    ),
+                    reason = "A partida não pertence à sala informada.",
+                    revision = matchRecord.snapshot.revision,
                 )
             }
 
             val roomPlayer = currentRoom.players.firstOrNull { player ->
                 player.playerId == action.playerId
-            } ?: return@synchronized cacheActionResult(
+            } ?: return@synchronized cacheRejectedAction(
                 action = action,
-                result = rejectedAction(
-                    reason = "Jogador não encontrado na sala.",
-                    revision = matchRecord.snapshot.revision,
-                ),
+                reason = "Jogador não encontrado na sala.",
+                revision = matchRecord.snapshot.revision,
             )
 
             val seatIndex = roomPlayer.seatIndex
-                ?: return@synchronized cacheActionResult(
+                ?: return@synchronized cacheRejectedAction(
                     action = action,
-                    result = rejectedAction(
-                        reason = "Jogador sem assento definido.",
-                        revision = matchRecord.snapshot.revision,
-                    ),
+                    reason = "Jogador sem assento definido.",
+                    revision = matchRecord.snapshot.revision,
                 )
 
             if (!roomPlayer.connected) {
-                return@synchronized cacheActionResult(
+                return@synchronized cacheRejectedAction(
                     action = action,
-                    result = rejectedAction(
-                        reason = "Jogador desconectado.",
-                        revision = matchRecord.snapshot.revision,
-                    ),
+                    reason = "Jogador desconectado.",
+                    revision = matchRecord.snapshot.revision,
                 )
             }
 
@@ -324,6 +409,8 @@ class InMemoryOnlineServerStore(
                 advanceAuthoritativeMatch(
                     matchRecord = matchRecord,
                     nowEpochMillis = nowEpochMillis(),
+                    trigger = "action_pre_validation",
+                    traceSource = OnlineTraceSource.SERVER_STORE,
                 )
             }
 
@@ -343,6 +430,17 @@ class InMemoryOnlineServerStore(
                     markPlayerDisconnected(
                         roomId = currentRoom.roomId,
                         playerId = action.playerId,
+                    )
+
+                    trace(
+                        level = OnlineTraceLevel.INFO,
+                        source = OnlineTraceSource.SERVER_STORE,
+                        type = OnlineTraceType.ROOM_LEFT,
+                        action = action,
+                        snapshotRevision = matchRecord.snapshot.revision,
+                        attributes = action.traceAttributes() + mapOf(
+                            "operation" to "leave_room",
+                        ),
                     )
 
                     OnlineActionResultDto(
@@ -377,10 +475,19 @@ class InMemoryOnlineServerStore(
                 }
             }
 
-            cacheActionResult(
+            val cachedResult = cacheActionResult(
                 action = action,
                 result = result,
             )
+
+            traceActionResult(
+                action = action,
+                result = cachedResult,
+                matchRecord = matchRecord,
+                localSeatIndex = seatIndex,
+            )
+
+            cachedResult
         }
     }
 
@@ -397,10 +504,33 @@ class InMemoryOnlineServerStore(
             val now = nowEpochMillis()
 
             matchesById.values.forEach { matchRecord ->
-                advanceAuthoritativeMatch(
+                val previousRevision = matchRecord.snapshot.revision
+
+                val changed = advanceAuthoritativeMatch(
                     matchRecord = matchRecord,
                     nowEpochMillis = now,
+                    trigger = "ticker",
+                    traceSource = OnlineTraceSource.SERVER_TICKER,
                 )
+
+                if (changed) {
+                    trace(
+                        level = OnlineTraceLevel.INFO,
+                        source = OnlineTraceSource.SERVER_TICKER,
+                        type = OnlineTraceType.AUTHORITATIVE_TICK,
+                        roomId = matchRecord.roomId,
+                        matchId = matchRecord.matchId,
+                        snapshotRevision = matchRecord.snapshot.revision,
+                        runtimeState = matchRecord.snapshot.toRuntimeState(
+                            localPlayerIndex = 0,
+                        ),
+                        automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
+                        attributes = mapOf(
+                            "previousRevision" to previousRevision.toString(),
+                            "trigger" to "ticker",
+                        ),
+                    )
+                }
             }
         }
     }
@@ -492,7 +622,7 @@ class InMemoryOnlineServerStore(
             serverEpochMillis = nowEpochMillis(),
         )
 
-        matchesById[matchId] = MatchRecord(
+        val matchRecord = MatchRecord(
             roomId = room.roomId,
             matchId = matchId,
             snapshot = snapshot,
@@ -507,6 +637,23 @@ class InMemoryOnlineServerStore(
                 }
                 .toSet(),
         )
+
+        matchesById[matchId] = matchRecord
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            source = OnlineTraceSource.SERVER_STORE,
+            type = OnlineTraceType.SNAPSHOT_PUBLISHED,
+            roomId = room.roomId,
+            matchId = matchId,
+            snapshotRevision = snapshot.revision,
+            runtimeState = runtimeState,
+            automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
+            attributes = mapOf(
+                "trigger" to "match_created",
+                "previousRevision" to "null",
+            ),
+        )
     }
 
     /**
@@ -520,11 +667,17 @@ class InMemoryOnlineServerStore(
     private fun advanceAuthoritativeMatch(
         matchRecord: MatchRecord,
         nowEpochMillis: Long,
+        trigger: String,
+        traceSource: OnlineTraceSource,
     ): Boolean {
         val currentSnapshot = matchRecord.snapshot
         val runtimeState = currentSnapshot.toRuntimeState(
             localPlayerIndex = 0,
         )
+
+        val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
+        val automaticSeatIndexesBefore =
+            matchRecord.automaticSeatIndexes.toSet()
 
         val clockReduction = reduceClockAndRegisterAutomaticPlayer(
             runtimeState = runtimeState,
@@ -536,12 +689,56 @@ class InMemoryOnlineServerStore(
         )
 
         if (clockReduction.turnWasResolved) {
+            val currentPlayerBecameAutomatic =
+                currentPlayerIndex !in automaticSeatIndexesBefore &&
+                        currentPlayerIndex in matchRecord.automaticSeatIndexes
+
+            if (currentPlayerBecameAutomatic) {
+                trace(
+                    level = OnlineTraceLevel.WARN,
+                    source = traceSource,
+                    type = OnlineTraceType.CLOCK_EXPIRED,
+                    roomId = matchRecord.roomId,
+                    matchId = matchRecord.matchId,
+                    snapshotRevision = currentSnapshot.revision,
+                    runtimeState = runtimeState,
+                    automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
+                    attributes = mapOf(
+                        "playerIndex" to currentPlayerIndex.toString(),
+                        "trigger" to trigger,
+                    ),
+                )
+            }
+
+            trace(
+                level = OnlineTraceLevel.INFO,
+                source = traceSource,
+                type = OnlineTraceType.AUTOMATIC_TURN_RESOLVED,
+                roomId = matchRecord.roomId,
+                matchId = matchRecord.matchId,
+                snapshotRevision = currentSnapshot.revision,
+                runtimeState = clockReduction.runtimeState,
+                automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
+                attributes = mapOf(
+                    "playerIndex" to currentPlayerIndex.toString(),
+                    "reason" to if (currentPlayerBecameAutomatic) {
+                        "clock_expired"
+                    } else {
+                        "automatic_seat"
+                    },
+                    "trigger" to trigger,
+                ),
+            )
+
             publishMatchSnapshot(
                 matchRecord = matchRecord,
                 previousSnapshot = currentSnapshot,
                 runtimeState = clockReduction.runtimeState,
                 serverEpochMillis = nowEpochMillis,
+                trigger = "$trigger:automatic_turn",
+                traceSource = traceSource,
             )
+
             return true
         }
 
@@ -555,11 +752,29 @@ class InMemoryOnlineServerStore(
             return false
         }
 
+        trace(
+            level = OnlineTraceLevel.INFO,
+            source = traceSource,
+            type = OnlineTraceType.AUTOMATIC_TURN_RESOLVED,
+            roomId = matchRecord.roomId,
+            matchId = matchRecord.matchId,
+            snapshotRevision = currentSnapshot.revision,
+            runtimeState = runtimeStateAfterBotTurn,
+            automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
+            attributes = mapOf(
+                "playerIndex" to currentPlayerIndex.toString(),
+                "reason" to "development_bot",
+                "trigger" to trigger,
+            ),
+        )
+
         publishMatchSnapshot(
             matchRecord = matchRecord,
             previousSnapshot = currentSnapshot,
             runtimeState = runtimeStateAfterBotTurn,
             serverEpochMillis = nowEpochMillis,
+            trigger = "$trigger:development_bot",
+            traceSource = traceSource,
         )
 
         return true
@@ -623,6 +838,8 @@ class InMemoryOnlineServerStore(
                     matchRecord = matchRecord,
                     previousSnapshot = currentSnapshot,
                     runtimeState = reduction.runtimeState,
+                    action = action,
+                    trigger = "game_action",
                 )
             }
 
@@ -658,6 +875,8 @@ class InMemoryOnlineServerStore(
                     matchRecord = matchRecord,
                     previousSnapshot = matchRecord.snapshot,
                     runtimeState = reduction.runtimeState,
+                    action = action,
+                    trigger = "start_next_round",
                 )
             }
 
@@ -689,6 +908,8 @@ class InMemoryOnlineServerStore(
                     matchRecord = matchRecord,
                     previousSnapshot = matchRecord.snapshot,
                     runtimeState = reduction.runtimeState,
+                    action = action,
+                    trigger = "start_new_match",
                 )
             }
 
@@ -873,6 +1094,9 @@ class InMemoryOnlineServerStore(
         previousSnapshot: OnlineMatchSnapshotDto,
         runtimeState: DominoMatchRuntimeState,
         serverEpochMillis: Long = nowEpochMillis(),
+        action: OnlinePlayerActionDto? = null,
+        trigger: String,
+        traceSource: OnlineTraceSource = OnlineTraceSource.SERVER_STORE,
     ): OnlineActionResultDto {
         val updatedSnapshot = runtimeState.toOnlineSnapshotDto(
             roomId = previousSnapshot.roomId,
@@ -898,6 +1122,22 @@ class InMemoryOnlineServerStore(
                 updatedAtEpochMillis = serverEpochMillis,
             )
         }
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            source = traceSource,
+            type = OnlineTraceType.SNAPSHOT_PUBLISHED,
+            action = action,
+            roomId = updatedSnapshot.roomId,
+            matchId = updatedSnapshot.matchId,
+            snapshotRevision = updatedSnapshot.revision,
+            runtimeState = runtimeState,
+            automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
+            attributes = mapOf(
+                "trigger" to trigger,
+                "previousRevision" to previousSnapshot.revision.toString(),
+            ),
+        )
 
         return OnlineActionResultDto(
             accepted = true,
@@ -947,6 +1187,180 @@ class InMemoryOnlineServerStore(
         actionResultsById[action.actionId] = cachedResult
 
         return cachedResult
+    }
+
+    private fun cacheRejectedAction(
+        action: OnlinePlayerActionDto,
+        reason: String,
+        revision: Long? = null,
+    ): OnlineActionResultDto {
+        val result = cacheActionResult(
+            action = action,
+            result = rejectedAction(
+                reason = reason,
+                revision = revision,
+            ),
+        )
+
+        trace(
+            level = OnlineTraceLevel.WARN,
+            source = OnlineTraceSource.SERVER_STORE,
+            type = OnlineTraceType.ACTION_REJECTED,
+            action = action,
+            snapshotRevision = result.revision,
+            attributes = action.traceAttributes() + mapOf(
+                "reason" to reason.take(180),
+            ),
+        )
+
+        return result
+    }
+
+    private fun traceActionResult(
+        action: OnlinePlayerActionDto,
+        result: OnlineActionResultDto,
+        matchRecord: MatchRecord,
+        localSeatIndex: Int,
+    ) {
+        val runtimeState = matchRecord.snapshot.toRuntimeState(
+            localPlayerIndex = localSeatIndex,
+        )
+
+        trace(
+            level = if (result.accepted) {
+                OnlineTraceLevel.INFO
+            } else {
+                OnlineTraceLevel.WARN
+            },
+            source = OnlineTraceSource.SERVER_STORE,
+            type = if (result.accepted) {
+                OnlineTraceType.ACTION_ACCEPTED
+            } else {
+                OnlineTraceType.ACTION_REJECTED
+            },
+            action = action,
+            snapshotRevision = result.revision,
+            runtimeState = runtimeState,
+            automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
+            attributes = action.traceAttributes() + mapOf(
+                "reason" to result.reason.orEmpty().take(180),
+            ),
+        )
+    }
+
+    private fun rejectedRoomOperationWithTrace(
+        operation: String,
+        reason: String,
+        roomId: String? = null,
+        matchId: String? = null,
+        playerId: String? = null,
+    ): OnlineRoomOperationResultDto {
+        trace(
+            level = OnlineTraceLevel.WARN,
+            source = OnlineTraceSource.SERVER_STORE,
+            type = OnlineTraceType.ACTION_REJECTED,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            attributes = mapOf(
+                "operation" to operation,
+                "reason" to reason.take(180),
+            ),
+        )
+
+        return rejectedRoomOperation(
+            reason = reason,
+        )
+    }
+
+    private fun trace(
+        level: OnlineTraceLevel,
+        source: OnlineTraceSource,
+        type: OnlineTraceType,
+        action: OnlinePlayerActionDto? = null,
+        roomId: String? = null,
+        matchId: String? = null,
+        playerId: String? = null,
+        localSeatIndex: Int? = null,
+        snapshotRevision: Long? = null,
+        runtimeState: DominoMatchRuntimeState? = null,
+        automaticPlayerIndexes: Set<Int> = emptySet(),
+        attributes: Map<String, String> = emptyMap(),
+    ) {
+        traceLogger.log(
+            level = level,
+            source = source,
+            type = type,
+            context = OnlineTraceContext(
+                roomId = roomId ?: action?.roomId,
+                matchId = matchId ?: action?.matchId,
+                playerId = playerId ?: action?.playerId,
+                localSeatIndex = localSeatIndex,
+                actionId = action?.actionId,
+                actionRevision = action?.revision,
+                snapshotRevision = snapshotRevision,
+            ),
+            state = runtimeState?.toTraceStateSummary(
+                automaticPlayerIndexes = automaticPlayerIndexes,
+            ),
+            attributes = attributes,
+        )
+    }
+
+    private fun DominoMatchRuntimeState.toTraceStateSummary(
+        automaticPlayerIndexes: Set<Int>,
+    ): OnlineTraceStateSummary {
+        return OnlineTraceStateSummary(
+            roundNumber = roundNumber,
+            phase = phase.traceName(),
+            currentPlayerIndex = gameState.currentPlayerIndex,
+            boardPieceCount = gameState.board.size,
+            teamScores = gameState.teamScores,
+            playerClockMillis = playerClockMillis,
+            automaticPlayerIndexes = automaticPlayerIndexes.sorted(),
+        )
+    }
+
+    private fun DominoMatchPhase.traceName(): String {
+        return when (this) {
+            DominoMatchPhase.RoundIntro -> "ROUND_INTRO"
+
+            DominoMatchPhase.WaitingForLocalMove ->
+                "WAITING_FOR_LOCAL_MOVE"
+
+            is DominoMatchPhase.PresentingMove ->
+                "PRESENTING_MOVE"
+
+            is DominoMatchPhase.PresentingPass ->
+                "PRESENTING_PASS"
+
+            DominoMatchPhase.RoundSummary -> "ROUND_SUMMARY"
+
+            DominoMatchPhase.MatchFinished -> "MATCH_FINISHED"
+        }
+    }
+
+    private fun OnlineRoomSnapshotDto.traceAttributes(): Map<String, String> {
+        return mapOf(
+            "roomStatus" to status.name,
+            "playerCount" to players.size.toString(),
+            "roomCode" to roomCode,
+        )
+    }
+
+    private fun OnlinePlayerActionDto.traceAttributes(): Map<String, String> {
+        val attributes = mutableMapOf(
+            "actionType" to type.name,
+        )
+
+        move?.let { onlineMove ->
+            attributes["piece"] =
+                "${onlineMove.piece.left}-${onlineMove.piece.right}"
+            attributes["boardSide"] = onlineMove.side.name
+            attributes["flipped"] = onlineMove.flipped.toString()
+        }
+
+        return attributes
     }
 
     private fun rejectedRoomOperation(

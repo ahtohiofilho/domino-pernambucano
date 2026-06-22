@@ -9,6 +9,10 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.createOnlinePassTurnAction
 import com.ahtohiofilho.dominopernambucano.online.createOnlinePlayMoveAction
 import com.ahtohiofilho.dominopernambucano.online.createOnlineSnapshotRequestAction
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceEvent
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSink
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import com.ahtohiofilho.dominopernambucano.online.toRuntimeState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -421,6 +425,124 @@ class InMemoryOnlineServerStoreTest {
         assertEquals(firstResult, repeatedResult)
     }
 
+    @Test
+    fun authoritative_tick_records_timeout_resolution_and_snapshot_publication() {
+        var now = 1_000L
+
+        val traceSink = RecordingOnlineTraceSink()
+
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+            traceLogger = OnlineTraceLogger(
+                sink = traceSink,
+                nowEpochMillis = { now },
+            ),
+        )
+
+        val startedRoom = startFourHumanMatch(
+            store = store,
+        )
+
+        val matchId = requireNotNull(
+            startedRoom.matchId,
+        )
+
+        traceSink.clear()
+
+        now += 31_000L
+
+        store.advanceAuthoritativeTime()
+
+        assertEquals(
+            listOf(
+                OnlineTraceType.CLOCK_EXPIRED,
+                OnlineTraceType.AUTOMATIC_TURN_RESOLVED,
+                OnlineTraceType.SNAPSHOT_PUBLISHED,
+                OnlineTraceType.AUTHORITATIVE_TICK,
+            ),
+            traceSink.events.map { event ->
+                event.type
+            },
+        )
+
+        assertEquals(
+            matchId,
+            traceSink.events
+                .first { event ->
+                    event.type == OnlineTraceType.SNAPSHOT_PUBLISHED
+                }
+                .context
+                .matchId,
+        )
+    }
+
+    @Test
+    fun repeated_action_id_records_deduplicated_action_without_new_revision() {
+        val traceSink = RecordingOnlineTraceSink()
+
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+            traceLogger = OnlineTraceLogger(
+                sink = traceSink,
+                nowEpochMillis = { 1_000L },
+            ),
+        )
+
+        val startedRoom = startFourHumanMatch(
+            store = store,
+        )
+
+        val matchId = requireNotNull(
+            startedRoom.matchId,
+        )
+
+        val initialSnapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        traceSink.clear()
+
+        val action = createOnlineSnapshotRequestAction(
+            roomId = startedRoom.roomId,
+            matchId = matchId,
+            playerId = "player-1",
+            revision = initialSnapshot.revision,
+            actionId = "deduplicated-action",
+        )
+
+        val firstResult = store.submitAction(
+            action = action,
+        )
+
+        val repeatedResult = store.submitAction(
+            action = action,
+        )
+
+        assertEquals(
+            firstResult,
+            repeatedResult,
+        )
+
+        assertEquals(
+            listOf(
+                OnlineTraceType.ACTION_SUBMITTED,
+                OnlineTraceType.ACTION_ACCEPTED,
+                OnlineTraceType.ACTION_SUBMITTED,
+                OnlineTraceType.ACTION_DEDUPLICATED,
+            ),
+            traceSink.events.map { event ->
+                event.type
+            },
+        )
+
+        assertEquals(
+            "deduplicated-action",
+            traceSink.events.last().context.actionId,
+        )
+    }
+
     private fun getSnapshotAtHumanTurn(
         store: InMemoryOnlineServerStore,
         matchId: String,
@@ -506,6 +628,7 @@ class InMemoryOnlineServerStoreTest {
             playerId = "player-2",
             playerName = "Jogador 2",
         )
+
         joinPlayer(
             store = store,
             roomCode = room.roomCode,
@@ -535,4 +658,18 @@ class InMemoryOnlineServerStoreTest {
             playerName = playerName,
         ),
     )
+
+    private class RecordingOnlineTraceSink : OnlineTraceSink {
+        val events = mutableListOf<OnlineTraceEvent>()
+
+        override fun record(
+            event: OnlineTraceEvent,
+        ) {
+            events += event
+        }
+
+        fun clear() {
+            events.clear()
+        }
+    }
 }
