@@ -312,10 +312,30 @@ class InMemoryOnlineServerStore(
                 )
             }
 
+            if (
+                action.type == OnlinePlayerActionTypeDto.PLAY_MOVE ||
+                action.type == OnlinePlayerActionTypeDto.PASS_TURN
+            ) {
+                /*
+                 * Fecha a pequena janela entre ticks: uma jogada enviada no
+                 * instante do timeout ainda é comparada ao relógio do servidor
+                 * antes de o redutor validar a ação humana.
+                 */
+                advanceAuthoritativeMatch(
+                    matchRecord = matchRecord,
+                    nowEpochMillis = nowEpochMillis(),
+                )
+            }
+
             val result = when (action.type) {
+                /*
+                 * Mantido temporariamente no contrato para compatibilidade de
+                 * versões. Não conduz mais relógio, bot ou troca de turno.
+                 */
                 OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT -> {
-                    submitSnapshotRequest(
-                        matchRecord = matchRecord,
+                    OnlineActionResultDto(
+                        accepted = true,
+                        revision = matchRecord.snapshot.revision,
                     )
                 }
 
@@ -364,6 +384,27 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    /**
+     * Avança a partida a partir do relógio do próprio servidor.
+     *
+     * Clientes nunca chamam este método por HTTP. O ticker do processo o invoca
+     * em cadência fixa, garantindo que polling e visualização sejam somente
+     * observacionais. Cada chamada publica no máximo uma transição por partida,
+     * preservando uma cadência consumível pela fila visual dos clientes.
+     */
+    fun advanceAuthoritativeTime() {
+        synchronized(lock) {
+            val now = nowEpochMillis()
+
+            matchesById.values.forEach { matchRecord ->
+                advanceAuthoritativeMatch(
+                    matchRecord = matchRecord,
+                    nowEpochMillis = now,
+                )
+            }
+        }
+    }
+
     fun getRoomSnapshot(
         roomId: String,
     ): OnlineRoomSnapshotDto? {
@@ -372,18 +413,18 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    /**
+     * Leitura observacional do estado autoritativo.
+     *
+     * Buscar um snapshot nunca reduz relógio, move bot, resolve toque ou cria
+     * revisão. A mutação é exclusividade de [advanceAuthoritativeTime] e das
+     * ações explícitas de jogo aceitas pelo servidor.
+     */
     fun getMatchSnapshot(
         matchId: String,
     ): OnlineMatchSnapshotDto? {
         return synchronized(lock) {
-            val matchRecord = matchesById[matchId]
-                ?: return@synchronized null
-
-            submitSnapshotRequest(
-                matchRecord = matchRecord,
-            )
-
-            matchRecord.snapshot
+            matchesById[matchId]?.snapshot
         }
     }
 
@@ -468,9 +509,18 @@ class InMemoryOnlineServerStore(
         )
     }
 
-    private fun submitSnapshotRequest(
+    /**
+     * Processa no máximo uma transição autoritativa da partida.
+     *
+     * A redução parcial de relógio não gera snapshot novo; o cliente mantém a
+     * contagem visual local entre revisões. Uma nova revisão é publicada apenas
+     * quando há troca de estado de jogo: jogada automática, toque, timeout ou
+     * ação de bot.
+     */
+    private fun advanceAuthoritativeMatch(
         matchRecord: MatchRecord,
-    ): OnlineActionResultDto {
+        nowEpochMillis: Long,
+    ): Boolean {
         val currentSnapshot = matchRecord.snapshot
         val runtimeState = currentSnapshot.toRuntimeState(
             localPlayerIndex = 0,
@@ -481,53 +531,38 @@ class InMemoryOnlineServerStore(
             automaticSeatIndexes = matchRecord.automaticSeatIndexes,
             elapsedMillis = getElapsedMillisSinceSnapshot(
                 snapshot = currentSnapshot,
-                nowEpochMillis = nowEpochMillis(),
+                nowEpochMillis = nowEpochMillis,
             ),
         )
 
-        /*
-         * Mantém uma única transição autoritativa por polling.
-         *
-         * Se o relógio resolveu a vez atual, este snapshot é publicado
-         * primeiro. O próximo polling poderá avançar um bot, preservando
-         * cadência para as animações dos clientes.
-         */
         if (clockReduction.turnWasResolved) {
-            return publishMatchSnapshot(
+            publishMatchSnapshot(
                 matchRecord = matchRecord,
                 previousSnapshot = currentSnapshot,
                 runtimeState = clockReduction.runtimeState,
+                serverEpochMillis = nowEpochMillis,
             )
+            return true
         }
-
-        val runtimeStateAfterClock = clockReduction.runtimeState
 
         val runtimeStateAfterBotTurn =
             advanceDevelopmentBotTurnIfNeeded(
                 matchRecord = matchRecord,
-                runtimeState = runtimeStateAfterClock,
+                runtimeState = clockReduction.runtimeState,
             )
 
-        if (runtimeStateAfterBotTurn != runtimeStateAfterClock) {
-            return publishMatchSnapshot(
-                matchRecord = matchRecord,
-                previousSnapshot = currentSnapshot,
-                runtimeState = runtimeStateAfterBotTurn,
-            )
+        if (runtimeStateAfterBotTurn == clockReduction.runtimeState) {
+            return false
         }
 
-        if (runtimeStateAfterClock != runtimeState) {
-            return publishMatchSnapshot(
-                matchRecord = matchRecord,
-                previousSnapshot = currentSnapshot,
-                runtimeState = runtimeStateAfterClock,
-            )
-        }
-
-        return OnlineActionResultDto(
-            accepted = true,
-            revision = currentSnapshot.revision,
+        publishMatchSnapshot(
+            matchRecord = matchRecord,
+            previousSnapshot = currentSnapshot,
+            runtimeState = runtimeStateAfterBotTurn,
+            serverEpochMillis = nowEpochMillis,
         )
+
+        return true
     }
 
     private fun advanceDevelopmentBotTurnIfNeeded(
@@ -575,64 +610,19 @@ class InMemoryOnlineServerStore(
         matchRecord: MatchRecord,
     ): OnlineActionResultDto {
         val currentSnapshot = matchRecord.snapshot
-        val now = nowEpochMillis()
-
-        val runtimeState = currentSnapshot.toRuntimeState(
-            localPlayerIndex = seatIndex,
-        )
-
-        val clockReduction = reduceClockAndRegisterAutomaticPlayer(
-            runtimeState = runtimeState,
-            automaticSeatIndexes = matchRecord.automaticSeatIndexes,
-            elapsedMillis = getElapsedMillisSinceSnapshot(
-                snapshot = currentSnapshot,
-                nowEpochMillis = now,
-            ),
-        )
-
-        if (clockReduction.turnWasResolved) {
-            val publishedResult = publishMatchSnapshot(
-                matchRecord = matchRecord,
-                previousSnapshot = currentSnapshot,
-                runtimeState = clockReduction.runtimeState,
-                serverEpochMillis = now,
-            )
-
-            val reason = if (
-                seatIndex in matchRecord.automaticSeatIndexes
-            ) {
-                "Jogador em modo automático nesta rodada."
-            } else {
-                "Tempo esgotado."
-            }
-
-            return publishedResult.copy(
-                accepted = false,
-                reason = reason,
-            )
-        }
-
-        val clockedSnapshot = clockReduction.runtimeState.toOnlineSnapshotDto(
-            roomId = currentSnapshot.roomId,
-            matchId = currentSnapshot.matchId,
-            revision = currentSnapshot.revision,
-            serverEpochMillis = now,
-            automaticPlayerIndexes = matchRecord.automaticSeatIndexes.sorted(),
-        )
 
         return when (
             val reduction = reduceOnlineGameAction(
                 action = action,
-                currentSnapshot = clockedSnapshot,
+                currentSnapshot = currentSnapshot,
                 seatIndex = seatIndex,
             )
         ) {
             is OnlineMatchActionReduction.Accepted -> {
                 publishMatchSnapshot(
                     matchRecord = matchRecord,
-                    previousSnapshot = clockedSnapshot,
+                    previousSnapshot = currentSnapshot,
                     runtimeState = reduction.runtimeState,
-                    serverEpochMillis = now,
                 )
             }
 

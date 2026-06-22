@@ -63,6 +63,13 @@ class OnlineDominoMatchCoordinator(
     private var automaticPlayerIndexes: Set<Int> =
         initialSnapshot.automaticPlayerIndexes.toSet()
 
+    /*
+     * Uma interação humana só pode gerar uma ação por vez. A UI permanece
+     * orientada pelo snapshot autoritativo; a trava evita que múltiplos drags
+     * reutilizem a mesma revisão enquanto a confirmação ainda está em trânsito.
+     */
+    private var inFlightAction: OnlinePlayerActionDto? = null
+
     override val state: StateFlow<DominoMatchRuntimeState> =
         mutableState.asStateFlow()
 
@@ -113,9 +120,8 @@ class OnlineDominoMatchCoordinator(
                 handleTurnClockTick(command)
             }
 
-            DominoMatchCommand.BotDecisionReady -> {
-                requestSnapshot()
-            }
+            /* O servidor agenda bots e timeout no ticker autoritativo. */
+            DominoMatchCommand.BotDecisionReady -> Unit
 
             DominoMatchCommand.PresentationFinished -> {
                 handlePresentationFinished()
@@ -143,11 +149,6 @@ class OnlineDominoMatchCoordinator(
         }
 
         val runtimeState = mutableState.value
-
-        if (shouldRequestAutomaticLocalTurn(runtimeState)) {
-            requestSnapshot()
-            return
-        }
 
         if (!runtimeState.clockPolicy.enabled) {
             return
@@ -178,14 +179,6 @@ class OnlineDominoMatchCoordinator(
             playerClockMillis = updatedClocks,
         )
 
-        if (
-            isPlayerClockExpired(
-                clocks = updatedClocks,
-                playerIndex = currentPlayerIndex,
-            )
-        ) {
-            requestSnapshot()
-        }
     }
 
     private fun handleRemoteSnapshot(
@@ -193,6 +186,10 @@ class OnlineDominoMatchCoordinator(
         revision: Long,
         automaticPlayerIndexes: Set<Int>,
     ) {
+        clearInFlightActionIfConfirmed(
+            revision = revision,
+        )
+
         pendingRemoteRuntimeStates.addLast(
             QueuedOnlineRuntimeState(
                 runtimeState = remoteRuntimeState,
@@ -234,23 +231,14 @@ class OnlineDominoMatchCoordinator(
         }
 
         when (val phase = currentState.phase) {
-            is DominoMatchPhase.PresentingMove -> {
-                requestSnapshot()
-            }
+            is DominoMatchPhase.PresentingMove -> Unit
 
             is DominoMatchPhase.PresentingPass -> {
-                if (phase.playerIndex == localPlayerIndex) {
-                    if (
-                        shouldRequestAutomaticLocalPassResolution(
-                            runtimeState = currentState,
-                        )
-                    ) {
-                        requestSnapshot()
-                    } else {
-                        submitPassTurn()
-                    }
-                } else {
-                    requestSnapshot()
+                if (
+                    phase.playerIndex == localPlayerIndex &&
+                    !isLocalPlayerAutomatic()
+                ) {
+                    submitPassTurn()
                 }
             }
 
@@ -299,9 +287,6 @@ class OnlineDominoMatchCoordinator(
             return
         }
 
-        requestSnapshotIfLocalAutomaticTurn(
-            runtimeState = stableRuntimeState,
-        )
     }
 
     private fun completeActivePresentation(): Boolean {
@@ -347,10 +332,7 @@ class OnlineDominoMatchCoordinator(
     ) {
         val runtimeState = stableRuntimeState
 
-        if (isLocalPlayerAutomatic()) {
-            requestSnapshotIfLocalAutomaticTurn(
-                runtimeState = runtimeState,
-            )
+        if (isLocalPlayerAutomatic() || inFlightAction != null) {
             return
         }
 
@@ -376,10 +358,7 @@ class OnlineDominoMatchCoordinator(
     private fun submitPassTurn() {
         val runtimeState = stableRuntimeState
 
-        if (isLocalPlayerAutomatic()) {
-            requestSnapshotIfLocalAutomaticTurn(
-                runtimeState = runtimeState,
-            )
+        if (isLocalPlayerAutomatic() || inFlightAction != null) {
             return
         }
 
@@ -394,6 +373,10 @@ class OnlineDominoMatchCoordinator(
     }
 
     private fun submitStartNextRound() {
+        if (inFlightAction != null) {
+            return
+        }
+
         val action = createOnlineStartNextRoundAction(
             roomId = roomId,
             matchId = matchId,
@@ -405,6 +388,10 @@ class OnlineDominoMatchCoordinator(
     }
 
     private fun submitStartNewMatch() {
+        if (inFlightAction != null) {
+            return
+        }
+
         val action = createOnlineStartNewMatchAction(
             roomId = roomId,
             matchId = matchId,
@@ -419,65 +406,43 @@ class OnlineDominoMatchCoordinator(
         return localPlayerIndex in automaticPlayerIndexes
     }
 
-    private fun shouldRequestAutomaticLocalTurn(
-        runtimeState: DominoMatchRuntimeState,
-    ): Boolean {
-        if (!isLocalPlayerAutomatic()) {
-            return false
-        }
-
-        if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
-            return false
-        }
-
-        return runtimeState.gameState.currentPlayerIndex == localPlayerIndex
-    }
-
-    private fun shouldRequestAutomaticLocalPassResolution(
-        runtimeState: DominoMatchRuntimeState,
-    ): Boolean {
-        if (!isLocalPlayerAutomatic()) {
-            return false
-        }
-
-        val phase = runtimeState.phase
-
-        if (phase !is DominoMatchPhase.PresentingPass) {
-            return false
-        }
-
-        return phase.playerIndex == localPlayerIndex &&
-                runtimeState.gameState.currentPlayerIndex == localPlayerIndex
-    }
-
-    private fun requestSnapshotIfLocalAutomaticTurn(
-        runtimeState: DominoMatchRuntimeState,
+    private fun clearInFlightActionIfConfirmed(
+        revision: Long,
     ) {
-        if (!shouldRequestAutomaticLocalTurn(runtimeState)) {
-            return
+        val action = inFlightAction ?: return
+
+        if (revision > action.revision) {
+            inFlightAction = null
         }
-
-        requestSnapshot()
-    }
-
-    private fun requestSnapshot() {
-        val action = createOnlineSnapshotRequestAction(
-            roomId = roomId,
-            matchId = matchId,
-            playerId = localPlayerId,
-            revision = stableRevision,
-        )
-
-        submitAction(action)
     }
 
     private fun submitAction(
         action: OnlinePlayerActionDto,
     ) {
+        if (inFlightAction != null) {
+            return
+        }
+
+        inFlightAction = action
+
         coordinatorScope.launch {
-            repository.submitAction(
+            val result = repository.submitAction(
                 action = action,
             )
+
+            if (!result.accepted) {
+                clearInFlightActionAfterRejection(
+                    action = action,
+                )
+            }
+        }
+    }
+
+    private fun clearInFlightActionAfterRejection(
+        action: OnlinePlayerActionDto,
+    ) {
+        if (inFlightAction?.actionId == action.actionId) {
+            inFlightAction = null
         }
     }
 

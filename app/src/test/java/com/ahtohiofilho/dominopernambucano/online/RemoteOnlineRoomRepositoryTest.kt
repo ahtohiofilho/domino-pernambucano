@@ -167,14 +167,28 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
-    fun submit_action_rejection_does_not_refresh_snapshots() =
+    fun stale_action_rejection_refreshes_authoritative_snapshots() =
         runBlocking {
+            val refreshedRoom = createInMatchRoomSnapshot(
+                updatedAtEpochMillis = 2_000L,
+            )
+            val refreshedMatch = createMatchSnapshot(
+                revision = 2L,
+                serverEpochMillis = 2_000L,
+            )
+
             val apiClient = FakeRemoteOnlineApiClient(
                 submitActionResult = OnlineActionResultDto(
                     accepted = false,
-                    revision = 1L,
+                    revision = refreshedMatch.revision,
                     actionId = "action-1",
                     reason = "Snapshot desatualizado.",
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    refreshedRoom.roomId to refreshedRoom,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    refreshedMatch.matchId to refreshedMatch,
                 ),
             )
 
@@ -183,10 +197,10 @@ class RemoteOnlineRoomRepositoryTest {
             )
 
             val action = createOnlinePassTurnAction(
-                roomId = "room-1",
-                matchId = "match-1",
+                roomId = refreshedRoom.roomId,
+                matchId = refreshedMatch.matchId,
                 playerId = "player-1",
-                revision = 0L,
+                revision = 1L,
                 actionId = "action-1",
             )
 
@@ -195,10 +209,10 @@ class RemoteOnlineRoomRepositoryTest {
             assertEquals(false, result.accepted)
             assertEquals("Snapshot desatualizado.", result.reason)
             assertEquals(listOf(action), apiClient.submitActionRequests)
-            assertEquals(emptyList<String>(), apiClient.fetchRoomSnapshotRequests)
-            assertEquals(emptyList<String>(), apiClient.fetchMatchSnapshotRequests)
-            assertNull(repository.roomSnapshot.value)
-            assertNull(repository.matchSnapshot.value)
+            assertEquals(listOf(refreshedRoom.roomId), apiClient.fetchRoomSnapshotRequests)
+            assertEquals(listOf(refreshedMatch.matchId), apiClient.fetchMatchSnapshotRequests)
+            assertEquals(refreshedRoom, repository.roomSnapshot.value)
+            assertEquals(refreshedMatch, repository.matchSnapshot.value)
         }
 
     @Test

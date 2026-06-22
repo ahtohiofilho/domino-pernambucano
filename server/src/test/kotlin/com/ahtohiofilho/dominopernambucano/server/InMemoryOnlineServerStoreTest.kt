@@ -4,6 +4,7 @@ import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.createOnlinePassTurnAction
 import com.ahtohiofilho.dominopernambucano.online.createOnlinePlayMoveAction
@@ -200,10 +201,9 @@ class InMemoryOnlineServerStoreTest {
 
             assertTrue(playerOneAction.accepted)
 
-            snapshot = requireNotNull(
-                store.getMatchSnapshot(
-                    matchId = matchId,
-                ),
+            snapshot = getSnapshotAtHumanTurn(
+                store = store,
+                matchId = matchId,
             )
         }
 
@@ -221,6 +221,8 @@ class InMemoryOnlineServerStoreTest {
 
         assertTrue(playerZeroAction.accepted)
 
+        store.advanceAuthoritativeTime()
+
         val snapshotAfterBotTurn = requireNotNull(
             store.getMatchSnapshot(
                 matchId = matchId,
@@ -234,6 +236,122 @@ class InMemoryOnlineServerStoreTest {
 
         assertTrue(
             snapshotAfterBotTurn.gameState != snapshot.gameState,
+        )
+    }
+
+    @Test
+    fun match_snapshot_read_is_observational_even_when_clock_has_elapsed() {
+        var now = 1_000L
+
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+
+        val startedRoom = startFourHumanMatch(
+            store = store,
+        )
+
+        val matchId = requireNotNull(startedRoom.matchId)
+        val initialSnapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        now += 31_000L
+
+        val firstRead = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+        val secondRead = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        assertEquals(initialSnapshot, firstRead)
+        assertEquals(firstRead, secondRead)
+        assertEquals(1L, secondRead.revision)
+    }
+
+    @Test
+    fun snapshot_request_is_observational_after_clock_has_expired() {
+        var now = 1_000L
+
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+
+        val startedRoom = startFourHumanMatch(
+            store = store,
+        )
+
+        val matchId = requireNotNull(startedRoom.matchId)
+        val initialSnapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        now += 31_000L
+
+        val result = store.submitAction(
+            createOnlineSnapshotRequestAction(
+                roomId = startedRoom.roomId,
+                matchId = matchId,
+                playerId = "player-1",
+                revision = initialSnapshot.revision,
+            ),
+        )
+
+        val snapshotAfterRequest = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        assertTrue(result.accepted)
+        assertEquals(initialSnapshot.revision, result.revision)
+        assertEquals(initialSnapshot, snapshotAfterRequest)
+    }
+
+    @Test
+    fun authoritative_tick_resolves_expired_turn_without_client_request() {
+        var now = 1_000L
+
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+
+        val startedRoom = startFourHumanMatch(
+            store = store,
+        )
+
+        val matchId = requireNotNull(startedRoom.matchId)
+        val initialSnapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        now += 31_000L
+        store.advanceAuthoritativeTime()
+
+        val snapshotAfterTick = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        assertTrue(snapshotAfterTick.revision > initialSnapshot.revision)
+        assertTrue(
+            snapshotAfterTick.gameState != initialSnapshot.gameState,
+        )
+        assertTrue(
+            initialSnapshot.gameState.currentPlayerIndex in
+                    snapshotAfterTick.automaticPlayerIndexes,
         )
     }
 
@@ -317,6 +435,8 @@ class InMemoryOnlineServerStoreTest {
             if (snapshot.gameState.currentPlayerIndex in 0..1) {
                 return snapshot
             }
+
+            store.advanceAuthoritativeTime()
         }
 
         error(
@@ -365,6 +485,41 @@ class InMemoryOnlineServerStoreTest {
 
         store.submitAction(
             action = action,
+        )
+    }
+
+    private fun startFourHumanMatch(
+        store: InMemoryOnlineServerStore,
+    ): OnlineRoomSnapshotDto {
+        val room = requireNotNull(
+            store.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-1",
+                    playerName = "Jogador 1",
+                ),
+            ).roomSnapshot,
+        )
+
+        joinPlayer(
+            store = store,
+            roomCode = room.roomCode,
+            playerId = "player-2",
+            playerName = "Jogador 2",
+        )
+        joinPlayer(
+            store = store,
+            roomCode = room.roomCode,
+            playerId = "player-3",
+            playerName = "Jogador 3",
+        )
+
+        return requireNotNull(
+            joinPlayer(
+                store = store,
+                roomCode = room.roomCode,
+                playerId = "player-4",
+                playerName = "Jogador 4",
+            ).roomSnapshot,
         )
     }
 

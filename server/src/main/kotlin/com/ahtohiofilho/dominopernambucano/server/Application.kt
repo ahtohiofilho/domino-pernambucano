@@ -1,7 +1,9 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStarted
+import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -9,11 +11,25 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 private const val AUTO_FILL_BOTS_ENVIRONMENT_VARIABLE =
     "DOMINO_AUTO_FILL_BOTS_AFTER_TWO_HUMANS"
+
+/*
+ * O intervalo também é a cadência máxima das ações automáticas. Como o store
+ * publica no máximo uma transição por partida a cada tick, bot, toque por
+ * timeout e jogada automática não chegam ao cliente em rajada.
+ */
+private const val AUTHORITATIVE_TICK_INTERVAL_MILLIS = 700L
 
 fun main() {
     embeddedServer(
@@ -38,6 +54,10 @@ fun Application.module() {
 fun Application.module(
     store: InMemoryOnlineServerStore,
 ) {
+    installAuthoritativeMatchTicker(
+        store = store,
+    )
+
     install(ContentNegotiation) {
         json(
             Json {
@@ -59,6 +79,27 @@ fun Application.module(
         onlineServerRoutes(
             store = store,
         )
+    }
+}
+
+private fun Application.installAuthoritativeMatchTicker(
+    store: InMemoryOnlineServerStore,
+) {
+    val tickerScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default,
+    )
+
+    environment.monitor.subscribe(ApplicationStarted) {
+        tickerScope.launch {
+            while (isActive) {
+                delay(AUTHORITATIVE_TICK_INTERVAL_MILLIS)
+                store.advanceAuthoritativeTime()
+            }
+        }
+    }
+
+    environment.monitor.subscribe(ApplicationStopping) {
+        tickerScope.cancel()
     }
 }
 

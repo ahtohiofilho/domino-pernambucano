@@ -146,6 +146,84 @@ class OnlineDominoMatchCoordinatorTest {
             }
         }
 
+    @Test
+    fun local_move_is_submitted_once_until_authoritative_revision_confirms_it() =
+        runBlocking {
+            val openingPiece = DominoPiece(
+                left = 6,
+                right = 6,
+            )
+
+            val initialRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    listOf(openingPiece),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 1L,
+                ),
+            )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                val move = com.ahtohiofilho.dominopernambucano.domain.PlayableMove(
+                    piece = openingPiece,
+                    side = com.ahtohiofilho.dominopernambucano.domain.BoardSide.RIGHT,
+                    flipped = false,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.LocalMoveSelected(
+                        move = move,
+                    ),
+                )
+                coordinator.dispatch(
+                    DominoMatchCommand.LocalMoveSelected(
+                        move = move,
+                    ),
+                )
+                yield()
+
+                assertEquals(1, repository.submittedActions.size)
+                assertEquals(
+                    OnlinePlayerActionTypeDto.PLAY_MOVE,
+                    repository.submittedActions.single().type,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.BotDecisionReady,
+                )
+                yield()
+
+                assertEquals(1, repository.submittedActions.size)
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
     private fun assertPresentingMove(
         coordinator: OnlineDominoMatchCoordinator,
         expectedPlayerIndex: Int,
@@ -223,6 +301,8 @@ class OnlineDominoMatchCoordinatorTest {
         private val mutableMatchSnapshot =
             MutableStateFlow<OnlineMatchSnapshotDto?>(initialSnapshot)
 
+        val submittedActions = mutableListOf<OnlinePlayerActionDto>()
+
         override val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?> =
             mutableRoomSnapshot.asStateFlow()
 
@@ -254,6 +334,8 @@ class OnlineDominoMatchCoordinatorTest {
         override suspend fun submitAction(
             action: OnlinePlayerActionDto,
         ): OnlineActionResultDto {
+            submittedActions += action
+
             return OnlineActionResultDto(
                 accepted = true,
                 revision = mutableMatchSnapshot.value?.revision,

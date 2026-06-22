@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class RemoteOnlineRoomRepository(
     private val config: OnlineBackendConfig,
@@ -21,6 +23,13 @@ class RemoteOnlineRoomRepository(
     private val repositoryScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate,
     )
+
+    /*
+     * Polling e envio de ação atualizam os mesmos StateFlows. Uma única porta
+     * serializa o pipeline local e impede que uma resposta de polling mais
+     * antiga sobrescreva o snapshot obtido logo após uma ação.
+     */
+    private val refreshMutex = Mutex()
 
     private val mutableRoomSnapshot =
         MutableStateFlow<OnlineRoomSnapshotDto?>(null)
@@ -104,30 +113,38 @@ class RemoteOnlineRoomRepository(
                 reason = getUnavailableBackendReason(),
             )
 
-        return runCatching {
-            client.submitAction(action)
-        }.fold(
-            onSuccess = { result ->
-                if (result.accepted) {
-                    refreshSnapshotsAfterAction(
-                        client = client,
-                        action = action,
-                    )
-                }
+        return refreshMutex.withLock {
+            runCatching {
+                client.submitAction(action)
+            }.fold(
+                onSuccess = { result ->
+                    if (
+                        result.accepted ||
+                        shouldRefreshAfterRejectedAction(
+                            action = action,
+                            result = result,
+                        )
+                    ) {
+                        refreshSnapshotsAfterAction(
+                            client = client,
+                            action = action,
+                        )
+                    }
 
-                result.copy(
-                    actionId = result.actionId ?: action.actionId,
-                )
-            },
-            onFailure = { error ->
-                rejectedAction(
-                    action = action,
-                    reason = error.toOnlineFailureReason(
-                        fallback = "Falha ao enviar ação online remota.",
-                    ),
-                )
-            },
-        )
+                    result.copy(
+                        actionId = result.actionId ?: action.actionId,
+                    )
+                },
+                onFailure = { error ->
+                    rejectedAction(
+                        action = action,
+                        reason = error.toOnlineFailureReason(
+                            fallback = "Falha ao enviar ação online remota.",
+                        ),
+                    )
+                },
+            )
+        }
     }
 
     override suspend fun leaveRoom() {
@@ -181,7 +198,9 @@ class RemoteOnlineRoomRepository(
             runCatching {
                 client.fetchMatchSnapshot(matchId)
             }.onSuccess { match ->
-                mutableMatchSnapshot.value = match
+                publishMatchSnapshotIfNewer(
+                    snapshot = match,
+                )
             }
         }
     }
@@ -220,11 +239,13 @@ class RemoteOnlineRoomRepository(
             while (isActive) {
                 delay(pollingPolicy.intervalMillis)
 
-                refreshSnapshots(
-                    client = client,
-                    roomId = roomId,
-                    fallbackMatchId = mutableMatchSnapshot.value?.matchId,
-                )
+                refreshMutex.withLock {
+                    refreshSnapshots(
+                        client = client,
+                        roomId = roomId,
+                        fallbackMatchId = mutableMatchSnapshot.value?.matchId,
+                    )
+                }
             }
         }
     }
@@ -254,7 +275,32 @@ class RemoteOnlineRoomRepository(
         runCatching {
             client.fetchMatchSnapshot(matchId)
         }.onSuccess { match ->
-            mutableMatchSnapshot.value = match
+            publishMatchSnapshotIfNewer(
+                snapshot = match,
+            )
+        }
+    }
+
+    private fun shouldRefreshAfterRejectedAction(
+        action: OnlinePlayerActionDto,
+        result: OnlineActionResultDto,
+    ): Boolean {
+        val serverRevision = result.revision ?: return false
+
+        return serverRevision > action.revision
+    }
+
+    private fun publishMatchSnapshotIfNewer(
+        snapshot: OnlineMatchSnapshotDto,
+    ) {
+        val currentSnapshot = mutableMatchSnapshot.value
+
+        if (
+            currentSnapshot == null ||
+            currentSnapshot.matchId != snapshot.matchId ||
+            snapshot.revision >= currentSnapshot.revision
+        ) {
+            mutableMatchSnapshot.value = snapshot
         }
     }
 
