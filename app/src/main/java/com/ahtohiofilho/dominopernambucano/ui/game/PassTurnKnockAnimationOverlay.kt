@@ -48,38 +48,48 @@ private const val KNOCK_PLAYER_RIGHT_SCREEN_FRACTION = 0.20f
 @Composable
 fun PassTurnKnockAnimationOverlay(
     playerIndex: Int,
+    localPlayerIndex: Int,
     presentationId: String?,
     onAnimationTrace: (OnlineTraceType, Map<String, String>) -> Unit,
     modifier: Modifier = Modifier,
     onAnimationFinished: () -> Unit,
 ) {
-    val offsetAnim = remember(playerIndex) {
+    val screenPlayerIndex = resolveKnockScreenPlayerIndex(
+        playerIndex = playerIndex,
+        localPlayerIndex = localPlayerIndex,
+    )
+
+    val offsetAnim = remember(presentationId, playerIndex, localPlayerIndex) {
         Animatable(0f)
     }
 
-    val rotationAnim = remember(playerIndex) {
+    val rotationAnim = remember(presentationId, playerIndex, localPlayerIndex) {
         Animatable(0f)
     }
 
-    val alphaAnim = remember(playerIndex) {
+    val alphaAnim = remember(presentationId, playerIndex, localPlayerIndex) {
         Animatable(0f)
     }
 
-    var frameIndex by remember(playerIndex) {
+    var frameIndex by remember(presentationId, playerIndex, localPlayerIndex) {
         mutableIntStateOf(0)
     }
 
     LaunchedEffect(
         presentationId,
         playerIndex,
+        localPlayerIndex,
     ) {
         val startedAtNanos = System.nanoTime()
+        var completionReported = false
 
         onAnimationTrace(
             OnlineTraceType.ANIMATION_STARTED,
             mapOf(
                 "animationKind" to "pass",
                 "playerIndex" to playerIndex.toString(),
+                "localPlayerIndex" to localPlayerIndex.toString(),
+                "screenPlayerIndex" to screenPlayerIndex.toString(),
                 "expectedDurationMillis" to expectedKnockDurationMillis().toString(),
             ),
         )
@@ -181,20 +191,32 @@ fun PassTurnKnockAnimationOverlay(
                 mapOf(
                     "animationKind" to "pass",
                     "playerIndex" to playerIndex.toString(),
+                    "localPlayerIndex" to localPlayerIndex.toString(),
+                    "screenPlayerIndex" to screenPlayerIndex.toString(),
                     "durationMillis" to elapsedKnockMillis(startedAtNanos).toString(),
                 ),
             )
 
+            completionReported = true
             onAnimationFinished()
         } catch (error: CancellationException) {
-            onAnimationTrace(
-                OnlineTraceType.ANIMATION_CANCELLED,
-                mapOf(
-                    "animationKind" to "pass",
-                    "playerIndex" to playerIndex.toString(),
-                    "durationMillis" to elapsedKnockMillis(startedAtNanos).toString(),
-                ),
-            )
+            /*
+             * Ao confirmar a apresentação, o coordenador promove a próxima
+             * revisão e este overlay sai da composição. Isso é encerramento
+             * normal, não cancelamento visual.
+             */
+            if (!completionReported) {
+                onAnimationTrace(
+                    OnlineTraceType.ANIMATION_CANCELLED,
+                    mapOf(
+                        "animationKind" to "pass",
+                        "playerIndex" to playerIndex.toString(),
+                        "localPlayerIndex" to localPlayerIndex.toString(),
+                        "screenPlayerIndex" to screenPlayerIndex.toString(),
+                        "durationMillis" to elapsedKnockMillis(startedAtNanos).toString(),
+                    ),
+                )
+            }
 
             throw error
         }
@@ -202,7 +224,7 @@ fun PassTurnKnockAnimationOverlay(
 
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = getKnockAlignmentForPlayer(playerIndex),
+        contentAlignment = getKnockAlignmentForPlayer(screenPlayerIndex),
     ) {
         val density = LocalDensity.current
 
@@ -214,15 +236,15 @@ fun PassTurnKnockAnimationOverlay(
             maxHeight.toPx()
         }
 
-        val handRotation = getKnockBaseRotationForPlayer(playerIndex)
+        val handRotation = getKnockBaseRotationForPlayer(screenPlayerIndex)
 
         val directionalOffset = getDirectionalKnockOffset(
-            playerIndex = playerIndex,
+            playerIndex = screenPlayerIndex,
             offset = offsetAnim.value,
         )
 
         val placementOffset = getKnockPlacementOffset(
-            playerIndex = playerIndex,
+            playerIndex = screenPlayerIndex,
             screenWidthPx = screenWidthPx,
             screenHeightPx = screenHeightPx,
         )
@@ -240,12 +262,30 @@ fun PassTurnKnockAnimationOverlay(
                 .graphicsLayer {
                     alpha = alphaAnim.value
                     rotationZ = handRotation + getDirectionalRotation(
-                        playerIndex = playerIndex,
+                        playerIndex = screenPlayerIndex,
                         rotation = rotationAnim.value,
                     )
                     shadowElevation = 18f
                 },
         )
+    }
+}
+
+internal fun resolveKnockScreenPlayerIndex(
+    playerIndex: Int,
+    localPlayerIndex: Int,
+    playerCount: Int = 4,
+): Int {
+    require(playerCount > 0) {
+        "playerCount deve ser positivo."
+    }
+
+    val relativeIndex = (playerIndex - localPlayerIndex) % playerCount
+
+    return if (relativeIndex < 0) {
+        relativeIndex + playerCount
+    } else {
+        relativeIndex
     }
 }
 

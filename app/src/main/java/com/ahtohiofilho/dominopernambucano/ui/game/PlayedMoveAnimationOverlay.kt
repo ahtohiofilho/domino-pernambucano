@@ -6,7 +6,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
@@ -21,6 +25,7 @@ import kotlin.math.roundToInt
 
 private const val MOVE_ANIMATION_DURATION_MILLIS = 720
 private const val MISSING_TARGET_FALLBACK_MILLIS = 280L
+private const val TARGET_ACQUISITION_POLL_MILLIS = 16L
 
 @Composable
 fun PlayedMoveAnimationOverlay(
@@ -32,33 +37,75 @@ fun PlayedMoveAnimationOverlay(
     onAnimationFinished: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val source = sourcePositionInWindow
-    val moveTarget = target
+    /*
+     * A geometria da mesa é medida depois da composição. Reiniciar o efeito a
+     * cada atualização de bounds cancelava a apresentação vigente antes do
+     * primeiro frame útil, principalmente quando chegavam revisões em lote.
+     * A identidade da animação passa a ser somente a apresentação autoritativa;
+     * source/target atualizados são lidos sem reiniciar a coroutine.
+     */
+    val latestSource by rememberUpdatedState(sourcePositionInWindow)
+    val latestTarget by rememberUpdatedState(target)
+    val latestAnimationTrace by rememberUpdatedState(onAnimationTrace)
+    val latestAnimationFinished by rememberUpdatedState(onAnimationFinished)
+
+    val animatedX = remember(presentationId) {
+        Animatable(0f)
+    }
+
+    val animatedY = remember(presentationId) {
+        Animatable(0f)
+    }
+
+    val animatedRotation = remember(presentationId) {
+        Animatable(0f)
+    }
+
+    var isPieceVisible by remember(presentationId) {
+        mutableStateOf(false)
+    }
+
+    val density = LocalDensity.current
+    val pieceWidthPx = with(density) {
+        LOCAL_HAND_PIECE_WIDTH.toPx()
+    }
+    val pieceHeightPx = with(density) {
+        LOCAL_HAND_PIECE_HEIGHT.toPx()
+    }
+    val visualPiece = remember(presentationId, move) {
+        getVisualPieceForPlayedMove(move)
+    }
     val moveAttributes = move.toAnimationTraceAttributes()
 
-    if (source == null || moveTarget == null) {
-        LaunchedEffect(
-            presentationId,
-            move,
-            sourcePositionInWindow,
-            target,
-        ) {
-            val startedAtNanos = System.nanoTime()
+    LaunchedEffect(presentationId) {
+        val startedAtNanos = System.nanoTime()
+        var completionReported = false
 
-            onAnimationTrace(
-                OnlineTraceType.ANIMATION_FALLBACK_USED,
-                moveAttributes + mapOf(
-                    "animationKind" to "move",
-                    "fallbackMillis" to MISSING_TARGET_FALLBACK_MILLIS.toString(),
-                    "sourceAvailable" to (source != null).toString(),
-                    "targetAvailable" to (moveTarget != null).toString(),
-                ),
-            )
+        try {
+            var source = latestSource
+            var moveTarget = latestTarget
 
-            try {
-                delay(MISSING_TARGET_FALLBACK_MILLIS)
+            while (
+                (source == null || moveTarget == null) &&
+                elapsedMillisSince(startedAtNanos) < MISSING_TARGET_FALLBACK_MILLIS
+            ) {
+                delay(TARGET_ACQUISITION_POLL_MILLIS)
+                source = latestSource
+                moveTarget = latestTarget
+            }
 
-                onAnimationTrace(
+            if (source == null || moveTarget == null) {
+                latestAnimationTrace(
+                    OnlineTraceType.ANIMATION_FALLBACK_USED,
+                    moveAttributes + mapOf(
+                        "animationKind" to "move",
+                        "fallbackMillis" to MISSING_TARGET_FALLBACK_MILLIS.toString(),
+                        "sourceAvailable" to (source != null).toString(),
+                        "targetAvailable" to (moveTarget != null).toString(),
+                    ),
+                )
+
+                latestAnimationTrace(
                     OnlineTraceType.ANIMATION_FINISHED,
                     moveAttributes + mapOf(
                         "animationKind" to "move",
@@ -67,85 +114,23 @@ fun PlayedMoveAnimationOverlay(
                     ),
                 )
 
-                onAnimationFinished()
-            } catch (error: CancellationException) {
-                onAnimationTrace(
-                    OnlineTraceType.ANIMATION_CANCELLED,
-                    moveAttributes + mapOf(
-                        "animationKind" to "move",
-                        "stage" to "fallback_wait",
-                        "durationMillis" to elapsedMillisSince(startedAtNanos).toString(),
-                    ),
-                )
-
-                throw error
+                completionReported = true
+                latestAnimationFinished()
+                return@LaunchedEffect
             }
-        }
 
-        return
-    }
+            latestAnimationTrace(
+                OnlineTraceType.ANIMATION_STARTED,
+                moveAttributes + mapOf(
+                    "animationKind" to "move",
+                    "expectedDurationMillis" to MOVE_ANIMATION_DURATION_MILLIS.toString(),
+                ),
+            )
 
-    val density = LocalDensity.current
-
-    val pieceWidthPx = with(density) {
-        LOCAL_HAND_PIECE_WIDTH.toPx()
-    }
-
-    val pieceHeightPx = with(density) {
-        LOCAL_HAND_PIECE_HEIGHT.toPx()
-    }
-
-    val animatedX = remember(
-        presentationId,
-        move,
-        source,
-        moveTarget,
-    ) {
-        Animatable(source.x)
-    }
-
-    val animatedY = remember(
-        presentationId,
-        move,
-        source,
-        moveTarget,
-    ) {
-        Animatable(source.y)
-    }
-
-    val animatedRotation = remember(
-        presentationId,
-        move,
-        source,
-        moveTarget,
-    ) {
-        Animatable(0f)
-    }
-
-    val visualPiece = remember(move) {
-        getVisualPieceForPlayedMove(move)
-    }
-
-    LaunchedEffect(
-        presentationId,
-        move,
-        source,
-        moveTarget,
-    ) {
-        val startedAtNanos = System.nanoTime()
-
-        onAnimationTrace(
-            OnlineTraceType.ANIMATION_STARTED,
-            moveAttributes + mapOf(
-                "animationKind" to "move",
-                "expectedDurationMillis" to MOVE_ANIMATION_DURATION_MILLIS.toString(),
-            ),
-        )
-
-        try {
             animatedX.snapTo(source.x)
             animatedY.snapTo(source.y)
             animatedRotation.snapTo(0f)
+            isPieceVisible = true
 
             val xJob = launch {
                 animatedX.animateTo(
@@ -181,7 +166,7 @@ fun PlayedMoveAnimationOverlay(
             yJob.join()
             rotationJob.join()
 
-            onAnimationTrace(
+            latestAnimationTrace(
                 OnlineTraceType.ANIMATION_FINISHED,
                 moveAttributes + mapOf(
                     "animationKind" to "move",
@@ -190,19 +175,31 @@ fun PlayedMoveAnimationOverlay(
                 ),
             )
 
-            onAnimationFinished()
+            completionReported = true
+            latestAnimationFinished()
         } catch (error: CancellationException) {
-            onAnimationTrace(
-                OnlineTraceType.ANIMATION_CANCELLED,
-                moveAttributes + mapOf(
-                    "animationKind" to "move",
-                    "stage" to "running",
-                    "durationMillis" to elapsedMillisSince(startedAtNanos).toString(),
-                ),
-            )
+            /*
+             * A própria confirmação de término remove o overlay da composição.
+             * Esse cancelamento posterior ao callback é esperado e não deve ser
+             * contado como apresentação abortada.
+             */
+            if (!completionReported) {
+                latestAnimationTrace(
+                    OnlineTraceType.ANIMATION_CANCELLED,
+                    moveAttributes + mapOf(
+                        "animationKind" to "move",
+                        "stage" to "running",
+                        "durationMillis" to elapsedMillisSince(startedAtNanos).toString(),
+                    ),
+                )
+            }
 
             throw error
         }
+    }
+
+    if (!isPieceVisible) {
+        return
     }
 
     DominoPieceView(

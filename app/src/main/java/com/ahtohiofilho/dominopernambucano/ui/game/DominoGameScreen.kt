@@ -547,6 +547,7 @@ fun DominoGameScreen(
         if (presentingPassPhase != null) {
             PassTurnKnockAnimationOverlay(
                 playerIndex = presentingPassPhase.playerIndex,
+                localPlayerIndex = uiState.localPlayerIndex,
                 presentationId = uiState.onlinePresentationId,
                 onAnimationTrace = { type, attributes ->
                     traceUi(

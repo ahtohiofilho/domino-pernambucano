@@ -182,6 +182,110 @@ class OnlineDominoMatchCoordinatorTest {
         }
 
     @Test
+    fun remote_revisions_arriving_during_pass_presentations_are_presented_in_order() =
+        runBlocking {
+            val initialRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+            val firstRemoteRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 1,
+                playerHands = listOf(
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+            val secondRemoteRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 2,
+                playerHands = listOf(
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 1L,
+                ),
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                repository.publishMatchSnapshot(
+                    firstRemoteRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                assertPresentingPass(
+                    coordinator = coordinator,
+                    expectedPlayerIndex = 0,
+                )
+
+                repository.publishMatchSnapshot(
+                    secondRemoteRuntimeState.toSnapshot(
+                        revision = 3L,
+                    ),
+                )
+                yield()
+
+                assertPresentingPass(
+                    coordinator = coordinator,
+                    expectedPlayerIndex = 0,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.PresentationFinished,
+                )
+
+                assertPresentingPass(
+                    coordinator = coordinator,
+                    expectedPlayerIndex = 1,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.PresentationFinished,
+                )
+
+                assertEquals(
+                    secondRemoteRuntimeState,
+                    coordinator.currentState,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
     fun local_move_is_submitted_once_until_authoritative_revision_confirms_it() =
         runBlocking {
             val openingPiece = DominoPiece(
@@ -379,6 +483,25 @@ class OnlineDominoMatchCoordinatorTest {
                 coordinator.dispose()
             }
         }
+
+    private fun assertPresentingPass(
+        coordinator: OnlineDominoMatchCoordinator,
+        expectedPlayerIndex: Int,
+    ) {
+        val phase = coordinator.currentState.phase
+
+        assertTrue(
+            "A revisão remota deveria estar em apresentação de toque.",
+            phase is DominoMatchPhase.PresentingPass,
+        )
+
+        phase as DominoMatchPhase.PresentingPass
+
+        assertEquals(
+            expectedPlayerIndex,
+            phase.playerIndex,
+        )
+    }
 
     private fun assertPresentingMove(
         coordinator: OnlineDominoMatchCoordinator,
