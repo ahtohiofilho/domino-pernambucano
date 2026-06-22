@@ -1,5 +1,11 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceContext
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLevel
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,6 +25,11 @@ class RemoteOnlineRoomRepository(
     private val apiClient: RemoteOnlineApiClient? = createApiClientOrNull(config),
     private val pollingPolicy: OnlineRemotePollingPolicy =
         OnlineRemotePollingPolicy.Disabled,
+    private val traceLogger: OnlineTraceLogger =
+        OnlineTraceLogger(),
+    private val nowEpochMillis: () -> Long = {
+        System.currentTimeMillis()
+    },
 ) : OnlineRoomRepository {
     private val repositoryScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate,
@@ -52,20 +63,49 @@ class RemoteOnlineRoomRepository(
         val client = apiClient
             ?: return rejectedRoomOperation(
                 reason = getUnavailableBackendReason(),
-            )
+            ).also {
+                trace(
+                    level = OnlineTraceLevel.WARN,
+                    type = OnlineTraceType.TRANSPORT_FAILURE,
+                    playerId = request.localPlayerId,
+                    attributes = mapOf(
+                        "operation" to "create_room",
+                        "reason" to getUnavailableBackendReason(),
+                    ),
+                )
+            }
+
+        val startedAtEpochMillis = nowEpochMillis()
 
         return runCatching {
             client.createRoom(request)
         }.fold(
             onSuccess = { result ->
+                traceRoomOperationResult(
+                    operation = "create_room",
+                    result = result,
+                    playerId = request.localPlayerId,
+                )
+
                 applyRoomOperationResult(
                     result = result,
                     client = client,
+                    operation = "create_room",
+                    playerId = request.localPlayerId,
                 )
 
                 result
             },
             onFailure = { error ->
+                traceTransportFailure(
+                    operation = "create_room",
+                    error = error,
+                    playerId = request.localPlayerId,
+                    durationMillis = elapsedMillisSince(
+                        startedAtEpochMillis = startedAtEpochMillis,
+                    ),
+                )
+
                 rejectedRoomOperation(
                     reason = error.toOnlineFailureReason(
                         fallback = "Falha ao criar sala online remota.",
@@ -81,20 +121,49 @@ class RemoteOnlineRoomRepository(
         val client = apiClient
             ?: return rejectedRoomOperation(
                 reason = getUnavailableBackendReason(),
-            )
+            ).also {
+                trace(
+                    level = OnlineTraceLevel.WARN,
+                    type = OnlineTraceType.TRANSPORT_FAILURE,
+                    playerId = request.localPlayerId,
+                    attributes = mapOf(
+                        "operation" to "join_room",
+                        "reason" to getUnavailableBackendReason(),
+                    ),
+                )
+            }
+
+        val startedAtEpochMillis = nowEpochMillis()
 
         return runCatching {
             client.joinRoom(request)
         }.fold(
             onSuccess = { result ->
+                traceRoomOperationResult(
+                    operation = "join_room",
+                    result = result,
+                    playerId = request.localPlayerId,
+                )
+
                 applyRoomOperationResult(
                     result = result,
                     client = client,
+                    operation = "join_room",
+                    playerId = request.localPlayerId,
                 )
 
                 result
             },
             onFailure = { error ->
+                traceTransportFailure(
+                    operation = "join_room",
+                    error = error,
+                    playerId = request.localPlayerId,
+                    durationMillis = elapsedMillisSince(
+                        startedAtEpochMillis = startedAtEpochMillis,
+                    ),
+                )
+
                 rejectedRoomOperation(
                     reason = error.toOnlineFailureReason(
                         fallback = "Falha ao entrar na sala online remota.",
@@ -111,18 +180,71 @@ class RemoteOnlineRoomRepository(
             ?: return rejectedAction(
                 action = action,
                 reason = getUnavailableBackendReason(),
-            )
+            ).also {
+                trace(
+                    level = OnlineTraceLevel.WARN,
+                    type = OnlineTraceType.ACTION_REJECTED,
+                    action = action,
+                    snapshotRevision = it.revision,
+                    attributes = action.traceAttributes() + mapOf(
+                        "reason" to getUnavailableBackendReason(),
+                        "source" to "backend_unavailable",
+                    ),
+                )
+            }
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.ACTION_SUBMITTED,
+            action = action,
+            attributes = action.traceAttributes(),
+        )
 
         return refreshMutex.withLock {
+            val startedAtEpochMillis = nowEpochMillis()
+
             runCatching {
                 client.submitAction(action)
             }.fold(
                 onSuccess = { result ->
+                    val resolvedResult = result.copy(
+                        actionId = result.actionId ?: action.actionId,
+                    )
+
+                    if (resolvedResult.accepted) {
+                        trace(
+                            level = OnlineTraceLevel.INFO,
+                            type = OnlineTraceType.ACTION_ACCEPTED,
+                            action = action,
+                            snapshotRevision = resolvedResult.revision,
+                            attributes = action.traceAttributes() + mapOf(
+                                "durationMillis" to elapsedMillisSince(
+                                    startedAtEpochMillis = startedAtEpochMillis,
+                                ).toString(),
+                            ),
+                        )
+                    } else {
+                        trace(
+                            level = OnlineTraceLevel.WARN,
+                            type = OnlineTraceType.ACTION_REJECTED,
+                            action = action,
+                            snapshotRevision = resolvedResult.revision,
+                            attributes = action.traceAttributes() + mapOf(
+                                "durationMillis" to elapsedMillisSince(
+                                    startedAtEpochMillis = startedAtEpochMillis,
+                                ).toString(),
+                                "reason" to resolvedResult.reason
+                                    .orEmpty()
+                                    .take(180),
+                            ),
+                        )
+                    }
+
                     if (
-                        result.accepted ||
+                        resolvedResult.accepted ||
                         shouldRefreshAfterRejectedAction(
                             action = action,
-                            result = result,
+                            result = resolvedResult,
                         )
                     ) {
                         refreshSnapshotsAfterAction(
@@ -131,24 +253,46 @@ class RemoteOnlineRoomRepository(
                         )
                     }
 
-                    result.copy(
-                        actionId = result.actionId ?: action.actionId,
-                    )
+                    resolvedResult
                 },
                 onFailure = { error ->
-                    rejectedAction(
+                    traceTransportFailure(
+                        operation = "submit_action",
+                        error = error,
+                        action = action,
+                        durationMillis = elapsedMillisSince(
+                            startedAtEpochMillis = startedAtEpochMillis,
+                        ),
+                    )
+
+                    val rejectedResult = rejectedAction(
                         action = action,
                         reason = error.toOnlineFailureReason(
                             fallback = "Falha ao enviar ação online remota.",
                         ),
                     )
+
+                    trace(
+                        level = OnlineTraceLevel.WARN,
+                        type = OnlineTraceType.ACTION_REJECTED,
+                        action = action,
+                        snapshotRevision = rejectedResult.revision,
+                        attributes = action.traceAttributes() + mapOf(
+                            "reason" to rejectedResult.reason.orEmpty().take(180),
+                            "source" to "transport_failure",
+                        ),
+                    )
+
+                    rejectedResult
                 },
             )
         }
     }
 
     override suspend fun leaveRoom() {
-        stopPolling()
+        stopPolling(
+            reason = "leave_room",
+        )
 
         val client = apiClient
         val currentSnapshot = mutableMatchSnapshot.value
@@ -159,20 +303,75 @@ class RemoteOnlineRoomRepository(
             currentSnapshot != null &&
             currentRoom != null
         ) {
+            val leaveAction = createOnlineLeaveRoomAction(
+                roomId = currentRoom.roomId,
+                matchId = currentSnapshot.matchId,
+                playerId = currentRoom.players
+                    .firstOrNull { player -> player.connected }
+                    ?.playerId
+                    ?: currentRoom.hostPlayerId,
+                revision = currentSnapshot.revision,
+            )
+
+            trace(
+                level = OnlineTraceLevel.INFO,
+                type = OnlineTraceType.ACTION_SUBMITTED,
+                action = leaveAction,
+                attributes = leaveAction.traceAttributes() + mapOf(
+                    "source" to "leave_room",
+                ),
+            )
+
+            val startedAtEpochMillis = nowEpochMillis()
+
             runCatching {
                 client.submitAction(
-                    createOnlineLeaveRoomAction(
-                        roomId = currentRoom.roomId,
-                        matchId = currentSnapshot.matchId,
-                        playerId = currentRoom.players
-                            .firstOrNull { player -> player.connected }
-                            ?.playerId
-                            ?: currentRoom.hostPlayerId,
-                        revision = currentSnapshot.revision,
-                    )
+                    leaveAction,
+                )
+            }.onSuccess { result ->
+                trace(
+                    level = if (result.accepted) {
+                        OnlineTraceLevel.INFO
+                    } else {
+                        OnlineTraceLevel.WARN
+                    },
+                    type = if (result.accepted) {
+                        OnlineTraceType.ACTION_ACCEPTED
+                    } else {
+                        OnlineTraceType.ACTION_REJECTED
+                    },
+                    action = leaveAction,
+                    snapshotRevision = result.revision,
+                    attributes = leaveAction.traceAttributes() + mapOf(
+                        "source" to "leave_room",
+                        "durationMillis" to elapsedMillisSince(
+                            startedAtEpochMillis = startedAtEpochMillis,
+                        ).toString(),
+                        "reason" to result.reason.orEmpty().take(180),
+                    ),
+                )
+            }.onFailure { error ->
+                traceTransportFailure(
+                    operation = "leave_room",
+                    error = error,
+                    action = leaveAction,
+                    durationMillis = elapsedMillisSince(
+                        startedAtEpochMillis = startedAtEpochMillis,
+                    ),
                 )
             }
         }
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.ROOM_LEFT,
+            roomId = currentRoom?.roomId,
+            matchId = currentSnapshot?.matchId,
+            attributes = mapOf(
+                "hadRoomSnapshot" to (currentRoom != null).toString(),
+                "hadMatchSnapshot" to (currentSnapshot != null).toString(),
+            ),
+        )
 
         mutableRoomSnapshot.value = null
         mutableMatchSnapshot.value = null
@@ -181,10 +380,24 @@ class RemoteOnlineRoomRepository(
     private suspend fun applyRoomOperationResult(
         result: OnlineRoomOperationResultDto,
         client: RemoteOnlineApiClient,
+        operation: String,
+        playerId: String,
     ) {
         val room = result.roomSnapshot ?: return
 
         mutableRoomSnapshot.value = room
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.SNAPSHOT_RECEIVED,
+            roomId = room.roomId,
+            matchId = room.matchId,
+            playerId = playerId,
+            localSeatIndex = result.localSeatIndex,
+            attributes = room.traceAttributes(
+                trigger = operation,
+            ),
+        )
 
         if (result.accepted) {
             startPolling(
@@ -195,13 +408,13 @@ class RemoteOnlineRoomRepository(
 
         val matchId = room.matchId
         if (result.accepted && matchId != null) {
-            runCatching {
-                client.fetchMatchSnapshot(matchId)
-            }.onSuccess { match ->
-                publishMatchSnapshotIfNewer(
-                    snapshot = match,
-                )
-            }
+            fetchAndPublishMatchSnapshot(
+                client = client,
+                roomId = room.roomId,
+                matchId = matchId,
+                trigger = operation,
+                playerId = playerId,
+            )
         }
     }
 
@@ -213,6 +426,8 @@ class RemoteOnlineRoomRepository(
             client = client,
             roomId = action.roomId,
             fallbackMatchId = action.matchId,
+            trigger = "action_refresh",
+            playerId = action.playerId,
         )
     }
 
@@ -231,9 +446,20 @@ class RemoteOnlineRoomRepository(
             return
         }
 
-        stopPolling()
+        stopPolling(
+            reason = "replaced",
+        )
 
         pollingRoomId = roomId
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.POLLING_STARTED,
+            roomId = roomId,
+            attributes = mapOf(
+                "intervalMillis" to pollingPolicy.intervalMillis.toString(),
+            ),
+        )
 
         pollingJob = repositoryScope.launch {
             while (isActive) {
@@ -244,39 +470,160 @@ class RemoteOnlineRoomRepository(
                         client = client,
                         roomId = roomId,
                         fallbackMatchId = mutableMatchSnapshot.value?.matchId,
+                        trigger = "polling",
+                        playerId = null,
                     )
                 }
             }
         }
     }
 
-    private fun stopPolling() {
+    private fun stopPolling(
+        reason: String,
+    ) {
+        val previousPollingRoomId = pollingRoomId
+        val hadActivePolling = pollingJob != null || previousPollingRoomId != null
+
         pollingJob?.cancel()
         pollingJob = null
         pollingRoomId = null
+
+        if (hadActivePolling) {
+            trace(
+                level = OnlineTraceLevel.INFO,
+                type = OnlineTraceType.POLLING_STOPPED,
+                roomId = previousPollingRoomId,
+                attributes = mapOf(
+                    "reason" to reason,
+                ),
+            )
+        }
     }
 
     private suspend fun refreshSnapshots(
         client: RemoteOnlineApiClient,
         roomId: String,
         fallbackMatchId: String?,
+        trigger: String,
+        playerId: String?,
     ) {
         var latestMatchId = fallbackMatchId
+
+        val roomRequestStartedAtEpochMillis = nowEpochMillis()
+
+        trace(
+            level = OnlineTraceLevel.DEBUG,
+            type = OnlineTraceType.SNAPSHOT_REQUESTED,
+            roomId = roomId,
+            matchId = fallbackMatchId,
+            playerId = playerId,
+            attributes = mapOf(
+                "snapshotKind" to "room",
+                "trigger" to trigger,
+            ),
+        )
 
         runCatching {
             client.fetchRoomSnapshot(roomId)
         }.onSuccess { room ->
             mutableRoomSnapshot.value = room
             latestMatchId = room.matchId ?: latestMatchId
+
+            trace(
+                level = OnlineTraceLevel.DEBUG,
+                type = OnlineTraceType.SNAPSHOT_RECEIVED,
+                roomId = room.roomId,
+                matchId = room.matchId ?: latestMatchId,
+                playerId = playerId,
+                attributes = room.traceAttributes(
+                    trigger = trigger,
+                ) + mapOf(
+                    "durationMillis" to elapsedMillisSince(
+                        startedAtEpochMillis = roomRequestStartedAtEpochMillis,
+                    ).toString(),
+                ),
+            )
+        }.onFailure { error ->
+            traceTransportFailure(
+                operation = "fetch_room_snapshot",
+                error = error,
+                roomId = roomId,
+                matchId = fallbackMatchId,
+                playerId = playerId,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis = roomRequestStartedAtEpochMillis,
+                ),
+                trigger = trigger,
+            )
         }
 
         val matchId = latestMatchId ?: return
 
+        fetchAndPublishMatchSnapshot(
+            client = client,
+            roomId = roomId,
+            matchId = matchId,
+            trigger = trigger,
+            playerId = playerId,
+        )
+    }
+
+    private suspend fun fetchAndPublishMatchSnapshot(
+        client: RemoteOnlineApiClient,
+        roomId: String,
+        matchId: String,
+        trigger: String,
+        playerId: String?,
+    ) {
+        val startedAtEpochMillis = nowEpochMillis()
+
+        trace(
+            level = OnlineTraceLevel.DEBUG,
+            type = OnlineTraceType.SNAPSHOT_REQUESTED,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            attributes = mapOf(
+                "snapshotKind" to "match",
+                "trigger" to trigger,
+            ),
+        )
+
         runCatching {
             client.fetchMatchSnapshot(matchId)
         }.onSuccess { match ->
+            trace(
+                level = OnlineTraceLevel.DEBUG,
+                type = OnlineTraceType.SNAPSHOT_RECEIVED,
+                roomId = roomId,
+                matchId = match.matchId,
+                playerId = playerId,
+                snapshotRevision = match.revision,
+                attributes = match.traceAttributes(
+                    trigger = trigger,
+                ) + mapOf(
+                    "durationMillis" to elapsedMillisSince(
+                        startedAtEpochMillis = startedAtEpochMillis,
+                    ).toString(),
+                ),
+            )
+
             publishMatchSnapshotIfNewer(
                 snapshot = match,
+                trigger = trigger,
+                playerId = playerId,
+            )
+        }.onFailure { error ->
+            traceTransportFailure(
+                operation = "fetch_match_snapshot",
+                error = error,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis = startedAtEpochMillis,
+                ),
+                trigger = trigger,
             )
         }
     }
@@ -292,6 +639,8 @@ class RemoteOnlineRoomRepository(
 
     private fun publishMatchSnapshotIfNewer(
         snapshot: OnlineMatchSnapshotDto,
+        trigger: String,
+        playerId: String?,
     ) {
         val currentSnapshot = mutableMatchSnapshot.value
 
@@ -301,7 +650,209 @@ class RemoteOnlineRoomRepository(
             snapshot.revision >= currentSnapshot.revision
         ) {
             mutableMatchSnapshot.value = snapshot
+
+            trace(
+                level = OnlineTraceLevel.INFO,
+                type = OnlineTraceType.SNAPSHOT_PUBLISHED,
+                roomId = snapshot.roomId,
+                matchId = snapshot.matchId,
+                playerId = playerId,
+                snapshotRevision = snapshot.revision,
+                attributes = mapOf(
+                    "trigger" to trigger,
+                    "previousRevision" to
+                            (currentSnapshot?.revision?.toString() ?: "null"),
+                ),
+            )
+
+            return
         }
+
+        trace(
+            level = OnlineTraceLevel.DEBUG,
+            type = OnlineTraceType.SNAPSHOT_IGNORED,
+            roomId = snapshot.roomId,
+            matchId = snapshot.matchId,
+            playerId = playerId,
+            snapshotRevision = snapshot.revision,
+            attributes = mapOf(
+                "reason" to "older_match_revision",
+                "trigger" to trigger,
+                "currentRevision" to currentSnapshot.revision.toString(),
+            ),
+        )
+    }
+
+    private fun traceRoomOperationResult(
+        operation: String,
+        result: OnlineRoomOperationResultDto,
+        playerId: String,
+    ) {
+        val room = result.roomSnapshot
+
+        if (result.accepted) {
+            trace(
+                level = OnlineTraceLevel.INFO,
+                type = when (operation) {
+                    "create_room" -> OnlineTraceType.ROOM_CREATED
+                    else -> OnlineTraceType.ROOM_JOINED
+                },
+                roomId = room?.roomId,
+                matchId = room?.matchId,
+                playerId = playerId,
+                localSeatIndex = result.localSeatIndex,
+                attributes = mapOf(
+                    "operation" to operation,
+                    "roomStatus" to (room?.status?.name ?: "null"),
+                ),
+            )
+
+            return
+        }
+
+        trace(
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.ACTION_REJECTED,
+            roomId = room?.roomId,
+            matchId = room?.matchId,
+            playerId = playerId,
+            localSeatIndex = result.localSeatIndex,
+            attributes = mapOf(
+                "operation" to operation,
+                "reason" to result.reason.orEmpty().take(180),
+            ),
+        )
+    }
+
+    private fun traceTransportFailure(
+        operation: String,
+        error: Throwable,
+        roomId: String? = null,
+        matchId: String? = null,
+        playerId: String? = null,
+        action: OnlinePlayerActionDto? = null,
+        durationMillis: Long,
+        trigger: String? = null,
+    ) {
+        if (error is CancellationException) {
+            return
+        }
+
+        val attributes = mutableMapOf(
+            "operation" to operation,
+            "errorType" to (error::class.simpleName ?: "UnknownError"),
+            "durationMillis" to durationMillis.toString(),
+        )
+
+        trigger?.let { value ->
+            attributes["trigger"] = value
+        }
+
+        error.message
+            ?.trim()
+            ?.takeIf { message -> message.isNotBlank() }
+            ?.take(180)
+            ?.let { message ->
+                attributes["message"] = message
+            }
+
+        trace(
+            level = OnlineTraceLevel.ERROR,
+            type = OnlineTraceType.TRANSPORT_FAILURE,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            action = action,
+            attributes = attributes,
+        )
+
+        if (trigger == "polling") {
+            trace(
+                level = OnlineTraceLevel.WARN,
+                type = OnlineTraceType.POLLING_FAILED,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                attributes = attributes,
+            )
+        }
+    }
+
+    private fun trace(
+        level: OnlineTraceLevel,
+        type: OnlineTraceType,
+        roomId: String? = null,
+        matchId: String? = null,
+        playerId: String? = null,
+        localSeatIndex: Int? = null,
+        action: OnlinePlayerActionDto? = null,
+        snapshotRevision: Long? = null,
+        attributes: Map<String, String> = emptyMap(),
+    ) {
+        traceLogger.log(
+            level = level,
+            source = OnlineTraceSource.CLIENT_REPOSITORY,
+            type = type,
+            context = OnlineTraceContext(
+                roomId = roomId
+                    ?: action?.roomId
+                    ?: mutableRoomSnapshot.value?.roomId,
+                matchId = matchId
+                    ?: action?.matchId
+                    ?: mutableMatchSnapshot.value?.matchId,
+                playerId = playerId ?: action?.playerId,
+                localSeatIndex = localSeatIndex,
+                actionId = action?.actionId,
+                actionRevision = action?.revision,
+                snapshotRevision = snapshotRevision,
+            ),
+            attributes = attributes,
+        )
+    }
+
+    private fun elapsedMillisSince(
+        startedAtEpochMillis: Long,
+    ): Long {
+        return (nowEpochMillis() - startedAtEpochMillis)
+            .coerceAtLeast(0L)
+    }
+
+    private fun OnlineRoomSnapshotDto.traceAttributes(
+        trigger: String,
+    ): Map<String, String> {
+        return mapOf(
+            "snapshotKind" to "room",
+            "trigger" to trigger,
+            "roomStatus" to status.name,
+            "playerCount" to players.size.toString(),
+            "updatedAtEpochMillis" to updatedAtEpochMillis.toString(),
+        )
+    }
+
+    private fun OnlineMatchSnapshotDto.traceAttributes(
+        trigger: String,
+    ): Map<String, String> {
+        return mapOf(
+            "snapshotKind" to "match",
+            "trigger" to trigger,
+            "serverEpochMillis" to
+                    (serverEpochMillis?.toString() ?: "null"),
+        )
+    }
+
+    private fun OnlinePlayerActionDto.traceAttributes(): Map<String, String> {
+        val attributes = mutableMapOf(
+            "actionType" to type.name,
+        )
+
+        move?.let { onlineMove ->
+            attributes["piece"] =
+                "${onlineMove.piece.left}-${onlineMove.piece.right}"
+            attributes["boardSide"] = onlineMove.side.name
+            attributes["flipped"] = onlineMove.flipped.toString()
+        }
+
+        return attributes
     }
 
     private fun getUnavailableBackendReason(): String {

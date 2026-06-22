@@ -3,6 +3,9 @@ package com.ahtohiofilho.dominopernambucano.online
 import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
+import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -143,8 +146,13 @@ class RemoteOnlineRoomRepositoryTest {
                 ),
             )
 
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
             val repository = createRepository(
                 apiClient = apiClient,
+                traceLogger = createTraceLogger(
+                    traceBuffer = traceBuffer,
+                ),
             )
 
             val action = createOnlinePassTurnAction(
@@ -164,6 +172,21 @@ class RemoteOnlineRoomRepositoryTest {
             assertEquals(listOf(refreshedMatch.matchId), apiClient.fetchMatchSnapshotRequests)
             assertEquals(refreshedRoom, repository.roomSnapshot.value)
             assertEquals(refreshedMatch, repository.matchSnapshot.value)
+
+            assertEquals(
+                listOf(
+                    OnlineTraceType.ACTION_SUBMITTED,
+                    OnlineTraceType.ACTION_ACCEPTED,
+                    OnlineTraceType.SNAPSHOT_REQUESTED,
+                    OnlineTraceType.SNAPSHOT_RECEIVED,
+                    OnlineTraceType.SNAPSHOT_REQUESTED,
+                    OnlineTraceType.SNAPSHOT_RECEIVED,
+                    OnlineTraceType.SNAPSHOT_PUBLISHED,
+                ),
+                traceBuffer.snapshot().map { entry ->
+                    entry.event.type
+                },
+            )
         }
 
     @Test
@@ -172,6 +195,7 @@ class RemoteOnlineRoomRepositoryTest {
             val refreshedRoom = createInMatchRoomSnapshot(
                 updatedAtEpochMillis = 2_000L,
             )
+
             val refreshedMatch = createMatchSnapshot(
                 revision = 2L,
                 serverEpochMillis = 2_000L,
@@ -192,8 +216,13 @@ class RemoteOnlineRoomRepositoryTest {
                 ),
             )
 
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
             val repository = createRepository(
                 apiClient = apiClient,
+                traceLogger = createTraceLogger(
+                    traceBuffer = traceBuffer,
+                ),
             )
 
             val action = createOnlinePassTurnAction(
@@ -213,6 +242,104 @@ class RemoteOnlineRoomRepositoryTest {
             assertEquals(listOf(refreshedMatch.matchId), apiClient.fetchMatchSnapshotRequests)
             assertEquals(refreshedRoom, repository.roomSnapshot.value)
             assertEquals(refreshedMatch, repository.matchSnapshot.value)
+
+            assertEquals(
+                listOf(
+                    OnlineTraceType.ACTION_SUBMITTED,
+                    OnlineTraceType.ACTION_REJECTED,
+                    OnlineTraceType.SNAPSHOT_REQUESTED,
+                    OnlineTraceType.SNAPSHOT_RECEIVED,
+                    OnlineTraceType.SNAPSHOT_REQUESTED,
+                    OnlineTraceType.SNAPSHOT_RECEIVED,
+                    OnlineTraceType.SNAPSHOT_PUBLISHED,
+                ),
+                traceBuffer.snapshot().map { entry ->
+                    entry.event.type
+                },
+            )
+        }
+
+    @Test
+    fun refresh_ignores_match_snapshot_older_than_current_snapshot() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val currentMatch = createMatchSnapshot(
+                revision = 2L,
+                serverEpochMillis = 2_000L,
+            )
+            val staleMatch = createMatchSnapshot(
+                revision = 1L,
+                serverEpochMillis = 1_000L,
+            )
+
+            val matchSnapshotsById = mutableMapOf(
+                currentMatch.matchId to currentMatch,
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+                submitActionResult = OnlineActionResultDto(
+                    accepted = true,
+                    revision = 3L,
+                    actionId = "action-1",
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = matchSnapshotsById,
+            )
+
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                traceLogger = createTraceLogger(
+                    traceBuffer = traceBuffer,
+                ),
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-1",
+                    playerName = "Jogador 1",
+                )
+            )
+
+            assertEquals(currentMatch, repository.matchSnapshot.value)
+
+            traceBuffer.clear()
+            matchSnapshotsById[currentMatch.matchId] = staleMatch
+
+            val action = createOnlinePassTurnAction(
+                roomId = room.roomId,
+                matchId = currentMatch.matchId,
+                playerId = "player-1",
+                revision = currentMatch.revision,
+                actionId = "action-1",
+            )
+
+            repository.submitAction(action)
+
+            assertEquals(currentMatch, repository.matchSnapshot.value)
+
+            assertEquals(
+                listOf(
+                    OnlineTraceType.ACTION_SUBMITTED,
+                    OnlineTraceType.ACTION_ACCEPTED,
+                    OnlineTraceType.SNAPSHOT_REQUESTED,
+                    OnlineTraceType.SNAPSHOT_RECEIVED,
+                    OnlineTraceType.SNAPSHOT_REQUESTED,
+                    OnlineTraceType.SNAPSHOT_RECEIVED,
+                    OnlineTraceType.SNAPSHOT_IGNORED,
+                ),
+                traceBuffer.snapshot().map { entry ->
+                    entry.event.type
+                },
+            )
         }
 
     @Test
@@ -276,8 +403,13 @@ class RemoteOnlineRoomRepositoryTest {
                 submitActionFailure = IllegalStateException("timeout"),
             )
 
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
             val repository = createRepository(
                 apiClient = apiClient,
+                traceLogger = createTraceLogger(
+                    traceBuffer = traceBuffer,
+                ),
             )
 
             val action = createOnlinePassTurnAction(
@@ -301,6 +433,17 @@ class RemoteOnlineRoomRepositoryTest {
             assertEquals(emptyList<String>(), apiClient.fetchMatchSnapshotRequests)
             assertNull(repository.roomSnapshot.value)
             assertNull(repository.matchSnapshot.value)
+
+            assertEquals(
+                listOf(
+                    OnlineTraceType.ACTION_SUBMITTED,
+                    OnlineTraceType.TRANSPORT_FAILURE,
+                    OnlineTraceType.ACTION_REJECTED,
+                ),
+                traceBuffer.snapshot().map { entry ->
+                    entry.event.type
+                },
+            )
         }
 
     @Test
@@ -314,7 +457,9 @@ class RemoteOnlineRoomRepositoryTest {
                     roomSnapshot = room,
                     localSeatIndex = 0,
                 ),
-                fetchMatchSnapshotFailure = IllegalStateException("partida indisponível"),
+                fetchMatchSnapshotFailure = IllegalStateException(
+                    "partida indisponível",
+                ),
             )
 
             val repository = createRepository(
@@ -366,7 +511,9 @@ class RemoteOnlineRoomRepositoryTest {
                     revision = refreshedMatch.revision,
                     actionId = "action-1",
                 ),
-                fetchRoomSnapshotFailure = IllegalStateException("sala indisponível"),
+                fetchRoomSnapshotFailure = IllegalStateException(
+                    "sala indisponível",
+                ),
                 matchSnapshotsById = matchSnapshotsById,
             )
 
@@ -448,12 +595,24 @@ class RemoteOnlineRoomRepositoryTest {
 
     private fun createRepository(
         apiClient: RemoteOnlineApiClient,
+        traceLogger: OnlineTraceLogger = OnlineTraceLogger(),
     ): RemoteOnlineRoomRepository {
         return RemoteOnlineRoomRepository(
             config = OnlineBackendConfig.remote(
                 baseUrl = "http://localhost:8080",
             ),
             apiClient = apiClient,
+            traceLogger = traceLogger,
+            nowEpochMillis = { 1_000L },
+        )
+    }
+
+    private fun createTraceLogger(
+        traceBuffer: InMemoryOnlineTraceBuffer,
+    ): OnlineTraceLogger {
+        return OnlineTraceLogger(
+            sink = traceBuffer,
+            nowEpochMillis = { 1_000L },
         )
     }
 
