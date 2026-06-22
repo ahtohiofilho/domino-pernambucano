@@ -1,12 +1,17 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoBoardChain
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.DominoPlayer
+import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
+import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -80,6 +85,13 @@ class OnlineDominoMatchCoordinatorTest {
                 ),
             )
 
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
+            val traceLogger = OnlineTraceLogger(
+                sink = traceBuffer,
+                nowEpochMillis = { 1_000L },
+            )
+
             val coordinator = OnlineDominoMatchCoordinator(
                 repository = repository,
                 roomId = TEST_ROOM_ID,
@@ -90,6 +102,7 @@ class OnlineDominoMatchCoordinatorTest {
                     revision = 1L,
                 ),
                 coroutineDispatcher = Dispatchers.Unconfined,
+                traceLogger = traceLogger,
             )
 
             try {
@@ -141,6 +154,27 @@ class OnlineDominoMatchCoordinatorTest {
                     secondRemoteRuntimeState,
                     coordinator.currentState,
                 )
+
+                assertEquals(
+                    listOf(
+                        OnlineTraceType.SNAPSHOT_RECEIVED,
+                        OnlineTraceType.SNAPSHOT_ENQUEUED,
+                        OnlineTraceType.PRESENTATION_STARTED,
+
+                        OnlineTraceType.SNAPSHOT_RECEIVED,
+                        OnlineTraceType.SNAPSHOT_ENQUEUED,
+
+                        OnlineTraceType.PRESENTATION_FINISHED,
+                        OnlineTraceType.STABLE_STATE_PROMOTED,
+                        OnlineTraceType.PRESENTATION_STARTED,
+
+                        OnlineTraceType.PRESENTATION_FINISHED,
+                        OnlineTraceType.STABLE_STATE_PROMOTED,
+                    ),
+                    traceBuffer.snapshot().map { entry ->
+                        entry.event.type
+                    },
+                )
             } finally {
                 coordinator.dispose()
             }
@@ -172,6 +206,13 @@ class OnlineDominoMatchCoordinatorTest {
                 ),
             )
 
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
+            val traceLogger = OnlineTraceLogger(
+                sink = traceBuffer,
+                nowEpochMillis = { 1_000L },
+            )
+
             val coordinator = OnlineDominoMatchCoordinator(
                 repository = repository,
                 roomId = TEST_ROOM_ID,
@@ -182,6 +223,7 @@ class OnlineDominoMatchCoordinatorTest {
                     revision = 1L,
                 ),
                 coroutineDispatcher = Dispatchers.Unconfined,
+                traceLogger = traceLogger,
             )
 
             try {
@@ -189,9 +231,9 @@ class OnlineDominoMatchCoordinatorTest {
                     DominoMatchCommand.RoundIntroFinished,
                 )
 
-                val move = com.ahtohiofilho.dominopernambucano.domain.PlayableMove(
+                val move = PlayableMove(
                     piece = openingPiece,
-                    side = com.ahtohiofilho.dominopernambucano.domain.BoardSide.RIGHT,
+                    side = BoardSide.RIGHT,
                     flipped = false,
                 )
 
@@ -200,14 +242,20 @@ class OnlineDominoMatchCoordinatorTest {
                         move = move,
                     ),
                 )
+
                 coordinator.dispatch(
                     DominoMatchCommand.LocalMoveSelected(
                         move = move,
                     ),
                 )
+
                 yield()
 
-                assertEquals(1, repository.submittedActions.size)
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+
                 assertEquals(
                     OnlinePlayerActionTypeDto.PLAY_MOVE,
                     repository.submittedActions.single().type,
@@ -218,7 +266,21 @@ class OnlineDominoMatchCoordinatorTest {
                 )
                 yield()
 
-                assertEquals(1, repository.submittedActions.size)
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+
+                assertEquals(
+                    listOf(
+                        OnlineTraceType.ACTION_PREPARED,
+                        OnlineTraceType.ACTION_SUBMITTED,
+                        OnlineTraceType.ACTION_ACCEPTED,
+                    ),
+                    traceBuffer.snapshot().map { entry ->
+                        entry.event.type
+                    },
+                )
             } finally {
                 coordinator.dispose()
             }
@@ -242,6 +304,7 @@ class OnlineDominoMatchCoordinatorTest {
             expectedPlayerIndex,
             phase.playerIndex,
         )
+
         assertEquals(
             expectedPiece,
             phase.move.piece,

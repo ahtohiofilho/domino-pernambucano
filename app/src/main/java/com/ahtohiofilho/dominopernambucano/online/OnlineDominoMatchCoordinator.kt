@@ -10,6 +10,12 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.decrementPlayerClockMillis
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceContext
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLevel
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceStateSummary
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +35,8 @@ class OnlineDominoMatchCoordinator(
     initialSnapshot: OnlineMatchSnapshotDto,
     private val coroutineDispatcher: CoroutineDispatcher =
         Dispatchers.Main.immediate,
+    private val traceLogger: OnlineTraceLogger =
+        OnlineTraceLogger(),
 ) : DominoMatchCoordinator {
     private val coordinatorScope = CoroutineScope(
         SupervisorJob() + coroutineDispatcher,
@@ -84,19 +92,58 @@ class OnlineDominoMatchCoordinator(
                 }
 
                 if (snapshot.roomId != roomId || snapshot.matchId != matchId) {
+                    trace(
+                        level = OnlineTraceLevel.WARN,
+                        type = OnlineTraceType.SNAPSHOT_IGNORED,
+                        snapshotRevision = snapshot.revision,
+                        attributes = mapOf(
+                            "reason" to "snapshot_from_different_match",
+                            "receivedRoomId" to snapshot.roomId,
+                            "receivedMatchId" to snapshot.matchId,
+                        ),
+                    )
+
                     return@collect
                 }
 
                 if (snapshot.revision <= lastReceivedRevision) {
+                    if (snapshot.revision < lastReceivedRevision) {
+                        trace(
+                            level = OnlineTraceLevel.DEBUG,
+                            type = OnlineTraceType.SNAPSHOT_IGNORED,
+                            snapshotRevision = snapshot.revision,
+                            runtimeState = stableRuntimeState,
+                            attributes = mapOf(
+                                "reason" to "stale_revision",
+                                "lastReceivedRevision" to
+                                        lastReceivedRevision.toString(),
+                            ),
+                        )
+                    }
+
                     return@collect
                 }
+
+                val remoteRuntimeState = snapshot.toRuntimeState(
+                    localPlayerIndex = localPlayerIndex,
+                )
+
+                trace(
+                    level = OnlineTraceLevel.INFO,
+                    type = OnlineTraceType.SNAPSHOT_RECEIVED,
+                    snapshotRevision = snapshot.revision,
+                    runtimeState = remoteRuntimeState,
+                    automaticIndexes = snapshot.automaticPlayerIndexes.toSet(),
+                    attributes = mapOf(
+                        "previousReceivedRevision" to
+                                lastReceivedRevision.toString(),
+                    ),
+                )
 
                 lastReceivedRevision = snapshot.revision
 
                 handleRemoteSnapshot(
-                    remoteRuntimeState = snapshot.toRuntimeState(
-                        localPlayerIndex = localPlayerIndex,
-                    ),
+                    remoteRuntimeState = remoteRuntimeState,
                     revision = snapshot.revision,
                     automaticPlayerIndexes = snapshot.automaticPlayerIndexes.toSet(),
                 )
@@ -120,7 +167,9 @@ class OnlineDominoMatchCoordinator(
                 handleTurnClockTick(command)
             }
 
-            /* O servidor agenda bots e timeout no ticker autoritativo. */
+            /*
+             * O servidor agenda bots e timeout no ticker autoritativo.
+             */
             DominoMatchCommand.BotDecisionReady -> Unit
 
             DominoMatchCommand.PresentationFinished -> {
@@ -178,7 +227,6 @@ class OnlineDominoMatchCoordinator(
         mutableState.value = runtimeState.copy(
             playerClockMillis = updatedClocks,
         )
-
     }
 
     private fun handleRemoteSnapshot(
@@ -195,6 +243,20 @@ class OnlineDominoMatchCoordinator(
                 runtimeState = remoteRuntimeState,
                 revision = revision,
                 automaticPlayerIndexes = automaticPlayerIndexes,
+            ),
+        )
+
+        trace(
+            level = OnlineTraceLevel.DEBUG,
+            type = OnlineTraceType.SNAPSHOT_ENQUEUED,
+            snapshotRevision = revision,
+            runtimeState = remoteRuntimeState,
+            automaticIndexes = automaticPlayerIndexes,
+            attributes = mapOf(
+                "queueDepth" to pendingRemoteRuntimeStates.size.toString(),
+                "stableRevision" to stableRevision.toString(),
+                "hasActivePresentation" to
+                        (activePresentationRuntimeState != null).toString(),
             ),
         )
 
@@ -284,9 +346,22 @@ class OnlineDominoMatchCoordinator(
 
             mutableState.value = presentation.presentationRuntimeState
 
+            trace(
+                level = OnlineTraceLevel.INFO,
+                type = OnlineTraceType.PRESENTATION_STARTED,
+                snapshotRevision = queuedRuntimeState.revision,
+                runtimeState = presentation.presentationRuntimeState,
+                automaticIndexes = queuedRuntimeState.automaticPlayerIndexes,
+                attributes = mapOf(
+                    "queueDepth" to pendingRemoteRuntimeStates.size.toString(),
+                    "stableRevision" to stableRevision.toString(),
+                    "presentationPhase" to
+                            presentation.presentationRuntimeState.phase.traceName(),
+                ),
+            )
+
             return
         }
-
     }
 
     private fun completeActivePresentation(): Boolean {
@@ -297,8 +372,33 @@ class OnlineDominoMatchCoordinator(
 
         if (nextQueuedRuntimeState != activeRuntimeState) {
             activePresentationRuntimeState = null
+
+            trace(
+                level = OnlineTraceLevel.WARN,
+                type = OnlineTraceType.INVARIANT_VIOLATION,
+                snapshotRevision = activeRuntimeState.revision,
+                runtimeState = currentState,
+                automaticIndexes = activeRuntimeState.automaticPlayerIndexes,
+                attributes = mapOf(
+                    "reason" to "active_presentation_not_at_queue_head",
+                    "queueDepth" to pendingRemoteRuntimeStates.size.toString(),
+                ),
+            )
+
             return false
         }
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.PRESENTATION_FINISHED,
+            snapshotRevision = activeRuntimeState.revision,
+            runtimeState = currentState,
+            automaticIndexes = activeRuntimeState.automaticPlayerIndexes,
+            attributes = mapOf(
+                "queueDepthBeforePromotion" to
+                        pendingRemoteRuntimeStates.size.toString(),
+            ),
+        )
 
         pendingRemoteRuntimeStates.removeFirst()
         activePresentationRuntimeState = null
@@ -317,6 +417,18 @@ class OnlineDominoMatchCoordinator(
         stableRevision = queuedRuntimeState.revision
         automaticPlayerIndexes = queuedRuntimeState.automaticPlayerIndexes
         mutableState.value = queuedRuntimeState.runtimeState
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.STABLE_STATE_PROMOTED,
+            snapshotRevision = queuedRuntimeState.revision,
+            runtimeState = queuedRuntimeState.runtimeState,
+            automaticIndexes = queuedRuntimeState.automaticPlayerIndexes,
+            attributes = mapOf(
+                "queueDepthAfterPromotion" to
+                        pendingRemoteRuntimeStates.size.toString(),
+            ),
+        )
     }
 
     private fun isPresentationInProgress(
@@ -423,18 +535,61 @@ class OnlineDominoMatchCoordinator(
             return
         }
 
+        trace(
+            level = OnlineTraceLevel.DEBUG,
+            type = OnlineTraceType.ACTION_PREPARED,
+            action = action,
+            runtimeState = stableRuntimeState,
+            attributes = action.traceAttributes(),
+        )
+
         inFlightAction = action
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.ACTION_SUBMITTED,
+            action = action,
+            runtimeState = stableRuntimeState,
+            attributes = action.traceAttributes(),
+        )
 
         coordinatorScope.launch {
             val result = repository.submitAction(
                 action = action,
             )
 
-            if (!result.accepted) {
-                clearInFlightActionAfterRejection(
+            if (result.accepted) {
+                trace(
+                    level = OnlineTraceLevel.INFO,
+                    type = OnlineTraceType.ACTION_ACCEPTED,
                     action = action,
+                    snapshotRevision = result.revision,
+                    runtimeState = stableRuntimeState,
+                    attributes = action.traceAttributes() + mapOf(
+                        "resultRevision" to
+                                (result.revision?.toString() ?: "null"),
+                    ),
                 )
+
+                return@launch
             }
+
+            trace(
+                level = OnlineTraceLevel.WARN,
+                type = OnlineTraceType.ACTION_REJECTED,
+                action = action,
+                snapshotRevision = result.revision,
+                runtimeState = stableRuntimeState,
+                attributes = action.traceAttributes() + mapOf(
+                    "reason" to result.reason.orEmpty().take(180),
+                    "resultRevision" to
+                            (result.revision?.toString() ?: "null"),
+                ),
+            )
+
+            clearInFlightActionAfterRejection(
+                action = action,
+            )
         }
     }
 
@@ -444,6 +599,83 @@ class OnlineDominoMatchCoordinator(
         if (inFlightAction?.actionId == action.actionId) {
             inFlightAction = null
         }
+    }
+
+    private fun trace(
+        level: OnlineTraceLevel,
+        type: OnlineTraceType,
+        action: OnlinePlayerActionDto? = null,
+        snapshotRevision: Long? = null,
+        runtimeState: DominoMatchRuntimeState? = null,
+        automaticIndexes: Set<Int> = automaticPlayerIndexes,
+        attributes: Map<String, String> = emptyMap(),
+    ) {
+        traceLogger.log(
+            level = level,
+            source = OnlineTraceSource.CLIENT_COORDINATOR,
+            type = type,
+            context = OnlineTraceContext(
+                roomId = roomId,
+                matchId = matchId,
+                playerId = localPlayerId,
+                localSeatIndex = localPlayerIndex,
+                actionId = action?.actionId,
+                actionRevision = action?.revision,
+                snapshotRevision = snapshotRevision,
+            ),
+            state = runtimeState?.toTraceStateSummary(
+                automaticIndexes = automaticIndexes,
+            ),
+            attributes = attributes,
+        )
+    }
+
+    private fun DominoMatchRuntimeState.toTraceStateSummary(
+        automaticIndexes: Set<Int>,
+    ): OnlineTraceStateSummary {
+        return OnlineTraceStateSummary(
+            roundNumber = roundNumber,
+            phase = phase.traceName(),
+            currentPlayerIndex = gameState.currentPlayerIndex,
+            boardPieceCount = gameState.board.size,
+            teamScores = gameState.teamScores,
+            playerClockMillis = playerClockMillis,
+            automaticPlayerIndexes = automaticIndexes.sorted(),
+        )
+    }
+
+    private fun DominoMatchPhase.traceName(): String {
+        return when (this) {
+            DominoMatchPhase.RoundIntro -> "ROUND_INTRO"
+
+            DominoMatchPhase.WaitingForLocalMove ->
+                "WAITING_FOR_LOCAL_MOVE"
+
+            is DominoMatchPhase.PresentingMove ->
+                "PRESENTING_MOVE"
+
+            is DominoMatchPhase.PresentingPass ->
+                "PRESENTING_PASS"
+
+            DominoMatchPhase.RoundSummary -> "ROUND_SUMMARY"
+
+            DominoMatchPhase.MatchFinished -> "MATCH_FINISHED"
+        }
+    }
+
+    private fun OnlinePlayerActionDto.traceAttributes(): Map<String, String> {
+        val attributes = mutableMapOf(
+            "actionType" to type.name,
+        )
+
+        move?.let { onlineMove ->
+            attributes["piece"] =
+                "${onlineMove.piece.left}-${onlineMove.piece.right}"
+            attributes["boardSide"] = onlineMove.side.name
+            attributes["flipped"] = onlineMove.flipped.toString()
+        }
+
+        return attributes
     }
 
     private fun buildPresentationBridge(
