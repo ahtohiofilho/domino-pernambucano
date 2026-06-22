@@ -7,14 +7,18 @@ import com.ahtohiofilho.dominopernambucano.domain.getPlayableMoves
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
+import com.ahtohiofilho.dominopernambucano.online.OnlineGameUiTraceReporter
+import com.ahtohiofilho.dominopernambucano.online.OnlineUiTraceContext
 
 @Composable
 fun DominoGameRoute(
     matchCoordinator: DominoMatchCoordinator,
     onBackToMenuClick: () -> Unit,
+    onlineUiTraceReporter: OnlineGameUiTraceReporter? = null,
 ) {
     val runtimeState by matchCoordinator.state.collectAsState()
     val gameState = runtimeState.gameState
+    val onlineUiTraceContext = onlineUiTraceReporter?.currentUiTraceContext()
 
     val localPlayer = gameState.players.getOrNull(
         runtimeState.localPlayerIndex,
@@ -46,8 +50,20 @@ fun DominoGameRoute(
             playerClockMillis = runtimeState.playerClockMillis,
             isTurnClockEnabled = runtimeState.clockPolicy.enabled,
             turnClockTotalMillis = runtimeState.clockPolicy.playerRoundTimeMillis,
+            onlinePresentationId = onlineUiTraceContext?.presentationId,
+            onlineSnapshotRevision = onlineUiTraceContext?.snapshotRevision,
         ),
         onBackToMenuClick = onBackToMenuClick,
+        onOnlineTrace = { type, presentationId, snapshotRevision, attributes ->
+            onlineUiTraceReporter?.traceUiEvent(
+                type = type,
+                traceContext = OnlineUiTraceContext(
+                    presentationId = presentationId,
+                    snapshotRevision = snapshotRevision,
+                ),
+                attributes = attributes,
+            )
+        },
         onRoundIntroFinished = {
             matchCoordinator.dispatch(
                 DominoMatchCommand.RoundIntroFinished,

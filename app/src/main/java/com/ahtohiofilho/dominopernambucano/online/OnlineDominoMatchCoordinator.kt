@@ -11,6 +11,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.decrementPlayerClockMillis
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceContext
+import com.ahtohiofilho.dominopernambucano.online.observability.createOnlineTraceStateFingerprint
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLevel
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
@@ -37,7 +38,7 @@ class OnlineDominoMatchCoordinator(
         Dispatchers.Main.immediate,
     private val traceLogger: OnlineTraceLogger =
         OnlineTraceLogger(),
-) : DominoMatchCoordinator {
+) : DominoMatchCoordinator, OnlineGameUiTraceReporter {
     private val coordinatorScope = CoroutineScope(
         SupervisorJob() + coroutineDispatcher,
     )
@@ -83,6 +84,55 @@ class OnlineDominoMatchCoordinator(
 
     override val currentState: DominoMatchRuntimeState
         get() = mutableState.value
+
+    override fun currentUiTraceContext(): OnlineUiTraceContext {
+        val activeRuntimeState = activePresentationRuntimeState
+
+        return OnlineUiTraceContext(
+            presentationId = activeRuntimeState?.let { queuedRuntimeState ->
+                createPresentationId(
+                    queuedRuntimeState = queuedRuntimeState,
+                )
+            },
+            snapshotRevision = activeRuntimeState?.revision ?: stableRevision,
+        )
+    }
+
+    override fun traceUiEvent(
+        type: OnlineTraceType,
+        traceContext: OnlineUiTraceContext,
+        attributes: Map<String, String>,
+    ) {
+        val activeRuntimeState = activePresentationRuntimeState
+        val resolvedTraceContext = if (
+            traceContext.snapshotRevision == null &&
+            traceContext.presentationId == null
+        ) {
+            currentUiTraceContext()
+        } else {
+            traceContext
+        }
+
+        val traceAttributes = buildMap {
+            putAll(attributes)
+            resolvedTraceContext.presentationId?.let { presentationId ->
+                put("presentationId", presentationId)
+            }
+        }
+
+        trace(
+            level = traceLevelForUiEvent(type),
+            source = OnlineTraceSource.CLIENT_UI,
+            type = type,
+            snapshotRevision = resolvedTraceContext.snapshotRevision
+                ?: activeRuntimeState?.revision
+                ?: stableRevision,
+            runtimeState = currentState,
+            automaticIndexes = activeRuntimeState?.automaticPlayerIndexes
+                ?: automaticPlayerIndexes,
+            attributes = traceAttributes,
+        )
+    }
 
     init {
         coordinatorScope.launch {
@@ -444,15 +494,39 @@ class OnlineDominoMatchCoordinator(
     ) {
         val runtimeState = stableRuntimeState
 
-        if (isLocalPlayerAutomatic() || inFlightAction != null) {
+        if (isLocalPlayerAutomatic()) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.PLAY_MOVE,
+                reason = "automatic_player",
+                move = command.move,
+            )
+            return
+        }
+
+        if (inFlightAction != null) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.PLAY_MOVE,
+                reason = "in_flight_action",
+                move = command.move,
+            )
             return
         }
 
         if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.PLAY_MOVE,
+                reason = "wrong_phase",
+                move = command.move,
+            )
             return
         }
 
         if (runtimeState.gameState.currentPlayerIndex != localPlayerIndex) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.PLAY_MOVE,
+                reason = "wrong_turn",
+                move = command.move,
+            )
             return
         }
 
@@ -470,7 +544,35 @@ class OnlineDominoMatchCoordinator(
     private fun submitPassTurn() {
         val runtimeState = stableRuntimeState
 
-        if (isLocalPlayerAutomatic() || inFlightAction != null) {
+        if (isLocalPlayerAutomatic()) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.PASS_TURN,
+                reason = "automatic_player",
+            )
+            return
+        }
+
+        if (inFlightAction != null) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.PASS_TURN,
+                reason = "in_flight_action",
+            )
+            return
+        }
+
+        if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.PASS_TURN,
+                reason = "wrong_phase",
+            )
+            return
+        }
+
+        if (runtimeState.gameState.currentPlayerIndex != localPlayerIndex) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.PASS_TURN,
+                reason = "wrong_turn",
+            )
             return
         }
 
@@ -486,6 +588,10 @@ class OnlineDominoMatchCoordinator(
 
     private fun submitStartNextRound() {
         if (inFlightAction != null) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.START_NEXT_ROUND,
+                reason = "in_flight_action",
+            )
             return
         }
 
@@ -501,6 +607,10 @@ class OnlineDominoMatchCoordinator(
 
     private fun submitStartNewMatch() {
         if (inFlightAction != null) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.START_NEW_MATCH,
+                reason = "in_flight_action",
+            )
             return
         }
 
@@ -518,6 +628,41 @@ class OnlineDominoMatchCoordinator(
         return localPlayerIndex in automaticPlayerIndexes
     }
 
+    private fun traceActionSuppressed(
+        actionType: OnlinePlayerActionTypeDto,
+        reason: String,
+        move: PlayableMove? = null,
+    ) {
+        val attributes = buildMap {
+            put("actionType", actionType.name)
+            put("reason", reason)
+            put("stableRevision", stableRevision.toString())
+            put("stablePhase", stableRuntimeState.phase.traceName())
+            put(
+                "currentPlayerIndex",
+                stableRuntimeState.gameState.currentPlayerIndex.toString(),
+            )
+            inFlightAction?.let { action ->
+                put("inFlightActionId", action.actionId)
+                put("inFlightActionRevision", action.revision.toString())
+                put("inFlightActionType", action.type.name)
+            }
+            move?.let { playableMove ->
+                put("piece", "${playableMove.piece.left}-${playableMove.piece.right}")
+                put("boardSide", playableMove.side.name)
+                put("flipped", playableMove.flipped.toString())
+            }
+        }
+
+        trace(
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.ACTION_SUPPRESSED,
+            snapshotRevision = stableRevision,
+            runtimeState = stableRuntimeState,
+            attributes = attributes,
+        )
+    }
+
     private fun clearInFlightActionIfConfirmed(
         revision: Long,
     ) {
@@ -532,6 +677,10 @@ class OnlineDominoMatchCoordinator(
         action: OnlinePlayerActionDto,
     ) {
         if (inFlightAction != null) {
+            traceActionSuppressed(
+                actionType = action.type,
+                reason = "in_flight_action",
+            )
             return
         }
 
@@ -604,6 +753,7 @@ class OnlineDominoMatchCoordinator(
     private fun trace(
         level: OnlineTraceLevel,
         type: OnlineTraceType,
+        source: OnlineTraceSource = OnlineTraceSource.CLIENT_COORDINATOR,
         action: OnlinePlayerActionDto? = null,
         snapshotRevision: Long? = null,
         runtimeState: DominoMatchRuntimeState? = null,
@@ -612,7 +762,7 @@ class OnlineDominoMatchCoordinator(
     ) {
         traceLogger.log(
             level = level,
-            source = OnlineTraceSource.CLIENT_COORDINATOR,
+            source = source,
             type = type,
             context = OnlineTraceContext(
                 roomId = roomId,
@@ -641,7 +791,34 @@ class OnlineDominoMatchCoordinator(
             teamScores = gameState.teamScores,
             playerClockMillis = playerClockMillis,
             automaticPlayerIndexes = automaticIndexes.sorted(),
+            stateFingerprint = createOnlineTraceStateFingerprint(
+                runtimeState = this,
+                automaticPlayerIndexes = automaticIndexes,
+            ),
         )
+    }
+
+    private fun createPresentationId(
+        queuedRuntimeState: QueuedOnlineRuntimeState,
+    ): String {
+        /*
+         * A revisão autoritativa é o identificador estável da apresentação.
+         * A fase do snapshot de destino pode já ser WaitingForLocalMove, pois
+         * a UI apresenta a transição entre o estado estável anterior e ele.
+         */
+        return "r${queuedRuntimeState.revision}"
+    }
+
+    private fun traceLevelForUiEvent(
+        type: OnlineTraceType,
+    ): OnlineTraceLevel {
+        return when (type) {
+            OnlineTraceType.UI_MOVE_INTENT_REJECTED,
+            OnlineTraceType.ANIMATION_CANCELLED,
+            OnlineTraceType.ANIMATION_FALLBACK_USED -> OnlineTraceLevel.WARN
+
+            else -> OnlineTraceLevel.DEBUG
+        }
     }
 
     private fun DominoMatchPhase.traceName(): String {

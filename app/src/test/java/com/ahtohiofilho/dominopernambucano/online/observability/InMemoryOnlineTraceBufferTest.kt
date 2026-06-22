@@ -65,6 +65,29 @@ class InMemoryOnlineTraceBufferTest {
     }
 
     @Test
+    fun logger_injects_the_client_session_id_when_the_event_context_does_not_set_one() {
+        val buffer = InMemoryOnlineTraceBuffer()
+        val logger = OnlineTraceLogger(
+            sink = buffer,
+            clientSessionId = "android-test-session",
+        )
+
+        logger.log(
+            level = OnlineTraceLevel.INFO,
+            source = OnlineTraceSource.CLIENT_UI,
+            type = OnlineTraceType.UI_MOVE_INTENT_RECEIVED,
+            context = OnlineTraceContext(
+                matchId = "match-1",
+            ),
+        )
+
+        assertEquals(
+            "android-test-session",
+            buffer.snapshot().single().event.context.clientSessionId,
+        )
+    }
+
+    @Test
     fun filters_entries_by_match_and_resets_cleanly() {
         val buffer = InMemoryOnlineTraceBuffer()
 

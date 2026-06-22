@@ -10,6 +10,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
+import com.ahtohiofilho.dominopernambucano.online.observability.AndroidLogcatOnlineTraceSink
+import com.ahtohiofilho.dominopernambucano.online.observability.CompositeOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
@@ -21,6 +23,7 @@ import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.PlayModeScreen
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineCreateRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
+import java.util.UUID
 
 @Composable
 fun DominoPernambucanoApp(
@@ -32,15 +35,30 @@ fun DominoPernambucanoApp(
         LocalDominoSessionCoordinator()
     }
 
+    val onlineTraceClientSessionId = remember {
+        "android-${UUID.randomUUID()}"
+    }
+
     val onlineTraceBuffer = remember {
         InMemoryOnlineTraceBuffer()
     }
 
-    val onlineTraceLogger = remember(
+    val onlineTraceSink = remember(
         onlineTraceBuffer,
     ) {
+        CompositeOnlineTraceSink(
+            onlineTraceBuffer,
+            AndroidLogcatOnlineTraceSink(),
+        )
+    }
+
+    val onlineTraceLogger = remember(
+        onlineTraceClientSessionId,
+        onlineTraceSink,
+    ) {
         OnlineTraceLogger(
-            sink = onlineTraceBuffer,
+            sink = onlineTraceSink,
+            clientSessionId = onlineTraceClientSessionId,
         )
     }
 
@@ -178,6 +196,7 @@ fun DominoPernambucanoApp(
                         DominoSessionCommand.BackToPlayModeSelection,
                     )
                 },
+                onlineUiTraceReporter = state.matchCoordinator,
             )
         }
     }

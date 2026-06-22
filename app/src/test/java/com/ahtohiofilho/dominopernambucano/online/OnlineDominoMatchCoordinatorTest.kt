@@ -11,6 +11,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -271,15 +272,108 @@ class OnlineDominoMatchCoordinatorTest {
                     repository.submittedActions.size,
                 )
 
+                val traceEntries = traceBuffer.snapshot()
+                val traceTypes = traceEntries.map { entry ->
+                    entry.event.type
+                }
+
+                assertTrue(
+                    "A ação local deveria ser preparada.",
+                    traceTypes.contains(OnlineTraceType.ACTION_PREPARED),
+                )
+
+                assertTrue(
+                    "A ação local deveria ser submetida.",
+                    traceTypes.contains(OnlineTraceType.ACTION_SUBMITTED),
+                )
+
+                assertTrue(
+                    "A segunda ação deveria ser suprimida enquanto a primeira está em voo.",
+                    traceTypes.contains(OnlineTraceType.ACTION_SUPPRESSED),
+                )
+
+                assertTrue(
+                    "A primeira ação deveria ser aceita pelo repositório de teste.",
+                    traceTypes.contains(OnlineTraceType.ACTION_ACCEPTED),
+                )
+
+                val suppressedAction = traceEntries.firstOrNull { entry ->
+                    entry.event.type == OnlineTraceType.ACTION_SUPPRESSED
+                }
+
                 assertEquals(
-                    listOf(
-                        OnlineTraceType.ACTION_PREPARED,
-                        OnlineTraceType.ACTION_SUBMITTED,
-                        OnlineTraceType.ACTION_ACCEPTED,
+                    "in_flight_action",
+                    requireNotNull(suppressedAction).event.attributes["reason"],
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun ui_trace_is_correlated_with_the_current_snapshot_and_state_fingerprint() =
+        runBlocking {
+            val openingPiece = DominoPiece(
+                left = 6,
+                right = 6,
+            )
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    listOf(openingPiece),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 7L,
+                ),
+            )
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 7L,
+                ),
+                coroutineDispatcher = Dispatchers.Unconfined,
+                traceLogger = OnlineTraceLogger(
+                    sink = traceBuffer,
+                ),
+            )
+
+            try {
+                coordinator.traceUiEvent(
+                    type = OnlineTraceType.ANIMATION_TARGET_PENDING,
+                    traceContext = coordinator.currentUiTraceContext(),
+                    attributes = mapOf(
+                        "animationKind" to "move",
                     ),
-                    traceBuffer.snapshot().map { entry ->
-                        entry.event.type
-                    },
+                )
+
+                val event = traceBuffer.snapshot().single().event
+
+                assertEquals(
+                    OnlineTraceSource.CLIENT_UI,
+                    event.source,
+                )
+                assertEquals(
+                    OnlineTraceType.ANIMATION_TARGET_PENDING,
+                    event.type,
+                )
+                assertEquals(
+                    7L,
+                    event.context.snapshotRevision,
+                )
+                assertTrue(
+                    event.state?.stateFingerprint?.isNotBlank() == true,
                 )
             } finally {
                 coordinator.dispose()

@@ -13,4 +13,6 @@ data class DominoGameUiState(
     val playerClockMillis: List<Long>,
     val isTurnClockEnabled: Boolean,
     val turnClockTotalMillis: Long,
+    val onlinePresentationId: String? = null,
+    val onlineSnapshotRevision: Long? = null,
 )

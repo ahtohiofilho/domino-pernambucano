@@ -57,6 +57,6 @@ class InMemoryOnlineTraceBuffer(
     }
 
     private companion object {
-        const val DEFAULT_CAPACITY = 400
+        const val DEFAULT_CAPACITY = 4_000
     }
 }

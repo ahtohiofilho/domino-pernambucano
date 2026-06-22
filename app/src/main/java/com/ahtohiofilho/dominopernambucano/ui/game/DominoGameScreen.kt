@@ -24,6 +24,7 @@ import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import kotlinx.coroutines.delay
@@ -32,6 +33,12 @@ import kotlinx.coroutines.delay
 fun DominoGameScreen(
     uiState: DominoGameUiState,
     onBackToMenuClick: () -> Unit,
+    onOnlineTrace: (
+        OnlineTraceType,
+        String?,
+        Long?,
+        Map<String, String>,
+    ) -> Unit = { _, _, _, _ -> },
     onRoundIntroFinished: () -> Unit,
     onLocalMoveSelected: (PlayableMove) -> Unit,
     onTurnClockTick: (Long) -> Unit,
@@ -74,6 +81,18 @@ fun DominoGameScreen(
     val isMatchFinishedPhase = uiState.phase == DominoMatchPhase.MatchFinished
 
     val shouldRevealRoundContext = isRoundSummaryPhase || isMatchFinishedPhase
+
+    fun traceUi(
+        type: OnlineTraceType,
+        attributes: Map<String, String> = emptyMap(),
+    ) {
+        onOnlineTrace(
+            type,
+            uiState.onlinePresentationId,
+            uiState.onlineSnapshotRevision,
+            attributes,
+        )
+    }
 
     val localVisualHandPieces = getVisualHandPieces(
         playerIndex = uiState.localPlayerIndex,
@@ -125,6 +144,41 @@ fun DominoGameScreen(
             delay(DominoMatchTiming.BotDecisionDelayMillis)
 
             onBotDecisionReady()
+        }
+    }
+
+    LaunchedEffect(
+        uiState.onlinePresentationId,
+        presentingMovePhase,
+        animatedMoveTargetInWindow,
+        localMoveSourcePositionInWindow,
+        localHandBoundsInWindow,
+        playerSeatBoundsInWindow,
+    ) {
+        val movePhase = presentingMovePhase ?: return@LaunchedEffect
+        val source = if (movePhase.playerIndex == uiState.localPlayerIndex) {
+            localMoveSourcePositionInWindow
+                ?: localHandBoundsInWindow?.centerOffset()
+        } else {
+            playerSeatBoundsInWindow[movePhase.playerIndex]?.centerOffset()
+        }
+        val target = animatedMoveTargetInWindow
+        val attributes = movePhase.move.toUiMoveTraceAttributes() + mapOf(
+            "animationKind" to "move",
+            "sourceAvailable" to (source != null).toString(),
+            "targetAvailable" to (target != null).toString(),
+        )
+
+        if (source == null || target == null) {
+            traceUi(
+                OnlineTraceType.ANIMATION_TARGET_PENDING,
+                attributes,
+            )
+        } else {
+            traceUi(
+                OnlineTraceType.ANIMATION_TARGET_READY,
+                attributes,
+            )
         }
     }
 
@@ -304,6 +358,16 @@ fun DominoGameScreen(
                     isWinner = shouldRevealRoundContext &&
                             gameState.roundWinnerPlayerIndex == uiState.localPlayerIndex,
                     onLocalMoveSelected = { move ->
+                        traceUi(
+                            OnlineTraceType.UI_MOVE_INTENT_RECEIVED,
+                            move.toUiMoveTraceAttributes() + mapOf(
+                                "inputMethod" to "tap",
+                                "phase" to uiState.phase.uiTracePhaseName(),
+                                "currentPlayerIndex" to
+                                        gameState.currentPlayerIndex.toString(),
+                            ),
+                        )
+
                         localMoveSourcePositionInWindow =
                             localHandBoundsInWindow?.centerOffset()
 
@@ -314,6 +378,15 @@ fun DominoGameScreen(
                     },
                     onPieceDragStart = { piece, positionInWindow ->
                         if (uiState.phase != DominoMatchPhase.WaitingForLocalMove) {
+                            traceUi(
+                                OnlineTraceType.UI_MOVE_INTENT_REJECTED,
+                                mapOf(
+                                    "inputMethod" to "drag",
+                                    "reason" to "wrong_phase",
+                                    "piece" to "${piece.left}-${piece.right}",
+                                    "phase" to uiState.phase.uiTracePhaseName(),
+                                ),
+                            )
                             clearDragState()
                             return@DominoLocalHand
                         }
@@ -321,6 +394,14 @@ fun DominoGameScreen(
                         val playableMoves = getPlayableMovesForPiece(piece)
 
                         if (playableMoves.isEmpty()) {
+                            traceUi(
+                                OnlineTraceType.UI_MOVE_INTENT_REJECTED,
+                                mapOf(
+                                    "inputMethod" to "drag",
+                                    "reason" to "not_playable",
+                                    "piece" to "${piece.left}-${piece.right}",
+                                ),
+                            )
                             clearDragState()
                             return@DominoLocalHand
                         }
@@ -371,8 +452,34 @@ fun DominoGameScreen(
                         )
 
                         if (selectedMove != null) {
+                            traceUi(
+                                OnlineTraceType.UI_MOVE_INTENT_RECEIVED,
+                                selectedMove.toUiMoveTraceAttributes() + mapOf(
+                                    "inputMethod" to "drag",
+                                    "phase" to uiState.phase.uiTracePhaseName(),
+                                    "currentPlayerIndex" to
+                                            gameState.currentPlayerIndex.toString(),
+                                ),
+                            )
                             localMoveSourcePositionInWindow =
                                 currentDragState.positionInWindow
+                        } else {
+                            traceUi(
+                                OnlineTraceType.UI_MOVE_INTENT_REJECTED,
+                                mapOf(
+                                    "inputMethod" to "drag",
+                                    "reason" to if (shouldCancelMove) {
+                                        "drag_cancelled_over_local_hand"
+                                    } else {
+                                        "drag_no_target"
+                                    },
+                                    "piece" to
+                                            "${currentDragState.piece.left}-${currentDragState.piece.right}",
+                                    "highlightedSide" to
+                                            (currentDragState.highlightedSide?.name
+                                                ?: "null"),
+                                ),
+                            )
                         }
 
                         clearDragState()
@@ -382,6 +489,17 @@ fun DominoGameScreen(
                         }
                     },
                     onPieceDragCancel = {
+                        draggedPieceState?.let { currentDragState ->
+                            traceUi(
+                                OnlineTraceType.UI_MOVE_INTENT_REJECTED,
+                                mapOf(
+                                    "inputMethod" to "drag",
+                                    "reason" to "drag_cancelled_by_system",
+                                    "piece" to
+                                            "${currentDragState.piece.left}-${currentDragState.piece.right}",
+                                ),
+                            )
+                        }
                         clearDragState()
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -415,6 +533,13 @@ fun DominoGameScreen(
                     playerIndex = presentingMovePhase.playerIndex,
                 ),
                 target = animatedMoveTargetInWindow,
+                presentationId = uiState.onlinePresentationId,
+                onAnimationTrace = { type, attributes ->
+                    traceUi(
+                        type = type,
+                        attributes = attributes,
+                    )
+                },
                 onAnimationFinished = onPresentationFinished,
             )
         }
@@ -422,6 +547,13 @@ fun DominoGameScreen(
         if (presentingPassPhase != null) {
             PassTurnKnockAnimationOverlay(
                 playerIndex = presentingPassPhase.playerIndex,
+                presentationId = uiState.onlinePresentationId,
+                onAnimationTrace = { type, attributes ->
+                    traceUi(
+                        type = type,
+                        attributes = attributes,
+                    )
+                },
                 onAnimationFinished = onPresentationFinished,
             )
         }
@@ -449,6 +581,25 @@ fun DominoGameScreen(
                 onBackToMenuClick = onBackToMenuClick,
             )
         }
+    }
+}
+
+private fun PlayableMove.toUiMoveTraceAttributes(): Map<String, String> {
+    return mapOf(
+        "piece" to "${piece.left}-${piece.right}",
+        "boardSide" to side.name,
+        "flipped" to flipped.toString(),
+    )
+}
+
+private fun DominoMatchPhase.uiTracePhaseName(): String {
+    return when (this) {
+        DominoMatchPhase.RoundIntro -> "ROUND_INTRO"
+        DominoMatchPhase.WaitingForLocalMove -> "WAITING_FOR_LOCAL_MOVE"
+        is DominoMatchPhase.PresentingMove -> "PRESENTING_MOVE"
+        is DominoMatchPhase.PresentingPass -> "PRESENTING_PASS"
+        DominoMatchPhase.RoundSummary -> "ROUND_SUMMARY"
+        DominoMatchPhase.MatchFinished -> "MATCH_FINISHED"
     }
 }
 

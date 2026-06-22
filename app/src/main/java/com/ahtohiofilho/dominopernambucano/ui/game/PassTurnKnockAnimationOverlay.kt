@@ -22,6 +22,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -46,6 +48,8 @@ private const val KNOCK_PLAYER_RIGHT_SCREEN_FRACTION = 0.20f
 @Composable
 fun PassTurnKnockAnimationOverlay(
     playerIndex: Int,
+    presentationId: String?,
+    onAnimationTrace: (OnlineTraceType, Map<String, String>) -> Unit,
     modifier: Modifier = Modifier,
     onAnimationFinished: () -> Unit,
 ) {
@@ -65,99 +69,135 @@ fun PassTurnKnockAnimationOverlay(
         mutableIntStateOf(0)
     }
 
-    LaunchedEffect(playerIndex) {
-        offsetAnim.snapTo(0f)
-        rotationAnim.snapTo(0f)
-        alphaAnim.snapTo(0f)
-        frameIndex = 0
+    LaunchedEffect(
+        presentationId,
+        playerIndex,
+    ) {
+        val startedAtNanos = System.nanoTime()
 
-        alphaAnim.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = KNOCK_APPEAR_MILLIS,
-                easing = FastOutSlowInEasing,
+        onAnimationTrace(
+            OnlineTraceType.ANIMATION_STARTED,
+            mapOf(
+                "animationKind" to "pass",
+                "playerIndex" to playerIndex.toString(),
+                "expectedDurationMillis" to expectedKnockDurationMillis().toString(),
             ),
         )
 
-        delay(KNOCK_PRE_KNOCK_HOLD_MILLIS)
-
-        suspend fun knockOnce() {
+        try {
+            offsetAnim.snapTo(0f)
+            rotationAnim.snapTo(0f)
+            alphaAnim.snapTo(0f)
             frameIndex = 0
 
-            offsetAnim.animateTo(
-                targetValue = 0f,
+            alphaAnim.animateTo(
+                targetValue = 1f,
                 animationSpec = tween(
-                    durationMillis = KNOCK_PREPARE_MILLIS,
+                    durationMillis = KNOCK_APPEAR_MILLIS,
                     easing = FastOutSlowInEasing,
                 ),
             )
 
-            frameIndex = 1
+            delay(KNOCK_PRE_KNOCK_HOLD_MILLIS)
 
-            val offsetJob = launch {
-                offsetAnim.animateTo(
-                    targetValue = KNOCK_OFFSET_PX,
-                    animationSpec = tween(
-                        durationMillis = KNOCK_IMPACT_MILLIS,
-                        easing = FastOutSlowInEasing,
-                    ),
-                )
-            }
+            suspend fun knockOnce() {
+                frameIndex = 0
 
-            val rotationJob = launch {
-                rotationAnim.animateTo(
-                    targetValue = KNOCK_ROTATION_DEGREES,
-                    animationSpec = tween(
-                        durationMillis = KNOCK_IMPACT_MILLIS,
-                        easing = FastOutSlowInEasing,
-                    ),
-                )
-            }
-
-            offsetJob.join()
-            rotationJob.join()
-
-            frameIndex = 0
-
-            val returnOffsetJob = launch {
                 offsetAnim.animateTo(
                     targetValue = 0f,
                     animationSpec = tween(
-                        durationMillis = KNOCK_RETURN_MILLIS,
+                        durationMillis = KNOCK_PREPARE_MILLIS,
                         easing = FastOutSlowInEasing,
                     ),
                 )
+
+                frameIndex = 1
+
+                val offsetJob = launch {
+                    offsetAnim.animateTo(
+                        targetValue = KNOCK_OFFSET_PX,
+                        animationSpec = tween(
+                            durationMillis = KNOCK_IMPACT_MILLIS,
+                            easing = FastOutSlowInEasing,
+                        ),
+                    )
+                }
+
+                val rotationJob = launch {
+                    rotationAnim.animateTo(
+                        targetValue = KNOCK_ROTATION_DEGREES,
+                        animationSpec = tween(
+                            durationMillis = KNOCK_IMPACT_MILLIS,
+                            easing = FastOutSlowInEasing,
+                        ),
+                    )
+                }
+
+                offsetJob.join()
+                rotationJob.join()
+
+                frameIndex = 0
+
+                val returnOffsetJob = launch {
+                    offsetAnim.animateTo(
+                        targetValue = 0f,
+                        animationSpec = tween(
+                            durationMillis = KNOCK_RETURN_MILLIS,
+                            easing = FastOutSlowInEasing,
+                        ),
+                    )
+                }
+
+                val returnRotationJob = launch {
+                    rotationAnim.animateTo(
+                        targetValue = 0f,
+                        animationSpec = tween(
+                            durationMillis = KNOCK_RETURN_MILLIS,
+                            easing = FastOutSlowInEasing,
+                        ),
+                    )
+                }
+
+                returnOffsetJob.join()
+                returnRotationJob.join()
             }
 
-            val returnRotationJob = launch {
-                rotationAnim.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(
-                        durationMillis = KNOCK_RETURN_MILLIS,
-                        easing = FastOutSlowInEasing,
-                    ),
-                )
-            }
+            knockOnce()
+            delay(KNOCK_BETWEEN_MILLIS)
+            knockOnce()
 
-            returnOffsetJob.join()
-            returnRotationJob.join()
+            delay(KNOCK_HOLD_AFTER_MILLIS)
+
+            alphaAnim.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(
+                    durationMillis = KNOCK_END_MILLIS,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+
+            onAnimationTrace(
+                OnlineTraceType.ANIMATION_FINISHED,
+                mapOf(
+                    "animationKind" to "pass",
+                    "playerIndex" to playerIndex.toString(),
+                    "durationMillis" to elapsedKnockMillis(startedAtNanos).toString(),
+                ),
+            )
+
+            onAnimationFinished()
+        } catch (error: CancellationException) {
+            onAnimationTrace(
+                OnlineTraceType.ANIMATION_CANCELLED,
+                mapOf(
+                    "animationKind" to "pass",
+                    "playerIndex" to playerIndex.toString(),
+                    "durationMillis" to elapsedKnockMillis(startedAtNanos).toString(),
+                ),
+            )
+
+            throw error
         }
-
-        knockOnce()
-        delay(KNOCK_BETWEEN_MILLIS)
-        knockOnce()
-
-        delay(KNOCK_HOLD_AFTER_MILLIS)
-
-        alphaAnim.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(
-                durationMillis = KNOCK_END_MILLIS,
-                easing = FastOutSlowInEasing,
-            ),
-        )
-
-        onAnimationFinished()
     }
 
     BoxWithConstraints(
@@ -207,6 +247,28 @@ fun PassTurnKnockAnimationOverlay(
                 },
         )
     }
+}
+
+private fun expectedKnockDurationMillis(): Long {
+    val singleKnockMillis =
+        KNOCK_PREPARE_MILLIS + KNOCK_IMPACT_MILLIS + KNOCK_RETURN_MILLIS
+
+    return (
+        KNOCK_APPEAR_MILLIS +
+                KNOCK_PRE_KNOCK_HOLD_MILLIS +
+                singleKnockMillis +
+                KNOCK_BETWEEN_MILLIS +
+                singleKnockMillis +
+                KNOCK_HOLD_AFTER_MILLIS +
+                KNOCK_END_MILLIS
+        ).toLong()
+}
+
+private fun elapsedKnockMillis(
+    startedAtNanos: Long,
+): Long {
+    return ((System.nanoTime() - startedAtNanos) / 1_000_000L)
+        .coerceAtLeast(0L)
 }
 
 private fun getKnockFrameRes(

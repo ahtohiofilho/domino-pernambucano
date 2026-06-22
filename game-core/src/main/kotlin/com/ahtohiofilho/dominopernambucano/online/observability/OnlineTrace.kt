@@ -14,6 +14,7 @@ enum class OnlineTraceLevel {
 
 @Serializable
 enum class OnlineTraceSource {
+    CLIENT_UI,
     CLIENT_COORDINATOR,
     CLIENT_REPOSITORY,
     SERVER_STORE,
@@ -27,11 +28,15 @@ enum class OnlineTraceType {
     ROOM_JOINED,
     ROOM_LEFT,
 
+    UI_MOVE_INTENT_RECEIVED,
+    UI_MOVE_INTENT_REJECTED,
+
     ACTION_PREPARED,
     ACTION_SUBMITTED,
     ACTION_ACCEPTED,
     ACTION_REJECTED,
     ACTION_DEDUPLICATED,
+    ACTION_SUPPRESSED,
 
     SNAPSHOT_REQUESTED,
     SNAPSHOT_RECEIVED,
@@ -46,6 +51,13 @@ enum class OnlineTraceType {
     PRESENTATION_STARTED,
     PRESENTATION_FINISHED,
     STABLE_STATE_PROMOTED,
+
+    ANIMATION_TARGET_PENDING,
+    ANIMATION_TARGET_READY,
+    ANIMATION_STARTED,
+    ANIMATION_FINISHED,
+    ANIMATION_CANCELLED,
+    ANIMATION_FALLBACK_USED,
 
     AUTHORITATIVE_TICK,
     CLOCK_EXPIRED,
@@ -83,8 +95,8 @@ data class OnlineTraceStateSummary(
     val automaticPlayerIndexes: List<Int>,
 
     /*
-     * Será preenchido no próximo lote por uma função determinística.
-     * Ele permitirá comparar cliente e servidor sem salvar o snapshot bruto.
+     * Hash determinístico do estado lógico. Ele permite comparar cliente e
+     * servidor sem registrar o snapshot bruto ou nomes de jogadores.
      */
     val stateFingerprint: String? = null,
 )
@@ -128,11 +140,24 @@ object NoOpOnlineTraceSink : OnlineTraceSink {
     ) = Unit
 }
 
+class CompositeOnlineTraceSink(
+    private vararg val sinks: OnlineTraceSink,
+) : OnlineTraceSink {
+    override fun record(
+        event: OnlineTraceEvent,
+    ) {
+        sinks.forEach { sink ->
+            sink.record(event)
+        }
+    }
+}
+
 class OnlineTraceLogger(
     private val sink: OnlineTraceSink = NoOpOnlineTraceSink,
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
+    private val clientSessionId: String? = null,
 ) {
     fun log(
         level: OnlineTraceLevel,
@@ -142,13 +167,23 @@ class OnlineTraceLogger(
         state: OnlineTraceStateSummary? = null,
         attributes: Map<String, String> = emptyMap(),
     ) {
+        val resolvedContext = if (
+            context.clientSessionId == null && clientSessionId != null
+        ) {
+            context.copy(
+                clientSessionId = clientSessionId,
+            )
+        } else {
+            context
+        }
+
         sink.record(
             OnlineTraceEvent(
                 occurredAtEpochMillis = nowEpochMillis(),
                 level = level,
                 source = source,
                 type = type,
-                context = context,
+                context = resolvedContext,
                 state = state,
                 attributes = attributes,
             )

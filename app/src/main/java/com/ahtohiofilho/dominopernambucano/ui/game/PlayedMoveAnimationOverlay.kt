@@ -13,6 +13,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -25,20 +27,59 @@ fun PlayedMoveAnimationOverlay(
     move: PlayableMove,
     sourcePositionInWindow: Offset?,
     target: DominoMoveTargetInWindow?,
+    presentationId: String?,
+    onAnimationTrace: (OnlineTraceType, Map<String, String>) -> Unit,
     onAnimationFinished: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val source = sourcePositionInWindow
     val moveTarget = target
+    val moveAttributes = move.toAnimationTraceAttributes()
 
     if (source == null || moveTarget == null) {
         LaunchedEffect(
+            presentationId,
             move,
             sourcePositionInWindow,
             target,
         ) {
-            delay(MISSING_TARGET_FALLBACK_MILLIS)
-            onAnimationFinished()
+            val startedAtNanos = System.nanoTime()
+
+            onAnimationTrace(
+                OnlineTraceType.ANIMATION_FALLBACK_USED,
+                moveAttributes + mapOf(
+                    "animationKind" to "move",
+                    "fallbackMillis" to MISSING_TARGET_FALLBACK_MILLIS.toString(),
+                    "sourceAvailable" to (source != null).toString(),
+                    "targetAvailable" to (moveTarget != null).toString(),
+                ),
+            )
+
+            try {
+                delay(MISSING_TARGET_FALLBACK_MILLIS)
+
+                onAnimationTrace(
+                    OnlineTraceType.ANIMATION_FINISHED,
+                    moveAttributes + mapOf(
+                        "animationKind" to "move",
+                        "completion" to "fallback",
+                        "durationMillis" to elapsedMillisSince(startedAtNanos).toString(),
+                    ),
+                )
+
+                onAnimationFinished()
+            } catch (error: CancellationException) {
+                onAnimationTrace(
+                    OnlineTraceType.ANIMATION_CANCELLED,
+                    moveAttributes + mapOf(
+                        "animationKind" to "move",
+                        "stage" to "fallback_wait",
+                        "durationMillis" to elapsedMillisSince(startedAtNanos).toString(),
+                    ),
+                )
+
+                throw error
+            }
         }
 
         return
@@ -55,6 +96,7 @@ fun PlayedMoveAnimationOverlay(
     }
 
     val animatedX = remember(
+        presentationId,
         move,
         source,
         moveTarget,
@@ -63,6 +105,7 @@ fun PlayedMoveAnimationOverlay(
     }
 
     val animatedY = remember(
+        presentationId,
         move,
         source,
         moveTarget,
@@ -71,6 +114,7 @@ fun PlayedMoveAnimationOverlay(
     }
 
     val animatedRotation = remember(
+        presentationId,
         move,
         source,
         moveTarget,
@@ -83,49 +127,82 @@ fun PlayedMoveAnimationOverlay(
     }
 
     LaunchedEffect(
+        presentationId,
         move,
         source,
         moveTarget,
     ) {
-        animatedX.snapTo(source.x)
-        animatedY.snapTo(source.y)
-        animatedRotation.snapTo(0f)
+        val startedAtNanos = System.nanoTime()
 
-        val xJob = launch {
-            animatedX.animateTo(
-                targetValue = moveTarget.positionInWindow.x,
-                animationSpec = tween(
-                    durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
-                    easing = FastOutSlowInEasing,
+        onAnimationTrace(
+            OnlineTraceType.ANIMATION_STARTED,
+            moveAttributes + mapOf(
+                "animationKind" to "move",
+                "expectedDurationMillis" to MOVE_ANIMATION_DURATION_MILLIS.toString(),
+            ),
+        )
+
+        try {
+            animatedX.snapTo(source.x)
+            animatedY.snapTo(source.y)
+            animatedRotation.snapTo(0f)
+
+            val xJob = launch {
+                animatedX.animateTo(
+                    targetValue = moveTarget.positionInWindow.x,
+                    animationSpec = tween(
+                        durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
+                        easing = FastOutSlowInEasing,
+                    ),
+                )
+            }
+
+            val yJob = launch {
+                animatedY.animateTo(
+                    targetValue = moveTarget.positionInWindow.y,
+                    animationSpec = tween(
+                        durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
+                        easing = FastOutSlowInEasing,
+                    ),
+                )
+            }
+
+            val rotationJob = launch {
+                animatedRotation.animateTo(
+                    targetValue = moveTarget.rotationDegrees,
+                    animationSpec = tween(
+                        durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
+                        easing = FastOutSlowInEasing,
+                    ),
+                )
+            }
+
+            xJob.join()
+            yJob.join()
+            rotationJob.join()
+
+            onAnimationTrace(
+                OnlineTraceType.ANIMATION_FINISHED,
+                moveAttributes + mapOf(
+                    "animationKind" to "move",
+                    "completion" to "animated",
+                    "durationMillis" to elapsedMillisSince(startedAtNanos).toString(),
                 ),
             )
-        }
 
-        val yJob = launch {
-            animatedY.animateTo(
-                targetValue = moveTarget.positionInWindow.y,
-                animationSpec = tween(
-                    durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
-                    easing = FastOutSlowInEasing,
+            onAnimationFinished()
+        } catch (error: CancellationException) {
+            onAnimationTrace(
+                OnlineTraceType.ANIMATION_CANCELLED,
+                moveAttributes + mapOf(
+                    "animationKind" to "move",
+                    "stage" to "running",
+                    "durationMillis" to elapsedMillisSince(startedAtNanos).toString(),
                 ),
             )
+
+            throw error
         }
-
-        val rotationJob = launch {
-            animatedRotation.animateTo(
-                targetValue = moveTarget.rotationDegrees,
-                animationSpec = tween(
-                    durationMillis = MOVE_ANIMATION_DURATION_MILLIS,
-                    easing = FastOutSlowInEasing,
-                ),
-            )
-        }
-
-        xJob.join()
-        yJob.join()
-        rotationJob.join()
-
-        onAnimationFinished()
     }
 
     DominoPieceView(
@@ -143,6 +220,21 @@ fun PlayedMoveAnimationOverlay(
             )
         },
     )
+}
+
+private fun PlayableMove.toAnimationTraceAttributes(): Map<String, String> {
+    return mapOf(
+        "piece" to "${piece.left}-${piece.right}",
+        "boardSide" to side.name,
+        "flipped" to flipped.toString(),
+    )
+}
+
+private fun elapsedMillisSince(
+    startedAtNanos: Long,
+): Long {
+    return ((System.nanoTime() - startedAtNanos) / 1_000_000L)
+        .coerceAtLeast(0L)
 }
 
 private fun getVisualPieceForPlayedMove(

@@ -26,6 +26,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.applyOnlineRoomPlayerNames
 import com.ahtohiofilho.dominopernambucano.online.determineOnlineNextPhase
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceContext
+import com.ahtohiofilho.dominopernambucano.online.observability.createOnlineTraceStateFingerprint
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLevel
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
@@ -1318,6 +1319,10 @@ class InMemoryOnlineServerStore(
             teamScores = gameState.teamScores,
             playerClockMillis = playerClockMillis,
             automaticPlayerIndexes = automaticPlayerIndexes.sorted(),
+            stateFingerprint = createOnlineTraceStateFingerprint(
+                runtimeState = this,
+                automaticPlayerIndexes = automaticPlayerIndexes,
+            ),
         )
     }
 
