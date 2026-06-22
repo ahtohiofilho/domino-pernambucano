@@ -1,5 +1,8 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchResultDto
+
 interface RemoteOnlineApiClient {
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
@@ -12,6 +15,15 @@ interface RemoteOnlineApiClient {
     suspend fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto
+
+    suspend fun submitTraceBatch(
+        batch: OnlineTraceBatchDto,
+    ): OnlineTraceBatchResultDto {
+        return OnlineTraceBatchResultDto(
+            accepted = true,
+            storedEntryCount = batch.entries.size,
+        )
+    }
 
     suspend fun fetchRoomSnapshot(
         roomId: String,

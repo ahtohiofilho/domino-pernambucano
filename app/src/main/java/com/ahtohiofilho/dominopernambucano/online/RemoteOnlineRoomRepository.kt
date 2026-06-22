@@ -1,5 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchResultDto
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceContext
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLevel
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
@@ -300,6 +302,41 @@ class RemoteOnlineRoomRepository(
 
                     rejectedResult
                 },
+            )
+        }
+    }
+
+    override suspend fun submitTraceBatch(
+        batch: OnlineTraceBatchDto,
+    ): OnlineTraceBatchResultDto {
+        if (batch.entries.isEmpty()) {
+            return OnlineTraceBatchResultDto(
+                accepted = true,
+            )
+        }
+
+        val client = apiClient ?: return OnlineTraceBatchResultDto(
+            accepted = false,
+            reason = getUnavailableBackendReason(),
+        )
+
+        return try {
+            client.submitTraceBatch(
+                batch = batch,
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            /*
+             * O canal de diagnóstico não pode realimentar o próprio logger
+             * nem interferir no fluxo da partida. O uploader manterá o lote
+             * pendente para uma tentativa posterior.
+             */
+            OnlineTraceBatchResultDto(
+                accepted = false,
+                reason = error.toOnlineFailureReason(
+                    fallback = "Falha ao enviar rastreamento online.",
+                ),
             )
         }
     }

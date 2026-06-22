@@ -1,5 +1,8 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchResultDto
+
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -27,6 +30,15 @@ interface OnlineRoomRepository {
     suspend fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto
+
+    suspend fun submitTraceBatch(
+        batch: OnlineTraceBatchDto,
+    ): OnlineTraceBatchResultDto {
+        return OnlineTraceBatchResultDto(
+            accepted = true,
+            storedEntryCount = batch.entries.size,
+        )
+    }
 
     suspend fun leaveRoom()
 }

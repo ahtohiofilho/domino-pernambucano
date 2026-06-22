@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +14,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
 import com.ahtohiofilho.dominopernambucano.online.observability.AndroidLogcatOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.CompositeOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchUploader
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
@@ -69,6 +71,32 @@ fun DominoPernambucanoApp(
         OnlineRepositoryFactory.create(
             config = onlineAppConfig.backendConfig,
             traceLogger = onlineTraceLogger,
+        )
+    }
+
+    val onlineTraceBatchUploader = remember(
+        onlineRoomRepository,
+        onlineTraceBuffer,
+    ) {
+        OnlineTraceBatchUploader(
+            repository = onlineRoomRepository,
+            traceBuffer = onlineTraceBuffer,
+        )
+    }
+
+    val onlineTraceEntries by onlineTraceBuffer.entries.collectAsState()
+    val onlineMatchSnapshot by onlineRoomRepository.matchSnapshot.collectAsState()
+
+    LaunchedEffect(
+        onlineTraceEntries,
+        onlineMatchSnapshot?.roomId,
+        onlineMatchSnapshot?.matchId,
+    ) {
+        val snapshot = onlineMatchSnapshot ?: return@LaunchedEffect
+
+        onlineTraceBatchUploader.flushPendingEntries(
+            roomId = snapshot.roomId,
+            matchId = snapshot.matchId,
         )
     }
 

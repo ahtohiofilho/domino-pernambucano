@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.server
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
@@ -13,6 +14,7 @@ import io.ktor.server.routing.post
 
 fun Route.onlineServerRoutes(
     store: InMemoryOnlineServerStore,
+    traceArchive: OnlineTraceArchive,
 ) {
     post("/${OnlineRemoteRoutes.CREATE_ROOM}") {
         val request = call.receive<CreateOnlineRoomRequestDto>()
@@ -40,6 +42,16 @@ fun Route.onlineServerRoutes(
         call.respond(
             store.submitAction(
                 action = action,
+            ),
+        )
+    }
+
+    post("/${OnlineRemoteRoutes.SUBMIT_TRACE_BATCH}") {
+        val batch = call.receive<OnlineTraceBatchDto>()
+
+        call.respond(
+            traceArchive.recordClientBatch(
+                batch = batch,
             ),
         )
     }

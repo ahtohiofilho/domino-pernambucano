@@ -4,6 +4,7 @@ object OnlineRemoteRoutes {
     const val CREATE_ROOM = "rooms"
     const val JOIN_ROOM = "rooms/join"
     const val SUBMIT_ACTION = "matches/actions"
+    const val SUBMIT_TRACE_BATCH = "traces"
 
     fun roomSnapshot(
         roomId: String,

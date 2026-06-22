@@ -6,7 +6,6 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStarted
 import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
-import io.ktor.server.application.log
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
@@ -45,12 +44,9 @@ fun main() {
 }
 
 fun Application.module() {
+    val traceArchive = OnlineTraceArchive()
     val traceLogger = OnlineTraceLogger(
-        sink = ServerOnlineTraceSink(
-            emit = { serializedEvent ->
-                log.info(serializedEvent)
-            },
-        ),
+        sink = traceArchive,
     )
 
     module(
@@ -59,11 +55,13 @@ fun Application.module() {
                 shouldAutoFillDevelopmentBots(),
             traceLogger = traceLogger,
         ),
+        traceArchive = traceArchive,
     )
 }
 
 fun Application.module(
     store: InMemoryOnlineServerStore,
+    traceArchive: OnlineTraceArchive = OnlineTraceArchive(),
 ) {
     installAuthoritativeMatchTicker(
         store = store,
@@ -89,6 +87,7 @@ fun Application.module(
 
         onlineServerRoutes(
             store = store,
+            traceArchive = traceArchive,
         )
     }
 }

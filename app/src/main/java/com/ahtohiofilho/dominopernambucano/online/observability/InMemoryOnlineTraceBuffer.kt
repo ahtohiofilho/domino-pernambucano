@@ -51,6 +51,19 @@ class InMemoryOnlineTraceBuffer(
     }
 
     @Synchronized
+    fun entriesForRoomOrMatch(
+        roomId: String,
+        matchId: String,
+    ): List<OnlineTraceEntry> {
+        return mutableEntries.value.filter { entry ->
+            val context = entry.event.context
+
+            context.roomId == roomId ||
+                    context.matchId == matchId
+        }
+    }
+
+    @Synchronized
     fun clear() {
         mutableEntries.value = emptyList()
         nextSequence = 1L

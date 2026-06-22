@@ -4,6 +4,14 @@ import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchResultDto
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceContext
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceEntry
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceEvent
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLevel
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -215,6 +223,61 @@ class KtorRemoteOnlineApiClientTest {
                         method = HttpMethod.Get.value,
                         path = "/rooms/room-1",
                     )
+                ),
+                recordedRequests,
+            )
+        }
+
+    @Test
+    fun submit_trace_batch_posts_to_traces_and_decodes_result() =
+        runBlocking {
+            val recordedRequests = mutableListOf<RecordedRequest>()
+            val apiClient = createApiClient(
+                responsesByPath = mapOf(
+                    "/traces" to """
+                        {
+                          "accepted": true,
+                          "storedEntryCount": 1
+                        }
+                    """.trimIndent(),
+                ),
+                recordedRequests = recordedRequests,
+            )
+
+            val result = apiClient.submitTraceBatch(
+                batch = OnlineTraceBatchDto(
+                    entries = listOf(
+                        OnlineTraceEntry(
+                            sequence = 1L,
+                            event = OnlineTraceEvent(
+                                occurredAtEpochMillis = 1_000L,
+                                level = OnlineTraceLevel.INFO,
+                                source = OnlineTraceSource.CLIENT_UI,
+                                type = OnlineTraceType.ANIMATION_FINISHED,
+                                context = OnlineTraceContext(
+                                    clientSessionId = "android-1",
+                                    roomId = "room-1",
+                                    matchId = "match-1",
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+
+            assertEquals(
+                OnlineTraceBatchResultDto(
+                    accepted = true,
+                    storedEntryCount = 1,
+                ),
+                result,
+            )
+            assertEquals(
+                listOf(
+                    RecordedRequest(
+                        method = HttpMethod.Post.value,
+                        path = "/traces",
+                    ),
                 ),
                 recordedRequests,
             )

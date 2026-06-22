@@ -1,5 +1,8 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchResultDto
+
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.android.Android
@@ -59,6 +62,18 @@ class KtorRemoteOnlineApiClient(
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             setBody(action)
+        }.body()
+    }
+
+    override suspend fun submitTraceBatch(
+        batch: OnlineTraceBatchDto,
+    ): OnlineTraceBatchResultDto {
+        return httpClient.post(
+            urlString = endpoint(OnlineRemoteRoutes.SUBMIT_TRACE_BATCH),
+        ) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            setBody(batch)
         }.body()
     }
 
