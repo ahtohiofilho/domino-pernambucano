@@ -136,11 +136,7 @@ class OnlineDominoMatchCoordinator(
 
     init {
         coordinatorScope.launch {
-            repository.matchSnapshot.collect { snapshot ->
-                if (snapshot == null) {
-                    return@collect
-                }
-
+            repository.matchSnapshotEvents.collect { snapshot ->
                 if (snapshot.roomId != roomId || snapshot.matchId != matchId) {
                     trace(
                         level = OnlineTraceLevel.WARN,
@@ -345,14 +341,11 @@ class OnlineDominoMatchCoordinator(
         when (val phase = currentState.phase) {
             is DominoMatchPhase.PresentingMove -> Unit
 
-            is DominoMatchPhase.PresentingPass -> {
-                if (
-                    phase.playerIndex == localPlayerIndex &&
-                    !isLocalPlayerAutomatic()
-                ) {
-                    submitPassTurn()
-                }
-            }
+            /*
+             * O passe obrigatÃ³rio Ã© reduzido pelo servidor no ticker
+             * autoritativo. O cliente encerra apenas a apresentaÃ§Ã£o visual.
+             */
+            is DominoMatchPhase.PresentingPass -> Unit
 
             else -> Unit
         }
@@ -536,51 +529,6 @@ class OnlineDominoMatchCoordinator(
             playerId = localPlayerId,
             revision = stableRevision,
             move = command.move,
-        )
-
-        submitAction(action)
-    }
-
-    private fun submitPassTurn() {
-        val runtimeState = stableRuntimeState
-
-        if (isLocalPlayerAutomatic()) {
-            traceActionSuppressed(
-                actionType = OnlinePlayerActionTypeDto.PASS_TURN,
-                reason = "automatic_player",
-            )
-            return
-        }
-
-        if (inFlightAction != null) {
-            traceActionSuppressed(
-                actionType = OnlinePlayerActionTypeDto.PASS_TURN,
-                reason = "in_flight_action",
-            )
-            return
-        }
-
-        if (runtimeState.phase != DominoMatchPhase.WaitingForLocalMove) {
-            traceActionSuppressed(
-                actionType = OnlinePlayerActionTypeDto.PASS_TURN,
-                reason = "wrong_phase",
-            )
-            return
-        }
-
-        if (runtimeState.gameState.currentPlayerIndex != localPlayerIndex) {
-            traceActionSuppressed(
-                actionType = OnlinePlayerActionTypeDto.PASS_TURN,
-                reason = "wrong_turn",
-            )
-            return
-        }
-
-        val action = createOnlinePassTurnAction(
-            roomId = roomId,
-            matchId = matchId,
-            playerId = localPlayerId,
-            revision = stableRevision,
         )
 
         submitAction(action)

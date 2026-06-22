@@ -17,6 +17,12 @@ object OnlineRemoteRoutes {
         return "matches/${matchId.toRoutePathSegment()}"
     }
 
+    fun matchSnapshotUpdates(
+        matchId: String,
+    ): String {
+        return "matches/${matchId.toRoutePathSegment()}/updates"
+    }
+
     private fun String.toRoutePathSegment(): String {
         return trim().trim('/')
     }

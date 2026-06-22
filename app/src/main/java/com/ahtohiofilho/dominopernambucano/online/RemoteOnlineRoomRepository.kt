@@ -12,8 +12,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -48,6 +51,15 @@ class RemoteOnlineRoomRepository(
     private val mutableMatchSnapshot =
         MutableStateFlow<OnlineMatchSnapshotDto?>(null)
 
+    /*
+     * As revisões que precisam ser apresentadas seguem por uma via sequencial.
+     * O StateFlow permanece como leitura do último estado autoritativo.
+     */
+    private val mutableMatchSnapshotEvents =
+        MutableSharedFlow<OnlineMatchSnapshotDto>(
+            extraBufferCapacity = 256,
+        )
+
     private var pollingJob: Job? = null
     private var pollingRoomId: String? = null
 
@@ -56,6 +68,9 @@ class RemoteOnlineRoomRepository(
 
     override val matchSnapshot: StateFlow<OnlineMatchSnapshotDto?> =
         mutableMatchSnapshot.asStateFlow()
+
+    override val matchSnapshotEvents: Flow<OnlineMatchSnapshotDto> =
+        mutableMatchSnapshotEvents.asSharedFlow()
 
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
@@ -575,6 +590,39 @@ class RemoteOnlineRoomRepository(
         trigger: String,
         playerId: String?,
     ) {
+        val currentSnapshot = mutableMatchSnapshot.value
+
+        if (
+            currentSnapshot == null ||
+            currentSnapshot.matchId != matchId
+        ) {
+            fetchAndPublishLatestMatchSnapshot(
+                client = client,
+                roomId = roomId,
+                matchId = matchId,
+                trigger = trigger,
+                playerId = playerId,
+            )
+            return
+        }
+
+        fetchAndPublishMatchSnapshotsAfter(
+            client = client,
+            roomId = roomId,
+            matchId = matchId,
+            afterRevision = currentSnapshot.revision,
+            trigger = trigger,
+            playerId = playerId,
+        )
+    }
+
+    private suspend fun fetchAndPublishLatestMatchSnapshot(
+        client: RemoteOnlineApiClient,
+        roomId: String,
+        matchId: String,
+        trigger: String,
+        playerId: String?,
+    ) {
         val startedAtEpochMillis = nowEpochMillis()
 
         trace(
@@ -589,9 +637,9 @@ class RemoteOnlineRoomRepository(
             ),
         )
 
-        runCatching {
-            client.fetchMatchSnapshot(matchId)
-        }.onSuccess { match ->
+        try {
+            val match = client.fetchMatchSnapshot(matchId)
+
             trace(
                 level = OnlineTraceLevel.DEBUG,
                 type = OnlineTraceType.SNAPSHOT_RECEIVED,
@@ -613,9 +661,109 @@ class RemoteOnlineRoomRepository(
                 trigger = trigger,
                 playerId = playerId,
             )
-        }.onFailure { error ->
+        } catch (error: Throwable) {
+            if (error is CancellationException) {
+                throw error
+            }
+
             traceTransportFailure(
                 operation = "fetch_match_snapshot",
+                error = error,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis = startedAtEpochMillis,
+                ),
+                trigger = trigger,
+            )
+        }
+    }
+
+    private suspend fun fetchAndPublishMatchSnapshotsAfter(
+        client: RemoteOnlineApiClient,
+        roomId: String,
+        matchId: String,
+        afterRevision: Long,
+        trigger: String,
+        playerId: String?,
+    ) {
+        val startedAtEpochMillis = nowEpochMillis()
+
+        trace(
+            level = OnlineTraceLevel.DEBUG,
+            type = OnlineTraceType.SNAPSHOT_REQUESTED,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            attributes = mapOf(
+                "snapshotKind" to "match_updates",
+                "trigger" to trigger,
+                "afterRevision" to afterRevision.toString(),
+            ),
+        )
+
+        try {
+            val snapshots = client.fetchMatchSnapshotsAfter(
+                matchId = matchId,
+                afterRevision = afterRevision,
+            ).sortedBy { snapshot ->
+                snapshot.revision
+            }
+
+            val firstRevision = snapshots.firstOrNull()?.revision
+            if (
+                firstRevision != null &&
+                firstRevision != afterRevision + 1L
+            ) {
+                trace(
+                    level = OnlineTraceLevel.WARN,
+                    type = OnlineTraceType.INVARIANT_VIOLATION,
+                    roomId = roomId,
+                    matchId = matchId,
+                    playerId = playerId,
+                    snapshotRevision = firstRevision,
+                    attributes = mapOf(
+                        "reason" to "revision_gap_in_match_updates",
+                        "afterRevision" to afterRevision.toString(),
+                        "firstReceivedRevision" to firstRevision.toString(),
+                    ),
+                )
+            }
+
+            snapshots.forEach { match ->
+                trace(
+                    level = OnlineTraceLevel.DEBUG,
+                    type = OnlineTraceType.SNAPSHOT_RECEIVED,
+                    roomId = roomId,
+                    matchId = match.matchId,
+                    playerId = playerId,
+                    snapshotRevision = match.revision,
+                    attributes = match.traceAttributes(
+                        trigger = trigger,
+                    ) + mapOf(
+                        "snapshotKind" to "match_updates",
+                        "afterRevision" to afterRevision.toString(),
+                        "batchSize" to snapshots.size.toString(),
+                        "durationMillis" to elapsedMillisSince(
+                            startedAtEpochMillis = startedAtEpochMillis,
+                        ).toString(),
+                    ),
+                )
+
+                publishMatchSnapshotIfNewer(
+                    snapshot = match,
+                    trigger = trigger,
+                    playerId = playerId,
+                )
+            }
+        } catch (error: Throwable) {
+            if (error is CancellationException) {
+                throw error
+            }
+
+            traceTransportFailure(
+                operation = "fetch_match_updates",
                 error = error,
                 roomId = roomId,
                 matchId = matchId,
@@ -637,7 +785,7 @@ class RemoteOnlineRoomRepository(
         return serverRevision > action.revision
     }
 
-    private fun publishMatchSnapshotIfNewer(
+    private suspend fun publishMatchSnapshotIfNewer(
         snapshot: OnlineMatchSnapshotDto,
         trigger: String,
         playerId: String?,
@@ -650,6 +798,7 @@ class RemoteOnlineRoomRepository(
             snapshot.revision >= currentSnapshot.revision
         ) {
             mutableMatchSnapshot.value = snapshot
+            mutableMatchSnapshotEvents.emit(snapshot)
 
             trace(
                 level = OnlineTraceLevel.INFO,
@@ -676,7 +825,14 @@ class RemoteOnlineRoomRepository(
             playerId = playerId,
             snapshotRevision = snapshot.revision,
             attributes = mapOf(
-                "reason" to "older_match_revision",
+                "reason" to if (
+                    currentSnapshot.matchId == snapshot.matchId &&
+                    snapshot.revision == currentSnapshot.revision
+                ) {
+                    "duplicate_match_revision"
+                } else {
+                    "older_match_revision"
+                },
                 "trigger" to trigger,
                 "currentRevision" to currentSnapshot.revision.toString(),
             ),

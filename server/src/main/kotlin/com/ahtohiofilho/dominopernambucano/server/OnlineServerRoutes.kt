@@ -83,4 +83,36 @@ fun Route.onlineServerRoutes(
 
         call.respond(matchSnapshot)
     }
+
+    get("/matches/{matchId}/updates") {
+        val matchId = call.parameters["matchId"]
+        val rawAfterRevision = call.request.queryParameters["afterRevision"]
+        val afterRevision = rawAfterRevision?.toLongOrNull()
+
+        if (
+            afterRevision == null ||
+            afterRevision < 0L
+        ) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+            )
+            return@get
+        }
+
+        val snapshots = matchId?.let { value ->
+            store.getMatchSnapshotsAfter(
+                matchId = value,
+                afterRevision = afterRevision,
+            )
+        }
+
+        if (snapshots == null) {
+            call.respond(
+                HttpStatusCode.NotFound,
+            )
+            return@get
+        }
+
+        call.respond(snapshots)
+    }
 }

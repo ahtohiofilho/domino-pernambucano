@@ -260,7 +260,7 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
-    fun refresh_ignores_match_snapshot_older_than_current_snapshot() =
+    fun refresh_keeps_current_match_when_incremental_feed_has_no_newer_revision() =
         runBlocking {
             val room = createInMatchRoomSnapshot()
             val currentMatch = createMatchSnapshot(
@@ -333,8 +333,6 @@ class RemoteOnlineRoomRepositoryTest {
                     OnlineTraceType.SNAPSHOT_REQUESTED,
                     OnlineTraceType.SNAPSHOT_RECEIVED,
                     OnlineTraceType.SNAPSHOT_REQUESTED,
-                    OnlineTraceType.SNAPSHOT_RECEIVED,
-                    OnlineTraceType.SNAPSHOT_IGNORED,
                 ),
                 traceBuffer.snapshot().map { entry ->
                     entry.event.type

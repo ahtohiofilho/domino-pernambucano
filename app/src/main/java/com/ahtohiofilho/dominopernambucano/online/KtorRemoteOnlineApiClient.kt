@@ -8,6 +8,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.parameter
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -81,6 +82,23 @@ class KtorRemoteOnlineApiClient(
                 OnlineRemoteRoutes.matchSnapshot(matchId),
             ),
         ) {
+            accept(ContentType.Application.Json)
+        }.body()
+    }
+
+    override suspend fun fetchMatchSnapshotsAfter(
+        matchId: String,
+        afterRevision: Long,
+    ): List<OnlineMatchSnapshotDto> {
+        return httpClient.get(
+            urlString = endpoint(
+                OnlineRemoteRoutes.matchSnapshotUpdates(matchId),
+            ),
+        ) {
+            parameter(
+                key = "afterRevision",
+                value = afterRevision,
+            )
             accept(ContentType.Application.Json)
         }.body()
     }

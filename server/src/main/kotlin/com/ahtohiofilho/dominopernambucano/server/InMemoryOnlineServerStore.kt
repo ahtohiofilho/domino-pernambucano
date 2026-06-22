@@ -45,6 +45,12 @@ private const val DEVELOPMENT_BOT_PLAYER_ID_PREFIX =
 private const val FIRST_DEVELOPMENT_BOT_SEAT_INDEX = 2
 private const val LAST_DEVELOPMENT_BOT_SEAT_INDEX = 3
 
+/*
+ * O store de desenvolvimento preserva uma janela de revisÃµes por partida para
+ * que o cliente apresente cada transiÃ§Ã£o, em vez de pular ao snapshot atual.
+ */
+private const val MATCH_REVISION_HISTORY_CAPACITY = 2_048
+
 class InMemoryOnlineServerStore(
     private val clockPolicy: DominoMatchClockPolicy =
         DominoMatchClockPolicy.OnlinePerPlayerRound,
@@ -60,6 +66,7 @@ class InMemoryOnlineServerStore(
         val roomId: String,
         val matchId: String,
         var snapshot: OnlineMatchSnapshotDto,
+        val revisionHistory: ArrayDeque<OnlineMatchSnapshotDto> = ArrayDeque(),
         val automaticSeatIndexes: MutableSet<Int> = mutableSetOf(),
         val developmentBotSeatIndexes: Set<Int> = emptySet(),
     )
@@ -559,6 +566,24 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    /**
+     * Retorna em ordem todas as revisÃµes posteriores Ã  referÃªncia do cliente.
+     * A consulta Ã© observacional e nÃ£o avança relÃ³gios ou turnos.
+     */
+    fun getMatchSnapshotsAfter(
+        matchId: String,
+        afterRevision: Long,
+    ): List<OnlineMatchSnapshotDto>? {
+        return synchronized(lock) {
+            matchesById[matchId]
+                ?.revisionHistory
+                ?.filter { snapshot ->
+                    snapshot.revision > afterRevision
+                }
+                ?.toList()
+        }
+    }
+
     private fun addDevelopmentBotsIfNeeded(
         players: List<OnlineRoomPlayerDto>,
     ): List<OnlineRoomPlayerDto> {
@@ -639,6 +664,11 @@ class InMemoryOnlineServerStore(
                 .toSet(),
         )
 
+        recordSnapshotInHistory(
+            matchRecord = matchRecord,
+            snapshot = snapshot,
+        )
+
         matchesById[matchId] = matchRecord
 
         trace(
@@ -677,6 +707,40 @@ class InMemoryOnlineServerStore(
         )
 
         val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
+
+        val mandatoryPassRuntimeState = resolveMandatoryPassIfNeeded(
+            runtimeState = runtimeState,
+        )
+
+        if (mandatoryPassRuntimeState != null) {
+            trace(
+                level = OnlineTraceLevel.INFO,
+                source = traceSource,
+                type = OnlineTraceType.AUTOMATIC_TURN_RESOLVED,
+                roomId = matchRecord.roomId,
+                matchId = matchRecord.matchId,
+                snapshotRevision = currentSnapshot.revision,
+                runtimeState = mandatoryPassRuntimeState,
+                automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
+                attributes = mapOf(
+                    "playerIndex" to currentPlayerIndex.toString(),
+                    "reason" to "mandatory_pass",
+                    "trigger" to trigger,
+                ),
+            )
+
+            publishMatchSnapshot(
+                matchRecord = matchRecord,
+                previousSnapshot = currentSnapshot,
+                runtimeState = mandatoryPassRuntimeState,
+                serverEpochMillis = nowEpochMillis,
+                trigger = "$trigger:mandatory_pass",
+                traceSource = traceSource,
+            )
+
+            return true
+        }
+
         val automaticSeatIndexesBefore =
             matchRecord.automaticSeatIndexes.toSet()
 
@@ -779,6 +843,34 @@ class InMemoryOnlineServerStore(
         )
 
         return true
+    }
+
+    private fun resolveMandatoryPassIfNeeded(
+        runtimeState: DominoMatchRuntimeState,
+    ): DominoMatchRuntimeState? {
+        val phase = runtimeState.phase as? DominoMatchPhase.PresentingPass
+            ?: return null
+
+        val gameState = runtimeState.gameState
+
+        if (
+            isRoundFinished(gameState) ||
+            isGameFinished(gameState) ||
+            phase.playerIndex != gameState.currentPlayerIndex
+        ) {
+            return null
+        }
+
+        val passedGameState = passTurn(
+            state = gameState,
+        )
+
+        return runtimeState.copy(
+            gameState = passedGameState,
+            phase = determineOnlineNextPhase(
+                gameState = passedGameState,
+            ),
+        )
     }
 
     private fun advanceDevelopmentBotTurnIfNeeded(
@@ -1109,6 +1201,11 @@ class InMemoryOnlineServerStore(
 
         matchRecord.snapshot = updatedSnapshot
 
+        recordSnapshotInHistory(
+            matchRecord = matchRecord,
+            snapshot = updatedSnapshot,
+        )
+
         val currentRoom = roomsById[matchRecord.roomId]
 
         if (currentRoom != null) {
@@ -1144,6 +1241,20 @@ class InMemoryOnlineServerStore(
             accepted = true,
             revision = updatedSnapshot.revision,
         )
+    }
+
+    private fun recordSnapshotInHistory(
+        matchRecord: MatchRecord,
+        snapshot: OnlineMatchSnapshotDto,
+    ) {
+        matchRecord.revisionHistory.addLast(snapshot)
+
+        while (
+            matchRecord.revisionHistory.size >
+            MATCH_REVISION_HISTORY_CAPACITY
+        ) {
+            matchRecord.revisionHistory.removeFirst()
+        }
     }
 
     private fun markPlayerDisconnected(

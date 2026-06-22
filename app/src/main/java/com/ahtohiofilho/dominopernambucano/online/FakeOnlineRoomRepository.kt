@@ -12,9 +12,14 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
 import com.ahtohiofilho.dominopernambucano.match.findRandomPlayableMove
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+private const val FAKE_MATCH_SNAPSHOT_EVENT_BUFFER_CAPACITY = 64
 
 class FakeOnlineRoomRepository(
     private val clockPolicy: DominoMatchClockPolicy =
@@ -28,6 +33,11 @@ class FakeOnlineRoomRepository(
 
     private val mutableMatchSnapshot =
         MutableStateFlow<OnlineMatchSnapshotDto?>(null)
+
+    private val mutableMatchSnapshotEvents =
+        MutableSharedFlow<OnlineMatchSnapshotDto>(
+            extraBufferCapacity = FAKE_MATCH_SNAPSHOT_EVENT_BUFFER_CAPACITY,
+        )
 
     private var nextRoomSequence = 1
     private var nextMatchSequence = 1
@@ -49,6 +59,9 @@ class FakeOnlineRoomRepository(
 
     override val matchSnapshot: StateFlow<OnlineMatchSnapshotDto?> =
         mutableMatchSnapshot.asStateFlow()
+
+    override val matchSnapshotEvents: Flow<OnlineMatchSnapshotDto> =
+        mutableMatchSnapshotEvents.asSharedFlow()
 
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
@@ -369,13 +382,16 @@ class FakeOnlineRoomRepository(
 
         revision = 1L
 
-        mutableMatchSnapshot.value = initialRuntimeState.toOnlineSnapshotDto(
+        val initialSnapshot = initialRuntimeState.toOnlineSnapshotDto(
             roomId = room.roomId,
             matchId = matchId,
             revision = revision,
             serverEpochMillis = nowEpochMillis(),
             automaticPlayerIndexes = automaticSeatIndexes.sorted(),
         )
+
+        mutableMatchSnapshot.value = initialSnapshot
+        mutableMatchSnapshotEvents.tryEmit(initialSnapshot)
     }
 
     private fun submitSnapshotRequest(
@@ -770,6 +786,7 @@ class FakeOnlineRoomRepository(
         )
 
         mutableMatchSnapshot.value = updatedSnapshot
+        mutableMatchSnapshotEvents.tryEmit(updatedSnapshot)
 
         mutableRoomSnapshot.value = mutableRoomSnapshot.value?.copy(
             status = if (runtimeState.gameState.gameWinnerTeamIndex != null) {
