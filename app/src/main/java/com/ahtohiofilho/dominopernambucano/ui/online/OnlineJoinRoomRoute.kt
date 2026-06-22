@@ -36,6 +36,7 @@ import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
@@ -55,6 +56,7 @@ fun OnlineJoinRoomRoute(
     roomRepository: OnlineRoomRepository,
     localPlayerIdentity: OnlinePlayerIdentity,
     debugOptions: OnlineDebugOptions,
+    traceLogger: OnlineTraceLogger,
     onStartOnlineMatch: (OnlineDominoMatchCoordinator) -> Unit,
     onBackClick: () -> Unit,
 ) {
@@ -130,6 +132,7 @@ fun OnlineJoinRoomRoute(
             localPlayerId = localPlayerId,
             localPlayerIndex = localSeatIndex,
             initialSnapshot = currentMatchSnapshot,
+            traceLogger = traceLogger,
         )
 
         onStartOnlineMatch(matchCoordinator)

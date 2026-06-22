@@ -1,10 +1,12 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStarted
 import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
+import io.ktor.server.application.log
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
@@ -43,10 +45,19 @@ fun main() {
 }
 
 fun Application.module() {
+    val traceLogger = OnlineTraceLogger(
+        sink = ServerOnlineTraceSink(
+            emit = { serializedEvent ->
+                log.info(serializedEvent)
+            },
+        ),
+    )
+
     module(
         store = InMemoryOnlineServerStore(
             autoFillDevelopmentBotsAfterTwoHumanPlayers =
                 shouldAutoFillDevelopmentBots(),
+            traceLogger = traceLogger,
         ),
     )
 }

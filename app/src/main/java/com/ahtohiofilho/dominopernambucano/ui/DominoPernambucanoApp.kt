@@ -10,6 +10,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
+import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
@@ -30,11 +32,25 @@ fun DominoPernambucanoApp(
         LocalDominoSessionCoordinator()
     }
 
+    val onlineTraceBuffer = remember {
+        InMemoryOnlineTraceBuffer()
+    }
+
+    val onlineTraceLogger = remember(
+        onlineTraceBuffer,
+    ) {
+        OnlineTraceLogger(
+            sink = onlineTraceBuffer,
+        )
+    }
+
     val onlineRoomRepository = remember(
         onlineAppConfig.backendConfig,
+        onlineTraceLogger,
     ) {
         OnlineRepositoryFactory.create(
             config = onlineAppConfig.backendConfig,
+            traceLogger = onlineTraceLogger,
         )
     }
 
@@ -117,6 +133,7 @@ fun DominoPernambucanoApp(
                 roomRepository = onlineRoomRepository,
                 localPlayerIdentity = onlinePlayerIdentity,
                 debugOptions = onlineDebugOptions,
+                traceLogger = onlineTraceLogger,
                 onStartOnlineMatch = { matchCoordinator ->
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.StartOnlineMatch(
@@ -137,6 +154,7 @@ fun DominoPernambucanoApp(
                 roomRepository = onlineRoomRepository,
                 localPlayerIdentity = onlinePlayerIdentity,
                 debugOptions = onlineDebugOptions,
+                traceLogger = onlineTraceLogger,
                 onStartOnlineMatch = { matchCoordinator ->
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.StartOnlineMatch(
