@@ -4,6 +4,15 @@ import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatch
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchResultDto
 
 interface RemoteOnlineApiClient {
+    /*
+     * O cliente remoto conserva a identidade transitória apenas para anexar o
+     * cabeçalho de homologação nas leituras HTTP. Implementações de teste podem
+     * manter o no-op padrão.
+     */
+    fun setDevelopmentPlayerId(
+        playerId: String?,
+    ) = Unit
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

@@ -3,9 +3,10 @@ package com.ahtohiofilho.dominopernambucano.server
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
-import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -15,9 +16,21 @@ import io.ktor.server.routing.post
 fun Route.onlineServerRoutes(
     store: InMemoryOnlineServerStore,
     traceArchive: OnlineTraceArchive,
+    identityResolver: OnlineRequestIdentityResolver =
+        DevelopmentHeaderOnlineRequestIdentityResolver,
 ) {
     post("/${OnlineRemoteRoutes.CREATE_ROOM}") {
+        val identity = call.requireOnlineIdentity(
+            identityResolver = identityResolver,
+        ) ?: return@post
         val request = call.receive<CreateOnlineRoomRequestDto>()
+
+        if (identity.playerId != request.localPlayerId) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+            )
+            return@post
+        }
 
         call.respond(
             store.createRoom(
@@ -27,7 +40,17 @@ fun Route.onlineServerRoutes(
     }
 
     post("/${OnlineRemoteRoutes.JOIN_ROOM}") {
+        val identity = call.requireOnlineIdentity(
+            identityResolver = identityResolver,
+        ) ?: return@post
         val request = call.receive<JoinOnlineRoomRequestDto>()
+
+        if (identity.playerId != request.localPlayerId) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+            )
+            return@post
+        }
 
         call.respond(
             store.joinRoom(
@@ -37,7 +60,17 @@ fun Route.onlineServerRoutes(
     }
 
     post("/${OnlineRemoteRoutes.SUBMIT_ACTION}") {
+        val identity = call.requireOnlineIdentity(
+            identityResolver = identityResolver,
+        ) ?: return@post
         val action = call.receive<OnlinePlayerActionDto>()
+
+        if (identity.playerId != action.playerId) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+            )
+            return@post
+        }
 
         call.respond(
             store.submitAction(
@@ -57,19 +90,38 @@ fun Route.onlineServerRoutes(
     }
 
     get("/rooms/{roomId}") {
+        val identity = call.requireOnlineIdentity(
+            identityResolver = identityResolver,
+        ) ?: return@get
         val roomId = call.parameters["roomId"]
 
-        val roomSnapshot = roomId?.let { value ->
-            store.getRoomSnapshot(
-                roomId = value,
+        if (roomId == null) {
+            call.respond(
+                HttpStatusCode.NotFound,
             )
+            return@get
         }
+
+        val roomSnapshot = store.getRoomSnapshot(
+            roomId = roomId,
+        )
 
         if (roomSnapshot == null) {
             call.respond(
                 HttpStatusCode.NotFound,
             )
+            return@get
+        }
 
+        if (
+            !store.isRoomParticipant(
+                roomId = roomId,
+                playerId = identity.playerId,
+            )
+        ) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+            )
             return@get
         }
 
@@ -77,26 +129,60 @@ fun Route.onlineServerRoutes(
     }
 
     get("/matches/{matchId}") {
+        val identity = call.requireOnlineIdentity(
+            identityResolver = identityResolver,
+        ) ?: return@get
         val matchId = call.parameters["matchId"]
 
-        val matchSnapshot = matchId?.let { value ->
-            store.getMatchSnapshot(
-                matchId = value,
-            )
-        }
-
-        if (matchSnapshot == null) {
+        if (matchId == null) {
             call.respond(
                 HttpStatusCode.NotFound,
             )
-
             return@get
         }
 
-        call.respond(matchSnapshot)
+        val authoritativeSnapshot = store.getMatchSnapshot(
+            matchId = matchId,
+        )
+
+        if (authoritativeSnapshot == null) {
+            call.respond(
+                HttpStatusCode.NotFound,
+            )
+            return@get
+        }
+
+        if (
+            !store.isMatchParticipant(
+                matchId = matchId,
+                playerId = identity.playerId,
+            )
+        ) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+            )
+            return@get
+        }
+
+        val participantSnapshot = store.getMatchSnapshotForParticipant(
+            matchId = matchId,
+            playerId = identity.playerId,
+        )
+
+        if (participantSnapshot == null) {
+            call.respond(
+                HttpStatusCode.NotFound,
+            )
+            return@get
+        }
+
+        call.respond(participantSnapshot)
     }
 
     get("/matches/{matchId}/updates") {
+        val identity = call.requireOnlineIdentity(
+            identityResolver = identityResolver,
+        ) ?: return@get
         val matchId = call.parameters["matchId"]
         val rawAfterRevision = call.request.queryParameters["afterRevision"]
         val afterRevision = rawAfterRevision?.toLongOrNull()
@@ -111,12 +197,41 @@ fun Route.onlineServerRoutes(
             return@get
         }
 
-        val snapshots = matchId?.let { value ->
-            store.getMatchSnapshotsAfter(
-                matchId = value,
-                afterRevision = afterRevision,
+        if (matchId == null) {
+            call.respond(
+                HttpStatusCode.NotFound,
             )
+            return@get
         }
+
+        val authoritativeSnapshot = store.getMatchSnapshot(
+            matchId = matchId,
+        )
+
+        if (authoritativeSnapshot == null) {
+            call.respond(
+                HttpStatusCode.NotFound,
+            )
+            return@get
+        }
+
+        if (
+            !store.isMatchParticipant(
+                matchId = matchId,
+                playerId = identity.playerId,
+            )
+        ) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+            )
+            return@get
+        }
+
+        val snapshots = store.getMatchSnapshotsAfterForParticipant(
+            matchId = matchId,
+            playerId = identity.playerId,
+            afterRevision = afterRevision,
+        )
 
         if (snapshots == null) {
             call.respond(
@@ -127,4 +242,22 @@ fun Route.onlineServerRoutes(
 
         call.respond(snapshots)
     }
+}
+
+private suspend fun ApplicationCall.requireOnlineIdentity(
+    identityResolver: OnlineRequestIdentityResolver,
+): OnlineRequestIdentity? {
+    val identity = identityResolver.resolve(
+        call = this,
+    )
+
+    if (identity != null) {
+        return identity
+    }
+
+    respond(
+        HttpStatusCode.Unauthorized,
+    )
+
+    return null
 }

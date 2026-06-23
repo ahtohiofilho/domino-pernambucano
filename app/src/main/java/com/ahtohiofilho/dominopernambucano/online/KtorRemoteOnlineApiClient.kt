@@ -8,8 +8,10 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.android.Android
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.parameter
 import io.ktor.client.request.setBody
@@ -29,14 +31,33 @@ class KtorRemoteOnlineApiClient(
             "Remote backend baseUrl não configurada."
         }.trimEnd('/')
 
+    private var developmentPlayerId: String? = null
+
+    override fun setDevelopmentPlayerId(
+        playerId: String?,
+    ) {
+        developmentPlayerId = playerId
+            ?.trim()
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+    }
+
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
+        setDevelopmentPlayerId(
+            playerId = request.localPlayerId,
+        )
+
         return httpClient.post(
             urlString = endpoint(OnlineRemoteRoutes.CREATE_ROOM),
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
+            applyDevelopmentPlayerId(
+                playerId = request.localPlayerId,
+            )
             setBody(request)
         }.body()
     }
@@ -44,11 +65,18 @@ class KtorRemoteOnlineApiClient(
     override suspend fun joinRoom(
         request: JoinOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
+        setDevelopmentPlayerId(
+            playerId = request.localPlayerId,
+        )
+
         return httpClient.post(
             urlString = endpoint(OnlineRemoteRoutes.JOIN_ROOM),
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
+            applyDevelopmentPlayerId(
+                playerId = request.localPlayerId,
+            )
             setBody(request)
         }.body()
     }
@@ -56,11 +84,18 @@ class KtorRemoteOnlineApiClient(
     override suspend fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto {
+        setDevelopmentPlayerId(
+            playerId = action.playerId,
+        )
+
         return httpClient.post(
             urlString = endpoint(OnlineRemoteRoutes.SUBMIT_ACTION),
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
+            applyDevelopmentPlayerId(
+                playerId = action.playerId,
+            )
             setBody(action)
         }.body()
     }
@@ -86,6 +121,9 @@ class KtorRemoteOnlineApiClient(
             ),
         ) {
             accept(ContentType.Application.Json)
+            applyDevelopmentPlayerId(
+                playerId = developmentPlayerId,
+            )
         }.body()
     }
 
@@ -98,6 +136,9 @@ class KtorRemoteOnlineApiClient(
             ),
         ) {
             accept(ContentType.Application.Json)
+            applyDevelopmentPlayerId(
+                playerId = developmentPlayerId,
+            )
         }.body()
     }
 
@@ -115,7 +156,26 @@ class KtorRemoteOnlineApiClient(
                 value = afterRevision,
             )
             accept(ContentType.Application.Json)
+            applyDevelopmentPlayerId(
+                playerId = developmentPlayerId,
+            )
         }.body()
+    }
+
+    private fun HttpRequestBuilder.applyDevelopmentPlayerId(
+        playerId: String?,
+    ) {
+        playerId
+            ?.trim()
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?.let { value ->
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    value,
+                )
+            }
     }
 
     private fun endpoint(

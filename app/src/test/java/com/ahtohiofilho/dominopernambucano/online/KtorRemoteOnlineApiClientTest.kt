@@ -32,6 +32,7 @@ class KtorRemoteOnlineApiClientTest {
     fun create_room_posts_to_rooms_and_decodes_result() =
         runBlocking {
             val recordedRequests = mutableListOf<RecordedRequest>()
+            val recordedDevelopmentPlayerIds = mutableListOf<String?>()
 
             val apiClient = createApiClient(
                 responsesByPath = mapOf(
@@ -57,6 +58,7 @@ class KtorRemoteOnlineApiClientTest {
                     """.trimIndent(),
                 ),
                 recordedRequests = recordedRequests,
+                recordedDevelopmentPlayerIds = recordedDevelopmentPlayerIds,
             )
 
             val result = apiClient.createRoom(
@@ -77,6 +79,10 @@ class KtorRemoteOnlineApiClientTest {
                     )
                 ),
                 recordedRequests,
+            )
+            assertEquals(
+                listOf("player-1"),
+                recordedDevelopmentPlayerIds,
             )
         }
 
@@ -211,6 +217,10 @@ class KtorRemoteOnlineApiClientTest {
                 recordedRequests = recordedRequests,
             )
 
+            apiClient.setDevelopmentPlayerId(
+                playerId = "player-1",
+            )
+
             val result = apiClient.fetchRoomSnapshot(
                 roomId = "room-1",
             )
@@ -310,6 +320,10 @@ class KtorRemoteOnlineApiClientTest {
                 recordedRequests = recordedRequests,
             )
 
+            apiClient.setDevelopmentPlayerId(
+                playerId = "player-1",
+            )
+
             val result = apiClient.fetchMatchSnapshot(
                 matchId = "match-1",
             )
@@ -331,6 +345,7 @@ class KtorRemoteOnlineApiClientTest {
     private fun createApiClient(
         responsesByPath: Map<String, String>,
         recordedRequests: MutableList<RecordedRequest>,
+        recordedDevelopmentPlayerIds: MutableList<String?>? = null,
     ): KtorRemoteOnlineApiClient {
         val mockEngine = MockEngine { request ->
             val path = request.url.encodedPath
@@ -338,6 +353,11 @@ class KtorRemoteOnlineApiClientTest {
             recordedRequests += RecordedRequest(
                 method = request.method.value,
                 path = path,
+            )
+            recordedDevelopmentPlayerIds?.add(
+                request.headers[
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                ],
             )
 
             val responseBody = requireNotNull(responsesByPath[path]) {

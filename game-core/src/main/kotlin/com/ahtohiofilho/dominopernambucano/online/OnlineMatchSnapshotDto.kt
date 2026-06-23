@@ -87,3 +87,60 @@ fun OnlineMatchSnapshotDto.toRuntimeState(
         playerClockMillis = playerClockMillis,
     )
 }
+
+private const val HIDDEN_ONLINE_DOMINO_VALUE = -1
+
+private val hiddenOnlineDominoPiece = OnlineDominoPieceDto(
+    left = HIDDEN_ONLINE_DOMINO_VALUE,
+    right = HIDDEN_ONLINE_DOMINO_VALUE,
+)
+
+/*
+ * O servidor mantém [OnlineMatchSnapshotDto] completo como estado autoritativo.
+ * Antes de cruzar a fronteira HTTP, a projeção abaixo preserva somente a mão do
+ * participante solicitado. As listas ocultas continuam com o tamanho real para
+ * manter a composição visual dos assentos estável no cliente.
+ */
+fun OnlineMatchSnapshotDto.projectForParticipant(
+    seatIndex: Int,
+): OnlineMatchSnapshotDto {
+    require(seatIndex in gameState.players.indices) {
+        "Assento local inválido para projeção do snapshot: $seatIndex."
+    }
+
+    if (phase.revealsAllHands()) {
+        return this
+    }
+
+    return copy(
+        gameState = gameState.copy(
+            players = gameState.players.mapIndexed { playerIndex, player ->
+                if (playerIndex == seatIndex) {
+                    player
+                } else {
+                    player.copy(
+                        hand = hiddenOnlinePieces(
+                            count = player.hand.size,
+                        ),
+                    )
+                }
+            },
+            sleepingPieces = hiddenOnlinePieces(
+                count = gameState.sleepingPieces.size,
+            ),
+        ),
+    )
+}
+
+private fun OnlineMatchPhaseDto.revealsAllHands(): Boolean {
+    return type == OnlineMatchPhaseTypeDto.ROUND_SUMMARY ||
+            type == OnlineMatchPhaseTypeDto.MATCH_FINISHED
+}
+
+private fun hiddenOnlinePieces(
+    count: Int,
+): List<OnlineDominoPieceDto> {
+    return List(count) {
+        hiddenOnlineDominoPiece
+    }
+}

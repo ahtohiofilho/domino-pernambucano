@@ -18,6 +18,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchActionReduction
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
+import com.ahtohiofilho.dominopernambucano.online.projectForParticipant
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomOperationResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
@@ -76,12 +77,19 @@ class InMemoryOnlineServerStore(
         val turnWasResolved: Boolean,
     )
 
+    private data class ActionResultCacheKey(
+        val matchId: String,
+        val playerId: String,
+        val actionId: String,
+    )
+
     private val lock = Any()
 
     private val roomsById = mutableMapOf<String, OnlineRoomSnapshotDto>()
     private val roomIdsByCode = mutableMapOf<String, String>()
     private val matchesById = mutableMapOf<String, MatchRecord>()
-    private val actionResultsById = mutableMapOf<String, OnlineActionResultDto>()
+    private val actionResultsByKey =
+        mutableMapOf<ActionResultCacheKey, OnlineActionResultDto>()
 
     private var nextRoomSequence = 1
     private var nextMatchSequence = 1
@@ -347,7 +355,7 @@ class InMemoryOnlineServerStore(
                 attributes = action.traceAttributes(),
             )
 
-            actionResultsById[action.actionId]?.let { cachedResult ->
+            actionResultsByKey[action.toActionResultCacheKey()]?.let { cachedResult ->
                 trace(
                     level = OnlineTraceLevel.INFO,
                     source = OnlineTraceSource.SERVER_STORE,
@@ -548,6 +556,84 @@ class InMemoryOnlineServerStore(
     ): OnlineRoomSnapshotDto? {
         return synchronized(lock) {
             roomsById[roomId]
+        }
+    }
+
+    fun isRoomParticipant(
+        roomId: String,
+        playerId: String,
+    ): Boolean {
+        return synchronized(lock) {
+            roomsById[roomId]
+                ?.players
+                ?.any { player ->
+                    player.playerId == playerId
+                } == true
+        }
+    }
+
+    fun isMatchParticipant(
+        matchId: String,
+        playerId: String,
+    ): Boolean {
+        return synchronized(lock) {
+            val matchRecord = matchesById[matchId] ?: return@synchronized false
+            val room = roomsById[matchRecord.roomId] ?: return@synchronized false
+
+            room.players.any { player ->
+                player.playerId == playerId
+            }
+        }
+    }
+
+    fun getMatchSnapshotForParticipant(
+        matchId: String,
+        playerId: String,
+    ): OnlineMatchSnapshotDto? {
+        return synchronized(lock) {
+            val matchRecord = matchesById[matchId]
+                ?: return@synchronized null
+            val room = roomsById[matchRecord.roomId]
+                ?: return@synchronized null
+            val seatIndex = room.players
+                .firstOrNull { player ->
+                    player.playerId == playerId
+                }
+                ?.seatIndex
+                ?: return@synchronized null
+
+            matchRecord.snapshot.projectForParticipant(
+                seatIndex = seatIndex,
+            )
+        }
+    }
+
+    fun getMatchSnapshotsAfterForParticipant(
+        matchId: String,
+        playerId: String,
+        afterRevision: Long,
+    ): List<OnlineMatchSnapshotDto>? {
+        return synchronized(lock) {
+            val matchRecord = matchesById[matchId]
+                ?: return@synchronized null
+            val room = roomsById[matchRecord.roomId]
+                ?: return@synchronized null
+            val seatIndex = room.players
+                .firstOrNull { player ->
+                    player.playerId == playerId
+                }
+                ?.seatIndex
+                ?: return@synchronized null
+
+            matchRecord.revisionHistory
+                .filter { snapshot ->
+                    snapshot.revision > afterRevision
+                }
+                .map { snapshot ->
+                    snapshot.projectForParticipant(
+                        seatIndex = seatIndex,
+                    )
+                }
         }
     }
 
@@ -1288,6 +1374,14 @@ class InMemoryOnlineServerStore(
             .coerceAtLeast(0L)
     }
 
+    private fun OnlinePlayerActionDto.toActionResultCacheKey(): ActionResultCacheKey {
+        return ActionResultCacheKey(
+            matchId = matchId,
+            playerId = playerId,
+            actionId = actionId,
+        )
+    }
+
     private fun cacheActionResult(
         action: OnlinePlayerActionDto,
         result: OnlineActionResultDto,
@@ -1296,7 +1390,7 @@ class InMemoryOnlineServerStore(
             actionId = action.actionId,
         )
 
-        actionResultsById[action.actionId] = cachedResult
+        actionResultsByKey[action.toActionResultCacheKey()] = cachedResult
 
         return cachedResult
     }

@@ -64,6 +64,7 @@ class RemoteOnlineRoomRepository(
 
     private var pollingJob: Job? = null
     private var pollingRoomId: String? = null
+    private var activePlayerId: String? = null
 
     override val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?> =
         mutableRoomSnapshot.asStateFlow()
@@ -91,6 +92,10 @@ class RemoteOnlineRoomRepository(
                     ),
                 )
             }
+
+        client.setDevelopmentPlayerId(
+            playerId = request.localPlayerId,
+        )
 
         val startedAtEpochMillis = nowEpochMillis()
 
@@ -149,6 +154,10 @@ class RemoteOnlineRoomRepository(
                     ),
                 )
             }
+
+        client.setDevelopmentPlayerId(
+            playerId = request.localPlayerId,
+        )
 
         val startedAtEpochMillis = nowEpochMillis()
 
@@ -209,6 +218,10 @@ class RemoteOnlineRoomRepository(
                     ),
                 )
             }
+
+        client.setDevelopmentPlayerId(
+            playerId = action.playerId,
+        )
 
         trace(
             level = OnlineTraceLevel.INFO,
@@ -349,19 +362,18 @@ class RemoteOnlineRoomRepository(
         val client = apiClient
         val currentSnapshot = mutableMatchSnapshot.value
         val currentRoom = mutableRoomSnapshot.value
+        val localPlayerId = activePlayerId
 
         if (
             client != null &&
             currentSnapshot != null &&
-            currentRoom != null
+            currentRoom != null &&
+            localPlayerId != null
         ) {
             val leaveAction = createOnlineLeaveRoomAction(
                 roomId = currentRoom.roomId,
                 matchId = currentSnapshot.matchId,
-                playerId = currentRoom.players
-                    .firstOrNull { player -> player.connected }
-                    ?.playerId
-                    ?: currentRoom.hostPlayerId,
+                playerId = localPlayerId,
                 revision = currentSnapshot.revision,
             )
 
@@ -427,6 +439,10 @@ class RemoteOnlineRoomRepository(
 
         mutableRoomSnapshot.value = null
         mutableMatchSnapshot.value = null
+        activePlayerId = null
+        client?.setDevelopmentPlayerId(
+            playerId = null,
+        )
     }
 
     private suspend fun applyRoomOperationResult(
@@ -452,6 +468,11 @@ class RemoteOnlineRoomRepository(
         )
 
         if (result.accepted) {
+            activePlayerId = playerId
+            client.setDevelopmentPlayerId(
+                playerId = playerId,
+            )
+
             startPolling(
                 roomId = room.roomId,
                 client = client,
@@ -523,7 +544,7 @@ class RemoteOnlineRoomRepository(
                         roomId = roomId,
                         fallbackMatchId = mutableMatchSnapshot.value?.matchId,
                         trigger = "polling",
-                        playerId = null,
+                        playerId = activePlayerId,
                     )
                 }
             }
@@ -559,6 +580,12 @@ class RemoteOnlineRoomRepository(
         trigger: String,
         playerId: String?,
     ) {
+        val resolvedPlayerId = playerId ?: activePlayerId
+
+        client.setDevelopmentPlayerId(
+            playerId = resolvedPlayerId,
+        )
+
         var latestMatchId = fallbackMatchId
 
         val roomRequestStartedAtEpochMillis = nowEpochMillis()
@@ -568,7 +595,7 @@ class RemoteOnlineRoomRepository(
             type = OnlineTraceType.SNAPSHOT_REQUESTED,
             roomId = roomId,
             matchId = fallbackMatchId,
-            playerId = playerId,
+            playerId = resolvedPlayerId,
             attributes = mapOf(
                 "snapshotKind" to "room",
                 "trigger" to trigger,
@@ -586,7 +613,7 @@ class RemoteOnlineRoomRepository(
                 type = OnlineTraceType.SNAPSHOT_RECEIVED,
                 roomId = room.roomId,
                 matchId = room.matchId ?: latestMatchId,
-                playerId = playerId,
+                playerId = resolvedPlayerId,
                 attributes = room.traceAttributes(
                     trigger = trigger,
                 ) + mapOf(
@@ -601,7 +628,7 @@ class RemoteOnlineRoomRepository(
                 error = error,
                 roomId = roomId,
                 matchId = fallbackMatchId,
-                playerId = playerId,
+                playerId = resolvedPlayerId,
                 durationMillis = elapsedMillisSince(
                     startedAtEpochMillis = roomRequestStartedAtEpochMillis,
                 ),
@@ -616,7 +643,7 @@ class RemoteOnlineRoomRepository(
             roomId = roomId,
             matchId = matchId,
             trigger = trigger,
-            playerId = playerId,
+            playerId = resolvedPlayerId,
         )
     }
 

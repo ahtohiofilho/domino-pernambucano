@@ -4,12 +4,14 @@ import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomOperationResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.createOnlineSnapshotRequestAction
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -66,6 +68,10 @@ class ApplicationTest {
             val createRoomResponse = client.post(
                 urlString = "/${OnlineRemoteRoutes.CREATE_ROOM}",
             ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "player-1",
+                )
                 contentType(
                     ContentType.Application.Json,
                 )
@@ -109,7 +115,12 @@ class ApplicationTest {
 
             val roomResponse = client.get(
                 urlString = "/${OnlineRemoteRoutes.roomSnapshot(createdRoom.roomId)}",
-            )
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "player-1",
+                )
+            }
 
             assertEquals(
                 HttpStatusCode.OK,
@@ -126,10 +137,70 @@ class ApplicationTest {
                 createdRoom,
                 fetchedRoom,
             )
+
+            val missingIdentityResponse = client.get(
+                urlString = "/${OnlineRemoteRoutes.roomSnapshot(createdRoom.roomId)}",
+            )
+
+            assertEquals(
+                HttpStatusCode.Unauthorized,
+                missingIdentityResponse.status,
+            )
+
+            val foreignIdentityResponse = client.get(
+                urlString = "/${OnlineRemoteRoutes.roomSnapshot(createdRoom.roomId)}",
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "player-2",
+                )
+            }
+
+            assertEquals(
+                HttpStatusCode.Forbidden,
+                foreignIdentityResponse.status,
+            )
         }
 
     @Test
-    fun fourth_player_starts_match_and_http_snapshot_is_consistent_for_all_clients() =
+    fun request_identity_must_match_player_id_declared_by_create_room() =
+        testApplication {
+            application {
+                module(
+                    store = InMemoryOnlineServerStore(
+                        nowEpochMillis = { 1_000L },
+                    ),
+                )
+            }
+
+            val response = client.post(
+                urlString = "/${OnlineRemoteRoutes.CREATE_ROOM}",
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "player-1",
+                )
+                contentType(
+                    ContentType.Application.Json,
+                )
+                setBody(
+                    json.encodeToString(
+                        CreateOnlineRoomRequestDto(
+                            localPlayerId = "player-2",
+                            playerName = "Jogador 2",
+                        ),
+                    ),
+                )
+            }
+
+            assertEquals(
+                HttpStatusCode.Forbidden,
+                response.status,
+            )
+        }
+
+    @Test
+    fun fourth_player_starts_match_and_http_snapshot_is_projected_for_requesting_player() =
         testApplication {
             application {
                 module(
@@ -226,7 +297,12 @@ class ApplicationTest {
 
             val roomResponse = client.get(
                 urlString = "/${OnlineRemoteRoutes.roomSnapshot(startedRoom.roomId)}",
-            )
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "player-1",
+                )
+            }
 
             assertEquals(
                 HttpStatusCode.OK,
@@ -246,7 +322,12 @@ class ApplicationTest {
 
             val matchResponse = client.get(
                 urlString = "/${OnlineRemoteRoutes.matchSnapshot(matchId)}",
-            )
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "player-1",
+                )
+            }
 
             assertEquals(
                 HttpStatusCode.OK,
@@ -286,6 +367,26 @@ class ApplicationTest {
                 },
             )
 
+            assertTrue(
+                matchSnapshot.gameState.players[0].hand.all { piece ->
+                    piece.left >= 0 && piece.right >= 0
+                },
+            )
+            matchSnapshot.gameState.players
+                .drop(1)
+                .forEach { player ->
+                    assertTrue(
+                        player.hand.all { piece ->
+                            piece.left == -1 && piece.right == -1
+                        },
+                    )
+                }
+            assertTrue(
+                matchSnapshot.gameState.sleepingPieces.all { piece ->
+                    piece.left == -1 && piece.right == -1
+                },
+            )
+
             val snapshotRequestAction = createOnlineSnapshotRequestAction(
                 roomId = startedRoom.roomId,
                 matchId = matchId,
@@ -298,12 +399,14 @@ class ApplicationTest {
                 actionJson = json.encodeToString(
                     snapshotRequestAction,
                 ),
+                playerId = "player-1",
             )
 
             val repeatedActionResult = submitActionThroughHttp(
                 actionJson = json.encodeToString(
                     snapshotRequestAction,
                 ),
+                playerId = "player-1",
             )
 
             assertTrue(firstActionResult.accepted)
@@ -320,7 +423,12 @@ class ApplicationTest {
 
             val latestMatchResponse = client.get(
                 urlString = "/${OnlineRemoteRoutes.matchSnapshot(matchId)}",
-            )
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "player-1",
+                )
+            }
 
             assertEquals(
                 HttpStatusCode.OK,
@@ -349,6 +457,10 @@ class ApplicationTest {
         val response = client.post(
             urlString = "/${OnlineRemoteRoutes.CREATE_ROOM}",
         ) {
+            header(
+                OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                playerId,
+            )
             contentType(
                 ContentType.Application.Json,
             )
@@ -381,6 +493,10 @@ class ApplicationTest {
         val response = client.post(
             urlString = "/${OnlineRemoteRoutes.JOIN_ROOM}",
         ) {
+            header(
+                OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                playerId,
+            )
             contentType(
                 ContentType.Application.Json,
             )
@@ -408,10 +524,15 @@ class ApplicationTest {
 
     private suspend fun io.ktor.server.testing.ApplicationTestBuilder.submitActionThroughHttp(
         actionJson: String,
+        playerId: String,
     ): OnlineActionResultDto {
         val response = client.post(
             urlString = "/${OnlineRemoteRoutes.SUBMIT_ACTION}",
         ) {
+            header(
+                OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                playerId,
+            )
             contentType(
                 ContentType.Application.Json,
             )
