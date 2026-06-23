@@ -32,6 +32,7 @@ fun PlayedMoveAnimationOverlay(
     move: PlayableMove,
     sourcePositionInWindow: Offset?,
     target: DominoMoveTargetInWindow?,
+    presentationKey: DominoMovePresentationKey,
     presentationId: String?,
     onAnimationTrace: (OnlineTraceType, Map<String, String>) -> Unit,
     onAnimationFinished: () -> Unit,
@@ -41,27 +42,28 @@ fun PlayedMoveAnimationOverlay(
      * A geometria da mesa é medida depois da composição. Reiniciar o efeito a
      * cada atualização de bounds cancelava a apresentação vigente antes do
      * primeiro frame útil, principalmente quando chegavam revisões em lote.
-     * A identidade da animação passa a ser somente a apresentação autoritativa;
-     * source/target atualizados são lidos sem reiniciar a coroutine.
+     * A identidade da animação é a apresentação lógica, inclusive no modo
+     * offline. source/target atualizados são lidos sem reiniciar a coroutine.
+     * Um target só é aceito quando carrega a mesma chave de apresentação.
      */
     val latestSource by rememberUpdatedState(sourcePositionInWindow)
     val latestTarget by rememberUpdatedState(target)
     val latestAnimationTrace by rememberUpdatedState(onAnimationTrace)
     val latestAnimationFinished by rememberUpdatedState(onAnimationFinished)
 
-    val animatedX = remember(presentationId) {
+    val animatedX = remember(presentationKey) {
         Animatable(0f)
     }
 
-    val animatedY = remember(presentationId) {
+    val animatedY = remember(presentationKey) {
         Animatable(0f)
     }
 
-    val animatedRotation = remember(presentationId) {
+    val animatedRotation = remember(presentationKey) {
         Animatable(0f)
     }
 
-    var isPieceVisible by remember(presentationId) {
+    var isPieceVisible by remember(presentationKey) {
         mutableStateOf(false)
     }
 
@@ -72,18 +74,20 @@ fun PlayedMoveAnimationOverlay(
     val pieceHeightPx = with(density) {
         LOCAL_HAND_PIECE_HEIGHT.toPx()
     }
-    val visualPiece = remember(presentationId, move) {
+    val visualPiece = remember(presentationKey) {
         getVisualPieceForPlayedMove(move)
     }
     val moveAttributes = move.toAnimationTraceAttributes()
 
-    LaunchedEffect(presentationId) {
+    LaunchedEffect(presentationKey) {
         val startedAtNanos = System.nanoTime()
         var completionReported = false
 
         try {
             var source = latestSource
-            var moveTarget = latestTarget
+            var moveTarget = latestTarget.forPresentation(
+                presentationKey = presentationKey,
+            )
 
             while (
                 (source == null || moveTarget == null) &&
@@ -91,7 +95,9 @@ fun PlayedMoveAnimationOverlay(
             ) {
                 delay(TARGET_ACQUISITION_POLL_MILLIS)
                 source = latestSource
-                moveTarget = latestTarget
+                moveTarget = latestTarget.forPresentation(
+                    presentationKey = presentationKey,
+                )
             }
 
             if (source == null || moveTarget == null) {
@@ -102,6 +108,9 @@ fun PlayedMoveAnimationOverlay(
                         "fallbackMillis" to MISSING_TARGET_FALLBACK_MILLIS.toString(),
                         "sourceAvailable" to (source != null).toString(),
                         "targetAvailable" to (moveTarget != null).toString(),
+                        "targetMatchesPresentation" to
+                                (latestTarget?.presentationKey ==
+                                        presentationKey).toString(),
                     ),
                 )
 

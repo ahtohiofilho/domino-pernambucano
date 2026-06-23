@@ -28,11 +28,12 @@ fun DominoGameTableStage(
     showDropTargets: Boolean,
     highlightedDropSide: BoardSide?,
     animatedPlayableMove: PlayableMove?,
+    animatedMovePresentationKey: DominoMovePresentationKey?,
     revealOpponentHands: Boolean,
     roundWinnerPlayerIndex: Int?,
     visualPiecesForPlayer: (Int) -> List<DominoPiece>,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit,
-    onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow?) -> Unit,
+    onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow) -> Unit,
     onPlayerSeatBoundsChanged: (Int, Rect?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -123,6 +124,7 @@ fun DominoGameTableStage(
                     showDropTargets = showDropTargets,
                     highlightedDropSide = highlightedDropSide,
                     animatedPlayableMove = animatedPlayableMove,
+                    animatedMovePresentationKey = animatedMovePresentationKey,
                     onDropTargetsChanged = onDropTargetsChanged,
                     onAnimatedMoveTargetChanged = onAnimatedMoveTargetChanged,
                     modifier = Modifier

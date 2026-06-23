@@ -23,8 +23,9 @@ fun DominoTableArea(
     showDropTargets: Boolean,
     highlightedDropSide: BoardSide?,
     animatedPlayableMove: PlayableMove?,
+    animatedMovePresentationKey: DominoMovePresentationKey?,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit,
-    onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow?) -> Unit,
+    onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val shouldShowBoard =
@@ -59,6 +60,7 @@ fun DominoTableArea(
                 showDropTargets = showDropTargets,
                 highlightedDropSide = highlightedDropSide,
                 animatedPlayableMove = animatedPlayableMove,
+                animatedMovePresentationKey = animatedMovePresentationKey,
                 onDropTargetsChanged = onDropTargetsChanged,
                 onAnimatedMoveTargetChanged = onAnimatedMoveTargetChanged,
                 modifier = Modifier.fillMaxSize(),

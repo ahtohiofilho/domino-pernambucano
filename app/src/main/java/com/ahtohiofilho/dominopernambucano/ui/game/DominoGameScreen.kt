@@ -75,6 +75,15 @@ fun DominoGameScreen(
     }
 
     val presentingMovePhase = uiState.phase as? DominoMatchPhase.PresentingMove
+    val presentingMovePresentationKey = presentingMovePhase?.let { movePhase ->
+        DominoMovePresentationKey(
+            onlinePresentationId = uiState.onlinePresentationId,
+            roundNumber = uiState.roundNumber,
+            boardChainBeforeMove = gameState.boardChain,
+            playerIndex = movePhase.playerIndex,
+            move = movePhase.move,
+        )
+    }
     val presentingPassPhase = uiState.phase as? DominoMatchPhase.PresentingPass
     val isRoundIntroPhase = uiState.phase == DominoMatchPhase.RoundIntro
     val isRoundSummaryPhase = uiState.phase == DominoMatchPhase.RoundSummary
@@ -106,6 +115,21 @@ fun DominoGameScreen(
     LaunchedEffect(uiState.phase) {
         if (uiState.phase !is DominoMatchPhase.PresentingMove) {
             localMoveSourcePositionInWindow = null
+        }
+    }
+
+    /*
+     * O alvo é produzido após a medição da mesa. Ao mudar a apresentação,
+     * qualquer alvo da apresentação anterior perde a validade imediatamente.
+     * A condição preserva um destino novo caso ele tenha chegado antes desta
+     * coroutine de limpeza.
+     */
+    LaunchedEffect(presentingMovePresentationKey) {
+        if (
+            animatedMoveTargetInWindow?.presentationKey !=
+            presentingMovePresentationKey
+        ) {
+            animatedMoveTargetInWindow = null
         }
     }
 
@@ -148,25 +172,31 @@ fun DominoGameScreen(
     }
 
     LaunchedEffect(
-        uiState.onlinePresentationId,
-        presentingMovePhase,
+        presentingMovePresentationKey,
         animatedMoveTargetInWindow,
         localMoveSourcePositionInWindow,
         localHandBoundsInWindow,
         playerSeatBoundsInWindow,
     ) {
         val movePhase = presentingMovePhase ?: return@LaunchedEffect
+        val presentationKey = presentingMovePresentationKey
+            ?: return@LaunchedEffect
         val source = if (movePhase.playerIndex == uiState.localPlayerIndex) {
             localMoveSourcePositionInWindow
                 ?: localHandBoundsInWindow?.centerOffset()
         } else {
             playerSeatBoundsInWindow[movePhase.playerIndex]?.centerOffset()
         }
-        val target = animatedMoveTargetInWindow
+        val target = animatedMoveTargetInWindow.forPresentation(
+            presentationKey = presentationKey,
+        )
         val attributes = movePhase.move.toUiMoveTraceAttributes() + mapOf(
             "animationKind" to "move",
             "sourceAvailable" to (source != null).toString(),
             "targetAvailable" to (target != null).toString(),
+            "targetMatchesPresentation" to
+                    (animatedMoveTargetInWindow?.presentationKey ==
+                            presentationKey).toString(),
         )
 
         if (source == null || target == null) {
@@ -315,6 +345,7 @@ fun DominoGameScreen(
                         !isMatchFinishedPhase,
                 highlightedDropSide = draggedPieceState?.highlightedSide,
                 animatedPlayableMove = presentingMovePhase?.move,
+                animatedMovePresentationKey = presentingMovePresentationKey,
                 revealOpponentHands = shouldRevealRoundContext,
                 roundWinnerPlayerIndex = if (shouldRevealRoundContext) {
                     gameState.roundWinnerPlayerIndex
@@ -330,7 +361,12 @@ fun DominoGameScreen(
                     dropTargetsInWindow = targets
                 },
                 onAnimatedMoveTargetChanged = { target ->
-                    animatedMoveTargetInWindow = target
+                    if (
+                        target.presentationKey ==
+                        presentingMovePresentationKey
+                    ) {
+                        animatedMoveTargetInWindow = target
+                    }
                 },
                 onPlayerSeatBoundsChanged = { playerIndex, bounds ->
                     updatePlayerSeatBounds(
@@ -526,13 +562,22 @@ fun DominoGameScreen(
             },
         )
 
-        if (presentingMovePhase != null) {
+        val movePhase = presentingMovePhase
+        val movePresentationKey = presentingMovePresentationKey
+
+        if (
+            movePhase != null &&
+            movePresentationKey != null
+        ) {
             PlayedMoveAnimationOverlay(
-                move = presentingMovePhase.move,
+                move = movePhase.move,
                 sourcePositionInWindow = getSourcePositionForPlayer(
-                    playerIndex = presentingMovePhase.playerIndex,
+                    playerIndex = movePhase.playerIndex,
                 ),
-                target = animatedMoveTargetInWindow,
+                target = animatedMoveTargetInWindow.forPresentation(
+                    presentationKey = movePresentationKey,
+                ),
+                presentationKey = movePresentationKey,
                 presentationId = uiState.onlinePresentationId,
                 onAnimationTrace = { type, attributes ->
                     traceUi(

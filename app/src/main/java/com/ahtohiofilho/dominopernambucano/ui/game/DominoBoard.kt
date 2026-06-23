@@ -49,8 +49,9 @@ fun DominoBoard(
     showDropTargets: Boolean = false,
     highlightedDropSide: BoardSide? = null,
     animatedPlayableMove: PlayableMove? = null,
+    animatedMovePresentationKey: DominoMovePresentationKey? = null,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit = {},
-    onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow?) -> Unit = {},
+    onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow) -> Unit = {},
 ) {
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
@@ -118,6 +119,7 @@ fun DominoBoard(
         val animatedMoveTargets = remember(
             boardChain,
             animatedPlayableMove,
+            animatedMovePresentationKey,
             maxWidth,
             maxHeight,
             responsiveMetrics,
@@ -169,14 +171,19 @@ fun DominoBoard(
 
         LaunchedEffect(
             animatedMoveTargets,
+            animatedMovePresentationKey,
             boardBoundsInWindow,
             density,
         ) {
             val bounds = boardBoundsInWindow
             val target = animatedMoveTargets.firstOrNull()
+            val presentationKey = animatedMovePresentationKey
 
-            if (bounds == null || target == null) {
-                onAnimatedMoveTargetChanged(null)
+            if (
+                bounds == null ||
+                target == null ||
+                presentationKey == null
+            ) {
                 return@LaunchedEffect
             }
 
@@ -194,6 +201,7 @@ fun DominoBoard(
 
             onAnimatedMoveTargetChanged(
                 DominoMoveTargetInWindow(
+                    presentationKey = presentationKey,
                     positionInWindow = boardCenterInWindow + targetOffsetInPixels,
                     rotationDegrees = target.rotationDegrees,
                 )
