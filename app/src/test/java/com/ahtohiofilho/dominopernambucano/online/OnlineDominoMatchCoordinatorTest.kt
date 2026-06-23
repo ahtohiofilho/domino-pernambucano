@@ -286,6 +286,124 @@ class OnlineDominoMatchCoordinatorTest {
         }
 
     @Test
+    fun confirmed_consecutive_passes_are_presented_once_each_in_fifo_order() =
+        runBlocking {
+            val initialRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+
+            val firstPendingPassRuntimeState = initialRuntimeState.copy(
+                phase = DominoMatchPhase.PresentingPass(
+                    playerIndex = 0,
+                ),
+            )
+
+            val secondPendingPassRuntimeState = firstPendingPassRuntimeState.copy(
+                gameState = firstPendingPassRuntimeState.gameState.copy(
+                    currentPlayerIndex = 1,
+                ),
+                phase = DominoMatchPhase.PresentingPass(
+                    playerIndex = 1,
+                ),
+            )
+
+            val resolvedRuntimeState = secondPendingPassRuntimeState.copy(
+                gameState = secondPendingPassRuntimeState.gameState.copy(
+                    currentPlayerIndex = 2,
+                ),
+                phase = DominoMatchPhase.WaitingForLocalMove,
+            )
+
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 1L,
+                ),
+            )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                repository.publishMatchSnapshot(
+                    firstPendingPassRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.WaitingForLocalMove,
+                    coordinator.currentState.phase,
+                )
+
+                repository.publishMatchSnapshot(
+                    secondPendingPassRuntimeState.toSnapshot(
+                        revision = 3L,
+                    ),
+                )
+                yield()
+
+                assertPresentingPass(
+                    coordinator = coordinator,
+                    expectedPlayerIndex = 0,
+                )
+
+                repository.publishMatchSnapshot(
+                    resolvedRuntimeState.toSnapshot(
+                        revision = 4L,
+                    ),
+                )
+                yield()
+
+                assertPresentingPass(
+                    coordinator = coordinator,
+                    expectedPlayerIndex = 0,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.PresentationFinished,
+                )
+
+                assertPresentingPass(
+                    coordinator = coordinator,
+                    expectedPlayerIndex = 1,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.PresentationFinished,
+                )
+
+                assertEquals(
+                    resolvedRuntimeState,
+                    coordinator.currentState,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
     fun local_move_is_submitted_once_until_authoritative_revision_confirms_it() =
         runBlocking {
             val openingPiece = DominoPiece(

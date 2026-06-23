@@ -315,7 +315,7 @@ class OnlineDominoMatchCoordinator(
             return
         }
 
-        mutableState.value = stableRuntimeState
+        mutableState.value = stableRuntimeState.toStableDisplayRuntimeState()
 
         advancePresentationQueue()
     }
@@ -460,6 +460,7 @@ class OnlineDominoMatchCoordinator(
         stableRevision = queuedRuntimeState.revision
         automaticPlayerIndexes = queuedRuntimeState.automaticPlayerIndexes
         mutableState.value = queuedRuntimeState.runtimeState
+            .toStableDisplayRuntimeState()
 
         trace(
             level = OnlineTraceLevel.INFO,
@@ -974,18 +975,17 @@ class OnlineDominoMatchCoordinator(
             return null
         }
 
-        if (previousRuntimeState.phase is DominoMatchPhase.PresentingPass) {
-            return null
-        }
+        return when (val previousPhase = previousRuntimeState.phase) {
+            DominoMatchPhase.WaitingForLocalMove -> {
+                previousGameState.currentPlayerIndex
+            }
 
-        if (
-            previousRuntimeState.phase != DominoMatchPhase.WaitingForLocalMove &&
-            previousRuntimeState.phase !is DominoMatchPhase.PresentingPass
-        ) {
-            return null
-        }
+            is DominoMatchPhase.PresentingPass -> {
+                previousPhase.playerIndex
+            }
 
-        return previousGameState.currentPlayerIndex
+            else -> null
+        }
     }
 }
 
@@ -998,6 +998,23 @@ private data class QueuedOnlineRuntimeState(
 private data class OnlinePresentationBridge(
     val presentationRuntimeState: DominoMatchRuntimeState,
 )
+
+/*
+ * Um snapshot autoritativo em PRESENTING_PASS anuncia um passe que o servidor
+ * ainda vai confirmar no tick seguinte. A UI só deve exibir esse toque quando
+ * a transição para a revisão seguinte permitir convertê-lo em uma apresentação
+ * FIFO explícita. O estado bruto continua armazenado em stableRuntimeState para
+ * preservar o playerIndex do passe pendente.
+ */
+private fun DominoMatchRuntimeState.toStableDisplayRuntimeState(): DominoMatchRuntimeState {
+    return if (phase is DominoMatchPhase.PresentingPass) {
+        copy(
+            phase = DominoMatchPhase.WaitingForLocalMove,
+        )
+    } else {
+        this
+    }
+}
 
 private data class DetectedOnlineMove(
     val playerIndex: Int,
