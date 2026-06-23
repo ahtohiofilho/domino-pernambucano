@@ -41,3 +41,5 @@ app/concatenador_android.py
 scripts_concatenados_android_*.txt
 scripts_concatenados_android_tudo.txt
 scripts_concatenados_android_ranking.txt
+# Evidências locais de homologação
+artifacts/
