@@ -15,7 +15,7 @@ data class OnlineTraceBufferHealth(
 
 class InMemoryOnlineTraceBuffer(
     private val capacity: Int = DEFAULT_CAPACITY,
-) : OnlineTraceSink {
+) : OnlineTraceOutbox {
     init {
         require(capacity > 0) {
             "A capacidade do buffer de rastreamento deve ser maior que zero."
@@ -35,6 +35,8 @@ class InMemoryOnlineTraceBuffer(
             newestRetainedSequence = null,
         ),
     )
+
+    private val acknowledgedEntries = mutableSetOf<OnlineTraceEntry>()
 
     private var nextSequence = 1L
     private var totalRecordedEntryCount = 0L
@@ -65,6 +67,7 @@ class InMemoryOnlineTraceBuffer(
         totalRecordedEntryCount += 1L
         droppedEntryCount += droppedEntryCountForRecord.toLong()
         mutableEntries.value = updatedEntries
+        acknowledgedEntries.retainAll(updatedEntries.toSet())
         publishHealth(updatedEntries)
     }
 
@@ -96,8 +99,45 @@ class InMemoryOnlineTraceBuffer(
     }
 
     @Synchronized
+    override fun pendingEntries(
+        roomId: String,
+        matchId: String,
+        limit: Int,
+    ): List<OnlineTraceEntry> {
+        require(limit > 0) {
+            "O limite de entradas pendentes deve ser maior que zero."
+        }
+
+        return entriesForRoomOrMatch(
+            roomId = roomId,
+            matchId = matchId,
+        ).asSequence()
+            .filterNot { entry ->
+                entry in acknowledgedEntries
+            }
+            .take(limit)
+            .toList()
+    }
+
+    override suspend fun acknowledge(
+        entries: List<OnlineTraceEntry>,
+    ) {
+        if (entries.isEmpty()) {
+            return
+        }
+
+        synchronized(this) {
+            acknowledgedEntries += entries
+            acknowledgedEntries.retainAll(
+                mutableEntries.value.toSet(),
+            )
+        }
+    }
+
+    @Synchronized
     fun clear() {
         mutableEntries.value = emptyList()
+        acknowledgedEntries.clear()
         nextSequence = 1L
         totalRecordedEntryCount = 0L
         droppedEntryCount = 0L

@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.withLock
 enum class OnlineTraceUploadFailureKind {
     TRANSPORT,
     REJECTED,
+    ACKNOWLEDGEMENT,
 }
 
 data class OnlineTraceOutboxHealth(
@@ -31,12 +32,26 @@ data class OnlineTraceOutboxHealth(
  */
 class OnlineTraceBatchUploader(
     private val repository: OnlineRoomRepository,
-    private val traceBuffer: InMemoryOnlineTraceBuffer,
+    private val traceOutbox: OnlineTraceOutbox,
     private val batchSize: Int = DEFAULT_BATCH_SIZE,
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
 ) {
+    constructor(
+        repository: OnlineRoomRepository,
+        traceBuffer: InMemoryOnlineTraceBuffer,
+        batchSize: Int = DEFAULT_BATCH_SIZE,
+        nowEpochMillis: () -> Long = {
+            System.currentTimeMillis()
+        },
+    ) : this(
+        repository = repository,
+        traceOutbox = traceBuffer,
+        batchSize = batchSize,
+        nowEpochMillis = nowEpochMillis,
+    )
+
     init {
         require(batchSize > 0) {
             "O tamanho do lote de rastreamento deve ser maior que zero."
@@ -66,7 +81,6 @@ class OnlineTraceBatchUploader(
                 val pendingEntries = findPendingEntries(
                     roomId = roomId,
                     matchId = matchId,
-                    lastAcknowledgedSequence = lastAcknowledgedSequence,
                     limit = batchSize,
                 )
 
@@ -107,6 +121,22 @@ class OnlineTraceBatchUploader(
                     return
                 }
 
+                try {
+                    traceOutbox.acknowledge(
+                        entries = pendingEntries,
+                    )
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Throwable) {
+                    publishOutboxHealth(
+                        roomId = roomId,
+                        matchId = matchId,
+                        lastAcknowledgedSequence = lastAcknowledgedSequence,
+                        failureKind = OnlineTraceUploadFailureKind.ACKNOWLEDGEMENT,
+                    )
+                    return
+                }
+
                 val updatedLastAcknowledgedSequence =
                     pendingEntries.last().sequence
 
@@ -126,20 +156,13 @@ class OnlineTraceBatchUploader(
     private fun findPendingEntries(
         roomId: String,
         matchId: String,
-        lastAcknowledgedSequence: Long,
         limit: Int,
     ): List<OnlineTraceEntry> {
-        return traceBuffer
-            .entriesForRoomOrMatch(
-                roomId = roomId,
-                matchId = matchId,
-            )
-            .asSequence()
-            .filter { entry ->
-                entry.sequence > lastAcknowledgedSequence
-            }
-            .take(limit)
-            .toList()
+        return traceOutbox.pendingEntries(
+            roomId = roomId,
+            matchId = matchId,
+            limit = limit,
+        )
     }
 
     private fun publishOutboxHealth(
@@ -153,7 +176,6 @@ class OnlineTraceBatchUploader(
         val pendingEntries = findPendingEntries(
             roomId = roomId,
             matchId = matchId,
-            lastAcknowledgedSequence = lastAcknowledgedSequence,
             limit = Int.MAX_VALUE,
         )
 
