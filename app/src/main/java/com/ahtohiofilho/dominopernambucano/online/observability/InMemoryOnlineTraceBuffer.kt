@@ -38,6 +38,8 @@ class InMemoryOnlineTraceBuffer(
 
     private val acknowledgedEntries = mutableSetOf<OnlineTraceEntry>()
 
+    private val mutablePendingEntryVersion = MutableStateFlow(0L)
+
     private var nextSequence = 1L
     private var totalRecordedEntryCount = 0L
     private var droppedEntryCount = 0L
@@ -47,6 +49,9 @@ class InMemoryOnlineTraceBuffer(
 
     val health: StateFlow<OnlineTraceBufferHealth> =
         mutableHealth.asStateFlow()
+
+    override val pendingEntryVersion: StateFlow<Long> =
+        mutablePendingEntryVersion.asStateFlow()
 
     @Synchronized
     override fun record(
@@ -69,6 +74,7 @@ class InMemoryOnlineTraceBuffer(
         mutableEntries.value = updatedEntries
         acknowledgedEntries.retainAll(updatedEntries.toSet())
         publishHealth(updatedEntries)
+        publishPendingEntryVersion()
     }
 
     @Synchronized
@@ -131,6 +137,7 @@ class InMemoryOnlineTraceBuffer(
             acknowledgedEntries.retainAll(
                 mutableEntries.value.toSet(),
             )
+            publishPendingEntryVersion()
         }
     }
 
@@ -142,6 +149,12 @@ class InMemoryOnlineTraceBuffer(
         totalRecordedEntryCount = 0L
         droppedEntryCount = 0L
         publishHealth(emptyList())
+        publishPendingEntryVersion()
+    }
+
+    private fun publishPendingEntryVersion() {
+        mutablePendingEntryVersion.value =
+            mutablePendingEntryVersion.value + 1L
     }
 
     private fun publishHealth(

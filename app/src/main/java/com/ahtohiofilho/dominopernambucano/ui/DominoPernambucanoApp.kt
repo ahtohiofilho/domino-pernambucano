@@ -13,7 +13,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
 import com.ahtohiofilho.dominopernambucano.online.observability.AndroidLogcatOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.CompositeOnlineTraceSink
-import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
+import com.ahtohiofilho.dominopernambucano.online.observability.PersistentOnlineTraceOutbox
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchUploader
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
@@ -25,6 +25,7 @@ import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.PlayModeScreen
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineCreateRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
+import java.io.File
 import java.util.UUID
 
 @Composable
@@ -41,15 +42,22 @@ fun DominoPernambucanoApp(
         "android-${UUID.randomUUID()}"
     }
 
-    val onlineTraceBuffer = remember {
-        InMemoryOnlineTraceBuffer()
+    val onlineTraceOutbox = remember(
+        context.applicationContext,
+    ) {
+        PersistentOnlineTraceOutbox(
+            directory = File(
+                context.applicationContext.filesDir,
+                "online-trace-outbox.jsonl",
+            ),
+        )
     }
 
     val onlineTraceSink = remember(
-        onlineTraceBuffer,
+        onlineTraceOutbox,
     ) {
         CompositeOnlineTraceSink(
-            onlineTraceBuffer,
+            onlineTraceOutbox,
             AndroidLogcatOnlineTraceSink(),
         )
     }
@@ -76,22 +84,26 @@ fun DominoPernambucanoApp(
 
     val onlineTraceBatchUploader = remember(
         onlineRoomRepository,
-        onlineTraceBuffer,
+        onlineTraceOutbox,
     ) {
         OnlineTraceBatchUploader(
             repository = onlineRoomRepository,
-            traceBuffer = onlineTraceBuffer,
+            traceOutbox = onlineTraceOutbox,
         )
     }
 
-    val onlineTraceEntries by onlineTraceBuffer.entries.collectAsState()
+    val onlineTracePendingEntryVersion by onlineTraceOutbox
+        .pendingEntryVersion
+        .collectAsState()
     val onlineMatchSnapshot by onlineRoomRepository.matchSnapshot.collectAsState()
 
     LaunchedEffect(
-        onlineTraceEntries,
+        onlineTracePendingEntryVersion,
         onlineMatchSnapshot?.roomId,
         onlineMatchSnapshot?.matchId,
     ) {
+        onlineTraceOutbox.retryPendingPersistence()
+
         val snapshot = onlineMatchSnapshot ?: return@LaunchedEffect
 
         onlineTraceBatchUploader.flushPendingEntries(
