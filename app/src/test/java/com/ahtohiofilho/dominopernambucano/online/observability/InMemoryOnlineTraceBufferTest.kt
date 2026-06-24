@@ -62,6 +62,39 @@ class InMemoryOnlineTraceBufferTest {
             OnlineTraceType.ACTION_ACCEPTED,
             entries[1].event.type,
         )
+
+        val health = buffer.health.value
+
+        assertEquals(2, health.capacity)
+        assertEquals(2, health.retainedEntryCount)
+        assertEquals(3L, health.totalRecordedEntryCount)
+        assertEquals(1L, health.droppedEntryCount)
+        assertEquals(2L, health.oldestRetainedSequence)
+        assertEquals(3L, health.newestRetainedSequence)
+    }
+
+    @Test
+    fun resets_buffer_health_when_entries_are_cleared() {
+        val buffer = InMemoryOnlineTraceBuffer(
+            capacity = 2,
+        )
+
+        buffer.record(
+            event = createEvent(
+                matchId = "match-1",
+                type = OnlineTraceType.ACTION_PREPARED,
+            ),
+        )
+
+        buffer.clear()
+
+        val health = buffer.health.value
+
+        assertEquals(0, health.retainedEntryCount)
+        assertEquals(0L, health.totalRecordedEntryCount)
+        assertEquals(0L, health.droppedEntryCount)
+        assertEquals(null, health.oldestRetainedSequence)
+        assertEquals(null, health.newestRetainedSequence)
     }
 
     @Test

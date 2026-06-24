@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class OnlineTraceBatchUploaderTest {
@@ -59,6 +60,76 @@ class OnlineTraceBatchUploaderTest {
                     batch.entries.map { entry -> entry.sequence }
                 },
             )
+
+            val health = uploader.outboxHealth.value.getValue("match-1")
+
+            assertEquals(2L, health.lastAcknowledgedSequence)
+            assertEquals(0, health.pendingEntryCount)
+            assertEquals(0, health.consecutiveFailureCount)
+            assertNull(health.lastFailureKind)
+            assertNull(health.lastFailureAtEpochMillis)
+        }
+
+    @Test
+    fun keeps_entries_pending_when_transport_fails_and_recovers_on_retry() =
+        runBlocking {
+            var now = 1_000L
+            val buffer = InMemoryOnlineTraceBuffer()
+            val repository = RecordingTraceRepository(
+                failNextTraceBatch = true,
+            )
+            val uploader = OnlineTraceBatchUploader(
+                repository = repository,
+                traceBuffer = buffer,
+                nowEpochMillis = { now },
+            )
+
+            buffer.record(
+                clientEvent(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                ),
+            )
+
+            uploader.flushPendingEntries(
+                roomId = "room-1",
+                matchId = "match-1",
+            )
+
+            val failedHealth = uploader.outboxHealth.value.getValue("match-1")
+
+            assertEquals(0L, failedHealth.lastAcknowledgedSequence)
+            assertEquals(1, failedHealth.pendingEntryCount)
+            assertEquals(1, failedHealth.consecutiveFailureCount)
+            assertEquals(
+                OnlineTraceUploadFailureKind.TRANSPORT,
+                failedHealth.lastFailureKind,
+            )
+            assertEquals(1_000L, failedHealth.lastFailureAtEpochMillis)
+
+            now += 1L
+
+            uploader.flushPendingEntries(
+                roomId = "room-1",
+                matchId = "match-1",
+            )
+
+            val recoveredHealth = uploader.outboxHealth.value.getValue("match-1")
+
+            assertEquals(
+                listOf(
+                    listOf(1L),
+                    listOf(1L),
+                ),
+                repository.receivedBatches.map { batch ->
+                    batch.entries.map { entry -> entry.sequence }
+                },
+            )
+            assertEquals(1L, recoveredHealth.lastAcknowledgedSequence)
+            assertEquals(0, recoveredHealth.pendingEntryCount)
+            assertEquals(0, recoveredHealth.consecutiveFailureCount)
+            assertNull(recoveredHealth.lastFailureKind)
+            assertNull(recoveredHealth.lastFailureAtEpochMillis)
         }
 
     private fun clientEvent(
@@ -78,7 +149,9 @@ class OnlineTraceBatchUploaderTest {
         )
     }
 
-    private class RecordingTraceRepository : OnlineRoomRepository {
+    private class RecordingTraceRepository(
+        private var failNextTraceBatch: Boolean = false,
+    ) : OnlineRoomRepository {
         private val mutableRoomSnapshot = MutableStateFlow<OnlineRoomSnapshotDto?>(null)
         private val mutableMatchSnapshot = MutableStateFlow<OnlineMatchSnapshotDto?>(null)
 
@@ -109,6 +182,12 @@ class OnlineTraceBatchUploaderTest {
             batch: OnlineTraceBatchDto,
         ): OnlineTraceBatchResultDto {
             receivedBatches += batch
+
+            if (failNextTraceBatch) {
+                failNextTraceBatch = false
+
+                throw IllegalStateException("Falha de transporte simulada.")
+            }
 
             return OnlineTraceBatchResultDto(
                 accepted = true,
