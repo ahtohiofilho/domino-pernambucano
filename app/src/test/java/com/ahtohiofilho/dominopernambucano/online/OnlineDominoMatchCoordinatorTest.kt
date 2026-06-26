@@ -182,6 +182,215 @@ class OnlineDominoMatchCoordinatorTest {
         }
 
     @Test
+    fun revision_gap_fast_forwards_active_presentation_and_pending_queue_to_latest_snapshot() =
+        runBlocking {
+            val openingPiece = DominoPiece(
+                left = 6,
+                right = 6,
+            )
+            val secondPiece = DominoPiece(
+                left = 6,
+                right = 5,
+            )
+            val latestPiece = DominoPiece(
+                left = 5,
+                right = 4,
+            )
+
+            val initialRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    listOf(openingPiece),
+                    listOf(secondPiece),
+                    listOf(latestPiece),
+                    emptyList(),
+                ),
+            )
+
+            val firstRemoteRuntimeState = createRuntimeState(
+                board = listOf(openingPiece),
+                boardChain = DominoBoardChain(
+                    openingPiece = openingPiece,
+                ),
+                currentPlayerIndex = 1,
+                playerHands = listOf(
+                    emptyList(),
+                    listOf(secondPiece),
+                    listOf(latestPiece),
+                    emptyList(),
+                ),
+            )
+
+            val secondRemoteRuntimeState = createRuntimeState(
+                board = listOf(
+                    openingPiece,
+                    secondPiece,
+                ),
+                boardChain = DominoBoardChain(
+                    openingPiece = openingPiece,
+                    rightPieces = listOf(secondPiece),
+                ),
+                currentPlayerIndex = 2,
+                playerHands = listOf(
+                    emptyList(),
+                    emptyList(),
+                    listOf(latestPiece),
+                    emptyList(),
+                ),
+            )
+
+            val latestRemoteRuntimeState = createRuntimeState(
+                board = listOf(
+                    openingPiece,
+                    secondPiece,
+                    latestPiece,
+                ),
+                boardChain = DominoBoardChain(
+                    openingPiece = openingPiece,
+                    rightPieces = listOf(
+                        secondPiece,
+                        latestPiece,
+                    ),
+                ),
+                currentPlayerIndex = 3,
+                playerHands = listOf(
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 1L,
+                ),
+            )
+
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher = Dispatchers.Unconfined,
+                traceLogger = OnlineTraceLogger(
+                    sink = traceBuffer,
+                    nowEpochMillis = { 1_000L },
+                ),
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                repository.publishMatchSnapshot(
+                    firstRemoteRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                assertPresentingMove(
+                    coordinator = coordinator,
+                    expectedPlayerIndex = 0,
+                    expectedPiece = openingPiece,
+                )
+
+                repository.publishMatchSnapshot(
+                    secondRemoteRuntimeState.toSnapshot(
+                        revision = 3L,
+                    ),
+                )
+                yield()
+
+                assertPresentingMove(
+                    coordinator = coordinator,
+                    expectedPlayerIndex = 0,
+                    expectedPiece = openingPiece,
+                )
+
+                repository.publishMatchSnapshot(
+                    latestRemoteRuntimeState.toSnapshot(
+                        revision = 6L,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    latestRemoteRuntimeState,
+                    coordinator.currentState,
+                )
+
+                val traceTypesBeforeLateCompletion = traceBuffer.snapshot().map { entry ->
+                    entry.event.type
+                }
+
+                assertEquals(
+                    listOf(
+                        OnlineTraceType.SNAPSHOT_RECEIVED,
+                        OnlineTraceType.SNAPSHOT_ENQUEUED,
+                        OnlineTraceType.PRESENTATION_STARTED,
+
+                        OnlineTraceType.SNAPSHOT_RECEIVED,
+                        OnlineTraceType.SNAPSHOT_ENQUEUED,
+
+                        OnlineTraceType.SNAPSHOT_RECEIVED,
+                        OnlineTraceType.PRESENTATION_FAST_FORWARDED,
+                        OnlineTraceType.STABLE_STATE_PROMOTED,
+                    ),
+                    traceTypesBeforeLateCompletion,
+                )
+
+                val fastForwardEvent = requireNotNull(
+                    traceBuffer.snapshot().singleOrNull { entry ->
+                        entry.event.type ==
+                                OnlineTraceType.PRESENTATION_FAST_FORWARDED
+                    },
+                ).event
+
+                assertEquals(
+                    "1",
+                    fastForwardEvent.attributes["previousStableRevision"],
+                )
+                assertEquals(
+                    "2",
+                    fastForwardEvent.attributes["discardedQueueDepth"],
+                )
+                assertEquals(
+                    "2",
+                    fastForwardEvent.attributes["cancelledPresentationRevision"],
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.PresentationFinished,
+                )
+
+                assertEquals(
+                    latestRemoteRuntimeState,
+                    coordinator.currentState,
+                )
+
+                assertEquals(
+                    traceTypesBeforeLateCompletion,
+                    traceBuffer.snapshot().map { entry ->
+                        entry.event.type
+                    },
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
     fun remote_revisions_arriving_during_pass_presentations_are_presented_in_order() =
         runBlocking {
             val initialRuntimeState = createRuntimeState(
