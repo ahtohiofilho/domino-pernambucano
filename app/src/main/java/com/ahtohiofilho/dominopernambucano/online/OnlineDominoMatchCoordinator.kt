@@ -170,9 +170,12 @@ class OnlineDominoMatchCoordinator(
                     return@collect
                 }
 
+                val previousReceivedRevision = lastReceivedRevision
                 val remoteRuntimeState = snapshot.toRuntimeState(
                     localPlayerIndex = localPlayerIndex,
                 )
+                val hasRevisionGap =
+                    snapshot.revision > previousReceivedRevision + 1L
 
                 trace(
                     level = OnlineTraceLevel.INFO,
@@ -182,7 +185,8 @@ class OnlineDominoMatchCoordinator(
                     automaticIndexes = snapshot.automaticPlayerIndexes.toSet(),
                     attributes = mapOf(
                         "previousReceivedRevision" to
-                                lastReceivedRevision.toString(),
+                                previousReceivedRevision.toString(),
+                        "hasRevisionGap" to hasRevisionGap.toString(),
                     ),
                 )
 
@@ -192,6 +196,7 @@ class OnlineDominoMatchCoordinator(
                     remoteRuntimeState = remoteRuntimeState,
                     revision = snapshot.revision,
                     automaticPlayerIndexes = snapshot.automaticPlayerIndexes.toSet(),
+                    hasRevisionGap = hasRevisionGap,
                 )
             }
         }
@@ -279,10 +284,20 @@ class OnlineDominoMatchCoordinator(
         remoteRuntimeState: DominoMatchRuntimeState,
         revision: Long,
         automaticPlayerIndexes: Set<Int>,
+        hasRevisionGap: Boolean,
     ) {
         clearInFlightActionIfConfirmed(
             revision = revision,
         )
+
+        if (hasRevisionGap) {
+            fastForwardToRemoteSnapshot(
+                remoteRuntimeState = remoteRuntimeState,
+                revision = revision,
+                automaticPlayerIndexes = automaticPlayerIndexes,
+            )
+            return
+        }
 
         pendingRemoteRuntimeStates.addLast(
             QueuedOnlineRuntimeState(
@@ -307,6 +322,50 @@ class OnlineDominoMatchCoordinator(
         )
 
         advancePresentationQueue()
+    }
+
+    /*
+     * Uma lacuna de revisões indica que o cliente ficou defasado e recebeu
+     * apenas o snapshot autoritativo mais recente. Nessa condição, a
+     * experiência correta é convergir imediatamente: não reencenamos ações
+     * históricas, não preservamos a apresentação em curso e não mantemos uma
+     * fila visual obsoleta.
+     */
+    private fun fastForwardToRemoteSnapshot(
+        remoteRuntimeState: DominoMatchRuntimeState,
+        revision: Long,
+        automaticPlayerIndexes: Set<Int>,
+    ) {
+        val discardedQueueDepth = pendingRemoteRuntimeStates.size
+        val cancelledPresentationRevision =
+            activePresentationRuntimeState?.revision
+        val previousStableRevision = stableRevision
+
+        pendingRemoteRuntimeStates.clear()
+        activePresentationRuntimeState = null
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.PRESENTATION_FAST_FORWARDED,
+            snapshotRevision = revision,
+            runtimeState = remoteRuntimeState,
+            automaticIndexes = automaticPlayerIndexes,
+            attributes = buildMap {
+                put("previousStableRevision", previousStableRevision.toString())
+                put("discardedQueueDepth", discardedQueueDepth.toString())
+                cancelledPresentationRevision?.let { activeRevision ->
+                    put("cancelledPresentationRevision", activeRevision.toString())
+                }
+            },
+        )
+
+        promoteRuntimeState(
+            queuedRuntimeState = QueuedOnlineRuntimeState(
+                runtimeState = remoteRuntimeState,
+                revision = revision,
+                automaticPlayerIndexes = automaticPlayerIndexes,
+            ),
+        )
     }
 
     private fun handleRoundIntroFinished() {

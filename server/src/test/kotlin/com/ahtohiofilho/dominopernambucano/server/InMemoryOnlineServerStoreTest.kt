@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
@@ -547,14 +548,21 @@ class InMemoryOnlineServerStoreTest {
         store: InMemoryOnlineServerStore,
         matchId: String,
     ): OnlineMatchSnapshotDto {
-        repeat(4) {
+        repeat(80) {
             val snapshot = requireNotNull(
                 store.getMatchSnapshot(
                     matchId = matchId,
                 ),
             )
 
-            if (snapshot.gameState.currentPlayerIndex in 0..1) {
+            val runtimeState = snapshot.toRuntimeState(
+                localPlayerIndex = snapshot.gameState.currentPlayerIndex,
+            )
+
+            if (
+                snapshot.gameState.currentPlayerIndex in 0..1 &&
+                runtimeState.phase == DominoMatchPhase.WaitingForLocalMove
+            ) {
                 return snapshot
             }
 
@@ -562,7 +570,7 @@ class InMemoryOnlineServerStoreTest {
         }
 
         error(
-            "A partida não alcançou uma vez humana após o processamento dos bots.",
+            "A partida não alcançou um turno humano com jogada disponível.",
         )
     }
 

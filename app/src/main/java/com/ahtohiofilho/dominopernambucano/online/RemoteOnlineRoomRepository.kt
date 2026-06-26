@@ -814,10 +814,22 @@ class RemoteOnlineRoomRepository(
                         ).toString(),
                     ),
                 )
+            }
 
+            /*
+             * Um lote com mais de uma revisão representa catch-up após
+             * defasagem. O StateFlow deve convergir para a maior revisão e a
+             * camada de apresentação receber apenas esse salto, em vez de
+             * executar um replay histórico de animações.
+             */
+            snapshots.lastOrNull()?.let { latestSnapshot ->
                 publishMatchSnapshotIfNewer(
-                    snapshot = match,
-                    trigger = trigger,
+                    snapshot = latestSnapshot,
+                    trigger = if (snapshots.size > 1) {
+                        "$trigger:fast_forward_batch"
+                    } else {
+                        trigger
+                    },
                     playerId = playerId,
                 )
             }

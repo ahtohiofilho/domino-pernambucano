@@ -260,6 +260,114 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
+    fun incremental_catch_up_batch_publishes_only_latest_snapshot_for_fast_forward() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val initialMatch = createMatchSnapshot(
+                revision = 1L,
+            )
+            val catchUpSnapshots = (2L..6L).map { revision ->
+                createMatchSnapshot(
+                    revision = revision,
+                    serverEpochMillis = revision * 1_000L,
+                )
+            }
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+                submitActionResult = OnlineActionResultDto(
+                    accepted = true,
+                    revision = catchUpSnapshots.last().revision,
+                    actionId = "action-1",
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    initialMatch.matchId to initialMatch,
+                ),
+                matchSnapshotsAfterById = mutableMapOf(
+                    initialMatch.matchId to catchUpSnapshots,
+                ),
+            )
+
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                traceLogger = createTraceLogger(
+                    traceBuffer = traceBuffer,
+                ),
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-1",
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            traceBuffer.clear()
+
+            val action = createOnlinePassTurnAction(
+                roomId = room.roomId,
+                matchId = initialMatch.matchId,
+                playerId = "player-1",
+                revision = initialMatch.revision,
+                actionId = "action-1",
+            )
+
+            val result = repository.submitAction(
+                action,
+            )
+
+            assertTrue(result.accepted)
+            assertEquals(
+                catchUpSnapshots.last(),
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                listOf(
+                    initialMatch.matchId to initialMatch.revision,
+                ),
+                apiClient.fetchMatchSnapshotsAfterRequests,
+            )
+
+            assertEquals(
+                listOf(2L, 3L, 4L, 5L, 6L),
+                traceBuffer.snapshot()
+                    .filter { entry ->
+                        entry.event.type == OnlineTraceType.SNAPSHOT_RECEIVED &&
+                                entry.event.context.snapshotRevision != null
+                    }
+                    .map { entry ->
+                        entry.event.context.snapshotRevision
+                    },
+            )
+
+            val publishedEntries = traceBuffer.snapshot().filter { entry ->
+                entry.event.type == OnlineTraceType.SNAPSHOT_PUBLISHED
+            }
+
+            assertEquals(
+                1,
+                publishedEntries.size,
+            )
+            assertEquals(
+                6L,
+                publishedEntries.single().event.context.snapshotRevision,
+            )
+            assertEquals(
+                "action_refresh:fast_forward_batch",
+                publishedEntries.single().event.attributes["trigger"],
+            )
+        }
+
+    @Test
     fun refresh_keeps_current_match_when_incremental_feed_has_no_newer_revision() =
         runBlocking {
             val room = createInMatchRoomSnapshot()
@@ -719,12 +827,15 @@ class RemoteOnlineRoomRepositoryTest {
             mutableMapOf(),
         private val matchSnapshotsById: MutableMap<String, OnlineMatchSnapshotDto> =
             mutableMapOf(),
+        private val matchSnapshotsAfterById: MutableMap<String, List<OnlineMatchSnapshotDto>> =
+            mutableMapOf(),
     ) : RemoteOnlineApiClient {
         val createRoomRequests = mutableListOf<CreateOnlineRoomRequestDto>()
         val joinRoomRequests = mutableListOf<JoinOnlineRoomRequestDto>()
         val submitActionRequests = mutableListOf<OnlinePlayerActionDto>()
         val fetchRoomSnapshotRequests = mutableListOf<String>()
         val fetchMatchSnapshotRequests = mutableListOf<String>()
+        val fetchMatchSnapshotsAfterRequests = mutableListOf<Pair<String, Long>>()
 
         override suspend fun createRoom(
             request: CreateOnlineRoomRequestDto,
@@ -787,6 +898,27 @@ class RemoteOnlineRoomRepositoryTest {
 
             return requireNotNull(matchSnapshotsById[matchId]) {
                 "Snapshot de partida não configurado para $matchId."
+            }
+        }
+
+        override suspend fun fetchMatchSnapshotsAfter(
+            matchId: String,
+            afterRevision: Long,
+        ): List<OnlineMatchSnapshotDto> {
+            fetchMatchSnapshotsAfterRequests += matchId to afterRevision
+
+            val configuredSnapshots = matchSnapshotsAfterById[matchId]
+
+            if (configuredSnapshots != null) {
+                return configuredSnapshots.filter { snapshot ->
+                    snapshot.revision > afterRevision
+                }
+            }
+
+            return listOf(
+                fetchMatchSnapshot(matchId),
+            ).filter { snapshot ->
+                snapshot.revision > afterRevision
             }
         }
     }
