@@ -27,6 +27,24 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+data class OnlinePresentationCatchUpPolicy(
+    val maxQueuedGameplayPresentations: Int = 4,
+    val retainedGameplayPresentations: Int = 1,
+) {
+    init {
+        require(maxQueuedGameplayPresentations >= 1) {
+            "O limite de apresentações pendentes deve ser positivo."
+        }
+
+        require(
+            retainedGameplayPresentations in
+                    1..maxQueuedGameplayPresentations
+        ) {
+            "A cauda preservada deve caber no orçamento normal."
+        }
+    }
+}
+
 class OnlineDominoMatchCoordinator(
     private val repository: OnlineRoomRepository,
     private val roomId: String,
@@ -38,6 +56,8 @@ class OnlineDominoMatchCoordinator(
         Dispatchers.Main.immediate,
     private val traceLogger: OnlineTraceLogger =
         OnlineTraceLogger(),
+    private val catchUpPolicy: OnlinePresentationCatchUpPolicy =
+        OnlinePresentationCatchUpPolicy(),
 ) : DominoMatchCoordinator, OnlineGameUiTraceReporter {
     private val coordinatorScope = CoroutineScope(
         SupervisorJob() + coroutineDispatcher,
@@ -291,10 +311,11 @@ class OnlineDominoMatchCoordinator(
         )
 
         if (hasRevisionGap) {
-            fastForwardToRemoteSnapshot(
+            hardResyncToRemoteSnapshot(
                 remoteRuntimeState = remoteRuntimeState,
                 revision = revision,
                 automaticPlayerIndexes = automaticPlayerIndexes,
+                reason = "missing_revision_history",
             )
             return
         }
@@ -325,16 +346,16 @@ class OnlineDominoMatchCoordinator(
     }
 
     /*
-     * Uma lacuna de revisões indica que o cliente ficou defasado e recebeu
-     * apenas o snapshot autoritativo mais recente. Nessa condição, a
-     * experiência correta é convergir imediatamente: não reencenamos ações
-     * históricas, não preservamos a apresentação em curso e não mantemos uma
-     * fila visual obsoleta.
+     * Uma lacuna de revisões é diferente de um lote contínuo: não existe
+     * baseline confiável para reproduzir ou compactar a narrativa visual.
+     * Somente nesse caso uma apresentação em curso pode ser cancelada para
+     * convergir imediatamente ao estado autoritativo mais recente.
      */
-    private fun fastForwardToRemoteSnapshot(
+    private fun hardResyncToRemoteSnapshot(
         remoteRuntimeState: DominoMatchRuntimeState,
         revision: Long,
         automaticPlayerIndexes: Set<Int>,
+        reason: String,
     ) {
         val discardedQueueDepth = pendingRemoteRuntimeStates.size
         val cancelledPresentationRevision =
@@ -345,12 +366,13 @@ class OnlineDominoMatchCoordinator(
         activePresentationRuntimeState = null
 
         trace(
-            level = OnlineTraceLevel.INFO,
-            type = OnlineTraceType.PRESENTATION_FAST_FORWARDED,
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.PRESENTATION_HARD_RESYNC,
             snapshotRevision = revision,
             runtimeState = remoteRuntimeState,
             automaticIndexes = automaticPlayerIndexes,
             attributes = buildMap {
+                put("reason", reason)
                 put("previousStableRevision", previousStableRevision.toString())
                 put("discardedQueueDepth", discardedQueueDepth.toString())
                 cancelledPresentationRevision?.let { activeRevision ->
@@ -426,6 +448,8 @@ class OnlineDominoMatchCoordinator(
             return
         }
 
+        compactGameplayBacklogIfNeeded()
+
         while (pendingRemoteRuntimeStates.isNotEmpty()) {
             val queuedRuntimeState = pendingRemoteRuntimeStates.first()
 
@@ -463,6 +487,116 @@ class OnlineDominoMatchCoordinator(
             )
 
             return
+        }
+    }
+
+    /*
+     * Só apresentações de jogada e toque consomem o orçamento visual.
+     * Enquanto a linha de revisões for contínua, mesmo uma dívida visual alta
+     * é compactada para uma baseline silenciosa e uma cauda animável. O
+     * resync duro fica reservado à ausência de histórico confiável.
+     */
+    private fun compactGameplayBacklogIfNeeded() {
+        if (activePresentationRuntimeState != null) {
+            return
+        }
+
+        val gameplayPresentationIndexes =
+            findQueuedGameplayPresentationIndexes()
+
+        val gameplayPresentationCount =
+            gameplayPresentationIndexes.size
+
+        if (
+            gameplayPresentationCount <=
+            catchUpPolicy.maxQueuedGameplayPresentations
+        ) {
+            return
+        }
+
+        val firstRetainedPresentationIndex =
+            gameplayPresentationIndexes[
+                gameplayPresentationIndexes.size -
+                        catchUpPolicy.retainedGameplayPresentations
+            ]
+
+        val baselineIndex = firstRetainedPresentationIndex - 1
+
+        /*
+         * O estado estável atual já é a base da primeira apresentação
+         * relevante. Sem uma revisão predecessora na fila não há nada seguro
+         * para compactar.
+         */
+        if (baselineIndex < 0) {
+            return
+        }
+
+        val queueDepthBeforeCompaction = pendingRemoteRuntimeStates.size
+        val previousStableRevision = stableRevision
+        val baselineRuntimeState =
+            pendingRemoteRuntimeStates.elementAt(baselineIndex)
+        val skippedSnapshotCount = baselineIndex
+
+        repeat(baselineIndex + 1) {
+            pendingRemoteRuntimeStates.removeFirst()
+        }
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.PRESENTATION_BACKLOG_COMPACTED,
+            snapshotRevision = baselineRuntimeState.revision,
+            runtimeState = baselineRuntimeState.runtimeState,
+            automaticIndexes = baselineRuntimeState.automaticPlayerIndexes,
+            attributes = mapOf(
+                "previousStableRevision" to previousStableRevision.toString(),
+                "baselineRevision" to baselineRuntimeState.revision.toString(),
+                "skippedSnapshotCount" to skippedSnapshotCount.toString(),
+                "gameplayPresentationCount" to
+                        gameplayPresentationCount.toString(),
+                "retainedGameplayPresentations" to
+                        catchUpPolicy.retainedGameplayPresentations.toString(),
+                "queueDepthBeforeCompaction" to
+                        queueDepthBeforeCompaction.toString(),
+                "queueDepthAfterCompaction" to
+                        pendingRemoteRuntimeStates.size.toString(),
+            ),
+        )
+
+        /*
+         * A baseline não é apresentada como animação. Ela torna a mesa
+         * coerente imediatamente antes da cauda preservada, permitindo que a
+         * última jogada ou toque seja mostrado em vez de teleportado.
+         */
+        promoteRuntimeState(
+            queuedRuntimeState = baselineRuntimeState,
+        )
+    }
+
+    private fun findQueuedGameplayPresentationIndexes(): List<Int> {
+        var previousRuntimeState = stableRuntimeState
+
+        return buildList {
+            pendingRemoteRuntimeStates.forEachIndexed { index, queuedRuntimeState ->
+                val presentation = buildPresentationBridge(
+                    previousRuntimeState = previousRuntimeState,
+                    remoteRuntimeState = queuedRuntimeState.runtimeState,
+                )
+
+                if (presentation?.isGameplayPresentation() == true) {
+                    add(index)
+                }
+
+                previousRuntimeState = queuedRuntimeState.runtimeState
+            }
+        }
+    }
+
+    private fun OnlinePresentationBridge.isGameplayPresentation(): Boolean {
+        return when (presentationRuntimeState.phase) {
+            is DominoMatchPhase.PresentingMove,
+            is DominoMatchPhase.PresentingPass -> true
+
+            else -> false
         }
     }
 

@@ -260,7 +260,7 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
-    fun incremental_catch_up_batch_publishes_only_latest_snapshot_for_fast_forward() =
+    fun incremental_catch_up_batch_publishes_all_snapshots_in_revision_order() =
         runBlocking {
             val room = createInMatchRoomSnapshot()
             val initialMatch = createMatchSnapshot(
@@ -354,16 +354,16 @@ class RemoteOnlineRoomRepositoryTest {
             }
 
             assertEquals(
-                1,
-                publishedEntries.size,
+                listOf(2L, 3L, 4L, 5L, 6L),
+                publishedEntries.map { entry ->
+                    entry.event.context.snapshotRevision
+                },
             )
-            assertEquals(
-                6L,
-                publishedEntries.single().event.context.snapshotRevision,
-            )
-            assertEquals(
-                "action_refresh:fast_forward_batch",
-                publishedEntries.single().event.attributes["trigger"],
+            assertTrue(
+                publishedEntries.all { entry ->
+                    entry.event.attributes["trigger"] ==
+                            "action_refresh:incremental_history_batch"
+                },
             )
         }
 

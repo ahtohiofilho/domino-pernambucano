@@ -817,16 +817,19 @@ class RemoteOnlineRoomRepository(
             }
 
             /*
-             * Um lote com mais de uma revisão representa catch-up após
-             * defasagem. O StateFlow deve convergir para a maior revisão e a
-             * camada de apresentação receber apenas esse salto, em vez de
-             * executar um replay histórico de animações.
+             * Um lote contínuo é histórico autoritativo recuperável, não
+             * desync. Preserve cada revisão no SharedFlow para que o
+             * coordenador decida, a partir da dívida visual real, entre
+             * replay FIFO, compactação da cauda ou ressincronização dura.
+             *
+             * O StateFlow ainda converge para a última revisão porque cada
+             * publicação atualiza o estado autoritativo mais recente.
              */
-            snapshots.lastOrNull()?.let { latestSnapshot ->
+            snapshots.forEach { snapshot ->
                 publishMatchSnapshotIfNewer(
-                    snapshot = latestSnapshot,
+                    snapshot = snapshot,
                     trigger = if (snapshots.size > 1) {
-                        "$trigger:fast_forward_batch"
+                        "$trigger:incremental_history_batch"
                     } else {
                         trigger
                     },
