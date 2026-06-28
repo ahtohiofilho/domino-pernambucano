@@ -145,11 +145,11 @@ class InMemoryOnlineServerStoreTest {
         )
 
         assertEquals(
-            18_000L,
+            20_000L,
             updatedSnapshot.playerClockMillis[currentPlayerIndex],
         )
         assertEquals(
-            8_000L,
+            30_000L,
             updatedSnapshot.playerClockReserveMillis[currentPlayerIndex],
         )
     }

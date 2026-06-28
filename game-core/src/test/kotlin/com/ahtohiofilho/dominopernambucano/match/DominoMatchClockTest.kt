@@ -34,6 +34,21 @@ class DominoMatchClockTest {
     }
 
     @Test
+    fun online_clock_starts_with_twenty_seconds_and_forty_seconds_of_reserve() {
+        val clocks = createInitialPlayerClockMillis(
+            playerCount = 2,
+            clockPolicy = DominoMatchClockPolicy.OnlinePerPlayerRound,
+        )
+        val reserves = createInitialPlayerClockReserveMillis(
+            playerCount = 2,
+            clockPolicy = DominoMatchClockPolicy.OnlinePerPlayerRound,
+        )
+
+        assertEquals(listOf(20_000L, 20_000L), clocks)
+        assertEquals(listOf(40_000L, 40_000L), reserves)
+    }
+
+    @Test
     fun reload_does_not_revive_an_expired_main_clock() {
         val result = reloadPlayerClockFromReserveMillis(
             clocks = listOf(0L),

@@ -22,7 +22,7 @@ fun createInitialPlayerClockReserveMillis(
     }
 
     return List(playerCount) {
-        clockPolicy.playerRoundTimeMillis
+        clockPolicy.playerRoundReserveMillis
     }
 }
 
