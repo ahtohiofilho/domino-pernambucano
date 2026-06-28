@@ -174,6 +174,10 @@ class OnlineSnapshotDtoTest {
         assertEquals(runtimeState.phase, restoredRuntimeState.phase)
         assertEquals(runtimeState.clockPolicy, restoredRuntimeState.clockPolicy)
         assertEquals(runtimeState.playerClockMillis, restoredRuntimeState.playerClockMillis)
+        assertEquals(
+            runtimeState.playerClockReserveMillis,
+            restoredRuntimeState.playerClockReserveMillis,
+        )
     }
 
     @Test

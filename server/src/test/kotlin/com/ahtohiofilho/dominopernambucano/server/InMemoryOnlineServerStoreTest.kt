@@ -92,6 +92,69 @@ class InMemoryOnlineServerStoreTest {
     }
 
     @Test
+    fun accepted_human_move_reloads_main_clock_from_authoritative_reserve() {
+        var now = 1_000L
+
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+
+        val startedRoom = startFourHumanMatch(
+            store = store,
+        )
+        val matchId = requireNotNull(startedRoom.matchId)
+        val initialSnapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+        val initialRuntimeState = initialSnapshot.toRuntimeState(
+            localPlayerIndex = initialSnapshot.gameState.currentPlayerIndex,
+        )
+        val currentPlayerIndex = initialRuntimeState.gameState.currentPlayerIndex
+        val currentPlayerId = requireNotNull(
+            startedRoom.players.firstOrNull { player ->
+                player.seatIndex == currentPlayerIndex
+            },
+        ).playerId
+        val move = requireNotNull(
+            findBasicBotMove(
+                state = initialRuntimeState.gameState,
+            ),
+        )
+
+        now += 10_000L
+
+        val result = store.submitAction(
+            action = createOnlinePlayMoveAction(
+                roomId = startedRoom.roomId,
+                matchId = matchId,
+                playerId = currentPlayerId,
+                revision = initialSnapshot.revision,
+                move = move,
+                actionId = "clock-reload-after-ten-seconds",
+            ),
+        )
+
+        assertTrue(result.accepted)
+
+        val updatedSnapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        assertEquals(
+            18_000L,
+            updatedSnapshot.playerClockMillis[currentPlayerIndex],
+        )
+        assertEquals(
+            8_000L,
+            updatedSnapshot.playerClockReserveMillis[currentPlayerIndex],
+        )
+    }
+
+    @Test
     fun second_human_starts_match_with_development_bots_when_enabled() {
         val store = InMemoryOnlineServerStore(
             autoFillDevelopmentBotsAfterTwoHumanPlayers = true,
@@ -191,30 +254,11 @@ class InMemoryOnlineServerStoreTest {
             startedRoom.matchId,
         )
 
-        var snapshot = getSnapshotAtHumanTurn(
+        val snapshot = getSnapshotAtHumanSeat(
             store = store,
+            roomId = startedRoom.roomId,
             matchId = matchId,
-        )
-
-        if (snapshot.gameState.currentPlayerIndex == 1) {
-            val playerOneAction = submitCurrentHumanAction(
-                store = store,
-                roomId = startedRoom.roomId,
-                matchId = matchId,
-                snapshot = snapshot,
-            )
-
-            assertTrue(playerOneAction.accepted)
-
-            snapshot = getSnapshotAtHumanTurn(
-                store = store,
-                matchId = matchId,
-            )
-        }
-
-        assertEquals(
-            0,
-            snapshot.gameState.currentPlayerIndex,
+            playerIndex = 0,
         )
 
         val playerZeroAction = submitCurrentHumanAction(
@@ -541,6 +585,52 @@ class InMemoryOnlineServerStoreTest {
         assertEquals(
             "deduplicated-action",
             traceSink.events.last().context.actionId,
+        )
+    }
+
+    private fun getSnapshotAtHumanSeat(
+        store: InMemoryOnlineServerStore,
+        roomId: String,
+        matchId: String,
+        playerIndex: Int,
+    ): OnlineMatchSnapshotDto {
+        repeat(80) {
+            val snapshot = requireNotNull(
+                store.getMatchSnapshot(
+                    matchId = matchId,
+                ),
+            )
+
+            val runtimeState = snapshot.toRuntimeState(
+                localPlayerIndex = snapshot.gameState.currentPlayerIndex,
+            )
+
+            if (
+                snapshot.gameState.currentPlayerIndex == playerIndex &&
+                runtimeState.phase == DominoMatchPhase.WaitingForLocalMove
+            ) {
+                return snapshot
+            }
+
+            if (
+                snapshot.gameState.currentPlayerIndex in 0..1 &&
+                runtimeState.phase == DominoMatchPhase.WaitingForLocalMove
+            ) {
+                val actionResult = submitCurrentHumanAction(
+                    store = store,
+                    roomId = roomId,
+                    matchId = matchId,
+                    snapshot = snapshot,
+                )
+
+                assertTrue(actionResult.accepted)
+            } else {
+                store.advanceAuthoritativeTime()
+            }
+        }
+
+        error(
+            "A partida não alcançou um turno jogável do humano $playerIndex.",
         )
     }
 

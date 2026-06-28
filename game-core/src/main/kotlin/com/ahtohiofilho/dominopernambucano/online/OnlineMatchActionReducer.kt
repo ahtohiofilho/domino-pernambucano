@@ -12,6 +12,8 @@ import com.ahtohiofilho.dominopernambucano.domain.playMoveForCurrentPlayer
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
+import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockReserveMillis
+import com.ahtohiofilho.dominopernambucano.match.reloadPlayerClockFromReserveMillis
 
 sealed interface OnlineMatchActionReduction {
     data class Accepted(
@@ -119,12 +121,22 @@ fun reduceOnlineGameAction(
         }
     }
 
+    val reloadedClock = reloadPlayerClockFromReserveMillis(
+        clocks = runtimeState.playerClockMillis,
+        reserves = runtimeState.playerClockReserveMillis,
+        playerIndex = seatIndex,
+        playerRoundTimeMillis = runtimeState.clockPolicy.playerRoundTimeMillis,
+    )
+
     return OnlineMatchActionReduction.Accepted(
         runtimeState = runtimeState.copy(
             gameState = updatedGameState,
             phase = determineOnlineNextPhase(
                 gameState = updatedGameState,
             ),
+            playerClockMillis = reloadedClock.playerClockMillis,
+            playerClockReserveMillis =
+                reloadedClock.playerClockReserveMillis,
         ),
     )
 }
@@ -179,6 +191,10 @@ fun reduceOnlineStartNextRoundAction(
                 playerCount = namedGameState.players.size,
                 clockPolicy = runtimeState.clockPolicy,
             ),
+            playerClockReserveMillis = createInitialPlayerClockReserveMillis(
+                playerCount = namedGameState.players.size,
+                clockPolicy = runtimeState.clockPolicy,
+            ),
         ),
     )
 }
@@ -219,6 +235,10 @@ fun reduceOnlineStartNewMatchAction(
                 gameState = freshGameState,
             ),
             playerClockMillis = createInitialPlayerClockMillis(
+                playerCount = freshGameState.players.size,
+                clockPolicy = runtimeState.clockPolicy,
+            ),
+            playerClockReserveMillis = createInitialPlayerClockReserveMillis(
                 playerCount = freshGameState.players.size,
                 clockPolicy = runtimeState.clockPolicy,
             ),

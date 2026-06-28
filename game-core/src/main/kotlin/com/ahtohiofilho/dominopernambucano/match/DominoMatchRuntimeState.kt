@@ -12,4 +12,9 @@ data class DominoMatchRuntimeState(
         playerCount = gameState.players.size,
         clockPolicy = clockPolicy,
     ),
+    val playerClockReserveMillis: List<Long> =
+        createInitialPlayerClockReserveMillis(
+            playerCount = gameState.players.size,
+            clockPolicy = clockPolicy,
+        ),
 )

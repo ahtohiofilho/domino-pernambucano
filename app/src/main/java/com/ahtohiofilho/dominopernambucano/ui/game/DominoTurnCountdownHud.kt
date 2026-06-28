@@ -4,6 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
@@ -20,9 +22,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
 private const val CountdownLateralOffsetFraction = 0.18f
+private val CountdownWarningYellow = Color(0xFFFFC107)
+private val CountdownCriticalRed = Color(0xFFD32F2F)
 
 @Composable
 fun DominoTurnCountdownHud(
@@ -46,7 +49,7 @@ fun DominoTurnCountdownHud(
         val horizontalLateralOffset = maxWidth * CountdownLateralOffsetFraction
         val verticalLateralOffset = maxHeight * CountdownLateralOffsetFraction
 
-        CountdownNumber(
+        CountdownClocks(
             playerIndex = topPlayerIndex,
             uiState = uiState,
             isCurrent = currentPlayerIndex == topPlayerIndex,
@@ -60,7 +63,7 @@ fun DominoTurnCountdownHud(
                 ),
         )
 
-        CountdownNumber(
+        CountdownClocks(
             playerIndex = leftPlayerIndex,
             uiState = uiState,
             isCurrent = currentPlayerIndex == leftPlayerIndex,
@@ -74,7 +77,7 @@ fun DominoTurnCountdownHud(
                 ),
         )
 
-        CountdownNumber(
+        CountdownClocks(
             playerIndex = rightPlayerIndex,
             uiState = uiState,
             isCurrent = currentPlayerIndex == rightPlayerIndex,
@@ -88,7 +91,7 @@ fun DominoTurnCountdownHud(
                 ),
         )
 
-        CountdownNumber(
+        CountdownClocks(
             playerIndex = localPlayerIndex,
             uiState = uiState,
             isCurrent = currentPlayerIndex == localPlayerIndex,
@@ -105,7 +108,7 @@ fun DominoTurnCountdownHud(
 }
 
 @Composable
-private fun CountdownNumber(
+private fun CountdownClocks(
     playerIndex: Int,
     uiState: DominoGameUiState,
     isCurrent: Boolean,
@@ -113,22 +116,56 @@ private fun CountdownNumber(
 ) {
     val remainingMillis = uiState.playerClockMillis.getOrNull(playerIndex)
         ?: return
+    val reserveMillis = uiState.playerClockReserveMillis
+        .getOrNull(playerIndex)
+        ?: 0L
 
+    val scale by animateFloatAsState(
+        targetValue = if (isCurrent) 1.14f else 1f,
+        label = "countdownClocksScale",
+    )
+
+    Row(
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        },
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CountdownClockNumber(
+            remainingMillis = remainingMillis,
+            isCurrent = isCurrent,
+        )
+
+        Text(
+            text = "+",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Black,
+            color = getCountdownPlusColor(
+                isCurrent = isCurrent,
+            ),
+            maxLines = 1,
+        )
+
+        CountdownClockNumber(
+            remainingMillis = reserveMillis,
+            isCurrent = isCurrent,
+        )
+    }
+}
+
+@Composable
+private fun CountdownClockNumber(
+    remainingMillis: Long,
+    isCurrent: Boolean,
+) {
     val remainingSeconds = formatCountdownSeconds(
         millis = remainingMillis,
     )
 
-    val scale by animateFloatAsState(
-        targetValue = if (isCurrent) 1.14f else 1f,
-        label = "countdownNumberScale",
-    )
-
     Box(
-        modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+        modifier = Modifier
             .clip(CircleShape)
             .background(
                 getCountdownBackgroundColor(
@@ -151,6 +188,7 @@ private fun CountdownNumber(
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Black,
             color = getCountdownTextColor(
+                remainingSeconds = remainingSeconds,
                 isCurrent = isCurrent,
             ),
             maxLines = 1,
@@ -169,31 +207,36 @@ private fun getCountdownBackgroundColor(
     remainingSeconds: Long,
     isCurrent: Boolean,
 ): Color {
-    return when {
-        remainingSeconds <= 5L && isCurrent -> {
-            DominoSemanticColors.playableMove.copy(alpha = 0.96f)
-        }
-
-        remainingSeconds <= 10L && isCurrent -> {
-            DominoSemanticColors.scoreHighlight.copy(alpha = 0.96f)
-        }
-
-        isCurrent -> {
-            DominoColorTokens.PureWhite.copy(alpha = 0.92f)
-        }
-
-        else -> {
-            DominoColorTokens.PureWhite.copy(alpha = 0.18f)
-        }
+    val color = when {
+        remainingSeconds <= 5L -> CountdownCriticalRed
+        remainingSeconds <= 12L -> CountdownWarningYellow
+        else -> DominoColorTokens.PureWhite
     }
+
+    return color.copy(
+        alpha = if (isCurrent) 0.96f else 0.54f,
+    )
 }
 
 private fun getCountdownTextColor(
+    remainingSeconds: Long,
     isCurrent: Boolean,
 ): Color {
-    return if (isCurrent) {
-        DominoColorTokens.InkBlue
+    val color = if (remainingSeconds <= 5L) {
+        DominoColorTokens.PureWhite
     } else {
-        DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.74f)
+        DominoColorTokens.InkBlue
     }
+
+    return color.copy(
+        alpha = if (isCurrent) 1f else 0.82f,
+    )
+}
+
+private fun getCountdownPlusColor(
+    isCurrent: Boolean,
+): Color {
+    return DominoColorTokens.PureWhite.copy(
+        alpha = if (isCurrent) 0.96f else 0.70f,
+    )
 }

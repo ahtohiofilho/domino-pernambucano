@@ -29,6 +29,8 @@ class LocalDominoMatchCoordinator(
     override val currentState: DominoMatchRuntimeState
         get() = mutableState.value
 
+    private var playerIndexAwaitingClockReload: Int? = null
+
     override fun dispatch(
         command: DominoMatchCommand,
     ) {
@@ -114,6 +116,8 @@ class LocalDominoMatchCoordinator(
         if (!validMoves.contains(command.move)) {
             return
         }
+
+        playerIndexAwaitingClockReload = gameState.currentPlayerIndex
 
         mutableState.value = runtimeState.copy(
             phase = DominoMatchPhase.PresentingMove(
@@ -209,6 +213,8 @@ class LocalDominoMatchCoordinator(
         )
 
         if (botMove != null) {
+            playerIndexAwaitingClockReload = gameState.currentPlayerIndex
+
             mutableState.value = runtimeState.copy(
                 phase = DominoMatchPhase.PresentingMove(
                     playerIndex = gameState.currentPlayerIndex,
@@ -234,8 +240,10 @@ class LocalDominoMatchCoordinator(
                     playableMove = phase.move,
                 )
 
-                val updatedRuntimeState = runtimeState.copy(
-                    gameState = updatedGameState,
+                val updatedRuntimeState = reloadPendingPlayerClock(
+                    runtimeState = runtimeState.copy(
+                        gameState = updatedGameState,
+                    ),
                 )
 
                 mutableState.value = updatedRuntimeState.copy(
@@ -250,8 +258,10 @@ class LocalDominoMatchCoordinator(
                     state = runtimeState.gameState,
                 )
 
-                val updatedRuntimeState = runtimeState.copy(
-                    gameState = updatedGameState,
+                val updatedRuntimeState = reloadPendingPlayerClock(
+                    runtimeState = runtimeState.copy(
+                        gameState = updatedGameState,
+                    ),
                 )
 
                 mutableState.value = updatedRuntimeState.copy(
@@ -283,6 +293,8 @@ class LocalDominoMatchCoordinator(
             previousState = runtimeState.gameState,
         )
 
+        playerIndexAwaitingClockReload = null
+
         mutableState.value = runtimeState.copy(
             gameState = nextRoundGameState,
             roundNumber = runtimeState.roundNumber + 1,
@@ -291,11 +303,17 @@ class LocalDominoMatchCoordinator(
                 playerCount = nextRoundGameState.players.size,
                 clockPolicy = runtimeState.clockPolicy,
             ),
+            playerClockReserveMillis = createInitialPlayerClockReserveMillis(
+                playerCount = nextRoundGameState.players.size,
+                clockPolicy = runtimeState.clockPolicy,
+            ),
         )
     }
 
     private fun handleStartNewMatch() {
         val runtimeState = mutableState.value
+
+        playerIndexAwaitingClockReload = null
 
         mutableState.value = createInitialRuntimeState(
             localPlayerIndex = runtimeState.localPlayerIndex,
@@ -306,6 +324,8 @@ class LocalDominoMatchCoordinator(
     private fun forceRandomMoveForCurrentPlayer(
         runtimeState: DominoMatchRuntimeState,
     ) {
+        playerIndexAwaitingClockReload = null
+
         val gameState = runtimeState.gameState
 
         val randomMove = findRandomPlayableMove(
@@ -326,6 +346,29 @@ class LocalDominoMatchCoordinator(
                 ),
             )
         }
+    }
+
+    private fun reloadPendingPlayerClock(
+        runtimeState: DominoMatchRuntimeState,
+    ): DominoMatchRuntimeState {
+        val playerIndex = playerIndexAwaitingClockReload
+            ?: return runtimeState
+
+        playerIndexAwaitingClockReload = null
+
+        val reloadedClock = reloadPlayerClockFromReserveMillis(
+            clocks = runtimeState.playerClockMillis,
+            reserves = runtimeState.playerClockReserveMillis,
+            playerIndex = playerIndex,
+            playerRoundTimeMillis =
+                runtimeState.clockPolicy.playerRoundTimeMillis,
+        )
+
+        return runtimeState.copy(
+            playerClockMillis = reloadedClock.playerClockMillis,
+            playerClockReserveMillis =
+                reloadedClock.playerClockReserveMillis,
+        )
     }
 
     private fun determineNextPhase(

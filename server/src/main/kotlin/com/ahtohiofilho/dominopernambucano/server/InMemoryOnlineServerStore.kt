@@ -1004,19 +1004,56 @@ class InMemoryOnlineServerStore(
         matchRecord: MatchRecord,
     ): OnlineActionResultDto {
         val currentSnapshot = matchRecord.snapshot
+        val now = nowEpochMillis()
+        val runtimeState = currentSnapshot.toRuntimeState(
+            localPlayerIndex = seatIndex,
+        )
+        val clockReduction = reduceClockAndRegisterAutomaticPlayer(
+            runtimeState = runtimeState,
+            automaticSeatIndexes = matchRecord.automaticSeatIndexes,
+            elapsedMillis = getElapsedMillisSinceSnapshot(
+                snapshot = currentSnapshot,
+                nowEpochMillis = now,
+            ),
+        )
+
+        if (clockReduction.turnWasResolved) {
+            val automaticResult = publishMatchSnapshot(
+                matchRecord = matchRecord,
+                previousSnapshot = currentSnapshot,
+                runtimeState = clockReduction.runtimeState,
+                serverEpochMillis = now,
+                trigger = "game_action:automatic_turn",
+            )
+
+            return automaticResult.copy(
+                accepted = false,
+                reason = "Tempo esgotado.",
+            )
+        }
+
+        val clockedSnapshot = clockReduction.runtimeState.toOnlineSnapshotDto(
+            roomId = currentSnapshot.roomId,
+            matchId = currentSnapshot.matchId,
+            revision = currentSnapshot.revision,
+            serverEpochMillis = now,
+            automaticPlayerIndexes =
+                matchRecord.automaticSeatIndexes.sorted(),
+        )
 
         return when (
             val reduction = reduceOnlineGameAction(
                 action = action,
-                currentSnapshot = currentSnapshot,
+                currentSnapshot = clockedSnapshot,
                 seatIndex = seatIndex,
             )
         ) {
             is OnlineMatchActionReduction.Accepted -> {
                 publishMatchSnapshot(
                     matchRecord = matchRecord,
-                    previousSnapshot = currentSnapshot,
+                    previousSnapshot = clockedSnapshot,
                     runtimeState = reduction.runtimeState,
+                    serverEpochMillis = now,
                     action = action,
                     trigger = "game_action",
                 )

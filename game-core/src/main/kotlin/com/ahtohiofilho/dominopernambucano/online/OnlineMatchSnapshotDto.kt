@@ -22,6 +22,7 @@ data class OnlineMatchSnapshotDto(
 
     val clockPolicy: OnlineMatchClockPolicyDto,
     val playerClockMillis: List<Long>,
+    val playerClockReserveMillis: List<Long> = emptyList(),
 
     val serverEpochMillis: Long? = null,
 
@@ -70,6 +71,7 @@ fun DominoMatchRuntimeState.toOnlineSnapshotDto(
         phase = phase.toOnlineDto(),
         clockPolicy = clockPolicy.toOnlineDto(),
         playerClockMillis = playerClockMillis,
+        playerClockReserveMillis = playerClockReserveMillis,
         serverEpochMillis = serverEpochMillis,
         automaticPlayerIndexes = automaticPlayerIndexes,
     )
@@ -85,6 +87,7 @@ fun OnlineMatchSnapshotDto.toRuntimeState(
         phase = phase.toDomain(),
         clockPolicy = clockPolicy.toDomain(),
         playerClockMillis = playerClockMillis,
+        playerClockReserveMillis = playerClockReserveMillis,
     )
 }
 

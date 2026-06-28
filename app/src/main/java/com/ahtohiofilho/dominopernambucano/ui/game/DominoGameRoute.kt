@@ -48,6 +48,8 @@ fun DominoGameRoute(
             phase = runtimeState.phase,
             localPlayableMoves = localPlayableMoves,
             playerClockMillis = runtimeState.playerClockMillis,
+            playerClockReserveMillis =
+                runtimeState.playerClockReserveMillis,
             isTurnClockEnabled = runtimeState.clockPolicy.enabled,
             turnClockTotalMillis = runtimeState.clockPolicy.playerRoundTimeMillis,
             onlinePresentationId = onlineUiTraceContext?.presentationId,
