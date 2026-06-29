@@ -7,6 +7,8 @@ import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLevel
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -99,6 +101,299 @@ class RemoteOnlineRoomRepository(
         return identity.copy(
             playerId = session.playerId,
         )
+    }
+
+
+
+    override suspend fun resumeParticipation(
+        binding: OnlineParticipationBinding,
+    ): OnlineParticipationResumeResult {
+        val client = apiClient ?: return OnlineParticipationResumeResult.Unavailable(
+            reason = getUnavailableBackendReason(),
+        )
+
+        val sessionRepository = anonymousSessionRepository
+            ?: return OnlineParticipationResumeResult.Unavailable(
+                reason = getUnavailableBackendReason(),
+            )
+
+        val session = try {
+            sessionRepository.getOrCreate()
+        } catch (error: Throwable) {
+            if (error is CancellationException) {
+                throw error
+            }
+
+            traceTransportFailure(
+                operation = "resume_participation_session",
+                error = error,
+                roomId = binding.roomId,
+                matchId = binding.matchId,
+                playerId = binding.playerId,
+                durationMillis = 0L,
+            )
+
+            return OnlineParticipationResumeResult.Unavailable(
+                reason = error.toOnlineFailureReason(
+                    fallback = "Não foi possível preparar sua sessão online.",
+                ),
+            )
+        }
+
+        if (session.playerId != binding.playerId) {
+            trace(
+                level = OnlineTraceLevel.WARN,
+                type = OnlineTraceType.INVARIANT_VIOLATION,
+                roomId = binding.roomId,
+                matchId = binding.matchId,
+                playerId = binding.playerId,
+                localSeatIndex = binding.seatIndex,
+                attributes = mapOf(
+                    "reason" to "resume_session_player_mismatch",
+                    "sessionPlayerId" to session.playerId,
+                ),
+            )
+
+            return OnlineParticipationResumeResult.Inactive(
+                reason = "Sua sessão online atual não corresponde à participação salva.",
+            )
+        }
+
+        client.setDevelopmentPlayerId(
+            playerId = binding.playerId,
+        )
+
+        return refreshMutex.withLock {
+            val startedAtEpochMillis = nowEpochMillis()
+
+            try {
+                trace(
+                    level = OnlineTraceLevel.DEBUG,
+                    type = OnlineTraceType.SNAPSHOT_REQUESTED,
+                    roomId = binding.roomId,
+                    matchId = binding.matchId,
+                    playerId = binding.playerId,
+                    localSeatIndex = binding.seatIndex,
+                    attributes = mapOf(
+                        "snapshotKind" to "room",
+                        "trigger" to "resume_participation",
+                    ),
+                )
+
+                val room = client.fetchRoomSnapshot(
+                    roomId = binding.roomId,
+                )
+
+                val localPlayer = room.players.firstOrNull { player ->
+                    player.playerId == binding.playerId
+                }
+
+                if (localPlayer == null) {
+                    trace(
+                        level = OnlineTraceLevel.WARN,
+                        type = OnlineTraceType.INVARIANT_VIOLATION,
+                        roomId = room.roomId,
+                        matchId = room.matchId,
+                        playerId = binding.playerId,
+                        localSeatIndex = binding.seatIndex,
+                        attributes = mapOf(
+                            "reason" to "resume_player_absent_from_room",
+                        ),
+                    )
+
+                    return@withLock OnlineParticipationResumeResult.Inactive(
+                        reason = "Você não participa mais desta sala online.",
+                    )
+                }
+
+                if (localPlayer.seatIndex != binding.seatIndex) {
+                    trace(
+                        level = OnlineTraceLevel.WARN,
+                        type = OnlineTraceType.INVARIANT_VIOLATION,
+                        roomId = room.roomId,
+                        matchId = room.matchId,
+                        playerId = binding.playerId,
+                        localSeatIndex = binding.seatIndex,
+                        attributes = mapOf(
+                            "reason" to "resume_seat_mismatch",
+                            "remoteSeatIndex" to
+                                    (localPlayer.seatIndex?.toString() ?: "null"),
+                        ),
+                    )
+
+                    return@withLock OnlineParticipationResumeResult.Inactive(
+                        reason = "Seu assento nesta sala foi alterado.",
+                    )
+                }
+
+                trace(
+                    level = OnlineTraceLevel.DEBUG,
+                    type = OnlineTraceType.SNAPSHOT_RECEIVED,
+                    roomId = room.roomId,
+                    matchId = room.matchId,
+                    playerId = binding.playerId,
+                    localSeatIndex = binding.seatIndex,
+                    attributes = room.traceAttributes(
+                        trigger = "resume_participation",
+                    ) + mapOf(
+                        "durationMillis" to elapsedMillisSince(
+                            startedAtEpochMillis = startedAtEpochMillis,
+                        ).toString(),
+                    ),
+                )
+
+                when (room.status) {
+                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
+                        mutableRoomSnapshot.value = room
+                        mutableMatchSnapshot.value = null
+                        activePlayerId = binding.playerId
+
+                        startPolling(
+                            roomId = room.roomId,
+                            client = client,
+                        )
+
+                        OnlineParticipationResumeResult.WaitingRoom(
+                            roomSnapshot = room,
+                            localSeatIndex = binding.seatIndex,
+                        )
+                    }
+
+                    OnlineRoomStatusDto.IN_MATCH -> {
+                        val matchId = room.matchId
+                            ?: return@withLock OnlineParticipationResumeResult.Unavailable(
+                                reason = "A sala entrou em partida sem identificador de partida.",
+                            )
+
+                        trace(
+                            level = OnlineTraceLevel.DEBUG,
+                            type = OnlineTraceType.SNAPSHOT_REQUESTED,
+                            roomId = room.roomId,
+                            matchId = matchId,
+                            playerId = binding.playerId,
+                            localSeatIndex = binding.seatIndex,
+                            attributes = mapOf(
+                                "snapshotKind" to "match",
+                                "trigger" to "resume_participation",
+                            ),
+                        )
+
+                        val match = client.fetchMatchSnapshot(
+                            matchId = matchId,
+                        )
+
+                        if (
+                            match.roomId != room.roomId ||
+                            match.matchId != matchId
+                        ) {
+                            trace(
+                                level = OnlineTraceLevel.ERROR,
+                                type = OnlineTraceType.INVARIANT_VIOLATION,
+                                roomId = room.roomId,
+                                matchId = matchId,
+                                playerId = binding.playerId,
+                                localSeatIndex = binding.seatIndex,
+                                snapshotRevision = match.revision,
+                                attributes = mapOf(
+                                    "reason" to "resume_room_match_mismatch",
+                                    "snapshotRoomId" to match.roomId,
+                                    "snapshotMatchId" to match.matchId,
+                                ),
+                            )
+
+                            return@withLock OnlineParticipationResumeResult.Unavailable(
+                                reason = "O estado remoto da sala e da partida está inconsistente.",
+                            )
+                        }
+
+                        trace(
+                            level = OnlineTraceLevel.DEBUG,
+                            type = OnlineTraceType.SNAPSHOT_RECEIVED,
+                            roomId = room.roomId,
+                            matchId = match.matchId,
+                            playerId = binding.playerId,
+                            localSeatIndex = binding.seatIndex,
+                            snapshotRevision = match.revision,
+                            attributes = match.traceAttributes(
+                                trigger = "resume_participation",
+                            ) + mapOf(
+                                "durationMillis" to elapsedMillisSince(
+                                    startedAtEpochMillis = startedAtEpochMillis,
+                                ).toString(),
+                            ),
+                        )
+
+                        mutableRoomSnapshot.value = room
+                        mutableMatchSnapshot.value = null
+                        activePlayerId = binding.playerId
+
+                        publishMatchSnapshotIfNewer(
+                            snapshot = match,
+                            trigger = "resume_participation",
+                            playerId = binding.playerId,
+                        )
+
+                        startPolling(
+                            roomId = room.roomId,
+                            client = client,
+                        )
+
+                        OnlineParticipationResumeResult.ActiveMatch(
+                            roomSnapshot = room,
+                            matchSnapshot = match,
+                            localSeatIndex = binding.seatIndex,
+                        )
+                    }
+
+                    OnlineRoomStatusDto.FINISHED,
+                    OnlineRoomStatusDto.CLOSED -> {
+                        OnlineParticipationResumeResult.Inactive(
+                            reason = "Esta sala online já foi encerrada.",
+                        )
+                    }
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) {
+                    throw error
+                }
+
+                if (error.isInvalidParticipationResumeRequest()) {
+                    trace(
+                        level = OnlineTraceLevel.WARN,
+                        type = OnlineTraceType.INVARIANT_VIOLATION,
+                        roomId = binding.roomId,
+                        matchId = binding.matchId,
+                        playerId = binding.playerId,
+                        localSeatIndex = binding.seatIndex,
+                        attributes = mapOf(
+                            "reason" to "resume_remote_participation_not_available",
+                            "status" to error.resumeHttpStatusValue().toString(),
+                        ),
+                    )
+
+                    return@withLock OnlineParticipationResumeResult.Inactive(
+                        reason = "A participação salva não está mais disponível no servidor.",
+                    )
+                }
+
+                traceTransportFailure(
+                    operation = "resume_participation",
+                    error = error,
+                    roomId = binding.roomId,
+                    matchId = binding.matchId,
+                    playerId = binding.playerId,
+                    durationMillis = elapsedMillisSince(
+                        startedAtEpochMillis = startedAtEpochMillis,
+                    ),
+                )
+
+                OnlineParticipationResumeResult.Unavailable(
+                    reason = error.toOnlineFailureReason(
+                        fallback = "Não foi possível consultar sua participação online.",
+                    ),
+                )
+            }
+        }
     }
 
     override suspend fun createRoom(
@@ -1156,6 +1451,23 @@ private fun createApiClientOrNull(
     return KtorRemoteOnlineApiClient(
         config = config,
     )
+}
+
+private fun Throwable.isInvalidParticipationResumeRequest(): Boolean {
+    if (this !is ClientRequestException) {
+        return false
+    }
+
+    return response.status == HttpStatusCode.NotFound ||
+            response.status == HttpStatusCode.Forbidden ||
+            response.status == HttpStatusCode.Unauthorized
+}
+
+private fun Throwable.resumeHttpStatusValue(): Int? {
+    return (this as? ClientRequestException)
+        ?.response
+        ?.status
+        ?.value
 }
 
 private fun Throwable.toOnlineFailureReason(

@@ -30,6 +30,19 @@ interface OnlineRoomRepository {
         return identity
     }
 
+    /*
+     * Reidrata uma participação persistida sem recriar a sala nem repetir o
+     * join. Implementações que não suportam continuidade podem tratá-la como
+     * vínculo inativo.
+     */
+    suspend fun resumeParticipation(
+        binding: OnlineParticipationBinding,
+    ): OnlineParticipationResumeResult {
+        return OnlineParticipationResumeResult.Inactive(
+            reason = "A retomada não é suportada por este backend online.",
+        )
+    }
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

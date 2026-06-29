@@ -57,6 +57,14 @@ class LocalDominoSessionCoordinator : DominoSessionCoordinator {
                 mutableState.value = DominoSessionState.OnlineJoinRoom
             }
 
+            is DominoSessionCommand.OpenResumedOnlineRoom -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
+                mutableState.value = DominoSessionState.OnlineResumedRoom(
+                    participationBinding = command.participationBinding,
+                )
+            }
+
             DominoSessionCommand.BackToMainMenu -> {
                 disposeCurrentOnlineCoordinatorIfNeeded()
 

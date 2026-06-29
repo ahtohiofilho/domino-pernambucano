@@ -33,6 +33,8 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationStore
+import com.ahtohiofilho.dominopernambucano.online.createOnlineParticipationBinding
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
@@ -51,6 +53,8 @@ import kotlinx.coroutines.launch
 fun OnlineCreateRoomRoute(
     roomRepository: OnlineRoomRepository,
     localPlayerIdentity: OnlinePlayerIdentity,
+    participationStore: OnlineParticipationStore,
+    participationBackendScope: String,
     debugOptions: OnlineDebugOptions,
     traceLogger: OnlineTraceLogger,
     onStartOnlineMatch: (OnlineDominoMatchCoordinator) -> Unit,
@@ -115,6 +119,22 @@ fun OnlineCreateRoomRoute(
                 playerName = resolvedPlayerName,
             )
         )
+
+        if (result.accepted) {
+            val room = result.roomSnapshot
+            val localSeatIndex = result.localSeatIndex
+
+            if (room != null && localSeatIndex != null) {
+                createOnlineParticipationBinding(
+                    backendScope = participationBackendScope,
+                    roomSnapshot = room,
+                    playerId = resolvedPlayerId,
+                    seatIndex = localSeatIndex,
+                )?.let { binding ->
+                    participationStore.write(binding)
+                }
+            }
+        }
 
         feedbackMessage = if (result.accepted) {
             null
@@ -218,6 +238,7 @@ fun OnlineCreateRoomRoute(
         onBackClick = {
             coroutineScope.launch {
                 roomRepository.leaveRoom()
+                participationStore.clear()
                 onBackClick()
             }
         },
@@ -225,7 +246,7 @@ fun OnlineCreateRoomRoute(
 }
 
 @Composable
-private fun OnlineLobbyScreen(
+internal fun OnlineLobbyScreen(
     roomSnapshot: OnlineRoomSnapshotDto?,
     matchRevision: Long?,
     feedbackMessage: String?,

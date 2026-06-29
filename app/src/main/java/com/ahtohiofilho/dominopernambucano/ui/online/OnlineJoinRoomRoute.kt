@@ -36,6 +36,8 @@ import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationStore
+import com.ahtohiofilho.dominopernambucano.online.createOnlineParticipationBinding
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
@@ -55,6 +57,8 @@ import kotlinx.coroutines.launch
 fun OnlineJoinRoomRoute(
     roomRepository: OnlineRoomRepository,
     localPlayerIdentity: OnlinePlayerIdentity,
+    participationStore: OnlineParticipationStore,
+    participationBackendScope: String,
     debugOptions: OnlineDebugOptions,
     traceLogger: OnlineTraceLogger,
     onStartOnlineMatch: (OnlineDominoMatchCoordinator) -> Unit,
@@ -241,6 +245,20 @@ fun OnlineJoinRoomRoute(
                 )
 
                 if (result.accepted) {
+                    val room = result.roomSnapshot
+                    val localSeatIndex = result.localSeatIndex
+
+                    if (room != null && localSeatIndex != null) {
+                        createOnlineParticipationBinding(
+                            backendScope = participationBackendScope,
+                            roomSnapshot = room,
+                            playerId = resolvedPlayerId,
+                            seatIndex = localSeatIndex,
+                        )?.let { binding ->
+                            participationStore.write(binding)
+                        }
+                    }
+
                     hasJoinedRoom = true
                     feedbackMessage = null
                 } else {
@@ -302,6 +320,7 @@ fun OnlineJoinRoomRoute(
             coroutineScope.launch {
                 if (hasJoinedRoom) {
                     roomRepository.leaveRoom()
+                    participationStore.clear()
                 }
 
                 onBackClick()

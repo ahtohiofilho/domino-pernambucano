@@ -699,6 +699,147 @@ class RemoteOnlineRoomRepositoryTest {
             assertNull(repository.matchSnapshot.value)
         }
 
+
+    @Test
+    fun resume_participation_restores_waiting_room_without_creating_or_joining_again() =
+        runBlocking {
+            val room = createWaitingRoomSnapshot()
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            val result = repository.resumeParticipation(
+                createParticipationBinding(),
+            )
+
+            val resumed = result as OnlineParticipationResumeResult.WaitingRoom
+
+            assertEquals(room, resumed.roomSnapshot)
+            assertEquals(0, resumed.localSeatIndex)
+            assertEquals(room, repository.roomSnapshot.value)
+            assertNull(repository.matchSnapshot.value)
+            assertEquals(listOf(room.roomId), apiClient.fetchRoomSnapshotRequests)
+            assertEquals(emptyList<String>(), apiClient.fetchMatchSnapshotRequests)
+            assertEquals(emptyList<CreateOnlineRoomRequestDto>(), apiClient.createRoomRequests)
+            assertEquals(emptyList<JoinOnlineRoomRequestDto>(), apiClient.joinRoomRequests)
+        }
+
+    @Test
+    fun resume_participation_uses_authoritative_match_id_and_restores_active_match() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 9L,
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            val result = repository.resumeParticipation(
+                createParticipationBinding(
+                    matchId = "stale-match-id",
+                ),
+            )
+
+            val resumed = result as OnlineParticipationResumeResult.ActiveMatch
+
+            assertEquals(room, resumed.roomSnapshot)
+            assertEquals(match, resumed.matchSnapshot)
+            assertEquals(0, resumed.localSeatIndex)
+            assertEquals(room, repository.roomSnapshot.value)
+            assertEquals(match, repository.matchSnapshot.value)
+            assertEquals(listOf(room.roomId), apiClient.fetchRoomSnapshotRequests)
+            assertEquals(listOf(match.matchId), apiClient.fetchMatchSnapshotRequests)
+            assertEquals(emptyList<CreateOnlineRoomRequestDto>(), apiClient.createRoomRequests)
+            assertEquals(emptyList<JoinOnlineRoomRequestDto>(), apiClient.joinRoomRequests)
+        }
+
+    @Test
+    fun resume_participation_returns_inactive_when_saved_seat_differs_from_room() =
+        runBlocking {
+            val room = createWaitingRoomSnapshot().copy(
+                players = listOf(
+                    OnlineRoomPlayerDto(
+                        playerId = "player-1",
+                        name = "Jogador 1",
+                        seatIndex = 1,
+                        connected = true,
+                    ),
+                ),
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            val result = repository.resumeParticipation(
+                createParticipationBinding(
+                    seatIndex = 0,
+                ),
+            )
+
+            assertTrue(result is OnlineParticipationResumeResult.Inactive)
+            assertNull(repository.roomSnapshot.value)
+            assertNull(repository.matchSnapshot.value)
+            assertEquals(listOf(room.roomId), apiClient.fetchRoomSnapshotRequests)
+            assertEquals(emptyList<String>(), apiClient.fetchMatchSnapshotRequests)
+        }
+
+    @Test
+    fun resume_participation_keeps_result_unavailable_when_room_fetch_fails() =
+        runBlocking {
+            val apiClient = FakeRemoteOnlineApiClient(
+                fetchRoomSnapshotFailure = IllegalStateException("servidor fora"),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            val result = repository.resumeParticipation(
+                createParticipationBinding(),
+            )
+
+            assertTrue(result is OnlineParticipationResumeResult.Unavailable)
+            assertNull(repository.roomSnapshot.value)
+            assertNull(repository.matchSnapshot.value)
+            assertEquals(listOf("room-1"), apiClient.fetchRoomSnapshotRequests)
+            assertEquals(emptyList<String>(), apiClient.fetchMatchSnapshotRequests)
+        }
+
+
+    private fun createParticipationBinding(
+        matchId: String? = null,
+        seatIndex: Int = 0,
+    ): OnlineParticipationBinding {
+        return OnlineParticipationBinding(
+            backendScope = "remote:http://localhost:8080",
+            roomId = "room-1",
+            matchId = matchId,
+            playerId = "player-1",
+            seatIndex = seatIndex,
+        )
+    }
+
     private fun createRepository(
         apiClient: RemoteOnlineApiClient,
         traceLogger: OnlineTraceLogger = OnlineTraceLogger(),
@@ -803,6 +944,12 @@ class RemoteOnlineRoomRepositoryTest {
     }
 
     private class FakeRemoteOnlineApiClient(
+        private val anonymousSessionResult: OnlineAnonymousSessionDto =
+            OnlineAnonymousSessionDto(
+                playerId = "player-1",
+                accessToken = "test-access-token",
+                expiresAtEpochMillis = Long.MAX_VALUE,
+            ),
         private val createRoomResult: OnlineRoomOperationResultDto =
             OnlineRoomOperationResultDto(
                 accepted = false,
@@ -830,12 +977,25 @@ class RemoteOnlineRoomRepositoryTest {
         private val matchSnapshotsAfterById: MutableMap<String, List<OnlineMatchSnapshotDto>> =
             mutableMapOf(),
     ) : RemoteOnlineApiClient {
+        val anonymousSessionRequests = mutableListOf<Unit>()
+        val developmentPlayerIds = mutableListOf<String?>()
         val createRoomRequests = mutableListOf<CreateOnlineRoomRequestDto>()
         val joinRoomRequests = mutableListOf<JoinOnlineRoomRequestDto>()
         val submitActionRequests = mutableListOf<OnlinePlayerActionDto>()
         val fetchRoomSnapshotRequests = mutableListOf<String>()
         val fetchMatchSnapshotRequests = mutableListOf<String>()
         val fetchMatchSnapshotsAfterRequests = mutableListOf<Pair<String, Long>>()
+
+        override fun setDevelopmentPlayerId(
+            playerId: String?,
+        ) {
+            developmentPlayerIds += playerId
+        }
+
+        override suspend fun createAnonymousSession(): OnlineAnonymousSessionDto {
+            anonymousSessionRequests += Unit
+            return anonymousSessionResult
+        }
 
         override suspend fun createRoom(
             request: CreateOnlineRoomRequestDto,
