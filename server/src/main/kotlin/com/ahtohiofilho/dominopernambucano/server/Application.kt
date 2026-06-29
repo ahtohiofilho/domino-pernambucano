@@ -62,8 +62,12 @@ fun Application.module() {
 fun Application.module(
     store: InMemoryOnlineServerStore,
     traceArchive: OnlineTraceArchive = OnlineTraceArchive(),
+    sessionTokenService: OnlineSessionTokenService =
+        createDefaultOnlineSessionTokenService(),
     identityResolver: OnlineRequestIdentityResolver =
-        DevelopmentHeaderOnlineRequestIdentityResolver,
+        createDefaultOnlineRequestIdentityResolver(
+            sessionTokenService = sessionTokenService,
+        ),
 ) {
     installAuthoritativeMatchTicker(
         store = store,
@@ -90,6 +94,7 @@ fun Application.module(
         onlineServerRoutes(
             store = store,
             traceArchive = traceArchive,
+            sessionTokenService = sessionTokenService,
             identityResolver = identityResolver,
         )
     }

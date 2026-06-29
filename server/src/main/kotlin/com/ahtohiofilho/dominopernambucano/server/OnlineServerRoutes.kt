@@ -16,9 +16,20 @@ import io.ktor.server.routing.post
 fun Route.onlineServerRoutes(
     store: InMemoryOnlineServerStore,
     traceArchive: OnlineTraceArchive,
+    sessionTokenService: OnlineSessionTokenService =
+        createDefaultOnlineSessionTokenService(),
     identityResolver: OnlineRequestIdentityResolver =
-        DevelopmentHeaderOnlineRequestIdentityResolver,
+        createDefaultOnlineRequestIdentityResolver(
+            sessionTokenService = sessionTokenService,
+        ),
 ) {
+    post("/${OnlineRemoteRoutes.CREATE_ANONYMOUS_SESSION}") {
+        call.respond(
+            HttpStatusCode.Created,
+            sessionTokenService.issueAnonymousSession(),
+        )
+    }
+
     post("/${OnlineRemoteRoutes.CREATE_ROOM}") {
         val identity = call.requireOnlineIdentity(
             identityResolver = identityResolver,
