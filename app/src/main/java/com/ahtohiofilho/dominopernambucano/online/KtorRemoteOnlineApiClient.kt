@@ -16,6 +16,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.parameter
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -32,6 +33,7 @@ class KtorRemoteOnlineApiClient(
         }.trimEnd('/')
 
     private var developmentPlayerId: String? = null
+    private var anonymousSession: OnlineAnonymousSessionDto? = null
 
     override fun setDevelopmentPlayerId(
         playerId: String?,
@@ -41,6 +43,25 @@ class KtorRemoteOnlineApiClient(
             ?.takeIf { value ->
                 value.isNotBlank()
             }
+    }
+
+    override fun setAnonymousSession(
+        session: OnlineAnonymousSessionDto?,
+    ) {
+        anonymousSession = session?.takeIf { candidate ->
+            candidate.playerId.isNotBlank() &&
+                    candidate.accessToken.isNotBlank()
+        }
+    }
+
+    override suspend fun createAnonymousSession(): OnlineAnonymousSessionDto {
+        return httpClient.post(
+            urlString = endpoint(
+                OnlineRemoteRoutes.CREATE_ANONYMOUS_SESSION,
+            ),
+        ) {
+            accept(ContentType.Application.Json)
+        }.body()
     }
 
     override suspend fun createRoom(
@@ -55,7 +76,7 @@ class KtorRemoteOnlineApiClient(
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
+            applyRequestIdentity(
                 playerId = request.localPlayerId,
             )
             setBody(request)
@@ -74,7 +95,7 @@ class KtorRemoteOnlineApiClient(
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
+            applyRequestIdentity(
                 playerId = request.localPlayerId,
             )
             setBody(request)
@@ -93,7 +114,7 @@ class KtorRemoteOnlineApiClient(
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
+            applyRequestIdentity(
                 playerId = action.playerId,
             )
             setBody(action)
@@ -121,7 +142,7 @@ class KtorRemoteOnlineApiClient(
             ),
         ) {
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
+            applyRequestIdentity(
                 playerId = developmentPlayerId,
             )
         }.body()
@@ -136,7 +157,7 @@ class KtorRemoteOnlineApiClient(
             ),
         ) {
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
+            applyRequestIdentity(
                 playerId = developmentPlayerId,
             )
         }.body()
@@ -156,10 +177,31 @@ class KtorRemoteOnlineApiClient(
                 value = afterRevision,
             )
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
+            applyRequestIdentity(
                 playerId = developmentPlayerId,
             )
         }.body()
+    }
+
+    private fun HttpRequestBuilder.applyRequestIdentity(
+        playerId: String?,
+    ) {
+        val matchingAnonymousSession = anonymousSession
+            ?.takeIf { session ->
+                session.playerId == playerId
+            }
+
+        if (matchingAnonymousSession != null) {
+            header(
+                HttpHeaders.Authorization,
+                "Bearer ${matchingAnonymousSession.accessToken}",
+            )
+            return
+        }
+
+        applyDevelopmentPlayerId(
+            playerId = playerId,
+        )
     }
 
     private fun HttpRequestBuilder.applyDevelopmentPlayerId(

@@ -61,8 +61,15 @@ fun OnlineCreateRoomRoute(
 
     val coroutineScope = rememberCoroutineScope()
 
-    val localPlayerId = localPlayerIdentity.playerId
-    val localPlayerName = localPlayerIdentity.playerName
+    var resolvedLocalPlayerIdentity by remember(
+        roomRepository,
+        localPlayerIdentity,
+    ) {
+        mutableStateOf<OnlinePlayerIdentity?>(null)
+    }
+
+    val localPlayerId = resolvedLocalPlayerIdentity?.playerId
+    val localPlayerName = resolvedLocalPlayerIdentity?.playerName
 
     var feedbackMessage by remember {
         mutableStateOf<String?>(null)
@@ -78,13 +85,34 @@ fun OnlineCreateRoomRoute(
 
     LaunchedEffect(
         roomRepository,
+        localPlayerIdentity,
+    ) {
+        resolvedLocalPlayerIdentity = null
+        feedbackMessage = "Conectando sua sessão online..."
+
+        resolvedLocalPlayerIdentity = runCatching {
+            roomRepository.resolveLocalPlayerIdentity(
+                identity = localPlayerIdentity,
+            )
+        }.getOrElse { error ->
+            feedbackMessage = error.message
+                ?: "Não foi possível iniciar sua sessão online."
+            null
+        }
+    }
+
+    LaunchedEffect(
+        roomRepository,
         localPlayerId,
         localPlayerName,
     ) {
+        val resolvedPlayerId = localPlayerId ?: return@LaunchedEffect
+        val resolvedPlayerName = localPlayerName ?: return@LaunchedEffect
+
         val result = roomRepository.createRoom(
             CreateOnlineRoomRequestDto(
-                localPlayerId = localPlayerId,
-                playerName = localPlayerName,
+                localPlayerId = resolvedPlayerId,
+                playerName = resolvedPlayerName,
             )
         )
 
@@ -103,9 +131,12 @@ fun OnlineCreateRoomRoute(
         val currentRoomSnapshot = roomSnapshot
         val currentMatchSnapshot = matchSnapshot
 
+        val resolvedPlayerId = localPlayerId
+
         if (
             currentRoomSnapshot == null ||
             currentMatchSnapshot == null ||
+            resolvedPlayerId == null ||
             hasOpenedMatch
         ) {
             return@LaunchedEffect
@@ -113,7 +144,7 @@ fun OnlineCreateRoomRoute(
 
         val localSeatIndex = findLocalSeatIndex(
             roomSnapshot = currentRoomSnapshot,
-            localPlayerId = localPlayerId,
+            localPlayerId = resolvedPlayerId,
         ) ?: return@LaunchedEffect
 
         hasOpenedMatch = true
@@ -122,7 +153,7 @@ fun OnlineCreateRoomRoute(
             repository = roomRepository,
             roomId = currentMatchSnapshot.roomId,
             matchId = currentMatchSnapshot.matchId,
-            localPlayerId = localPlayerId,
+            localPlayerId = resolvedPlayerId,
             localPlayerIndex = localSeatIndex,
             initialSnapshot = currentMatchSnapshot,
             traceLogger = traceLogger,

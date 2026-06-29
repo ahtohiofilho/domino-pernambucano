@@ -19,6 +19,17 @@ interface OnlineRoomRepository {
     val matchSnapshotEvents: Flow<OnlineMatchSnapshotDto>
         get() = matchSnapshot.filterNotNull()
 
+    /*
+     * O backend remoto pode substituir o identificador provisório local pelo
+     * playerId emitido na sessão anônima. A implementação fake permanece
+     * transparente para testes e desenvolvimento local.
+     */
+    suspend fun resolveLocalPlayerIdentity(
+        identity: OnlinePlayerIdentity,
+    ): OnlinePlayerIdentity {
+        return identity
+    }
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

@@ -32,6 +32,8 @@ class RemoteOnlineRoomRepository(
         OnlineRemotePollingPolicy.Disabled,
     private val traceLogger: OnlineTraceLogger =
         OnlineTraceLogger(),
+    private val anonymousSessionStore: OnlineAnonymousSessionStore =
+        InMemoryOnlineAnonymousSessionStore(),
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
@@ -66,6 +68,15 @@ class RemoteOnlineRoomRepository(
     private var pollingRoomId: String? = null
     private var activePlayerId: String? = null
 
+    private val anonymousSessionRepository: OnlineAnonymousSessionRepository? =
+        apiClient?.let { client ->
+            OnlineAnonymousSessionRepository(
+                apiClient = client,
+                store = anonymousSessionStore,
+                nowEpochMillis = nowEpochMillis,
+            )
+        }
+
     override val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?> =
         mutableRoomSnapshot.asStateFlow()
 
@@ -74,6 +85,21 @@ class RemoteOnlineRoomRepository(
 
     override val matchSnapshotEvents: Flow<OnlineMatchSnapshotDto> =
         mutableMatchSnapshotEvents.asSharedFlow()
+
+    override suspend fun resolveLocalPlayerIdentity(
+        identity: OnlinePlayerIdentity,
+    ): OnlinePlayerIdentity {
+        val sessionRepository = anonymousSessionRepository
+            ?: throw IllegalStateException(
+                getUnavailableBackendReason(),
+            )
+
+        val session = sessionRepository.getOrCreate()
+
+        return identity.copy(
+            playerId = session.playerId,
+        )
+    }
 
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,

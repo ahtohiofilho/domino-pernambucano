@@ -6,6 +6,8 @@ object OnlineRepositoryFactory {
     fun create(
         config: OnlineBackendConfig = OnlineBackendConfig.Fake,
         traceLogger: OnlineTraceLogger = OnlineTraceLogger(),
+        anonymousSessionStore: OnlineAnonymousSessionStore =
+            InMemoryOnlineAnonymousSessionStore(),
     ): OnlineRoomRepository {
         return when (config.mode) {
             OnlineBackendMode.FAKE -> {
@@ -17,6 +19,7 @@ object OnlineRepositoryFactory {
                     config = config,
                     pollingPolicy = OnlineRemotePollingPolicy.Default,
                     traceLogger = traceLogger,
+                    anonymousSessionStore = anonymousSessionStore,
                 )
             }
         }

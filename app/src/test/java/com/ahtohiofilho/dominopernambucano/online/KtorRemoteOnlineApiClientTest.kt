@@ -29,6 +29,90 @@ import org.junit.Test
 
 class KtorRemoteOnlineApiClientTest {
     @Test
+    fun anonymous_session_is_created_and_authorizes_matching_player_requests() =
+        runBlocking {
+            val recordedRequests = mutableListOf<RecordedRequest>()
+            val recordedAuthorizationHeaders = mutableListOf<String?>()
+            val recordedDevelopmentPlayerIds = mutableListOf<String?>()
+
+            val apiClient = createApiClient(
+                responsesByPath = mapOf(
+                    "/sessions/anonymous" to """
+                        {
+                          "playerId": "anonymous-player-1",
+                          "accessToken": "anonymous-access-token",
+                          "expiresAtEpochMillis": 900000
+                        }
+                    """.trimIndent(),
+                    "/rooms" to """
+                        {
+                          "accepted": true,
+                          "localSeatIndex": 0,
+                          "roomSnapshot": {
+                            "roomId": "room-1",
+                            "roomCode": "123456",
+                            "hostPlayerId": "anonymous-player-1",
+                            "status": "WAITING_FOR_PLAYERS",
+                            "players": [
+                              {
+                                "playerId": "anonymous-player-1",
+                                "name": "Você",
+                                "seatIndex": 0,
+                                "connected": true
+                              }
+                            ]
+                          }
+                        }
+                    """.trimIndent(),
+                ),
+                recordedRequests = recordedRequests,
+                recordedDevelopmentPlayerIds = recordedDevelopmentPlayerIds,
+                recordedAuthorizationHeaders = recordedAuthorizationHeaders,
+            )
+
+            val session = apiClient.createAnonymousSession()
+
+            apiClient.setAnonymousSession(
+                session = session,
+            )
+
+            apiClient.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = session.playerId,
+                    playerName = "Você",
+                )
+            )
+
+            assertEquals(
+                listOf(
+                    RecordedRequest(
+                        method = HttpMethod.Post.value,
+                        path = "/sessions/anonymous",
+                    ),
+                    RecordedRequest(
+                        method = HttpMethod.Post.value,
+                        path = "/rooms",
+                    ),
+                ),
+                recordedRequests,
+            )
+            assertEquals(
+                listOf(
+                    null,
+                    "Bearer anonymous-access-token",
+                ),
+                recordedAuthorizationHeaders,
+            )
+            assertEquals(
+                listOf(
+                    null,
+                    null,
+                ),
+                recordedDevelopmentPlayerIds,
+            )
+        }
+
+    @Test
     fun create_room_posts_to_rooms_and_decodes_result() =
         runBlocking {
             val recordedRequests = mutableListOf<RecordedRequest>()
@@ -76,7 +160,7 @@ class KtorRemoteOnlineApiClientTest {
                     RecordedRequest(
                         method = HttpMethod.Post.value,
                         path = "/rooms",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
@@ -139,7 +223,7 @@ class KtorRemoteOnlineApiClientTest {
                     RecordedRequest(
                         method = HttpMethod.Post.value,
                         path = "/rooms/join",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
@@ -183,7 +267,7 @@ class KtorRemoteOnlineApiClientTest {
                     RecordedRequest(
                         method = HttpMethod.Post.value,
                         path = "/matches/actions",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
@@ -232,7 +316,7 @@ class KtorRemoteOnlineApiClientTest {
                     RecordedRequest(
                         method = HttpMethod.Get.value,
                         path = "/rooms/room-1",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
@@ -242,6 +326,7 @@ class KtorRemoteOnlineApiClientTest {
     fun submit_trace_batch_posts_to_traces_and_decodes_result() =
         runBlocking {
             val recordedRequests = mutableListOf<RecordedRequest>()
+
             val apiClient = createApiClient(
                 responsesByPath = mapOf(
                     "/traces" to """
@@ -336,7 +421,7 @@ class KtorRemoteOnlineApiClientTest {
                     RecordedRequest(
                         method = HttpMethod.Get.value,
                         path = "/matches/match-1",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
@@ -346,6 +431,7 @@ class KtorRemoteOnlineApiClientTest {
         responsesByPath: Map<String, String>,
         recordedRequests: MutableList<RecordedRequest>,
         recordedDevelopmentPlayerIds: MutableList<String?>? = null,
+        recordedAuthorizationHeaders: MutableList<String?>? = null,
     ): KtorRemoteOnlineApiClient {
         val mockEngine = MockEngine { request ->
             val path = request.url.encodedPath
@@ -357,6 +443,11 @@ class KtorRemoteOnlineApiClientTest {
             recordedDevelopmentPlayerIds?.add(
                 request.headers[
                     OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                ],
+            )
+            recordedAuthorizationHeaders?.add(
+                request.headers[
+                    HttpHeaders.Authorization,
                 ],
             )
 

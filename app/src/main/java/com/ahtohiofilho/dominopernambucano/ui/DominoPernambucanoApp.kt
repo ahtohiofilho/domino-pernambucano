@@ -16,6 +16,7 @@ import com.ahtohiofilho.dominopernambucano.online.observability.CompositeOnlineT
 import com.ahtohiofilho.dominopernambucano.online.observability.PersistentOnlineTraceOutbox
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchUploader
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineAnonymousSessionStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
@@ -72,13 +73,23 @@ fun DominoPernambucanoApp(
         )
     }
 
+    val onlineAnonymousSessionStore = remember(
+        context.applicationContext,
+    ) {
+        SharedPreferencesOnlineAnonymousSessionStore(
+            context = context.applicationContext,
+        )
+    }
+
     val onlineRoomRepository = remember(
         onlineAppConfig.backendConfig,
         onlineTraceLogger,
+        onlineAnonymousSessionStore,
     ) {
         OnlineRepositoryFactory.create(
             config = onlineAppConfig.backendConfig,
             traceLogger = onlineTraceLogger,
+            anonymousSessionStore = onlineAnonymousSessionStore,
         )
     }
 

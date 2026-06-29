@@ -36,7 +36,6 @@ import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
-import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
@@ -44,6 +43,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerId
 import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.online.createDebugHostOnlinePlayerIdentity
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.ui.menu.MenuScaffold
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
@@ -65,8 +65,15 @@ fun OnlineJoinRoomRoute(
 
     val coroutineScope = rememberCoroutineScope()
 
-    val localPlayerId = localPlayerIdentity.playerId
-    val localPlayerName = localPlayerIdentity.playerName
+    var resolvedLocalPlayerIdentity by remember(
+        roomRepository,
+        localPlayerIdentity,
+    ) {
+        mutableStateOf<OnlinePlayerIdentity?>(null)
+    }
+
+    val localPlayerId = resolvedLocalPlayerIdentity?.playerId
+    val localPlayerName = resolvedLocalPlayerIdentity?.playerName
 
     var roomCodeInput by remember {
         mutableStateOf("")
@@ -74,6 +81,28 @@ fun OnlineJoinRoomRoute(
 
     var feedbackMessage by remember {
         mutableStateOf<String?>(null)
+    }
+
+    LaunchedEffect(
+        roomRepository,
+        localPlayerIdentity,
+    ) {
+        resolvedLocalPlayerIdentity = null
+        feedbackMessage = "Conectando sua sessão online..."
+
+        resolvedLocalPlayerIdentity = runCatching {
+            roomRepository.resolveLocalPlayerIdentity(
+                identity = localPlayerIdentity,
+            )
+        }.getOrElse { error ->
+            feedbackMessage = error.message
+                ?: "Não foi possível iniciar sua sessão online."
+            null
+        }
+
+        if (resolvedLocalPlayerIdentity != null) {
+            feedbackMessage = null
+        }
     }
 
     var hasJoinedRoom by remember {
@@ -108,10 +137,12 @@ fun OnlineJoinRoomRoute(
     ) {
         val currentRoomSnapshot = roomSnapshot
         val currentMatchSnapshot = matchSnapshot
+        val resolvedPlayerId = localPlayerId
 
         if (
             currentRoomSnapshot == null ||
             currentMatchSnapshot == null ||
+            resolvedPlayerId == null ||
             hasOpenedMatch ||
             !hasJoinedRoom
         ) {
@@ -120,7 +151,7 @@ fun OnlineJoinRoomRoute(
 
         val localSeatIndex = findLocalSeatIndexForJoin(
             roomSnapshot = currentRoomSnapshot,
-            localPlayerId = localPlayerId,
+            localPlayerId = resolvedPlayerId,
         ) ?: return@LaunchedEffect
 
         hasOpenedMatch = true
@@ -129,7 +160,7 @@ fun OnlineJoinRoomRoute(
             repository = roomRepository,
             roomId = currentMatchSnapshot.roomId,
             matchId = currentMatchSnapshot.matchId,
-            localPlayerId = localPlayerId,
+            localPlayerId = resolvedPlayerId,
             localPlayerIndex = localSeatIndex,
             initialSnapshot = currentMatchSnapshot,
             traceLogger = traceLogger,
@@ -153,7 +184,8 @@ fun OnlineJoinRoomRoute(
         },
         onCreateDemoRoomClick = {
             if (!debugOptions.allowDemoRoomCreation) {
-                feedbackMessage = "Criação de sala fake está desabilitada neste ambiente."
+                feedbackMessage =
+                    "Criação de sala fake está desabilitada neste ambiente."
                 return@OnlineJoinRoomScreen
             }
 
@@ -164,14 +196,15 @@ fun OnlineJoinRoomRoute(
                     CreateOnlineRoomRequestDto(
                         localPlayerId = debugHostIdentity.playerId,
                         playerName = debugHostIdentity.playerName,
-                    )
+                    ),
                 )
 
                 if (result.accepted) {
                     roomCodeInput = result.roomSnapshot?.roomCode.orEmpty()
                     hasJoinedRoom = false
                     hasOpenedMatch = false
-                    feedbackMessage = "Sala fake criada. Agora entre com o código."
+                    feedbackMessage =
+                        "Sala fake criada. Agora entre com o código."
                 } else {
                     feedbackMessage = result.reason
                         ?: "Não foi possível criar a sala fake."
@@ -187,12 +220,24 @@ fun OnlineJoinRoomRoute(
                     return@launch
                 }
 
+                val resolvedPlayerId = localPlayerId
+                val resolvedPlayerName = localPlayerName
+
+                if (
+                    resolvedPlayerId == null ||
+                    resolvedPlayerName == null
+                ) {
+                    feedbackMessage =
+                        "Sua sessão online ainda está sendo preparada."
+                    return@launch
+                }
+
                 val result = roomRepository.joinRoom(
                     JoinOnlineRoomRequestDto(
                         roomCode = normalizedRoomCode,
-                        localPlayerId = localPlayerId,
-                        playerName = localPlayerName,
-                    )
+                        localPlayerId = resolvedPlayerId,
+                        playerName = resolvedPlayerName,
+                    ),
                 )
 
                 if (result.accepted) {
@@ -206,7 +251,8 @@ fun OnlineJoinRoomRoute(
         },
         onCompleteWithFakePlayersClick = {
             if (!debugOptions.allowFakePlayerCompletion) {
-                feedbackMessage = "Completar mesa com fakes está desabilitado neste ambiente."
+                feedbackMessage =
+                    "Completar mesa com fakes está desabilitado neste ambiente."
                 return@OnlineJoinRoomScreen
             }
 
@@ -215,7 +261,8 @@ fun OnlineJoinRoomRoute(
                     ?: return@launch
 
                 while (
-                    workingSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
+                    workingSnapshot.status ==
+                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
                     workingSnapshot.players.size < 4
                 ) {
                     val fakePlayerNumber = resolveNextFakePlayerNumber(
@@ -232,7 +279,7 @@ fun OnlineJoinRoomRoute(
                             roomCode = workingSnapshot.roomCode,
                             localPlayerId = fakePlayerIdentity.playerId,
                             playerName = fakePlayerIdentity.playerName,
-                        )
+                        ),
                     )
 
                     if (!result.accepted) {
@@ -317,7 +364,9 @@ private fun OnlineJoinRoomScreen(
 
                 Text(
                     text = "Carregando sala...",
-                    color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f),
+                    color = DominoSemanticColors.primaryTextOnDark.copy(
+                        alpha = 0.72f,
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                 )
@@ -337,17 +386,23 @@ private fun OnlineJoinRoomScreen(
                 }
 
                 if (
-                    roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
+                    roomSnapshot.status ==
+                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
                     allowFakePlayerCompletion
                 ) {
                     PrimaryMenuButton(
                         text = "Completar mesa com fakes",
                         onClick = onCompleteWithFakePlayersClick,
                     )
-                } else if (roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS) {
+                } else if (
+                    roomSnapshot.status ==
+                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS
+                ) {
                     Text(
                         text = "Aguardando jogadores.",
-                        color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f),
+                        color = DominoSemanticColors.primaryTextOnDark.copy(
+                            alpha = 0.72f,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
@@ -403,7 +458,9 @@ private fun JoinRoomFormCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = DominoSemanticColors.primarySurface.copy(alpha = 0.96f),
+            containerColor = DominoSemanticColors.primarySurface.copy(
+                alpha = 0.96f,
+            ),
             contentColor = DominoSemanticColors.primaryTextOnLight,
         ),
     ) {
@@ -437,12 +494,22 @@ private fun JoinRoomFormCard(
                     keyboardType = KeyboardType.Ascii,
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = DominoSemanticColors.primaryTextOnLight,
-                    unfocusedTextColor = DominoSemanticColors.primaryTextOnLight,
-                    focusedBorderColor = DominoColorTokens.PernambucoBlue,
-                    unfocusedBorderColor = DominoColorTokens.PernambucoBlue.copy(alpha = 0.48f),
-                    focusedLabelColor = DominoColorTokens.PernambucoBlue,
-                    unfocusedLabelColor = DominoSemanticColors.primaryTextOnLight.copy(alpha = 0.66f),
+                    focusedTextColor =
+                        DominoSemanticColors.primaryTextOnLight,
+                    unfocusedTextColor =
+                        DominoSemanticColors.primaryTextOnLight,
+                    focusedBorderColor =
+                        DominoColorTokens.PernambucoBlue,
+                    unfocusedBorderColor =
+                        DominoColorTokens.PernambucoBlue.copy(
+                            alpha = 0.48f,
+                        ),
+                    focusedLabelColor =
+                        DominoColorTokens.PernambucoBlue,
+                    unfocusedLabelColor =
+                        DominoSemanticColors.primaryTextOnLight.copy(
+                            alpha = 0.66f,
+                        ),
                     cursorColor = DominoColorTokens.PernambucoBlue,
                 ),
             )
@@ -450,7 +517,9 @@ private fun JoinRoomFormCard(
             Text(
                 text = "No fake repository, a sala precisa existir nesta execução do app. Use a sala fake de teste para validar o caminho.",
                 style = MaterialTheme.typography.bodySmall,
-                color = DominoSemanticColors.primaryTextOnLight.copy(alpha = 0.64f),
+                color = DominoSemanticColors.primaryTextOnLight.copy(
+                    alpha = 0.64f,
+                ),
             )
         }
     }
@@ -464,7 +533,9 @@ private fun JoinRoomCodeCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = DominoSemanticColors.primarySurface.copy(alpha = 0.96f),
+            containerColor = DominoSemanticColors.primarySurface.copy(
+                alpha = 0.96f,
+            ),
             contentColor = DominoSemanticColors.primaryTextOnLight,
         ),
     ) {
@@ -482,7 +553,9 @@ private fun JoinRoomCodeCard(
                 text = "Código da sala",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = DominoSemanticColors.primaryTextOnLight.copy(alpha = 0.66f),
+                color = DominoSemanticColors.primaryTextOnLight.copy(
+                    alpha = 0.66f,
+                ),
             )
 
             Text(
@@ -500,7 +573,9 @@ private fun JoinRoomCodeCard(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
-                color = DominoSemanticColors.primaryTextOnLight.copy(alpha = 0.78f),
+                color = DominoSemanticColors.primaryTextOnLight.copy(
+                    alpha = 0.78f,
+                ),
             )
         }
     }
@@ -514,7 +589,9 @@ private fun JoinPlayerListCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = DominoColorTokens.PureWhite.copy(alpha = 0.16f),
+            containerColor = DominoColorTokens.PureWhite.copy(
+                alpha = 0.16f,
+            ),
             contentColor = DominoSemanticColors.primaryTextOnDark,
         ),
     ) {
@@ -569,7 +646,9 @@ private fun JoinPlayerSlotRow(
                 text = "Lugar ${seatIndex + 1}",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.58f),
+                color = DominoSemanticColors.primaryTextOnDark.copy(
+                    alpha = 0.58f,
+                ),
             )
 
             Text(
@@ -583,7 +662,9 @@ private fun JoinPlayerSlotRow(
                 color = if (isOccupied) {
                     DominoSemanticColors.primaryTextOnDark
                 } else {
-                    DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.58f)
+                    DominoSemanticColors.primaryTextOnDark.copy(
+                        alpha = 0.58f,
+                    )
                 },
             )
         }
@@ -599,7 +680,9 @@ private fun JoinPlayerSlotRow(
             color = if (player?.connected == true) {
                 DominoSemanticColors.playableMove
             } else {
-                DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.48f)
+                DominoSemanticColors.primaryTextOnDark.copy(
+                    alpha = 0.48f,
+                )
             },
         )
     }

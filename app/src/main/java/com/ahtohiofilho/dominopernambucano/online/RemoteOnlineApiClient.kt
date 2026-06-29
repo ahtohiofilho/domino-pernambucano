@@ -13,6 +13,18 @@ interface RemoteOnlineApiClient {
         playerId: String?,
     ) = Unit
 
+    /*
+     * A sessão é emitida pelo servidor e reaproveitada pelo cliente remoto.
+     * Implementações legadas podem preservar o no-op até migrarem para Bearer.
+     */
+    fun setAnonymousSession(
+        session: OnlineAnonymousSessionDto?,
+    ) = Unit
+
+    suspend fun createAnonymousSession(): OnlineAnonymousSessionDto {
+        error("Sessões anônimas não são suportadas por este cliente remoto.")
+    }
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto
