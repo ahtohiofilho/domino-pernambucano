@@ -94,6 +94,204 @@ class InMemoryOnlineServerStore(
     private var nextRoomSequence = 1
     private var nextMatchSequence = 1
 
+    fun snapshotPersistentState(): OnlineServerPersistentState {
+        return synchronized(lock) {
+            OnlineServerPersistentState(
+                nextRoomSequence = nextRoomSequence,
+                nextMatchSequence = nextMatchSequence,
+                rooms = roomsById.values
+                    .sortedBy { room ->
+                        room.roomId
+                    },
+                matches = matchesById.values
+                    .sortedBy { matchRecord ->
+                        matchRecord.matchId
+                    }
+                    .map { matchRecord ->
+                        OnlineServerPersistentMatchRecord(
+                            roomId = matchRecord.roomId,
+                            matchId = matchRecord.matchId,
+                            snapshot = matchRecord.snapshot,
+                            revisionHistory = matchRecord.revisionHistory
+                                .toList(),
+                            automaticSeatIndexes = matchRecord
+                                .automaticSeatIndexes
+                                .sorted(),
+                            developmentBotSeatIndexes = matchRecord
+                                .developmentBotSeatIndexes
+                                .sorted(),
+                        )
+                    },
+                actionResults = actionResultsByKey.entries
+                    .sortedWith(
+                        compareBy(
+                            { entry -> entry.key.matchId },
+                            { entry -> entry.key.playerId },
+                            { entry -> entry.key.actionId },
+                        ),
+                    )
+                    .map { entry ->
+                        OnlineServerPersistentActionResult(
+                            matchId = entry.key.matchId,
+                            playerId = entry.key.playerId,
+                            actionId = entry.key.actionId,
+                            result = entry.value,
+                        )
+                    },
+            )
+        }
+    }
+
+    fun restorePersistentState(
+        state: OnlineServerPersistentState,
+    ) {
+        synchronized(lock) {
+            require(
+                state.schemaVersion == ONLINE_SERVER_STATE_SCHEMA_VERSION,
+            ) {
+                "Versão de estado não suportada: ${state.schemaVersion}."
+            }
+
+            require(state.nextRoomSequence > 0) {
+                "Próxima sequência de sala inválida."
+            }
+
+            require(state.nextMatchSequence > 0) {
+                "Próxima sequência de partida inválida."
+            }
+
+            val restoredRooms = state.rooms.associateBy { room ->
+                room.roomId
+            }
+
+            require(restoredRooms.size == state.rooms.size) {
+                "Há identificadores de sala duplicados."
+            }
+
+            val restoredRoomIdsByCode = state.rooms.associate { room ->
+                require(room.roomId.isNotBlank()) {
+                    "Há sala sem identificador."
+                }
+                require(room.roomCode.isNotBlank()) {
+                    "Há sala sem código."
+                }
+
+                room.roomCode to room.roomId
+            }
+
+            require(restoredRoomIdsByCode.size == state.rooms.size) {
+                "Há códigos de sala duplicados."
+            }
+
+            val restoredMatches = mutableMapOf<String, MatchRecord>()
+
+            state.matches.forEach { persistedMatch ->
+                val room = restoredRooms[persistedMatch.roomId]
+                    ?: error(
+                        "Partida ${persistedMatch.matchId} sem sala correspondente.",
+                    )
+
+                require(room.matchId == persistedMatch.matchId) {
+                    "Sala ${room.roomId} não referencia a partida " +
+                            "${persistedMatch.matchId}."
+                }
+
+                require(
+                    persistedMatch.snapshot.roomId == persistedMatch.roomId &&
+                            persistedMatch.snapshot.matchId ==
+                            persistedMatch.matchId,
+                ) {
+                    "Snapshot da partida ${persistedMatch.matchId} é inconsistente."
+                }
+
+                require(persistedMatch.revisionHistory.isNotEmpty()) {
+                    "Partida ${persistedMatch.matchId} sem histórico de revisões."
+                }
+
+                require(
+                    persistedMatch.revisionHistory.last() ==
+                            persistedMatch.snapshot,
+                ) {
+                    "Última revisão da partida ${persistedMatch.matchId} " +
+                            "não corresponde ao snapshot atual."
+                }
+
+                require(
+                    persistedMatch.snapshot.automaticPlayerIndexes.toSet() ==
+                            persistedMatch.automaticSeatIndexes.toSet(),
+                ) {
+                    "Modo automático inconsistente na partida " +
+                            "${persistedMatch.matchId}."
+                }
+
+                require(
+                    restoredMatches.put(
+                        persistedMatch.matchId,
+                        MatchRecord(
+                            roomId = persistedMatch.roomId,
+                            matchId = persistedMatch.matchId,
+                            snapshot = persistedMatch.snapshot,
+                            revisionHistory = ArrayDeque(
+                                persistedMatch.revisionHistory,
+                            ),
+                            automaticSeatIndexes = persistedMatch
+                                .automaticSeatIndexes
+                                .toMutableSet(),
+                            developmentBotSeatIndexes = persistedMatch
+                                .developmentBotSeatIndexes
+                                .toSet(),
+                        ),
+                    ) == null,
+                ) {
+                    "Há identificadores de partida duplicados."
+                }
+            }
+
+            val restoredActionResults = mutableMapOf<
+                    ActionResultCacheKey,
+                    OnlineActionResultDto,
+                    >()
+
+            state.actionResults.forEach { persistedResult ->
+                val cacheKey = ActionResultCacheKey(
+                    matchId = persistedResult.matchId,
+                    playerId = persistedResult.playerId,
+                    actionId = persistedResult.actionId,
+                )
+
+                require(
+                    restoredActionResults.put(
+                        cacheKey,
+                        persistedResult.result,
+                    ) == null,
+                ) {
+                    "Há resultados idempotentes duplicados."
+                }
+            }
+
+            roomsById.clear()
+            roomsById.putAll(restoredRooms)
+            roomIdsByCode.clear()
+            roomIdsByCode.putAll(restoredRoomIdsByCode)
+            matchesById.clear()
+            matchesById.putAll(restoredMatches)
+            actionResultsByKey.clear()
+            actionResultsByKey.putAll(restoredActionResults)
+            nextRoomSequence = state.nextRoomSequence
+            nextMatchSequence = state.nextMatchSequence
+        }
+    }
+
+    fun clearExpiredRooms(
+        nowMillis: Long = nowEpochMillis(),
+    ): Boolean {
+        return synchronized(lock) {
+            clearExpiredRoomsLocked(
+                nowMillis = nowMillis,
+            )
+        }
+    }
+
     fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
@@ -515,9 +713,10 @@ class InMemoryOnlineServerStore(
      * observacionais. Cada chamada publica no máximo uma transição por partida,
      * preservando uma cadência consumível pela fila visual dos clientes.
      */
-    fun advanceAuthoritativeTime() {
-        synchronized(lock) {
+    fun advanceAuthoritativeTime(): Boolean {
+        return synchronized(lock) {
             val now = nowEpochMillis()
+            var stateChanged = false
 
             matchesById.values.forEach { matchRecord ->
                 val previousRevision = matchRecord.snapshot.revision
@@ -530,6 +729,8 @@ class InMemoryOnlineServerStore(
                 )
 
                 if (changed) {
+                    stateChanged = true
+
                     trace(
                         level = OnlineTraceLevel.INFO,
                         source = OnlineTraceSource.SERVER_TICKER,
@@ -548,6 +749,10 @@ class InMemoryOnlineServerStore(
                     )
                 }
             }
+
+            stateChanged || clearExpiredRoomsLocked(
+                nowMillis = now,
+            )
         }
     }
 
@@ -668,6 +873,65 @@ class InMemoryOnlineServerStore(
                 }
                 ?.toList()
         }
+    }
+
+    private fun clearExpiredRoomsLocked(
+        nowMillis: Long,
+    ): Boolean {
+        val expiredRooms = roomsById.values.filter { room ->
+            room.shouldExpireAt(
+                nowMillis = nowMillis,
+            )
+        }
+
+        if (expiredRooms.isEmpty()) {
+            return false
+        }
+
+        expiredRooms.forEach { room ->
+            roomsById.remove(room.roomId)
+            roomIdsByCode.remove(room.roomCode)
+
+            val expiredMatchIds = matchesById.values
+                .filter { matchRecord ->
+                    matchRecord.roomId == room.roomId
+                }
+                .map { matchRecord ->
+                    matchRecord.matchId
+                }
+
+            expiredMatchIds.forEach { matchId ->
+                matchesById.remove(matchId)
+            }
+
+            actionResultsByKey.entries.removeAll { entry ->
+                entry.key.matchId in expiredMatchIds
+            }
+        }
+
+        return true
+    }
+
+    private fun OnlineRoomSnapshotDto.shouldExpireAt(
+        nowMillis: Long,
+    ): Boolean {
+        val updatedAt = updatedAtEpochMillis ?: createdAtEpochMillis
+            ?: return false
+
+        val ttlMillis = when (status) {
+            OnlineRoomStatusDto.WAITING_FOR_PLAYERS ->
+                WAITING_ROOM_TTL_MILLIS
+
+            OnlineRoomStatusDto.FINISHED ->
+                FINISHED_ROOM_TTL_MILLIS
+
+            OnlineRoomStatusDto.CLOSED ->
+                CLOSED_ROOM_TTL_MILLIS
+
+            OnlineRoomStatusDto.IN_MATCH -> return false
+        }
+
+        return nowMillis - updatedAt >= ttlMillis
     }
 
     private fun addDevelopmentBotsIfNeeded(
@@ -1638,3 +1902,7 @@ class InMemoryOnlineServerStore(
         )
     }
 }
+
+private const val WAITING_ROOM_TTL_MILLIS = 24L * 60L * 60L * 1_000L
+private const val FINISHED_ROOM_TTL_MILLIS = 6L * 60L * 60L * 1_000L
+private const val CLOSED_ROOM_TTL_MILLIS = 60L * 60L * 1_000L
