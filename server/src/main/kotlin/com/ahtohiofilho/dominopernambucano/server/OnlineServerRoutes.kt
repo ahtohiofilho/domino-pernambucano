@@ -22,8 +22,13 @@ fun Route.onlineServerRoutes(
         createDefaultOnlineRequestIdentityResolver(
             sessionTokenService = sessionTokenService,
         ),
+    persistenceController: OnlineServerPersistenceController? = null,
 ) {
     post("/${OnlineRemoteRoutes.CREATE_ANONYMOUS_SESSION}") {
+        if (!call.requireOnlineServerReady(persistenceController)) {
+            return@post
+        }
+
         call.respond(
             HttpStatusCode.Created,
             sessionTokenService.issueAnonymousSession(),
@@ -31,6 +36,10 @@ fun Route.onlineServerRoutes(
     }
 
     post("/${OnlineRemoteRoutes.CREATE_ROOM}") {
+        if (!call.requireOnlineServerReady(persistenceController)) {
+            return@post
+        }
+
         val identity = call.requireOnlineIdentity(
             identityResolver = identityResolver,
         ) ?: return@post
@@ -44,13 +53,21 @@ fun Route.onlineServerRoutes(
         }
 
         call.respond(
-            store.createRoom(
-                request = request,
-            ),
+            persistOnlineServerMutation(
+                persistenceController = persistenceController,
+            ) {
+                store.createRoom(
+                    request = request,
+                )
+            },
         )
     }
 
     post("/${OnlineRemoteRoutes.JOIN_ROOM}") {
+        if (!call.requireOnlineServerReady(persistenceController)) {
+            return@post
+        }
+
         val identity = call.requireOnlineIdentity(
             identityResolver = identityResolver,
         ) ?: return@post
@@ -64,13 +81,21 @@ fun Route.onlineServerRoutes(
         }
 
         call.respond(
-            store.joinRoom(
-                request = request,
-            ),
+            persistOnlineServerMutation(
+                persistenceController = persistenceController,
+            ) {
+                store.joinRoom(
+                    request = request,
+                )
+            },
         )
     }
 
     post("/${OnlineRemoteRoutes.SUBMIT_ACTION}") {
+        if (!call.requireOnlineServerReady(persistenceController)) {
+            return@post
+        }
+
         val identity = call.requireOnlineIdentity(
             identityResolver = identityResolver,
         ) ?: return@post
@@ -84,9 +109,13 @@ fun Route.onlineServerRoutes(
         }
 
         call.respond(
-            store.submitAction(
-                action = action,
-            ),
+            persistOnlineServerMutation(
+                persistenceController = persistenceController,
+            ) {
+                store.submitAction(
+                    action = action,
+                )
+            },
         )
     }
 
@@ -101,6 +130,10 @@ fun Route.onlineServerRoutes(
     }
 
     get("/rooms/{roomId}") {
+        if (!call.requireOnlineServerReady(persistenceController)) {
+            return@get
+        }
+
         val identity = call.requireOnlineIdentity(
             identityResolver = identityResolver,
         ) ?: return@get
@@ -140,6 +173,10 @@ fun Route.onlineServerRoutes(
     }
 
     get("/matches/{matchId}") {
+        if (!call.requireOnlineServerReady(persistenceController)) {
+            return@get
+        }
+
         val identity = call.requireOnlineIdentity(
             identityResolver = identityResolver,
         ) ?: return@get
@@ -191,6 +228,10 @@ fun Route.onlineServerRoutes(
     }
 
     get("/matches/{matchId}/updates") {
+        if (!call.requireOnlineServerReady(persistenceController)) {
+            return@get
+        }
+
         val identity = call.requireOnlineIdentity(
             identityResolver = identityResolver,
         ) ?: return@get
@@ -253,6 +294,40 @@ fun Route.onlineServerRoutes(
 
         call.respond(snapshots)
     }
+}
+
+private fun <T> persistOnlineServerMutation(
+    persistenceController: OnlineServerPersistenceController?,
+    mutation: () -> T,
+): T {
+    return persistenceController?.mutate(
+        mutation = mutation,
+    ) ?: mutation()
+}
+
+private suspend fun ApplicationCall.requireOnlineServerReady(
+    persistenceController: OnlineServerPersistenceController?,
+): Boolean {
+    val recoveryStatus = persistenceController
+        ?.currentRecoveryStatus()
+        ?: OnlineServerRecoveryStatus.Ready
+
+    if (recoveryStatus is OnlineServerRecoveryStatus.Ready) {
+        return true
+    }
+
+    recoveryStatus as OnlineServerRecoveryStatus.Invalid
+
+    respond(
+        HttpStatusCode.ServiceUnavailable,
+        ServerHealthResponse(
+            status = "degraded",
+            recovery = "invalid",
+            reason = recoveryStatus.reason,
+        ),
+    )
+
+    return false
 }
 
 private suspend fun ApplicationCall.requireOnlineIdentity(

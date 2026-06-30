@@ -21,9 +21,16 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.nio.file.Path
 
 private const val AUTO_FILL_BOTS_ENVIRONMENT_VARIABLE =
     "DOMINO_AUTO_FILL_BOTS_AFTER_TWO_HUMANS"
+
+private const val ONLINE_SERVER_STATE_DIRECTORY_ENVIRONMENT_VARIABLE =
+    "DOMINO_ONLINE_SERVER_STATE_DIRECTORY"
+
+private const val DEFAULT_ONLINE_SERVER_STATE_DIRECTORY =
+    "build/online-server-state"
 
 /*
  * O intervalo também é a cadência máxima das ações automáticas. Como o store
@@ -49,13 +56,19 @@ fun Application.module() {
         sink = traceArchive,
     )
 
+    val store = InMemoryOnlineServerStore(
+        autoFillDevelopmentBotsAfterTwoHumanPlayers =
+            shouldAutoFillDevelopmentBots(),
+        traceLogger = traceLogger,
+    )
+
     module(
-        store = InMemoryOnlineServerStore(
-            autoFillDevelopmentBotsAfterTwoHumanPlayers =
-                shouldAutoFillDevelopmentBots(),
-            traceLogger = traceLogger,
-        ),
+        store = store,
         traceArchive = traceArchive,
+        persistenceController = OnlineServerPersistenceController(
+            store = store,
+            stateStore = createDefaultOnlineServerStateStore(),
+        ),
     )
 }
 
@@ -68,9 +81,13 @@ fun Application.module(
         createDefaultOnlineRequestIdentityResolver(
             sessionTokenService = sessionTokenService,
         ),
+    persistenceController: OnlineServerPersistenceController? = null,
 ) {
+    persistenceController?.restoreAtStartup()
+
     installAuthoritativeMatchTicker(
         store = store,
+        persistenceController = persistenceController,
     )
 
     install(ContentNegotiation) {
@@ -84,11 +101,31 @@ fun Application.module(
 
     routing {
         get("/health") {
-            call.respond(
-                ServerHealthResponse(
-                    status = "ok",
-                ),
-            )
+            when (
+                val recoveryStatus = persistenceController
+                    ?.currentRecoveryStatus()
+                    ?: OnlineServerRecoveryStatus.Ready
+            ) {
+                OnlineServerRecoveryStatus.Ready -> {
+                    call.respond(
+                        ServerHealthResponse(
+                            status = "ok",
+                            recovery = "ready",
+                        ),
+                    )
+                }
+
+                is OnlineServerRecoveryStatus.Invalid -> {
+                    call.respond(
+                        io.ktor.http.HttpStatusCode.ServiceUnavailable,
+                        ServerHealthResponse(
+                            status = "degraded",
+                            recovery = "invalid",
+                            reason = recoveryStatus.reason,
+                        ),
+                    )
+                }
+            }
         }
 
         onlineServerRoutes(
@@ -96,12 +133,14 @@ fun Application.module(
             traceArchive = traceArchive,
             sessionTokenService = sessionTokenService,
             identityResolver = identityResolver,
+            persistenceController = persistenceController,
         )
     }
 }
 
 private fun Application.installAuthoritativeMatchTicker(
     store: InMemoryOnlineServerStore,
+    persistenceController: OnlineServerPersistenceController?,
 ) {
     val tickerScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default,
@@ -111,7 +150,14 @@ private fun Application.installAuthoritativeMatchTicker(
         tickerScope.launch {
             while (isActive) {
                 delay(AUTHORITATIVE_TICK_INTERVAL_MILLIS)
-                store.advanceAuthoritativeTime()
+
+                if (persistenceController != null) {
+                    persistenceController.clearExpiredRooms()
+                    persistenceController.advanceAuthoritativeTime()
+                } else {
+                    store.clearExpiredRooms()
+                    store.advanceAuthoritativeTime()
+                }
             }
         }
     }
@@ -119,6 +165,22 @@ private fun Application.installAuthoritativeMatchTicker(
     environment.monitor.subscribe(ApplicationStopping) {
         tickerScope.cancel()
     }
+}
+
+private fun createDefaultOnlineServerStateStore(): OnlineServerStateStore {
+    val configuredDirectory = System.getenv(
+        ONLINE_SERVER_STATE_DIRECTORY_ENVIRONMENT_VARIABLE,
+    )?.trim()
+
+    val stateDirectory = if (configuredDirectory.isNullOrBlank()) {
+        Path.of(
+            DEFAULT_ONLINE_SERVER_STATE_DIRECTORY,
+        )
+    } else {
+        Path.of(configuredDirectory)
+    }
+
+    return JsonFileOnlineServerStateStore(stateDirectory)
 }
 
 private fun shouldAutoFillDevelopmentBots(): Boolean {
@@ -133,4 +195,6 @@ private fun shouldAutoFillDevelopmentBots(): Boolean {
 @Serializable
 data class ServerHealthResponse(
     val status: String,
+    val recovery: String = "ready",
+    val reason: String? = null,
 )

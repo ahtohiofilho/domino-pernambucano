@@ -35,7 +35,11 @@ class ApplicationTest {
     @Test
     fun health_returns_ok() = testApplication {
         application {
-            module()
+            module(
+                store = InMemoryOnlineServerStore(
+                    nowEpochMillis = { 1_000L },
+                ),
+            )
         }
 
         val response = client.get(
