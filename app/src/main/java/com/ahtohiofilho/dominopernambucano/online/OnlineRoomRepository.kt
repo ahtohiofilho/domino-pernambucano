@@ -43,6 +43,26 @@ interface OnlineRoomRepository {
         )
     }
 
+    /*
+     * Pausa de ciclo de vida não representa abandono. Implementações remotas
+     * devem interromper apenas o loop de polling e preservar os snapshots e o
+     * vínculo persistido do chamador.
+     */
+    fun pausePollingForBackground() = Unit
+
+    /*
+     * A reconciliação de foreground mantém o mesmo contrato autoritativo da
+     * retomada persistida. Backends específicos podem restaurar o polling
+     * antes de delegar ao fluxo de reconciliação.
+     */
+    suspend fun refreshAfterForeground(
+        binding: OnlineParticipationBinding,
+    ): OnlineParticipationResumeResult {
+        return resumeParticipation(
+            binding = binding,
+        )
+    }
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

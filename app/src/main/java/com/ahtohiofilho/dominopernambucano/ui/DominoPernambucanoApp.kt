@@ -41,6 +41,16 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+private sealed interface OnlineForegroundRefreshState {
+    data object Ready : OnlineForegroundRefreshState
+
+    data object Refreshing : OnlineForegroundRefreshState
+
+    data class Unavailable(
+        val reason: String,
+    ) : OnlineForegroundRefreshState
+}
+
 private sealed interface OnlineParticipationBootstrapState {
     data object Checking : OnlineParticipationBootstrapState
 
@@ -53,6 +63,7 @@ private sealed interface OnlineParticipationBootstrapState {
 
 @Composable
 fun DominoPernambucanoApp(
+    isAppInForeground: Boolean? = true,
     onlineAppConfig: OnlineAppConfig = OnlineAppEnvironment.Current,
 ) {
     val context = LocalContext.current
@@ -145,6 +156,7 @@ fun DominoPernambucanoApp(
         .collectAsState()
     val onlineRoomSnapshot by onlineRoomRepository.roomSnapshot.collectAsState()
     val onlineMatchSnapshot by onlineRoomRepository.matchSnapshot.collectAsState()
+    val sessionState by sessionCoordinator.state.collectAsState()
 
     LaunchedEffect(
         onlineTracePendingEntryVersion,
@@ -228,6 +240,186 @@ fun DominoPernambucanoApp(
         mutableStateOf<OnlineParticipationBootstrapState>(
             OnlineParticipationBootstrapState.Checking,
         )
+    }
+
+    var hasEnteredForeground by remember {
+        mutableStateOf(false)
+    }
+
+    var requiresForegroundRefresh by remember {
+        mutableStateOf(false)
+    }
+
+    var foregroundRefreshAttempt by remember {
+        mutableIntStateOf(0)
+    }
+
+    var foregroundRefreshState by remember {
+        mutableStateOf<OnlineForegroundRefreshState>(
+            OnlineForegroundRefreshState.Ready,
+        )
+    }
+
+    LaunchedEffect(
+        isAppInForeground,
+        foregroundRefreshAttempt,
+        participationBootstrapState,
+    ) {
+        when (isAppInForeground) {
+            null -> Unit
+
+            false -> {
+                if (!hasEnteredForeground) {
+                    return@LaunchedEffect
+                }
+
+                requiresForegroundRefresh = true
+                onlineRoomRepository.pausePollingForBackground()
+
+                (sessionState as? DominoSessionState.OnlineMatch)
+                    ?.matchCoordinator
+                    ?.beginLifecycleReconciliation()
+            }
+
+            true -> {
+                if (!hasEnteredForeground) {
+                    hasEnteredForeground = true
+                    return@LaunchedEffect
+                }
+
+                if (!requiresForegroundRefresh) {
+                    return@LaunchedEffect
+                }
+
+                if (
+                    participationBootstrapState !=
+                    OnlineParticipationBootstrapState.Ready
+                ) {
+                    return@LaunchedEffect
+                }
+
+                val binding = onlineParticipationStore.read()
+
+                if (binding == null) {
+                    requiresForegroundRefresh = false
+                    foregroundRefreshState = OnlineForegroundRefreshState.Ready
+                    return@LaunchedEffect
+                }
+
+                if (binding.backendScope != onlineParticipationBackendScope) {
+                    onlineParticipationStore.clear()
+                    requiresForegroundRefresh = false
+                    foregroundRefreshState = OnlineForegroundRefreshState.Ready
+                    return@LaunchedEffect
+                }
+
+                foregroundRefreshState =
+                    OnlineForegroundRefreshState.Refreshing
+
+                val refreshResult = try {
+                    onlineRoomRepository.refreshAfterForeground(
+                        binding = binding,
+                    )
+                } catch (error: Throwable) {
+                    if (error is CancellationException) {
+                        throw error
+                    }
+
+                    OnlineParticipationResumeResult.Unavailable(
+                        reason = error.message
+                            ?: "Não foi possível atualizar sua participação online.",
+                    )
+                }
+
+                when (refreshResult) {
+                    is OnlineParticipationResumeResult.WaitingRoom -> {
+                        val refreshedBinding = binding.copy(
+                            matchId = refreshResult.roomSnapshot.matchId,
+                            seatIndex = refreshResult.localSeatIndex,
+                        )
+
+                        onlineParticipationStore.write(refreshedBinding)
+                        requiresForegroundRefresh = false
+                        foregroundRefreshState = OnlineForegroundRefreshState.Ready
+
+                        if (
+                            sessionState is DominoSessionState.OnlineMatch ||
+                            sessionState == DominoSessionState.OnlineCreateRoom
+                        ) {
+                            sessionCoordinator.dispatch(
+                                DominoSessionCommand.OpenResumedOnlineRoom(
+                                    participationBinding = refreshedBinding,
+                                ),
+                            )
+                        }
+                    }
+
+                    is OnlineParticipationResumeResult.ActiveMatch -> {
+                        val refreshedBinding = binding.copy(
+                            matchId = refreshResult.matchSnapshot.matchId,
+                            seatIndex = refreshResult.localSeatIndex,
+                        )
+
+                        onlineParticipationStore.write(refreshedBinding)
+                        requiresForegroundRefresh = false
+                        foregroundRefreshState = OnlineForegroundRefreshState.Ready
+
+                        val activeCoordinator =
+                            (sessionState as? DominoSessionState.OnlineMatch)
+                                ?.matchCoordinator
+
+                        if (
+                            activeCoordinator != null &&
+                            activeCoordinator.currentMatchId() ==
+                            refreshResult.matchSnapshot.matchId
+                        ) {
+                            activeCoordinator.completeLifecycleReconciliation(
+                                requiredRevision = refreshResult.matchSnapshot.revision,
+                            )
+                        } else {
+                            val refreshedCoordinator =
+                                OnlineDominoMatchCoordinator(
+                                    repository = onlineRoomRepository,
+                                    roomId = refreshResult.matchSnapshot.roomId,
+                                    matchId = refreshResult.matchSnapshot.matchId,
+                                    localPlayerId = refreshedBinding.playerId,
+                                    localPlayerIndex = refreshedBinding.seatIndex,
+                                    initialSnapshot = refreshResult.matchSnapshot,
+                                    traceLogger = onlineTraceLogger,
+                                )
+
+                            refreshedCoordinator.beginLifecycleReconciliation()
+                            refreshedCoordinator.completeLifecycleReconciliation(
+                                requiredRevision = refreshResult.matchSnapshot.revision,
+                            )
+
+                            sessionCoordinator.dispatch(
+                                DominoSessionCommand.StartOnlineMatch(
+                                    matchCoordinator = refreshedCoordinator,
+                                ),
+                            )
+                        }
+                    }
+
+                    is OnlineParticipationResumeResult.Inactive -> {
+                        onlineParticipationStore.clear()
+                        requiresForegroundRefresh = false
+                        foregroundRefreshState = OnlineForegroundRefreshState.Ready
+
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.BackToPlayModeSelection,
+                        )
+                    }
+
+                    is OnlineParticipationResumeResult.Unavailable -> {
+                        foregroundRefreshState =
+                            OnlineForegroundRefreshState.Unavailable(
+                                reason = refreshResult.reason,
+                            )
+                    }
+                }
+            }
+        }
     }
 
     LaunchedEffect(
@@ -339,8 +531,12 @@ fun DominoPernambucanoApp(
                     participationRestoreAttempt += 1
                 },
                 onOpenMenuClick = {
-                    participationBootstrapState =
-                        OnlineParticipationBootstrapState.Ready
+                    appCoroutineScope.launch {
+                        onlineRoomRepository.leaveRoom()
+                        onlineParticipationStore.clear()
+                        participationBootstrapState =
+                            OnlineParticipationBootstrapState.Ready
+                    }
                 },
             )
             return
@@ -349,8 +545,45 @@ fun DominoPernambucanoApp(
         OnlineParticipationBootstrapState.Ready -> Unit
     }
 
+    when (val state = foregroundRefreshState) {
+        OnlineForegroundRefreshState.Ready -> Unit
+
+        OnlineForegroundRefreshState.Refreshing -> {
+            OnlineParticipationRestoreScreen(
+                isLoading = true,
+                message = "Atualizando o estado da partida...",
+                onRetryClick = { },
+                onOpenMenuClick = { },
+            )
+            return
+        }
+
+        is OnlineForegroundRefreshState.Unavailable -> {
+            OnlineParticipationRestoreScreen(
+                isLoading = false,
+                message = state.reason,
+                onRetryClick = {
+                    foregroundRefreshAttempt += 1
+                },
+                onOpenMenuClick = {
+                    appCoroutineScope.launch {
+                        onlineRoomRepository.leaveRoom()
+                        onlineParticipationStore.clear()
+                        requiresForegroundRefresh = false
+                        foregroundRefreshState =
+                            OnlineForegroundRefreshState.Ready
+
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.BackToPlayModeSelection,
+                        )
+                    }
+                },
+            )
+            return
+        }
+    }
+
     val onlineDebugOptions = onlineAppConfig.debugOptions
-    val sessionState by sessionCoordinator.state.collectAsState()
 
     when (val state = sessionState) {
         DominoSessionState.MainMenu -> {

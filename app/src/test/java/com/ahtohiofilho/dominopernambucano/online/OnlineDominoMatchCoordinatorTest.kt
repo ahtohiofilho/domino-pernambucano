@@ -1180,6 +1180,99 @@ class OnlineDominoMatchCoordinatorTest {
             }
         }
 
+    @Test
+    fun lifecycle_reconciliation_suppresses_actions_until_target_revision_is_stable() =
+        runBlocking {
+            val openingPiece = DominoPiece(
+                left = 6,
+                right = 6,
+            )
+            val initialRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    listOf(openingPiece),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 7L,
+                ),
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialRuntimeState.toSnapshot(
+                    revision = 7L,
+                ),
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+                coordinator.beginLifecycleReconciliation()
+                coordinator.completeLifecycleReconciliation(
+                    requiredRevision = 8L,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.LocalMoveSelected(
+                        move = PlayableMove(
+                            piece = openingPiece,
+                            side = BoardSide.RIGHT,
+                            flipped = false,
+                        ),
+                    ),
+                )
+
+                assertTrue(
+                    coordinator.lifecycleReconciliationInProgress.value,
+                )
+                assertEquals(
+                    emptyList<OnlinePlayerActionDto>(),
+                    repository.submittedActions,
+                )
+
+                repository.publishMatchSnapshot(
+                    initialRuntimeState.toSnapshot(
+                        revision = 8L,
+                    ),
+                )
+                yield()
+
+                assertTrue(
+                    !coordinator.lifecycleReconciliationInProgress.value,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.LocalMoveSelected(
+                        move = PlayableMove(
+                            piece = openingPiece,
+                            side = BoardSide.RIGHT,
+                            flipped = false,
+                        ),
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
     private fun assertPresentingPass(
         coordinator: OnlineDominoMatchCoordinator,
         expectedPlayerIndex: Int,

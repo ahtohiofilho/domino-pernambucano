@@ -99,6 +99,14 @@ class OnlineDominoMatchCoordinator(
      */
     private var inFlightAction: OnlinePlayerActionDto? = null
 
+    private val mutableLifecycleReconciliationInProgress =
+        MutableStateFlow(false)
+
+    private var lifecycleReconciliationRequiredRevision: Long? = null
+
+    val lifecycleReconciliationInProgress: StateFlow<Boolean> =
+        mutableLifecycleReconciliationInProgress.asStateFlow()
+
     override val state: StateFlow<DominoMatchRuntimeState> =
         mutableState.asStateFlow()
 
@@ -259,6 +267,29 @@ class OnlineDominoMatchCoordinator(
 
     fun dispose() {
         coordinatorScope.cancel()
+    }
+
+    fun currentMatchId(): String = matchId
+
+    /*
+     * O ciclo de vida pausa a superfície de input antes de consultar o
+     * servidor. A liberação ocorre somente quando a revisão autoritativa
+     * devolvida pelo refresh tiver sido promovida a estado estável.
+     */
+    fun beginLifecycleReconciliation() {
+        lifecycleReconciliationRequiredRevision = null
+        mutableLifecycleReconciliationInProgress.value = true
+    }
+
+    fun completeLifecycleReconciliation(
+        requiredRevision: Long,
+    ) {
+        if (!mutableLifecycleReconciliationInProgress.value) {
+            return
+        }
+
+        lifecycleReconciliationRequiredRevision = requiredRevision
+        releaseLifecycleReconciliationIfReady()
     }
 
     private fun handleTurnClockTick(
@@ -666,6 +697,22 @@ class OnlineDominoMatchCoordinator(
                         pendingRemoteRuntimeStates.size.toString(),
             ),
         )
+
+        releaseLifecycleReconciliationIfReady()
+    }
+
+    private fun releaseLifecycleReconciliationIfReady() {
+        val requiredRevision = lifecycleReconciliationRequiredRevision
+            ?: return
+
+        if (
+            stableRevision >= requiredRevision &&
+            activePresentationRuntimeState == null &&
+            pendingRemoteRuntimeStates.isEmpty()
+        ) {
+            lifecycleReconciliationRequiredRevision = null
+            mutableLifecycleReconciliationInProgress.value = false
+        }
     }
 
     private fun isPresentationInProgress(
@@ -680,6 +727,15 @@ class OnlineDominoMatchCoordinator(
         command: DominoMatchCommand.LocalMoveSelected,
     ) {
         val runtimeState = stableRuntimeState
+
+        if (mutableLifecycleReconciliationInProgress.value) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.PLAY_MOVE,
+                reason = "lifecycle_reconciliation",
+                move = command.move,
+            )
+            return
+        }
 
         if (isLocalPlayerAutomatic()) {
             traceActionSuppressed(
@@ -729,6 +785,14 @@ class OnlineDominoMatchCoordinator(
     }
 
     private fun submitStartNextRound() {
+        if (mutableLifecycleReconciliationInProgress.value) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.START_NEXT_ROUND,
+                reason = "lifecycle_reconciliation",
+            )
+            return
+        }
+
         if (inFlightAction != null) {
             traceActionSuppressed(
                 actionType = OnlinePlayerActionTypeDto.START_NEXT_ROUND,
@@ -748,6 +812,14 @@ class OnlineDominoMatchCoordinator(
     }
 
     private fun submitStartNewMatch() {
+        if (mutableLifecycleReconciliationInProgress.value) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.START_NEW_MATCH,
+                reason = "lifecycle_reconciliation",
+            )
+            return
+        }
+
         if (inFlightAction != null) {
             traceActionSuppressed(
                 actionType = OnlinePlayerActionTypeDto.START_NEW_MATCH,

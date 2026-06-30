@@ -46,7 +46,7 @@ fun OnlineParticipationRestoreScreen(
             )
 
             SecondaryMenuButton(
-                text = "Abrir menu",
+                text = "Abandonar participação",
                 onClick = onOpenMenuClick,
             )
         }

@@ -827,6 +827,80 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
 
+    @Test
+    fun refresh_after_foreground_reuses_authoritative_resume_without_submitting_leave() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 4L,
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+            val binding = createParticipationBinding(
+                matchId = match.matchId,
+            )
+
+            repository.pausePollingForBackground()
+
+            val result = repository.refreshAfterForeground(
+                binding = binding,
+            )
+
+            assertTrue(result is OnlineParticipationResumeResult.ActiveMatch)
+            assertEquals(room, repository.roomSnapshot.value)
+            assertEquals(match, repository.matchSnapshot.value)
+            assertEquals(emptyList<OnlinePlayerActionDto>(), apiClient.submitActionRequests)
+        }
+
+    @Test
+    fun refresh_after_foreground_keeps_existing_snapshots_when_backend_is_unavailable() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 4L,
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+            val binding = createParticipationBinding(
+                matchId = match.matchId,
+            )
+
+            repository.resumeParticipation(
+                binding = binding,
+            )
+            apiClient.failRoomSnapshotFetch(
+                IllegalStateException("servidor fora"),
+            )
+
+            val result = repository.refreshAfterForeground(
+                binding = binding,
+            )
+
+            assertTrue(result is OnlineParticipationResumeResult.Unavailable)
+            assertEquals(room, repository.roomSnapshot.value)
+            assertEquals(match, repository.matchSnapshot.value)
+            assertEquals(emptyList<OnlinePlayerActionDto>(), apiClient.submitActionRequests)
+        }
+
+
     private fun createParticipationBinding(
         matchId: String? = null,
         seatIndex: Int = 0,
@@ -968,7 +1042,7 @@ class RemoteOnlineRoomRepositoryTest {
         private val createRoomFailure: Throwable? = null,
         private val joinRoomFailure: Throwable? = null,
         private val submitActionFailure: Throwable? = null,
-        private val fetchRoomSnapshotFailure: Throwable? = null,
+        private var fetchRoomSnapshotFailure: Throwable? = null,
         private val fetchMatchSnapshotFailure: Throwable? = null,
         private val roomSnapshotsById: MutableMap<String, OnlineRoomSnapshotDto> =
             mutableMapOf(),
@@ -1031,6 +1105,12 @@ class RemoteOnlineRoomRepositoryTest {
             }
 
             return submitActionResult
+        }
+
+        fun failRoomSnapshotFetch(
+            error: Throwable,
+        ) {
+            fetchRoomSnapshotFailure = error
         }
 
         override suspend fun fetchRoomSnapshot(

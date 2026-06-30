@@ -68,6 +68,7 @@ class RemoteOnlineRoomRepository(
 
     private var pollingJob: Job? = null
     private var pollingRoomId: String? = null
+    private var pollingPausedForBackground = false
     private var activePlayerId: String? = null
 
     private val anonymousSessionRepository: OnlineAnonymousSessionRepository? =
@@ -394,6 +395,24 @@ class RemoteOnlineRoomRepository(
                 )
             }
         }
+    }
+
+    override fun pausePollingForBackground() {
+        pollingPausedForBackground = true
+
+        stopPolling(
+            reason = "background",
+        )
+    }
+
+    override suspend fun refreshAfterForeground(
+        binding: OnlineParticipationBinding,
+    ): OnlineParticipationResumeResult {
+        pollingPausedForBackground = false
+
+        return resumeParticipation(
+            binding = binding,
+        )
     }
 
     override suspend fun createRoom(
@@ -761,6 +780,7 @@ class RemoteOnlineRoomRepository(
         mutableRoomSnapshot.value = null
         mutableMatchSnapshot.value = null
         activePlayerId = null
+        pollingPausedForBackground = false
         client?.setDevelopmentPlayerId(
             playerId = null,
         )
@@ -829,7 +849,7 @@ class RemoteOnlineRoomRepository(
         roomId: String,
         client: RemoteOnlineApiClient,
     ) {
-        if (!pollingPolicy.enabled) {
+        if (!pollingPolicy.enabled || pollingPausedForBackground) {
             return
         }
 
