@@ -33,6 +33,7 @@ class KtorRemoteOnlineApiClientTest {
         runBlocking {
             val recordedRequests = mutableListOf<RecordedRequest>()
             val recordedDevelopmentPlayerIds = mutableListOf<String?>()
+            val recordedAuthorizationHeaders = mutableListOf<String?>()
 
             val apiClient = createApiClient(
                 responsesByPath = mapOf(
@@ -46,6 +47,11 @@ class KtorRemoteOnlineApiClientTest {
                 ),
                 recordedRequests = recordedRequests,
                 recordedDevelopmentPlayerIds = recordedDevelopmentPlayerIds,
+                recordedAuthorizationHeaders = recordedAuthorizationHeaders,
+            )
+
+            apiClient.setBearerAccessToken(
+                accessToken = "expired-access-token",
             )
 
             val result = apiClient.createAnonymousSession()
@@ -74,6 +80,10 @@ class KtorRemoteOnlineApiClientTest {
             assertEquals(
                 listOf(null),
                 recordedDevelopmentPlayerIds,
+            )
+            assertEquals(
+                listOf(null),
+                recordedAuthorizationHeaders,
             )
         }
 
@@ -114,23 +124,104 @@ class KtorRemoteOnlineApiClientTest {
                 CreateOnlineRoomRequestDto(
                     localPlayerId = "player-1",
                     playerName = "Você",
-                )
+                ),
             )
 
-            assertEquals(true, result.accepted)
-            assertEquals(0, result.localSeatIndex)
-            assertEquals("room-1", result.roomSnapshot?.roomId)
+            assertEquals(
+                true,
+                result.accepted,
+            )
+            assertEquals(
+                0,
+                result.localSeatIndex,
+            )
+            assertEquals(
+                "room-1",
+                result.roomSnapshot?.roomId,
+            )
             assertEquals(
                 listOf(
                     RecordedRequest(
                         method = HttpMethod.Post.value,
                         path = "/rooms",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
             assertEquals(
                 listOf("player-1"),
+                recordedDevelopmentPlayerIds,
+            )
+        }
+
+    @Test
+    fun create_room_uses_bearer_and_omits_development_header() =
+        runBlocking {
+            val recordedRequests = mutableListOf<RecordedRequest>()
+            val recordedDevelopmentPlayerIds = mutableListOf<String?>()
+            val recordedAuthorizationHeaders = mutableListOf<String?>()
+
+            val apiClient = createApiClient(
+                responsesByPath = mapOf(
+                    "/rooms" to """
+                        {
+                          "accepted": true,
+                          "localSeatIndex": 0,
+                          "roomSnapshot": {
+                            "roomId": "room-1",
+                            "roomCode": "123456",
+                            "hostPlayerId": "anonymous-player-1",
+                            "status": "WAITING_FOR_PLAYERS",
+                            "players": [
+                              {
+                                "playerId": "anonymous-player-1",
+                                "name": "Você",
+                                "seatIndex": 0,
+                                "connected": true
+                              }
+                            ]
+                          }
+                        }
+                    """.trimIndent(),
+                ),
+                recordedRequests = recordedRequests,
+                recordedDevelopmentPlayerIds = recordedDevelopmentPlayerIds,
+                recordedAuthorizationHeaders = recordedAuthorizationHeaders,
+            )
+
+            apiClient.setBearerAccessToken(
+                accessToken = "test-access-token",
+            )
+
+            val result = apiClient.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "anonymous-player-1",
+                    playerName = "Você",
+                ),
+            )
+
+            assertEquals(
+                true,
+                result.accepted,
+            )
+
+            assertEquals(
+                listOf(
+                    RecordedRequest(
+                        method = HttpMethod.Post.value,
+                        path = "/rooms",
+                    ),
+                ),
+                recordedRequests,
+            )
+
+            assertEquals(
+                listOf("Bearer test-access-token"),
+                recordedAuthorizationHeaders,
+            )
+
+            assertEquals(
+                listOf(null),
                 recordedDevelopmentPlayerIds,
             )
         }
@@ -177,18 +268,27 @@ class KtorRemoteOnlineApiClientTest {
                     roomCode = "123456",
                     localPlayerId = "player-2",
                     playerName = "Jogador 2",
-                )
+                ),
             )
 
-            assertEquals(true, result.accepted)
-            assertEquals(1, result.localSeatIndex)
-            assertEquals("room-1", result.roomSnapshot?.roomId)
+            assertEquals(
+                true,
+                result.accepted,
+            )
+            assertEquals(
+                1,
+                result.localSeatIndex,
+            )
+            assertEquals(
+                "room-1",
+                result.roomSnapshot?.roomId,
+            )
             assertEquals(
                 listOf(
                     RecordedRequest(
                         method = HttpMethod.Post.value,
                         path = "/rooms/join",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
@@ -224,15 +324,24 @@ class KtorRemoteOnlineApiClientTest {
                 action = action,
             )
 
-            assertEquals(true, result.accepted)
-            assertEquals(2L, result.revision)
-            assertEquals("action-1", result.actionId)
+            assertEquals(
+                true,
+                result.accepted,
+            )
+            assertEquals(
+                2L,
+                result.revision,
+            )
+            assertEquals(
+                "action-1",
+                result.actionId,
+            )
             assertEquals(
                 listOf(
                     RecordedRequest(
                         method = HttpMethod.Post.value,
                         path = "/matches/actions",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
@@ -274,14 +383,20 @@ class KtorRemoteOnlineApiClientTest {
                 roomId = "room-1",
             )
 
-            assertEquals("room-1", result.roomId)
-            assertEquals("match-1", result.matchId)
+            assertEquals(
+                "room-1",
+                result.roomId,
+            )
+            assertEquals(
+                "match-1",
+                result.matchId,
+            )
             assertEquals(
                 listOf(
                     RecordedRequest(
                         method = HttpMethod.Get.value,
                         path = "/rooms/room-1",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
@@ -291,6 +406,7 @@ class KtorRemoteOnlineApiClientTest {
     fun submit_trace_batch_posts_to_traces_and_decodes_result() =
         runBlocking {
             val recordedRequests = mutableListOf<RecordedRequest>()
+
             val apiClient = createApiClient(
                 responsesByPath = mapOf(
                     "/traces" to """
@@ -377,15 +493,24 @@ class KtorRemoteOnlineApiClientTest {
                 matchId = "match-1",
             )
 
-            assertEquals("room-1", result.roomId)
-            assertEquals("match-1", result.matchId)
-            assertEquals(3L, result.revision)
+            assertEquals(
+                "room-1",
+                result.roomId,
+            )
+            assertEquals(
+                "match-1",
+                result.matchId,
+            )
+            assertEquals(
+                3L,
+                result.revision,
+            )
             assertEquals(
                 listOf(
                     RecordedRequest(
                         method = HttpMethod.Get.value,
                         path = "/matches/match-1",
-                    )
+                    ),
                 ),
                 recordedRequests,
             )
@@ -395,6 +520,7 @@ class KtorRemoteOnlineApiClientTest {
         responsesByPath: Map<String, String>,
         recordedRequests: MutableList<RecordedRequest>,
         recordedDevelopmentPlayerIds: MutableList<String?>? = null,
+        recordedAuthorizationHeaders: MutableList<String?>? = null,
     ): KtorRemoteOnlineApiClient {
         val mockEngine = MockEngine { request ->
             val path = request.url.encodedPath
@@ -403,9 +529,16 @@ class KtorRemoteOnlineApiClientTest {
                 method = request.method.value,
                 path = path,
             )
+
             recordedDevelopmentPlayerIds?.add(
                 request.headers[
                     OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                ],
+            )
+
+            recordedAuthorizationHeaders?.add(
+                request.headers[
+                    HttpHeaders.Authorization,
                 ],
             )
 

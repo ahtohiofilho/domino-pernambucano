@@ -16,6 +16,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.parameter
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -32,11 +33,22 @@ class KtorRemoteOnlineApiClient(
         }.trimEnd('/')
 
     private var developmentPlayerId: String? = null
+    private var bearerAccessToken: String? = null
 
     override fun setDevelopmentPlayerId(
         playerId: String?,
     ) {
         developmentPlayerId = playerId
+            ?.trim()
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+    }
+
+    override fun setBearerAccessToken(
+        accessToken: String?,
+    ) {
+        bearerAccessToken = accessToken
             ?.trim()
             ?.takeIf { value ->
                 value.isNotBlank()
@@ -66,8 +78,8 @@ class KtorRemoteOnlineApiClient(
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
-                playerId = request.localPlayerId,
+            applyProtectedAuthentication(
+                developmentPlayerId = request.localPlayerId,
             )
             setBody(request)
         }.body()
@@ -85,9 +97,8 @@ class KtorRemoteOnlineApiClient(
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
-                playerId = request.localPlayerId,
+            applyProtectedAuthentication(
+                developmentPlayerId = request.localPlayerId,
             )
             setBody(request)
         }.body()
@@ -105,8 +116,8 @@ class KtorRemoteOnlineApiClient(
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
-                playerId = action.playerId,
+            applyProtectedAuthentication(
+                developmentPlayerId = action.playerId,
             )
             setBody(action)
         }.body()
@@ -133,8 +144,8 @@ class KtorRemoteOnlineApiClient(
             ),
         ) {
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
-                playerId = developmentPlayerId,
+            applyProtectedAuthentication(
+                developmentPlayerId = developmentPlayerId,
             )
         }.body()
     }
@@ -148,8 +159,8 @@ class KtorRemoteOnlineApiClient(
             ),
         ) {
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
-                playerId = developmentPlayerId,
+            applyProtectedAuthentication(
+                developmentPlayerId = developmentPlayerId,
             )
         }.body()
     }
@@ -168,10 +179,28 @@ class KtorRemoteOnlineApiClient(
                 value = afterRevision,
             )
             accept(ContentType.Application.Json)
-            applyDevelopmentPlayerId(
-                playerId = developmentPlayerId,
+            applyProtectedAuthentication(
+                developmentPlayerId = developmentPlayerId,
             )
         }.body()
+    }
+
+    private fun HttpRequestBuilder.applyProtectedAuthentication(
+        developmentPlayerId: String?,
+    ) {
+        val accessToken = bearerAccessToken
+
+        if (accessToken != null) {
+            header(
+                HttpHeaders.Authorization,
+                "Bearer $accessToken",
+            )
+            return
+        }
+
+        applyDevelopmentPlayerId(
+            playerId = developmentPlayerId,
+        )
     }
 
     private fun HttpRequestBuilder.applyDevelopmentPlayerId(

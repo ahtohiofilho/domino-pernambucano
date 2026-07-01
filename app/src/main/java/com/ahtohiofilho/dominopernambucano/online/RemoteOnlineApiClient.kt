@@ -13,6 +13,16 @@ interface RemoteOnlineApiClient {
         playerId: String?,
     ) = Unit
 
+    /*
+     * Token Bearer attivo per le route online protette.
+     *
+     * Le implementazioni di test possono mantenere il no-op predefinito.
+     * Il token non deve essere registrato in trace o log.
+     */
+    fun setBearerAccessToken(
+        accessToken: String?,
+    ) = Unit
+
     suspend fun createAnonymousSession(): OnlineAnonymousSessionDto {
         throw UnsupportedOperationException(
             "Emissão de sessão anônima não configurada para este cliente remoto.",
