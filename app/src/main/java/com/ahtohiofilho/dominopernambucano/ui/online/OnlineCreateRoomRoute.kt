@@ -31,15 +31,14 @@ import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
-import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
-import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerId
 import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerIdentity
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.ui.menu.MenuScaffold
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
@@ -76,6 +75,10 @@ fun OnlineCreateRoomRoute(
         mutableStateOf(false)
     }
 
+    var participationPlayerId by remember {
+        mutableStateOf(localPlayerId)
+    }
+
     LaunchedEffect(
         roomRepository,
         localPlayerId,
@@ -85,13 +88,25 @@ fun OnlineCreateRoomRoute(
             CreateOnlineRoomRequestDto(
                 localPlayerId = localPlayerId,
                 playerName = localPlayerName,
-            )
+            ),
         )
 
-        feedbackMessage = if (result.accepted) {
-            null
+        if (result.accepted) {
+            participationPlayerId = result.localSeatIndex
+                ?.let { seatIndex ->
+                    result.roomSnapshot
+                        ?.players
+                        ?.firstOrNull { player ->
+                            player.seatIndex == seatIndex
+                        }
+                        ?.playerId
+                }
+                ?: localPlayerId
+
+            feedbackMessage = null
         } else {
-            result.reason ?: "Não foi possível criar a sala."
+            feedbackMessage = result.reason
+                ?: "Não foi possível criar a sala."
         }
     }
 
@@ -99,6 +114,7 @@ fun OnlineCreateRoomRoute(
         roomSnapshot,
         matchSnapshot,
         hasOpenedMatch,
+        participationPlayerId,
     ) {
         val currentRoomSnapshot = roomSnapshot
         val currentMatchSnapshot = matchSnapshot
@@ -113,7 +129,7 @@ fun OnlineCreateRoomRoute(
 
         val localSeatIndex = findLocalSeatIndex(
             roomSnapshot = currentRoomSnapshot,
-            localPlayerId = localPlayerId,
+            localPlayerId = participationPlayerId,
         ) ?: return@LaunchedEffect
 
         hasOpenedMatch = true
@@ -122,7 +138,7 @@ fun OnlineCreateRoomRoute(
             repository = roomRepository,
             roomId = currentMatchSnapshot.roomId,
             matchId = currentMatchSnapshot.matchId,
-            localPlayerId = localPlayerId,
+            localPlayerId = participationPlayerId,
             localPlayerIndex = localSeatIndex,
             initialSnapshot = currentMatchSnapshot,
             traceLogger = traceLogger,
@@ -138,7 +154,8 @@ fun OnlineCreateRoomRoute(
         allowFakePlayerCompletion = debugOptions.allowFakePlayerCompletion,
         onCompleteWithFakePlayersClick = {
             if (!debugOptions.allowFakePlayerCompletion) {
-                feedbackMessage = "Completar mesa com fakes está desabilitado neste ambiente."
+                feedbackMessage =
+                    "Completar mesa com fakes está desabilitado neste ambiente."
                 return@OnlineLobbyScreen
             }
 
@@ -148,7 +165,8 @@ fun OnlineCreateRoomRoute(
                 var workingSnapshot = snapshot
 
                 while (
-                    workingSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
+                    workingSnapshot.status ==
+                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
                     workingSnapshot.players.size < 4
                 ) {
                     val fakePlayerNumber = resolveNextFakePlayerNumber(
@@ -165,7 +183,7 @@ fun OnlineCreateRoomRoute(
                             roomCode = workingSnapshot.roomCode,
                             localPlayerId = fakePlayerIdentity.playerId,
                             playerName = fakePlayerIdentity.playerName,
-                        )
+                        ),
                     )
 
                     if (!result.accepted) {
@@ -213,7 +231,9 @@ private fun OnlineLobbyScreen(
 
         Text(
             text = "Lobby fake em memória para validar criação de sala, entrada de jogadores e abertura automática da partida.",
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.78f),
+            color = DominoSemanticColors.primaryTextOnDark.copy(
+                alpha = 0.78f,
+            ),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
@@ -225,7 +245,9 @@ private fun OnlineLobbyScreen(
 
             Text(
                 text = "Criando sala.",
-                color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f),
+                color = DominoSemanticColors.primaryTextOnDark.copy(
+                    alpha = 0.72f,
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
             )
@@ -246,17 +268,23 @@ private fun OnlineLobbyScreen(
             }
 
             if (
-                roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
+                roomSnapshot.status ==
+                OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
                 allowFakePlayerCompletion
             ) {
                 PrimaryMenuButton(
                     text = "Completar mesa com fakes",
                     onClick = onCompleteWithFakePlayersClick,
                 )
-            } else if (roomSnapshot.status == OnlineRoomStatusDto.WAITING_FOR_PLAYERS) {
+            } else if (
+                roomSnapshot.status ==
+                OnlineRoomStatusDto.WAITING_FOR_PLAYERS
+            ) {
                 Text(
                     text = "Aguardando jogadores.",
-                    color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f),
+                    color = DominoSemanticColors.primaryTextOnDark.copy(
+                        alpha = 0.72f,
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
@@ -288,7 +316,9 @@ private fun RoomCodeCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = DominoSemanticColors.primarySurface.copy(alpha = 0.96f),
+            containerColor = DominoSemanticColors.primarySurface.copy(
+                alpha = 0.96f,
+            ),
             contentColor = DominoSemanticColors.primaryTextOnLight,
         ),
     ) {
@@ -306,7 +336,9 @@ private fun RoomCodeCard(
                 text = "Código da sala",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = DominoSemanticColors.primaryTextOnLight.copy(alpha = 0.66f),
+                color = DominoSemanticColors.primaryTextOnLight.copy(
+                    alpha = 0.66f,
+                ),
             )
 
             Text(
@@ -325,7 +357,9 @@ private fun RoomCodeCard(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
-                color = DominoSemanticColors.primaryTextOnLight.copy(alpha = 0.78f),
+                color = DominoSemanticColors.primaryTextOnLight.copy(
+                    alpha = 0.78f,
+                ),
             )
         }
     }
@@ -339,7 +373,9 @@ private fun PlayerListCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = DominoColorTokens.PureWhite.copy(alpha = 0.16f),
+            containerColor = DominoColorTokens.PureWhite.copy(
+                alpha = 0.16f,
+            ),
             contentColor = DominoSemanticColors.primaryTextOnDark,
         ),
     ) {
@@ -394,7 +430,9 @@ private fun PlayerSlotRow(
                 text = "Lugar ${seatIndex + 1}",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.58f),
+                color = DominoSemanticColors.primaryTextOnDark.copy(
+                    alpha = 0.58f,
+                ),
             )
 
             Text(
@@ -408,7 +446,9 @@ private fun PlayerSlotRow(
                 color = if (isOccupied) {
                     DominoSemanticColors.primaryTextOnDark
                 } else {
-                    DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.58f)
+                    DominoSemanticColors.primaryTextOnDark.copy(
+                        alpha = 0.58f,
+                    )
                 },
             )
         }
@@ -424,7 +464,9 @@ private fun PlayerSlotRow(
             color = if (player?.connected == true) {
                 DominoSemanticColors.playableMove
             } else {
-                DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.48f)
+                DominoSemanticColors.primaryTextOnDark.copy(
+                    alpha = 0.48f,
+                )
             },
         )
     }
