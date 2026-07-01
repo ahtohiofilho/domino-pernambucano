@@ -29,6 +29,55 @@ import org.junit.Test
 
 class KtorRemoteOnlineApiClientTest {
     @Test
+    fun create_anonymous_session_posts_to_session_endpoint_and_decodes_result() =
+        runBlocking {
+            val recordedRequests = mutableListOf<RecordedRequest>()
+            val recordedDevelopmentPlayerIds = mutableListOf<String?>()
+
+            val apiClient = createApiClient(
+                responsesByPath = mapOf(
+                    "/sessions/anonymous" to """
+                        {
+                          "playerId": "anonymous-player-1",
+                          "accessToken": "test-access-token",
+                          "expiresAtEpochMillis": 1700000000000
+                        }
+                    """.trimIndent(),
+                ),
+                recordedRequests = recordedRequests,
+                recordedDevelopmentPlayerIds = recordedDevelopmentPlayerIds,
+            )
+
+            val result = apiClient.createAnonymousSession()
+
+            assertEquals(
+                "anonymous-player-1",
+                result.playerId,
+            )
+            assertEquals(
+                "test-access-token",
+                result.accessToken,
+            )
+            assertEquals(
+                1_700_000_000_000L,
+                result.expiresAtEpochMillis,
+            )
+            assertEquals(
+                listOf(
+                    RecordedRequest(
+                        method = HttpMethod.Post.value,
+                        path = "/sessions/anonymous",
+                    ),
+                ),
+                recordedRequests,
+            )
+            assertEquals(
+                listOf(null),
+                recordedDevelopmentPlayerIds,
+            )
+        }
+
+    @Test
     fun create_room_posts_to_rooms_and_decodes_result() =
         runBlocking {
             val recordedRequests = mutableListOf<RecordedRequest>()

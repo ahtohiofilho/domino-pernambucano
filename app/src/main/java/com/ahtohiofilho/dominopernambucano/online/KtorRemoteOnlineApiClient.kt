@@ -43,6 +43,17 @@ class KtorRemoteOnlineApiClient(
             }
     }
 
+    override suspend fun createAnonymousSession(): OnlineAnonymousSessionDto {
+        return httpClient.post(
+            urlString = endpoint(
+                OnlineRemoteRoutes.CREATE_ANONYMOUS_SESSION,
+            ),
+        ) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }.body()
+    }
+
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
@@ -73,6 +84,7 @@ class KtorRemoteOnlineApiClient(
             urlString = endpoint(OnlineRemoteRoutes.JOIN_ROOM),
         ) {
             contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             applyDevelopmentPlayerId(
                 playerId = request.localPlayerId,

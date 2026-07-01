@@ -13,6 +13,12 @@ interface RemoteOnlineApiClient {
         playerId: String?,
     ) = Unit
 
+    suspend fun createAnonymousSession(): OnlineAnonymousSessionDto {
+        throw UnsupportedOperationException(
+            "Emissão de sessão anônima não configurada para este cliente remoto.",
+        )
+    }
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto
