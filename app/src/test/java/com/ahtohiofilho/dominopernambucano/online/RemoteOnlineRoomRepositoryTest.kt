@@ -699,9 +699,172 @@ class RemoteOnlineRoomRepositoryTest {
             assertNull(repository.matchSnapshot.value)
         }
 
+
+    @Test
+    fun create_room_uses_anonymous_session_identity_and_bearer() =
+        runBlocking {
+            val session = OnlineAnonymousSessionDto(
+                playerId = "anonymous-player-1",
+                accessToken = "session-access-token",
+                expiresAtEpochMillis = 2_000L,
+            )
+
+            val room = createWaitingRoomSnapshot().copy(
+                hostPlayerId = session.playerId,
+                players = listOf(
+                    OnlineRoomPlayerDto(
+                        playerId = session.playerId,
+                        name = "Jogador 1",
+                        seatIndex = 0,
+                        connected = true,
+                    ),
+                ),
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                anonymousSession = session,
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    OnlineAnonymousSessionRepository(
+                        store = InMemoryOnlineAnonymousSessionStore(),
+                        nowEpochMillis = { 1_000L },
+                    ),
+            )
+
+            val result = repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-local",
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            assertTrue(result.accepted)
+            assertEquals(1, apiClient.createAnonymousSessionCallCount)
+            assertEquals(
+                listOf(
+                    CreateOnlineRoomRequestDto(
+                        localPlayerId = session.playerId,
+                        playerName = "Jogador 1",
+                    ),
+                ),
+                apiClient.createRoomRequests,
+            )
+            assertEquals(
+                session.accessToken,
+                apiClient.bearerAccessTokenUpdates.last(),
+            )
+            assertEquals(
+                null,
+                apiClient.developmentPlayerIdUpdates.last(),
+            )
+        }
+
+    @Test
+    fun fake_join_restores_active_participant_bearer() =
+        runBlocking {
+            val session = OnlineAnonymousSessionDto(
+                playerId = "anonymous-player-1",
+                accessToken = "session-access-token",
+                expiresAtEpochMillis = 2_000L,
+            )
+
+            val authenticatedRoom = createWaitingRoomSnapshot().copy(
+                hostPlayerId = session.playerId,
+                players = listOf(
+                    OnlineRoomPlayerDto(
+                        playerId = session.playerId,
+                        name = "Jogador 1",
+                        seatIndex = 0,
+                        connected = true,
+                    ),
+                ),
+            )
+
+            val roomAfterFakeJoin = authenticatedRoom.copy(
+                players = authenticatedRoom.players + OnlineRoomPlayerDto(
+                    playerId = "fake-player-2",
+                    name = "Jogador 2",
+                    seatIndex = 1,
+                    connected = true,
+                ),
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                anonymousSession = session,
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = authenticatedRoom,
+                    localSeatIndex = 0,
+                ),
+                joinRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = roomAfterFakeJoin,
+                    localSeatIndex = 1,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    OnlineAnonymousSessionRepository(
+                        store = InMemoryOnlineAnonymousSessionStore(),
+                        nowEpochMillis = { 1_000L },
+                    ),
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-local",
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            apiClient.bearerAccessTokenUpdates.clear()
+            apiClient.developmentPlayerIdUpdates.clear()
+
+            val fakeJoinRequest = JoinOnlineRoomRequestDto(
+                roomCode = authenticatedRoom.roomCode,
+                localPlayerId = "fake-player-2",
+                playerName = "Jogador 2",
+            )
+
+            val result = repository.joinRoom(
+                fakeJoinRequest,
+            )
+
+            assertTrue(result.accepted)
+            assertEquals(
+                listOf(fakeJoinRequest),
+                apiClient.joinRoomRequests,
+            )
+            assertEquals(
+                listOf(
+                    null,
+                    session.accessToken,
+                ),
+                apiClient.bearerAccessTokenUpdates,
+            )
+            assertEquals(
+                listOf(
+                    "fake-player-2",
+                    null,
+                ),
+                apiClient.developmentPlayerIdUpdates,
+            )
+        }
+
     private fun createRepository(
         apiClient: RemoteOnlineApiClient,
         traceLogger: OnlineTraceLogger = OnlineTraceLogger(),
+        anonymousSessionRepository: OnlineAnonymousSessionRepository? = null,
     ): RemoteOnlineRoomRepository {
         return RemoteOnlineRoomRepository(
             config = OnlineBackendConfig.remote(
@@ -710,6 +873,7 @@ class RemoteOnlineRoomRepositoryTest {
             apiClient = apiClient,
             traceLogger = traceLogger,
             nowEpochMillis = { 1_000L },
+            anonymousSessionRepository = anonymousSessionRepository,
         )
     }
 
@@ -803,6 +967,7 @@ class RemoteOnlineRoomRepositoryTest {
     }
 
     private class FakeRemoteOnlineApiClient(
+        private val anonymousSession: OnlineAnonymousSessionDto? = null,
         private val createRoomResult: OnlineRoomOperationResultDto =
             OnlineRoomOperationResultDto(
                 accepted = false,
@@ -836,6 +1001,31 @@ class RemoteOnlineRoomRepositoryTest {
         val fetchRoomSnapshotRequests = mutableListOf<String>()
         val fetchMatchSnapshotRequests = mutableListOf<String>()
         val fetchMatchSnapshotsAfterRequests = mutableListOf<Pair<String, Long>>()
+        val bearerAccessTokenUpdates = mutableListOf<String?>()
+        val developmentPlayerIdUpdates = mutableListOf<String?>()
+
+        var createAnonymousSessionCallCount: Int = 0
+            private set
+
+        override fun setDevelopmentPlayerId(
+            playerId: String?,
+        ) {
+            developmentPlayerIdUpdates += playerId
+        }
+
+        override fun setBearerAccessToken(
+            accessToken: String?,
+        ) {
+            bearerAccessTokenUpdates += accessToken
+        }
+
+        override suspend fun createAnonymousSession(): OnlineAnonymousSessionDto {
+            createAnonymousSessionCallCount += 1
+
+            return requireNotNull(anonymousSession) {
+                "Sessão anônima não configurada para o teste."
+            }
+        }
 
         override suspend fun createRoom(
             request: CreateOnlineRoomRequestDto,
@@ -922,4 +1112,26 @@ class RemoteOnlineRoomRepositoryTest {
             }
         }
     }
+
+    private class InMemoryOnlineAnonymousSessionStore(
+        initialSession: OnlineAnonymousSessionDto? = null,
+    ) : OnlineAnonymousSessionStore {
+        private var storedSession: OnlineAnonymousSessionDto? =
+            initialSession
+
+        override fun read(): OnlineAnonymousSessionDto? {
+            return storedSession
+        }
+
+        override fun write(
+            session: OnlineAnonymousSessionDto,
+        ) {
+            storedSession = session
+        }
+
+        override fun clear() {
+            storedSession = null
+        }
+    }
+
 }

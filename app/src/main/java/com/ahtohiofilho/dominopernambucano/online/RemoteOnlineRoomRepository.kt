@@ -35,6 +35,8 @@ class RemoteOnlineRoomRepository(
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
+    private val anonymousSessionRepository:
+        OnlineAnonymousSessionRepository? = null,
 ) : OnlineRoomRepository {
     private val repositoryScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate,
@@ -65,6 +67,18 @@ class RemoteOnlineRoomRepository(
     private var pollingJob: Job? = null
     private var pollingRoomId: String? = null
     private var activePlayerId: String? = null
+    private var activeAnonymousSession: OnlineAnonymousSessionDto? = null
+
+    private data class PreparedRoomParticipant(
+        val playerId: String,
+        val anonymousSession: OnlineAnonymousSessionDto? = null,
+        val usesDevelopmentAuthentication: Boolean,
+    )
+
+    private data class PreparedRoomOperationResult(
+        val participant: PreparedRoomParticipant,
+        val result: OnlineRoomOperationResultDto,
+    )
 
     override val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?> =
         mutableRoomSnapshot.asStateFlow()
@@ -93,27 +107,48 @@ class RemoteOnlineRoomRepository(
                 )
             }
 
-        client.setDevelopmentPlayerId(
-            playerId = request.localPlayerId,
-        )
-
         val startedAtEpochMillis = nowEpochMillis()
 
         return runCatching {
-            client.createRoom(request)
+            val participant = prepareRoomParticipant(
+                client = client,
+                requestedPlayerId = request.localPlayerId,
+            )
+
+            try {
+                PreparedRoomOperationResult(
+                    participant = participant,
+                    result = client.createRoom(
+                        request.copy(
+                            localPlayerId = participant.playerId,
+                        ),
+                    ),
+                )
+            } finally {
+                if (participant.usesDevelopmentAuthentication) {
+                    restoreActiveParticipantAuthentication(
+                        client = client,
+                    )
+                }
+            }
         }.fold(
-            onSuccess = { result ->
+            onSuccess = { operationResult ->
+                val participant = operationResult.participant
+                val result = operationResult.result
+
                 traceRoomOperationResult(
                     operation = "create_room",
                     result = result,
-                    playerId = request.localPlayerId,
+                    playerId = participant.playerId,
                 )
 
                 applyRoomOperationResult(
                     result = result,
                     client = client,
                     operation = "create_room",
-                    playerId = request.localPlayerId,
+                    playerId = participant.playerId,
+                    anonymousSession = participant.anonymousSession,
+                    activateParticipant = !participant.usesDevelopmentAuthentication,
                 )
 
                 result
@@ -155,27 +190,48 @@ class RemoteOnlineRoomRepository(
                 )
             }
 
-        client.setDevelopmentPlayerId(
-            playerId = request.localPlayerId,
-        )
-
         val startedAtEpochMillis = nowEpochMillis()
 
         return runCatching {
-            client.joinRoom(request)
+            val participant = prepareRoomParticipant(
+                client = client,
+                requestedPlayerId = request.localPlayerId,
+            )
+
+            try {
+                PreparedRoomOperationResult(
+                    participant = participant,
+                    result = client.joinRoom(
+                        request.copy(
+                            localPlayerId = participant.playerId,
+                        ),
+                    ),
+                )
+            } finally {
+                if (participant.usesDevelopmentAuthentication) {
+                    restoreActiveParticipantAuthentication(
+                        client = client,
+                    )
+                }
+            }
         }.fold(
-            onSuccess = { result ->
+            onSuccess = { operationResult ->
+                val participant = operationResult.participant
+                val result = operationResult.result
+
                 traceRoomOperationResult(
                     operation = "join_room",
                     result = result,
-                    playerId = request.localPlayerId,
+                    playerId = participant.playerId,
                 )
 
                 applyRoomOperationResult(
                     result = result,
                     client = client,
                     operation = "join_room",
-                    playerId = request.localPlayerId,
+                    playerId = participant.playerId,
+                    anonymousSession = participant.anonymousSession,
+                    activateParticipant = !participant.usesDevelopmentAuthentication,
                 )
 
                 result
@@ -219,18 +275,40 @@ class RemoteOnlineRoomRepository(
                 )
             }
 
-        client.setDevelopmentPlayerId(
-            playerId = action.playerId,
-        )
-
-        trace(
-            level = OnlineTraceLevel.INFO,
-            type = OnlineTraceType.ACTION_SUBMITTED,
-            action = action,
-            attributes = action.traceAttributes(),
-        )
-
         return refreshMutex.withLock {
+            val authenticationFailure =
+                configureActiveParticipantAuthentication(
+                    client = client,
+                    playerId = action.playerId,
+                )
+
+            if (authenticationFailure != null) {
+                val rejectedResult = rejectedAction(
+                    action = action,
+                    reason = authenticationFailure,
+                )
+
+                trace(
+                    level = OnlineTraceLevel.WARN,
+                    type = OnlineTraceType.ACTION_REJECTED,
+                    action = action,
+                    snapshotRevision = rejectedResult.revision,
+                    attributes = action.traceAttributes() + mapOf(
+                        "reason" to authenticationFailure.take(180),
+                        "source" to "authentication_failure",
+                    ),
+                )
+
+                return@withLock rejectedResult
+            }
+
+            trace(
+                level = OnlineTraceLevel.INFO,
+                type = OnlineTraceType.ACTION_SUBMITTED,
+                action = action,
+                attributes = action.traceAttributes(),
+            )
+
             val startedAtEpochMillis = nowEpochMillis()
 
             runCatching {
@@ -377,50 +455,69 @@ class RemoteOnlineRoomRepository(
                 revision = currentSnapshot.revision,
             )
 
-            trace(
-                level = OnlineTraceLevel.INFO,
-                type = OnlineTraceType.ACTION_SUBMITTED,
-                action = leaveAction,
-                attributes = leaveAction.traceAttributes() + mapOf(
-                    "source" to "leave_room",
-                ),
-            )
-
-            val startedAtEpochMillis = nowEpochMillis()
-
-            runCatching {
-                client.submitAction(
-                    leaveAction,
+            val authenticationFailure =
+                configureActiveParticipantAuthentication(
+                    client = client,
+                    playerId = localPlayerId,
                 )
-            }.onSuccess { result ->
+
+            if (authenticationFailure == null) {
                 trace(
-                    level = if (result.accepted) {
-                        OnlineTraceLevel.INFO
-                    } else {
-                        OnlineTraceLevel.WARN
-                    },
-                    type = if (result.accepted) {
-                        OnlineTraceType.ACTION_ACCEPTED
-                    } else {
-                        OnlineTraceType.ACTION_REJECTED
-                    },
+                    level = OnlineTraceLevel.INFO,
+                    type = OnlineTraceType.ACTION_SUBMITTED,
                     action = leaveAction,
-                    snapshotRevision = result.revision,
                     attributes = leaveAction.traceAttributes() + mapOf(
                         "source" to "leave_room",
-                        "durationMillis" to elapsedMillisSince(
-                            startedAtEpochMillis = startedAtEpochMillis,
-                        ).toString(),
-                        "reason" to result.reason.orEmpty().take(180),
                     ),
                 )
-            }.onFailure { error ->
-                traceTransportFailure(
-                    operation = "leave_room",
-                    error = error,
+
+                val startedAtEpochMillis = nowEpochMillis()
+
+                runCatching {
+                    client.submitAction(
+                        leaveAction,
+                    )
+                }.onSuccess { result ->
+                    trace(
+                        level = if (result.accepted) {
+                            OnlineTraceLevel.INFO
+                        } else {
+                            OnlineTraceLevel.WARN
+                        },
+                        type = if (result.accepted) {
+                            OnlineTraceType.ACTION_ACCEPTED
+                        } else {
+                            OnlineTraceType.ACTION_REJECTED
+                        },
+                        action = leaveAction,
+                        snapshotRevision = result.revision,
+                        attributes = leaveAction.traceAttributes() + mapOf(
+                            "source" to "leave_room",
+                            "durationMillis" to elapsedMillisSince(
+                                startedAtEpochMillis = startedAtEpochMillis,
+                            ).toString(),
+                            "reason" to result.reason.orEmpty().take(180),
+                        ),
+                    )
+                }.onFailure { error ->
+                    traceTransportFailure(
+                        operation = "leave_room",
+                        error = error,
+                        action = leaveAction,
+                        durationMillis = elapsedMillisSince(
+                            startedAtEpochMillis = startedAtEpochMillis,
+                        ),
+                    )
+                }
+            } else {
+                trace(
+                    level = OnlineTraceLevel.WARN,
+                    type = OnlineTraceType.ACTION_REJECTED,
                     action = leaveAction,
-                    durationMillis = elapsedMillisSince(
-                        startedAtEpochMillis = startedAtEpochMillis,
+                    snapshotRevision = currentSnapshot.revision,
+                    attributes = leaveAction.traceAttributes() + mapOf(
+                        "source" to "authentication_failure",
+                        "reason" to authenticationFailure.take(180),
                     ),
                 )
             }
@@ -440,6 +537,10 @@ class RemoteOnlineRoomRepository(
         mutableRoomSnapshot.value = null
         mutableMatchSnapshot.value = null
         activePlayerId = null
+        activeAnonymousSession = null
+        client?.setBearerAccessToken(
+            accessToken = null,
+        )
         client?.setDevelopmentPlayerId(
             playerId = null,
         )
@@ -450,6 +551,8 @@ class RemoteOnlineRoomRepository(
         client: RemoteOnlineApiClient,
         operation: String,
         playerId: String,
+        anonymousSession: OnlineAnonymousSessionDto?,
+        activateParticipant: Boolean,
     ) {
         val room = result.roomSnapshot ?: return
 
@@ -467,16 +570,35 @@ class RemoteOnlineRoomRepository(
             ),
         )
 
-        if (result.accepted) {
+        if (result.accepted && activateParticipant) {
             activePlayerId = playerId
-            client.setDevelopmentPlayerId(
-                playerId = playerId,
-            )
+            activeAnonymousSession = anonymousSession
 
-            startPolling(
-                roomId = room.roomId,
-                client = client,
-            )
+            val authenticationFailure =
+                configureActiveParticipantAuthentication(
+                    client = client,
+                    playerId = playerId,
+                )
+
+            if (authenticationFailure == null) {
+                startPolling(
+                    roomId = room.roomId,
+                    client = client,
+                )
+            } else {
+                trace(
+                    level = OnlineTraceLevel.WARN,
+                    type = OnlineTraceType.ACTION_REJECTED,
+                    roomId = room.roomId,
+                    matchId = room.matchId,
+                    playerId = playerId,
+                    attributes = mapOf(
+                        "operation" to operation,
+                        "source" to "authentication_failure",
+                        "reason" to authenticationFailure.take(180),
+                    ),
+                )
+            }
         }
 
         val matchId = room.matchId
@@ -486,7 +608,7 @@ class RemoteOnlineRoomRepository(
                 roomId = room.roomId,
                 matchId = matchId,
                 trigger = operation,
-                playerId = playerId,
+                playerId = activePlayerId ?: playerId,
             )
         }
     }
@@ -539,13 +661,35 @@ class RemoteOnlineRoomRepository(
                 delay(pollingPolicy.intervalMillis)
 
                 refreshMutex.withLock {
-                    refreshSnapshots(
-                        client = client,
-                        roomId = roomId,
-                        fallbackMatchId = mutableMatchSnapshot.value?.matchId,
-                        trigger = "polling",
-                        playerId = activePlayerId,
-                    )
+                    val playerId = activePlayerId
+
+                    val authenticationFailure =
+                        configureActiveParticipantAuthentication(
+                            client = client,
+                            playerId = playerId,
+                        )
+
+                    if (authenticationFailure == null) {
+                        refreshSnapshots(
+                            client = client,
+                            roomId = roomId,
+                            fallbackMatchId = mutableMatchSnapshot.value?.matchId,
+                            trigger = "polling",
+                            playerId = playerId,
+                        )
+                    } else {
+                        trace(
+                            level = OnlineTraceLevel.WARN,
+                            type = OnlineTraceType.POLLING_FAILED,
+                            roomId = roomId,
+                            matchId = mutableMatchSnapshot.value?.matchId,
+                            playerId = playerId,
+                            attributes = mapOf(
+                                "reason" to authenticationFailure.take(180),
+                                "source" to "authentication_failure",
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -581,10 +725,6 @@ class RemoteOnlineRoomRepository(
         playerId: String?,
     ) {
         val resolvedPlayerId = playerId ?: activePlayerId
-
-        client.setDevelopmentPlayerId(
-            playerId = resolvedPlayerId,
-        )
 
         var latestMatchId = fallbackMatchId
 
@@ -916,6 +1056,160 @@ class RemoteOnlineRoomRepository(
                 "currentRevision" to currentSnapshot.revision.toString(),
             ),
         )
+    }
+
+
+    private suspend fun prepareRoomParticipant(
+        client: RemoteOnlineApiClient,
+        requestedPlayerId: String,
+    ): PreparedRoomParticipant {
+        if (isDevelopmentOnlyPlayerId(requestedPlayerId)) {
+            client.setBearerAccessToken(
+                accessToken = null,
+            )
+            client.setDevelopmentPlayerId(
+                playerId = requestedPlayerId,
+            )
+
+            return PreparedRoomParticipant(
+                playerId = requestedPlayerId,
+                usesDevelopmentAuthentication = true,
+            )
+        }
+
+        val sessionRepository = anonymousSessionRepository
+
+        if (sessionRepository == null) {
+            client.setBearerAccessToken(
+                accessToken = null,
+            )
+            client.setDevelopmentPlayerId(
+                playerId = requestedPlayerId,
+            )
+
+            return PreparedRoomParticipant(
+                playerId = requestedPlayerId,
+                usesDevelopmentAuthentication = false,
+            )
+        }
+
+        val session = sessionRepository.getOrCreateValidSession {
+            client.createAnonymousSession()
+        }
+
+        client.setDevelopmentPlayerId(
+            playerId = null,
+        )
+        client.setBearerAccessToken(
+            accessToken = session.accessToken,
+        )
+
+        return PreparedRoomParticipant(
+            playerId = session.playerId,
+            anonymousSession = session,
+            usesDevelopmentAuthentication = false,
+        )
+    }
+
+    private fun restoreActiveParticipantAuthentication(
+        client: RemoteOnlineApiClient,
+    ) {
+        val playerId = activePlayerId
+
+        if (playerId == null) {
+            client.setBearerAccessToken(
+                accessToken = null,
+            )
+            client.setDevelopmentPlayerId(
+                playerId = null,
+            )
+            return
+        }
+
+        configureActiveParticipantAuthentication(
+            client = client,
+            playerId = playerId,
+        )
+    }
+
+    private fun configureActiveParticipantAuthentication(
+        client: RemoteOnlineApiClient,
+        playerId: String?,
+    ): String? {
+        val resolvedPlayerId = playerId
+            ?.trim()
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return "Identidade do participante online não está disponível."
+
+        val sessionRepository = anonymousSessionRepository
+
+        if (sessionRepository == null) {
+            client.setBearerAccessToken(
+                accessToken = null,
+            )
+            client.setDevelopmentPlayerId(
+                playerId = resolvedPlayerId,
+            )
+            return null
+        }
+
+        val activeSession = activeAnonymousSession
+
+        if (
+            activeSession == null ||
+            activeSession.playerId != resolvedPlayerId
+        ) {
+            clearClientAuthentication(
+                client = client,
+            )
+
+            return "Sessão anônima ativa não está disponível."
+        }
+
+        val storedSession = sessionRepository.getValidSessionOrNull()
+
+        if (
+            storedSession == null ||
+            storedSession.playerId != activeSession.playerId ||
+            storedSession.accessToken != activeSession.accessToken
+        ) {
+            activeAnonymousSession = null
+
+            clearClientAuthentication(
+                client = client,
+            )
+
+            return "Sessão anônima ativa expirou ou não é mais válida."
+        }
+
+        client.setDevelopmentPlayerId(
+            playerId = null,
+        )
+        client.setBearerAccessToken(
+            accessToken = storedSession.accessToken,
+        )
+
+        return null
+    }
+
+    private fun clearClientAuthentication(
+        client: RemoteOnlineApiClient,
+    ) {
+        client.setBearerAccessToken(
+            accessToken = null,
+        )
+        client.setDevelopmentPlayerId(
+            playerId = null,
+        )
+    }
+
+    private fun isDevelopmentOnlyPlayerId(
+        playerId: String,
+    ): Boolean {
+        return playerId == "fake-host" ||
+                playerId.startsWith("fake-player-")
     }
 
     private fun traceRoomOperationResult(

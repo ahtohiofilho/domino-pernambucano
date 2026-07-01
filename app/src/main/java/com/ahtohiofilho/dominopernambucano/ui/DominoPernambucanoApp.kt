@@ -10,12 +10,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
+import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
 import com.ahtohiofilho.dominopernambucano.online.observability.AndroidLogcatOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.CompositeOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.PersistentOnlineTraceOutbox
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchUploader
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineAnonymousSessionStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
@@ -72,13 +74,25 @@ fun DominoPernambucanoApp(
         )
     }
 
+    val onlineAnonymousSessionRepository = remember(
+        context.applicationContext,
+    ) {
+        OnlineAnonymousSessionRepository(
+            store = SharedPreferencesOnlineAnonymousSessionStore(
+                context = context.applicationContext,
+            ),
+        )
+    }
+
     val onlineRoomRepository = remember(
         onlineAppConfig.backendConfig,
         onlineTraceLogger,
+        onlineAnonymousSessionRepository,
     ) {
         OnlineRepositoryFactory.create(
             config = onlineAppConfig.backendConfig,
             traceLogger = onlineTraceLogger,
+            anonymousSessionRepository = onlineAnonymousSessionRepository,
         )
     }
 
