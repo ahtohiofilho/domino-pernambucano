@@ -3,4 +3,7 @@
     <exclude
         domain="sharedpref"
         path="online_anonymous_session.xml" />
+    <exclude
+        domain="sharedpref"
+        path="online_participation_binding.xml" />
 </full-backup-content>

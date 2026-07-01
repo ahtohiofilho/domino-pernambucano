@@ -4,11 +4,17 @@
         <exclude
             domain="sharedpref"
             path="online_anonymous_session.xml" />
+        <exclude
+            domain="sharedpref"
+            path="online_participation_binding.xml" />
     </cloud-backup>
 
     <device-transfer>
         <exclude
             domain="sharedpref"
             path="online_anonymous_session.xml" />
+        <exclude
+            domain="sharedpref"
+            path="online_participation_binding.xml" />
     </device-transfer>
 </data-extraction-rules>
