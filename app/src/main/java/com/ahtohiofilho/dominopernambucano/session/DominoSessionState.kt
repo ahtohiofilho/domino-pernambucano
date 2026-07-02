@@ -2,11 +2,19 @@ package com.ahtohiofilho.dominopernambucano.session
 
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 
 sealed interface DominoSessionState {
     data class MainMenu(
-        val hasPendingOnlineParticipation: Boolean,
-    ) : DominoSessionState
+        val pendingOnlineParticipation:
+            OnlinePendingParticipationLocalResolution,
+    ) : DominoSessionState {
+        val hasPendingOnlineParticipation: Boolean
+            get() = when (pendingOnlineParticipation) {
+                OnlinePendingParticipationLocalResolution.NoPendingParticipation -> false
+                else -> true
+            }
+    }
 
     data object PlayModeSelection : DominoSessionState
 

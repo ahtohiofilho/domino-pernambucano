@@ -1,34 +1,55 @@
 package com.ahtohiofilho.dominopernambucano.session
 
+import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionStore
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBinding
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingStore
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LocalDominoSessionCoordinatorTest {
     @Test
-    fun initial_state_marks_pending_online_participation_when_valid_binding_exists() {
+    fun initial_state_exposes_ready_pending_online_participation_when_local_identity_matches() {
+        val binding = OnlineParticipationBinding(
+            roomId = "room-1",
+            matchId = "match-1",
+            playerId = "anonymous-player-1",
+            localSeatIndex = 2,
+        )
+
         val coordinator = LocalDominoSessionCoordinator(
             onlineParticipationBindingRepository =
                 OnlineParticipationBindingRepository(
                     store = TestOnlineParticipationBindingStore(
-                        initialBinding = OnlineParticipationBinding(
-                            roomId = "room-1",
-                            matchId = "match-1",
-                            playerId = "anonymous-player-1",
-                            localSeatIndex = 2,
-                        ),
+                        initialBinding = binding,
                     ),
+                ),
+            onlineAnonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    playerId = binding.playerId,
                 ),
         )
 
         assertEquals(
             DominoSessionState.MainMenu(
-                hasPendingOnlineParticipation = true,
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .ReadyForRemoteReconciliation(
+                            binding = binding,
+                        ),
             ),
             coordinator.currentState,
+        )
+
+        assertTrue(
+            (coordinator.currentState as DominoSessionState.MainMenu)
+                .hasPendingOnlineParticipation,
         )
     }
 
@@ -45,9 +66,16 @@ class LocalDominoSessionCoordinatorTest {
 
         assertEquals(
             DominoSessionState.MainMenu(
-                hasPendingOnlineParticipation = false,
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
             ),
             coordinator.currentState,
+        )
+
+        assertFalse(
+            (coordinator.currentState as DominoSessionState.MainMenu)
+                .hasPendingOnlineParticipation,
         )
 
         assertEquals(
@@ -76,9 +104,16 @@ class LocalDominoSessionCoordinatorTest {
 
         assertEquals(
             DominoSessionState.MainMenu(
-                hasPendingOnlineParticipation = false,
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
             ),
             coordinator.currentState,
+        )
+
+        assertFalse(
+            (coordinator.currentState as DominoSessionState.MainMenu)
+                .hasPendingOnlineParticipation,
         )
 
         assertNull(
@@ -88,6 +123,20 @@ class LocalDominoSessionCoordinatorTest {
         assertEquals(
             1,
             store.clearCallCount,
+        )
+    }
+
+    private fun createAnonymousSessionRepository(
+        playerId: String,
+    ): OnlineAnonymousSessionRepository {
+        return OnlineAnonymousSessionRepository(
+            store = TestOnlineAnonymousSessionStore(
+                initialSession = OnlineAnonymousSessionDto(
+                    playerId = playerId,
+                    accessToken = "test-access-token",
+                    expiresAtEpochMillis = Long.MAX_VALUE,
+                ),
+            ),
         )
     }
 }
@@ -114,5 +163,25 @@ private class TestOnlineParticipationBindingStore(
     override fun clear() {
         clearCallCount += 1
         storedBinding = null
+    }
+}
+
+private class TestOnlineAnonymousSessionStore(
+    initialSession: OnlineAnonymousSessionDto? = null,
+) : OnlineAnonymousSessionStore {
+    private var storedSession: OnlineAnonymousSessionDto? = initialSession
+
+    override fun read(): OnlineAnonymousSessionDto? {
+        return storedSession
+    }
+
+    override fun write(
+        session: OnlineAnonymousSessionDto,
+    ) {
+        storedSession = session
+    }
+
+    override fun clear() {
+        storedSession = null
     }
 }

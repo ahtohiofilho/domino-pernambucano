@@ -94,10 +94,13 @@ fun DominoPernambucanoApp(
 
     val sessionCoordinator = remember(
         onlineParticipationBindingRepository,
+        onlineAnonymousSessionRepository,
     ) {
         LocalDominoSessionCoordinator(
             onlineParticipationBindingRepository =
                 onlineParticipationBindingRepository,
+            onlineAnonymousSessionRepository =
+                onlineAnonymousSessionRepository,
         )
     }
 

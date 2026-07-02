@@ -2,7 +2,9 @@ package com.ahtohiofilho.dominopernambucano.session
 
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolver
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,15 +14,21 @@ private const val ENABLE_OFFLINE_CLOCK_DEBUG = false
 class LocalDominoSessionCoordinator(
     private val onlineParticipationBindingRepository:
         OnlineParticipationBindingRepository? = null,
+    private val onlineAnonymousSessionRepository:
+        OnlineAnonymousSessionRepository? = null,
 ) : DominoSessionCoordinator {
-    private val hasPendingOnlineParticipationOnInitialization =
-        onlineParticipationBindingRepository
-            ?.getValidBindingOrNull() != null
+    private val pendingOnlineParticipationOnInitialization =
+        OnlinePendingParticipationLocalResolver(
+            onlineParticipationBindingRepository =
+                onlineParticipationBindingRepository,
+            onlineAnonymousSessionRepository =
+                onlineAnonymousSessionRepository,
+        ).resolve()
 
     private val mutableState = MutableStateFlow<DominoSessionState>(
         DominoSessionState.MainMenu(
-            hasPendingOnlineParticipation =
-                hasPendingOnlineParticipationOnInitialization,
+            pendingOnlineParticipation =
+                pendingOnlineParticipationOnInitialization,
         ),
     )
 
@@ -72,8 +80,8 @@ class LocalDominoSessionCoordinator(
                 disposeCurrentOnlineCoordinatorIfNeeded()
 
                 mutableState.value = DominoSessionState.MainMenu(
-                    hasPendingOnlineParticipation =
-                        hasPendingOnlineParticipationOnInitialization,
+                    pendingOnlineParticipation =
+                        pendingOnlineParticipationOnInitialization,
                 )
             }
 
