@@ -8,6 +8,10 @@ sealed interface DominoSessionState {
     data class MainMenu(
         val pendingOnlineParticipation:
             OnlinePendingParticipationLocalResolution,
+        val pendingOnlineParticipationInspection:
+            OnlinePendingParticipationInspectionState =
+                OnlinePendingParticipationInspectionState
+                    .NotRequested,
     ) : DominoSessionState {
         val hasPendingOnlineParticipation: Boolean
             get() = when (pendingOnlineParticipation) {

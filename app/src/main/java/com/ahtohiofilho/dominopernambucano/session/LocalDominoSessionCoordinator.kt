@@ -5,9 +5,15 @@ import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolver
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
+import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 private const val ENABLE_OFFLINE_CLOCK_DEBUG = false
 
@@ -16,20 +22,20 @@ class LocalDominoSessionCoordinator(
         OnlineParticipationBindingRepository? = null,
     private val onlineAnonymousSessionRepository:
         OnlineAnonymousSessionRepository? = null,
+    private val onlineRoomRepository: OnlineRoomRepository? = null,
 ) : DominoSessionCoordinator {
     private val pendingOnlineParticipationOnInitialization =
-        OnlinePendingParticipationLocalResolver(
-            onlineParticipationBindingRepository =
-                onlineParticipationBindingRepository,
-            onlineAnonymousSessionRepository =
-                onlineAnonymousSessionRepository,
-        ).resolve()
+        resolvePendingOnlineParticipation()
+
+    private var latestMainMenuState = DominoSessionState.MainMenu(
+        pendingOnlineParticipation =
+            pendingOnlineParticipationOnInitialization,
+    )
+
+    private val pendingOnlineParticipationInspectionMutex = Mutex()
 
     private val mutableState = MutableStateFlow<DominoSessionState>(
-        DominoSessionState.MainMenu(
-            pendingOnlineParticipation =
-                pendingOnlineParticipationOnInitialization,
-        ),
+        latestMainMenuState,
     )
 
     override val state: StateFlow<DominoSessionState> =
@@ -79,10 +85,7 @@ class LocalDominoSessionCoordinator(
             DominoSessionCommand.BackToMainMenu -> {
                 disposeCurrentOnlineCoordinatorIfNeeded()
 
-                mutableState.value = DominoSessionState.MainMenu(
-                    pendingOnlineParticipation =
-                        pendingOnlineParticipationOnInitialization,
-                )
+                mutableState.value = latestMainMenuState
             }
 
             DominoSessionCommand.BackToPlayModeSelection -> {
@@ -90,6 +93,104 @@ class LocalDominoSessionCoordinator(
 
                 mutableState.value = DominoSessionState.PlayModeSelection
             }
+        }
+    }
+
+    /*
+     * Esta operação só inspeciona a participação que já foi classificada
+     * localmente como pronta. Ela não cria coordinator de partida, não inicia
+     * polling, não consulta a partida e não muda a navegação.
+     */
+    suspend fun inspectPendingOnlineParticipation() {
+        pendingOnlineParticipationInspectionMutex.withLock {
+            val mainMenuState = mutableState.value
+                as? DominoSessionState.MainMenu
+                ?: return@withLock
+
+            val readyParticipation = mainMenuState
+                .pendingOnlineParticipation
+                as? OnlinePendingParticipationLocalResolution
+                    .ReadyForRemoteReconciliation
+                ?: return@withLock
+
+            val previousInspection = mainMenuState
+                .pendingOnlineParticipationInspection
+
+            updateMainMenuState(
+                mainMenuState.copy(
+                    pendingOnlineParticipationInspection =
+                        OnlinePendingParticipationInspectionState
+                            .InProgress,
+                ),
+            )
+
+            val inspection = try {
+                onlineRoomRepository?.inspectPendingParticipation(
+                    binding = readyParticipation.binding,
+                ) ?: OnlinePendingParticipationRemoteInspection
+                    .TemporarilyUnavailable(
+                        reason =
+                            "Inspeção remota de participação pendente não configurada.",
+                    )
+            } catch (error: CancellationException) {
+                updateMainMenuState(
+                    mainMenuState.copy(
+                        pendingOnlineParticipation =
+                            resolvePendingOnlineParticipation(),
+                        pendingOnlineParticipationInspection =
+                            previousInspection,
+                    ),
+                )
+
+                throw error
+            } catch (_: Throwable) {
+                OnlinePendingParticipationRemoteInspection
+                    .TemporarilyUnavailable(
+                        reason =
+                            "Falha ao verificar participação pendente online.",
+                    )
+            }
+
+            if (
+                inspection is OnlinePendingParticipationRemoteInspection
+                    .NoLongerRecoverable
+            ) {
+                onlineParticipationBindingRepository?.clearIfMatches(
+                    binding = readyParticipation.binding,
+                )
+            }
+
+            updateMainMenuState(
+                mainMenuState.copy(
+                    pendingOnlineParticipation =
+                        resolvePendingOnlineParticipation(),
+                    pendingOnlineParticipationInspection =
+                        OnlinePendingParticipationInspectionState
+                            .Completed(
+                                result = inspection,
+                            ),
+                ),
+            )
+        }
+    }
+
+    private fun resolvePendingOnlineParticipation():
+        OnlinePendingParticipationLocalResolution {
+        return OnlinePendingParticipationLocalResolver(
+            onlineParticipationBindingRepository =
+                onlineParticipationBindingRepository,
+            onlineAnonymousSessionRepository =
+                onlineAnonymousSessionRepository,
+        ).resolve()
+    }
+
+    private fun updateMainMenuState(
+        mainMenuState: DominoSessionState.MainMenu,
+    ) {
+        latestMainMenuState = mainMenuState
+
+        if (mutableState.value is DominoSessionState.MainMenu) {
+            mutableState.value = mainMenuState
         }
     }
 

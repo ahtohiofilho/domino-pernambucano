@@ -6,6 +6,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
@@ -24,6 +25,7 @@ import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePartici
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
 import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
+import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
 import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.PlayModeScreen
@@ -31,6 +33,7 @@ import com.ahtohiofilho.dominopernambucano.ui.online.OnlineCreateRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.launch
 
 @Composable
 fun DominoPernambucanoApp(
@@ -92,18 +95,6 @@ fun DominoPernambucanoApp(
         )
     }
 
-    val sessionCoordinator = remember(
-        onlineParticipationBindingRepository,
-        onlineAnonymousSessionRepository,
-    ) {
-        LocalDominoSessionCoordinator(
-            onlineParticipationBindingRepository =
-                onlineParticipationBindingRepository,
-            onlineAnonymousSessionRepository =
-                onlineAnonymousSessionRepository,
-        )
-    }
-
     val onlineRoomRepository = remember(
         onlineAppConfig.backendConfig,
         onlineTraceLogger,
@@ -116,6 +107,20 @@ fun DominoPernambucanoApp(
             anonymousSessionRepository = onlineAnonymousSessionRepository,
             onlineParticipationBindingRepository =
                 onlineParticipationBindingRepository,
+        )
+    }
+
+    val sessionCoordinator = remember(
+        onlineParticipationBindingRepository,
+        onlineAnonymousSessionRepository,
+        onlineRoomRepository,
+    ) {
+        LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                onlineParticipationBindingRepository,
+            onlineAnonymousSessionRepository =
+                onlineAnonymousSessionRepository,
+            onlineRoomRepository = onlineRoomRepository,
         )
     }
 
@@ -169,13 +174,31 @@ fun DominoPernambucanoApp(
 
     val sessionState by sessionCoordinator.state.collectAsState()
 
+    val menuCoroutineScope = rememberCoroutineScope()
+
     when (val state = sessionState) {
         is DominoSessionState.MainMenu -> {
             MainMenuScreen(
+                pendingOnlineParticipation =
+                    state.pendingOnlineParticipation,
+                pendingOnlineParticipationInspection =
+                    state.pendingOnlineParticipationInspection,
                 onPlayClick = {
-                    sessionCoordinator.dispatch(
-                        DominoSessionCommand.OpenPlayModeSelection,
-                    )
+                    if (
+                        state.pendingOnlineParticipationInspection
+                            !is OnlinePendingParticipationInspectionState
+                                .InProgress
+                    ) {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.OpenPlayModeSelection,
+                        )
+                    }
+                },
+                onInspectPendingOnlineParticipationClick = {
+                    menuCoroutineScope.launch {
+                        sessionCoordinator
+                            .inspectPendingOnlineParticipation()
+                    }
                 },
             )
         }

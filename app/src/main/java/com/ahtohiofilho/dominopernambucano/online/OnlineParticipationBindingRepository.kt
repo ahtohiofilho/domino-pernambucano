@@ -41,6 +41,20 @@ class OnlineParticipationBindingRepository(
         )
     }
 
+    fun clearIfMatches(
+        binding: OnlineParticipationBinding,
+    ): Boolean {
+        val storedBinding = getValidBindingOrNull()
+            ?: return false
+
+        if (storedBinding != binding) {
+            return false
+        }
+
+        store.clear()
+        return true
+    }
+
     fun clear() {
         store.clear()
     }
