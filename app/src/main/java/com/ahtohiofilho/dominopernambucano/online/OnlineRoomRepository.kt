@@ -40,5 +40,15 @@ interface OnlineRoomRepository {
         )
     }
 
+    suspend fun inspectPendingParticipation(
+        binding: OnlineParticipationBinding,
+    ): OnlinePendingParticipationRemoteInspection {
+        return OnlinePendingParticipationRemoteInspection
+            .TemporarilyUnavailable(
+                reason =
+                    "Inspeção remota de participação pendente não configurada.",
+            )
+    }
+
     suspend fun leaveRoom()
 }

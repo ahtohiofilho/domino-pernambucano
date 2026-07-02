@@ -434,6 +434,66 @@ class RemoteOnlineRoomRepository(
         }
     }
 
+    override suspend fun inspectPendingParticipation(
+        binding: OnlineParticipationBinding,
+    ): OnlinePendingParticipationRemoteInspection {
+        val client = apiClient
+            ?: return OnlinePendingParticipationRemoteInspection
+                .TemporarilyUnavailable(
+                    reason = getUnavailableBackendReason(),
+                )
+
+        return refreshMutex.withLock {
+            val session = anonymousSessionRepository
+                ?.getValidSessionOrNull()
+                ?: return@withLock OnlinePendingParticipationRemoteInspection
+                    .NotAttempted(
+                        reason = OnlinePendingParticipationRemoteBlockReason
+                            .MISSING_VALID_ANONYMOUS_SESSION,
+                    )
+
+            if (session.playerId != binding.playerId) {
+                return@withLock OnlinePendingParticipationRemoteInspection
+                    .NotAttempted(
+                        reason = OnlinePendingParticipationRemoteBlockReason
+                            .ANONYMOUS_SESSION_IDENTITY_MISMATCH,
+                    )
+            }
+
+            client.setDevelopmentPlayerId(
+                playerId = null,
+            )
+            client.setBearerAccessToken(
+                accessToken = session.accessToken,
+            )
+
+            try {
+                val room = client.fetchRoomSnapshot(
+                    roomId = binding.roomId,
+                )
+
+                inspectPendingParticipationRoom(
+                    binding = binding,
+                    room = room,
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                OnlinePendingParticipationRemoteInspection
+                    .TemporarilyUnavailable(
+                        reason = error.toOnlineFailureReason(
+                            fallback =
+                                "Falha ao consultar participação pendente online.",
+                        ),
+                    )
+            } finally {
+                restoreActiveParticipantAuthentication(
+                    client = client,
+                )
+            }
+        }
+    }
+
     override suspend fun leaveRoom() {
         onlineParticipationBindingRepository?.clear()
 
@@ -664,6 +724,72 @@ class RemoteOnlineRoomRepository(
                 localSeatIndex = localSeatIndex,
             ),
         )
+    }
+
+    private fun inspectPendingParticipationRoom(
+        binding: OnlineParticipationBinding,
+        room: OnlineRoomSnapshotDto,
+    ): OnlinePendingParticipationRemoteInspection {
+        if (room.roomId != binding.roomId) {
+            return OnlinePendingParticipationRemoteInspection
+                .NoLongerRecoverable(
+                    reason = OnlinePendingParticipationRemoteInvalidReason
+                        .ROOM_ID_MISMATCH,
+                )
+        }
+
+        when (room.status) {
+            OnlineRoomStatusDto.CLOSED -> {
+                return OnlinePendingParticipationRemoteInspection
+                    .NoLongerRecoverable(
+                        reason = OnlinePendingParticipationRemoteInvalidReason
+                            .ROOM_CLOSED,
+                    )
+            }
+
+            OnlineRoomStatusDto.FINISHED -> {
+                return OnlinePendingParticipationRemoteInspection
+                    .NoLongerRecoverable(
+                        reason = OnlinePendingParticipationRemoteInvalidReason
+                            .ROOM_FINISHED,
+                    )
+            }
+
+            OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+            OnlineRoomStatusDto.IN_MATCH -> Unit
+        }
+
+        val localPlayer = room.players.firstOrNull { player ->
+            player.playerId == binding.playerId
+        } ?: return OnlinePendingParticipationRemoteInspection
+            .NoLongerRecoverable(
+                reason = OnlinePendingParticipationRemoteInvalidReason
+                    .PLAYER_NOT_FOUND,
+            )
+
+        if (localPlayer.seatIndex != binding.localSeatIndex) {
+            return OnlinePendingParticipationRemoteInspection
+                .NoLongerRecoverable(
+                    reason = OnlinePendingParticipationRemoteInvalidReason
+                        .LOCAL_SEAT_MISMATCH,
+                )
+        }
+
+        if (
+            binding.matchId != null &&
+            room.matchId != binding.matchId
+        ) {
+            return OnlinePendingParticipationRemoteInspection
+                .NoLongerRecoverable(
+                    reason = OnlinePendingParticipationRemoteInvalidReason
+                        .MATCH_ID_MISMATCH,
+                )
+        }
+
+        return OnlinePendingParticipationRemoteInspection
+            .Recoverable(
+                roomSnapshot = room,
+            )
     }
 
     private suspend fun refreshSnapshotsAfterAction(
