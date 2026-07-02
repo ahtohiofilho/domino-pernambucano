@@ -38,10 +38,6 @@ fun DominoPernambucanoApp(
 ) {
     val context = LocalContext.current
 
-    val sessionCoordinator = remember {
-        LocalDominoSessionCoordinator()
-    }
-
     val onlineTraceClientSessionId = remember {
         "android-${UUID.randomUUID()}"
     }
@@ -93,6 +89,15 @@ fun DominoPernambucanoApp(
             store = SharedPreferencesOnlineParticipationBindingStore(
                 context = context.applicationContext,
             ),
+        )
+    }
+
+    val sessionCoordinator = remember(
+        onlineParticipationBindingRepository,
+    ) {
+        LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                onlineParticipationBindingRepository,
         )
     }
 
@@ -162,7 +167,7 @@ fun DominoPernambucanoApp(
     val sessionState by sessionCoordinator.state.collectAsState()
 
     when (val state = sessionState) {
-        DominoSessionState.MainMenu -> {
+        is DominoSessionState.MainMenu -> {
             MainMenuScreen(
                 onPlayClick = {
                     sessionCoordinator.dispatch(

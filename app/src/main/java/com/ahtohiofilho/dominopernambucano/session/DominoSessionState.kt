@@ -4,7 +4,9 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 
 sealed interface DominoSessionState {
-    data object MainMenu : DominoSessionState
+    data class MainMenu(
+        val hasPendingOnlineParticipation: Boolean,
+    ) : DominoSessionState
 
     data object PlayModeSelection : DominoSessionState
 

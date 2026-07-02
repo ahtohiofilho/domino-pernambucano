@@ -2,15 +2,26 @@ package com.ahtohiofilho.dominopernambucano.session
 
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 private const val ENABLE_OFFLINE_CLOCK_DEBUG = false
 
-class LocalDominoSessionCoordinator : DominoSessionCoordinator {
+class LocalDominoSessionCoordinator(
+    private val onlineParticipationBindingRepository:
+        OnlineParticipationBindingRepository? = null,
+) : DominoSessionCoordinator {
+    private val hasPendingOnlineParticipationOnInitialization =
+        onlineParticipationBindingRepository
+            ?.getValidBindingOrNull() != null
+
     private val mutableState = MutableStateFlow<DominoSessionState>(
-        DominoSessionState.MainMenu,
+        DominoSessionState.MainMenu(
+            hasPendingOnlineParticipation =
+                hasPendingOnlineParticipationOnInitialization,
+        ),
     )
 
     override val state: StateFlow<DominoSessionState> =
@@ -60,7 +71,10 @@ class LocalDominoSessionCoordinator : DominoSessionCoordinator {
             DominoSessionCommand.BackToMainMenu -> {
                 disposeCurrentOnlineCoordinatorIfNeeded()
 
-                mutableState.value = DominoSessionState.MainMenu
+                mutableState.value = DominoSessionState.MainMenu(
+                    hasPendingOnlineParticipation =
+                        hasPendingOnlineParticipationOnInitialization,
+                )
             }
 
             DominoSessionCommand.BackToPlayModeSelection -> {
