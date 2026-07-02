@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
 import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
 import com.ahtohiofilho.dominopernambucano.online.observability.AndroidLogcatOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.CompositeOnlineTraceSink
@@ -19,6 +20,7 @@ import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatch
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineAnonymousSessionStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
+import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineParticipationBindingStore
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
 import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
@@ -84,15 +86,28 @@ fun DominoPernambucanoApp(
         )
     }
 
+    val onlineParticipationBindingRepository = remember(
+        context.applicationContext,
+    ) {
+        OnlineParticipationBindingRepository(
+            store = SharedPreferencesOnlineParticipationBindingStore(
+                context = context.applicationContext,
+            ),
+        )
+    }
+
     val onlineRoomRepository = remember(
         onlineAppConfig.backendConfig,
         onlineTraceLogger,
         onlineAnonymousSessionRepository,
+        onlineParticipationBindingRepository,
     ) {
         OnlineRepositoryFactory.create(
             config = onlineAppConfig.backendConfig,
             traceLogger = onlineTraceLogger,
             anonymousSessionRepository = onlineAnonymousSessionRepository,
+            onlineParticipationBindingRepository =
+                onlineParticipationBindingRepository,
         )
     }
 

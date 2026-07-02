@@ -7,6 +7,8 @@ object OnlineRepositoryFactory {
         config: OnlineBackendConfig = OnlineBackendConfig.Fake,
         traceLogger: OnlineTraceLogger = OnlineTraceLogger(),
         anonymousSessionRepository: OnlineAnonymousSessionRepository? = null,
+        onlineParticipationBindingRepository:
+            OnlineParticipationBindingRepository? = null,
     ): OnlineRoomRepository {
         return when (config.mode) {
             OnlineBackendMode.FAKE -> {
@@ -19,6 +21,8 @@ object OnlineRepositoryFactory {
                     pollingPolicy = OnlineRemotePollingPolicy.Default,
                     traceLogger = traceLogger,
                     anonymousSessionRepository = anonymousSessionRepository,
+                    onlineParticipationBindingRepository =
+                        onlineParticipationBindingRepository,
                 )
             }
         }

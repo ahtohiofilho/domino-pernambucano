@@ -861,10 +861,391 @@ class RemoteOnlineRoomRepositoryTest {
             )
         }
 
+    @Test
+    fun create_room_persists_binding_for_accepted_authenticated_participant() =
+        runBlocking {
+            val session = OnlineAnonymousSessionDto(
+                playerId = "anonymous-player-1",
+                accessToken = "session-access-token",
+                expiresAtEpochMillis = 2_000L,
+            )
+
+            val room = createWaitingRoomSnapshot().copy(
+                hostPlayerId = session.playerId,
+                players = listOf(
+                    OnlineRoomPlayerDto(
+                        playerId = session.playerId,
+                        name = "Jogador 1",
+                        seatIndex = 0,
+                        connected = true,
+                    ),
+                ),
+            )
+
+            val bindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = InMemoryOnlineParticipationBindingStore(),
+                )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                anonymousSession = session,
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    OnlineAnonymousSessionRepository(
+                        store = InMemoryOnlineAnonymousSessionStore(),
+                        nowEpochMillis = { 1_000L },
+                    ),
+                onlineParticipationBindingRepository =
+                    bindingRepository,
+            )
+
+            val result = repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-local",
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            assertTrue(result.accepted)
+            assertEquals(
+                OnlineParticipationBinding(
+                    roomId = room.roomId,
+                    matchId = null,
+                    playerId = session.playerId,
+                    localSeatIndex = 0,
+                ),
+                bindingRepository.getValidBindingOrNull(),
+            )
+        }
+
+    @Test
+    fun join_room_persists_binding_for_accepted_authenticated_participant() =
+        runBlocking {
+            val session = OnlineAnonymousSessionDto(
+                playerId = "anonymous-player-2",
+                accessToken = "session-access-token",
+                expiresAtEpochMillis = 2_000L,
+            )
+
+            val room = createWaitingRoomSnapshot().copy(
+                hostPlayerId = "host-player",
+                players = listOf(
+                    OnlineRoomPlayerDto(
+                        playerId = "host-player",
+                        name = "Host",
+                        seatIndex = 0,
+                        connected = true,
+                    ),
+                    OnlineRoomPlayerDto(
+                        playerId = session.playerId,
+                        name = "Jogador 2",
+                        seatIndex = 1,
+                        connected = true,
+                    ),
+                ),
+            )
+
+            val bindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = InMemoryOnlineParticipationBindingStore(),
+                )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                anonymousSession = session,
+                joinRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 1,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    OnlineAnonymousSessionRepository(
+                        store = InMemoryOnlineAnonymousSessionStore(),
+                        nowEpochMillis = { 1_000L },
+                    ),
+                onlineParticipationBindingRepository =
+                    bindingRepository,
+            )
+
+            val result = repository.joinRoom(
+                JoinOnlineRoomRequestDto(
+                    roomCode = room.roomCode,
+                    localPlayerId = "player-local",
+                    playerName = "Jogador 2",
+                ),
+            )
+
+            assertTrue(result.accepted)
+            assertEquals(
+                session.playerId,
+                apiClient.joinRoomRequests.single().localPlayerId,
+            )
+            assertEquals(
+                OnlineParticipationBinding(
+                    roomId = room.roomId,
+                    matchId = null,
+                    playerId = session.playerId,
+                    localSeatIndex = 1,
+                ),
+                bindingRepository.getValidBindingOrNull(),
+            )
+        }
+
+    @Test
+    fun accepted_room_operation_without_confirmed_local_seat_does_not_persist_binding() =
+        runBlocking {
+            val session = OnlineAnonymousSessionDto(
+                playerId = "anonymous-player-1",
+                accessToken = "session-access-token",
+                expiresAtEpochMillis = 2_000L,
+            )
+
+            val room = createWaitingRoomSnapshot().copy(
+                hostPlayerId = session.playerId,
+                players = listOf(
+                    OnlineRoomPlayerDto(
+                        playerId = session.playerId,
+                        name = "Jogador 1",
+                        seatIndex = 0,
+                        connected = true,
+                    ),
+                ),
+            )
+
+            val bindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = InMemoryOnlineParticipationBindingStore(),
+                )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                anonymousSession = session,
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = null,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    OnlineAnonymousSessionRepository(
+                        store = InMemoryOnlineAnonymousSessionStore(),
+                        nowEpochMillis = { 1_000L },
+                    ),
+                onlineParticipationBindingRepository =
+                    bindingRepository,
+            )
+
+            val result = repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-local",
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            assertTrue(result.accepted)
+            assertNull(
+                bindingRepository.getValidBindingOrNull(),
+            )
+        }
+
+    @Test
+    fun fake_join_does_not_overwrite_authenticated_participant_binding() =
+        runBlocking {
+            val session = OnlineAnonymousSessionDto(
+                playerId = "anonymous-player-1",
+                accessToken = "session-access-token",
+                expiresAtEpochMillis = 2_000L,
+            )
+
+            val authenticatedRoom = createWaitingRoomSnapshot().copy(
+                hostPlayerId = session.playerId,
+                players = listOf(
+                    OnlineRoomPlayerDto(
+                        playerId = session.playerId,
+                        name = "Jogador 1",
+                        seatIndex = 0,
+                        connected = true,
+                    ),
+                ),
+            )
+
+            val roomAfterFakeJoin = authenticatedRoom.copy(
+                players = authenticatedRoom.players + OnlineRoomPlayerDto(
+                    playerId = "fake-player-2",
+                    name = "Jogador 2",
+                    seatIndex = 1,
+                    connected = true,
+                ),
+            )
+
+            val bindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = InMemoryOnlineParticipationBindingStore(),
+                )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                anonymousSession = session,
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = authenticatedRoom,
+                    localSeatIndex = 0,
+                ),
+                joinRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = roomAfterFakeJoin,
+                    localSeatIndex = 1,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    OnlineAnonymousSessionRepository(
+                        store = InMemoryOnlineAnonymousSessionStore(),
+                        nowEpochMillis = { 1_000L },
+                    ),
+                onlineParticipationBindingRepository =
+                    bindingRepository,
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-local",
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            val expectedBinding = OnlineParticipationBinding(
+                roomId = authenticatedRoom.roomId,
+                matchId = null,
+                playerId = session.playerId,
+                localSeatIndex = 0,
+            )
+
+            assertEquals(
+                expectedBinding,
+                bindingRepository.getValidBindingOrNull(),
+            )
+
+            val result = repository.joinRoom(
+                JoinOnlineRoomRequestDto(
+                    roomCode = authenticatedRoom.roomCode,
+                    localPlayerId = "fake-player-2",
+                    playerName = "Jogador 2",
+                ),
+            )
+
+            assertTrue(result.accepted)
+            assertEquals(
+                expectedBinding,
+                bindingRepository.getValidBindingOrNull(),
+            )
+        }
+
+    @Test
+    fun leave_room_clears_authenticated_participant_binding_when_remote_action_fails() =
+        runBlocking {
+            val session = OnlineAnonymousSessionDto(
+                playerId = "anonymous-player-1",
+                accessToken = "session-access-token",
+                expiresAtEpochMillis = 2_000L,
+            )
+
+            val initialRoom = createInMatchRoomSnapshot()
+            val room = initialRoom.copy(
+                hostPlayerId = session.playerId,
+                players = initialRoom.players.map { player ->
+                    if (player.seatIndex == 0) {
+                        player.copy(
+                            playerId = session.playerId,
+                            name = "Jogador 1",
+                        )
+                    } else {
+                        player
+                    }
+                },
+            )
+            val match = createMatchSnapshot(
+                revision = 1L,
+            )
+
+            val bindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = InMemoryOnlineParticipationBindingStore(),
+                )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                anonymousSession = session,
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+                submitActionFailure = IllegalStateException("falha ao sair"),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    OnlineAnonymousSessionRepository(
+                        store = InMemoryOnlineAnonymousSessionStore(),
+                        nowEpochMillis = { 1_000L },
+                    ),
+                onlineParticipationBindingRepository =
+                    bindingRepository,
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-local",
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            assertEquals(
+                OnlineParticipationBinding(
+                    roomId = room.roomId,
+                    matchId = room.matchId,
+                    playerId = session.playerId,
+                    localSeatIndex = 0,
+                ),
+                bindingRepository.getValidBindingOrNull(),
+            )
+
+            repository.leaveRoom()
+
+            assertEquals(1, apiClient.submitActionRequests.size)
+            assertEquals(
+                OnlinePlayerActionTypeDto.LEAVE_ROOM,
+                apiClient.submitActionRequests.first().type,
+            )
+            assertNull(
+                bindingRepository.getValidBindingOrNull(),
+            )
+        }
+
     private fun createRepository(
         apiClient: RemoteOnlineApiClient,
         traceLogger: OnlineTraceLogger = OnlineTraceLogger(),
         anonymousSessionRepository: OnlineAnonymousSessionRepository? = null,
+        onlineParticipationBindingRepository:
+            OnlineParticipationBindingRepository? = null,
     ): RemoteOnlineRoomRepository {
         return RemoteOnlineRoomRepository(
             config = OnlineBackendConfig.remote(
@@ -874,6 +1255,8 @@ class RemoteOnlineRoomRepositoryTest {
             traceLogger = traceLogger,
             nowEpochMillis = { 1_000L },
             anonymousSessionRepository = anonymousSessionRepository,
+            onlineParticipationBindingRepository =
+                onlineParticipationBindingRepository,
         )
     }
 
@@ -1110,6 +1493,25 @@ class RemoteOnlineRoomRepositoryTest {
             ).filter { snapshot ->
                 snapshot.revision > afterRevision
             }
+        }
+    }
+
+    private class InMemoryOnlineParticipationBindingStore :
+        OnlineParticipationBindingStore {
+        private var storedBinding: OnlineParticipationBinding? = null
+
+        override fun read(): OnlineParticipationBinding? {
+            return storedBinding
+        }
+
+        override fun write(
+            binding: OnlineParticipationBinding,
+        ) {
+            storedBinding = binding
+        }
+
+        override fun clear() {
+            storedBinding = null
         }
     }
 

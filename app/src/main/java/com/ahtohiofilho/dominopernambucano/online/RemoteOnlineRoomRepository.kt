@@ -37,6 +37,8 @@ class RemoteOnlineRoomRepository(
     },
     private val anonymousSessionRepository:
         OnlineAnonymousSessionRepository? = null,
+    private val onlineParticipationBindingRepository:
+        OnlineParticipationBindingRepository? = null,
 ) : OnlineRoomRepository {
     private val repositoryScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate,
@@ -433,6 +435,8 @@ class RemoteOnlineRoomRepository(
     }
 
     override suspend fun leaveRoom() {
+        onlineParticipationBindingRepository?.clear()
+
         stopPolling(
             reason = "leave_room",
         )
@@ -570,6 +574,12 @@ class RemoteOnlineRoomRepository(
             ),
         )
 
+        persistAcceptedAuthenticatedParticipationBinding(
+            result = result,
+            room = room,
+            anonymousSession = anonymousSession,
+        )
+
         if (result.accepted && activateParticipant) {
             activePlayerId = playerId
             activeAnonymousSession = anonymousSession
@@ -611,6 +621,49 @@ class RemoteOnlineRoomRepository(
                 playerId = activePlayerId ?: playerId,
             )
         }
+    }
+
+    private fun persistAcceptedAuthenticatedParticipationBinding(
+        result: OnlineRoomOperationResultDto,
+        room: OnlineRoomSnapshotDto,
+        anonymousSession: OnlineAnonymousSessionDto?,
+    ) {
+        if (!result.accepted) {
+            return
+        }
+
+        val bindingRepository =
+            onlineParticipationBindingRepository
+                ?: return
+
+        val authenticatedPlayerId = anonymousSession
+            ?.playerId
+            ?.takeIf { playerId ->
+                playerId.isNotBlank()
+            }
+            ?: return
+
+        val localSeatIndex = result.localSeatIndex
+            ?.takeIf { seatIndex ->
+                seatIndex in 0..3
+            }
+            ?: return
+
+        if (
+            room.roomId.isBlank() ||
+            room.matchId?.isBlank() == true
+        ) {
+            return
+        }
+
+        bindingRepository.save(
+            binding = OnlineParticipationBinding(
+                roomId = room.roomId,
+                matchId = room.matchId,
+                playerId = authenticatedPlayerId,
+                localSeatIndex = localSeatIndex,
+            ),
+        )
     }
 
     private suspend fun refreshSnapshotsAfterAction(
