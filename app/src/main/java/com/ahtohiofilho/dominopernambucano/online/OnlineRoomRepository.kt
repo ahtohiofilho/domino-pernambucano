@@ -60,5 +60,15 @@ interface OnlineRoomRepository {
             )
     }
 
+    suspend fun activatePendingParticipationMatchResume(
+        preparation: OnlinePendingParticipationMatchResumePreparation.Ready,
+    ): OnlinePendingParticipationMatchResumeActivation {
+        return OnlinePendingParticipationMatchResumeActivation
+            .TemporarilyUnavailable(
+                reason =
+                    "Ativação remota de retomada de participação pendente não configurada.",
+            )
+    }
+
     suspend fun leaveRoom()
 }

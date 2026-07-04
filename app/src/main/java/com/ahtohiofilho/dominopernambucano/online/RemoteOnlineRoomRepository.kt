@@ -8,6 +8,7 @@ import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogge
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,6 +31,8 @@ class RemoteOnlineRoomRepository(
     private val apiClient: RemoteOnlineApiClient? = createApiClientOrNull(config),
     private val pollingPolicy: OnlineRemotePollingPolicy =
         OnlineRemotePollingPolicy.Disabled,
+    private val coroutineDispatcher: CoroutineDispatcher =
+        Dispatchers.Main.immediate,
     private val traceLogger: OnlineTraceLogger =
         OnlineTraceLogger(),
     private val nowEpochMillis: () -> Long = {
@@ -41,7 +44,7 @@ class RemoteOnlineRoomRepository(
         OnlineParticipationBindingRepository? = null,
 ) : OnlineRoomRepository {
     private val repositoryScope = CoroutineScope(
-        SupervisorJob() + Dispatchers.Main.immediate,
+        SupervisorJob() + coroutineDispatcher,
     )
 
     /*
@@ -612,6 +615,113 @@ class RemoteOnlineRoomRepository(
                     client = client,
                 )
             }
+        }
+    }
+
+    override suspend fun activatePendingParticipationMatchResume(
+        preparation: OnlinePendingParticipationMatchResumePreparation.Ready,
+    ): OnlinePendingParticipationMatchResumeActivation {
+        val client = apiClient
+            ?: return OnlinePendingParticipationMatchResumeActivation
+                .TemporarilyUnavailable(
+                    reason = getUnavailableBackendReason(),
+                )
+
+        return refreshMutex.withLock {
+            val session = anonymousSessionRepository
+                ?.getValidSessionOrNull()
+                ?: return@withLock OnlinePendingParticipationMatchResumeActivation
+                    .NotAttempted(
+                        reason = OnlinePendingParticipationRemoteBlockReason
+                            .MISSING_VALID_ANONYMOUS_SESSION,
+                    )
+
+            if (session.playerId != preparation.binding.playerId) {
+                return@withLock OnlinePendingParticipationMatchResumeActivation
+                    .NotAttempted(
+                        reason = OnlinePendingParticipationRemoteBlockReason
+                            .ANONYMOUS_SESSION_IDENTITY_MISMATCH,
+                    )
+            }
+
+            if (
+                preparation.roomSnapshot.roomId != preparation.binding.roomId ||
+                preparation.matchSnapshot.roomId != preparation.binding.roomId ||
+                preparation.roomSnapshot.matchId != preparation.matchSnapshot.matchId
+            ) {
+                return@withLock OnlinePendingParticipationMatchResumeActivation
+                    .TemporarilyUnavailable(
+                        reason =
+                            "A preparação da retomada não corresponde à participação salva.",
+                    )
+            }
+
+            val previousActivePlayerId = activePlayerId
+            val previousActiveAnonymousSession = activeAnonymousSession
+
+            activePlayerId = session.playerId
+            activeAnonymousSession = session
+
+            val authenticationFailure =
+                configureActiveParticipantAuthentication(
+                    client = client,
+                    playerId = session.playerId,
+                )
+
+            if (authenticationFailure != null) {
+                activePlayerId = previousActivePlayerId
+                activeAnonymousSession = previousActiveAnonymousSession
+
+                restoreActiveParticipantAuthentication(
+                    client = client,
+                )
+
+                return@withLock OnlinePendingParticipationMatchResumeActivation
+                    .TemporarilyUnavailable(
+                        reason = authenticationFailure,
+                    )
+            }
+
+            try {
+                mutableRoomSnapshot.value = preparation.roomSnapshot
+
+                publishMatchSnapshotIfNewer(
+                    snapshot = preparation.matchSnapshot,
+                    trigger = "pending_participation_resume_activation",
+                    playerId = session.playerId,
+                )
+            } catch (error: CancellationException) {
+                activePlayerId = previousActivePlayerId
+                activeAnonymousSession = previousActiveAnonymousSession
+
+                restoreActiveParticipantAuthentication(
+                    client = client,
+                )
+
+                throw error
+            } catch (error: Throwable) {
+                activePlayerId = previousActivePlayerId
+                activeAnonymousSession = previousActiveAnonymousSession
+
+                restoreActiveParticipantAuthentication(
+                    client = client,
+                )
+
+                return@withLock OnlinePendingParticipationMatchResumeActivation
+                    .TemporarilyUnavailable(
+                        reason = error.toOnlineFailureReason(
+                            fallback =
+                                "Falha ao ativar retomada de participação pendente online.",
+                        ),
+                    )
+            }
+
+            startPolling(
+                roomId = preparation.roomSnapshot.roomId,
+                client = client,
+            )
+
+            OnlinePendingParticipationMatchResumeActivation.Activated
         }
     }
 

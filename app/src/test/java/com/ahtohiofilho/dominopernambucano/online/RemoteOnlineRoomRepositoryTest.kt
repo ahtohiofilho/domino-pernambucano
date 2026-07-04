@@ -6,6 +6,8 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -1334,6 +1336,170 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
+    fun activate_pending_participation_match_resume_publishes_prepared_snapshots_without_fetching_again() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+                localSeatIndex = 2,
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val match = createMatchSnapshot(
+                revision = 5L,
+            )
+            val apiClient = FakeRemoteOnlineApiClient()
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            val result = repository.activatePendingParticipationMatchResume(
+                preparation = OnlinePendingParticipationMatchResumePreparation.Ready(
+                    binding = binding,
+                    roomSnapshot = room,
+                    matchSnapshot = match,
+                ),
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumeActivation.Activated,
+                result,
+            )
+            assertEquals(
+                room,
+                repository.roomSnapshot.value,
+            )
+            assertEquals(
+                match,
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+        }
+
+    @Test
+    fun activate_pending_participation_match_resume_starts_polling_once_for_same_room() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val match = createMatchSnapshot(
+                revision = 5L,
+            )
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+            val repository = createRepository(
+                apiClient = FakeRemoteOnlineApiClient(),
+                traceLogger = createTraceLogger(
+                    traceBuffer = traceBuffer,
+                ),
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+                pollingPolicy = OnlineRemotePollingPolicy(
+                    enabled = true,
+                    intervalMillis = 60_000L,
+                ),
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+            val preparation =
+                OnlinePendingParticipationMatchResumePreparation.Ready(
+                    binding = binding,
+                    roomSnapshot = room,
+                    matchSnapshot = match,
+                )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumeActivation.Activated,
+                repository.activatePendingParticipationMatchResume(
+                    preparation = preparation,
+                ),
+            )
+            assertEquals(
+                OnlinePendingParticipationMatchResumeActivation.Activated,
+                repository.activatePendingParticipationMatchResume(
+                    preparation = preparation,
+                ),
+            )
+            assertEquals(
+                1,
+                traceBuffer.snapshot().count { entry ->
+                    entry.event.type == OnlineTraceType.POLLING_STARTED
+                },
+            )
+
+            repository.leaveRoom()
+
+            assertEquals(
+                1,
+                traceBuffer.snapshot().count { entry ->
+                    entry.event.type == OnlineTraceType.POLLING_STOPPED
+                },
+            )
+        }
+
+    @Test
+    fun activate_pending_participation_match_resume_does_not_publish_when_valid_session_is_absent() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val match = createMatchSnapshot(
+                revision = 5L,
+            )
+            val repository = createRepository(
+                apiClient = FakeRemoteOnlineApiClient(),
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(),
+            )
+
+            val result = repository.activatePendingParticipationMatchResume(
+                preparation = OnlinePendingParticipationMatchResumePreparation.Ready(
+                    binding = binding,
+                    roomSnapshot = room,
+                    matchSnapshot = match,
+                ),
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumeActivation
+                    .NotAttempted(
+                        reason = OnlinePendingParticipationRemoteBlockReason
+                            .MISSING_VALID_ANONYMOUS_SESSION,
+                    ),
+                result,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+        }
+
+    @Test
     fun prepare_pending_participation_match_resume_returns_not_in_match_without_fetching_match_snapshot() =
         runBlocking {
             val binding = createPendingParticipationBinding(
@@ -2418,6 +2584,10 @@ class RemoteOnlineRoomRepositoryTest {
 
     private fun createRepository(
         apiClient: RemoteOnlineApiClient,
+        pollingPolicy: OnlineRemotePollingPolicy =
+            OnlineRemotePollingPolicy.Disabled,
+        coroutineDispatcher: CoroutineDispatcher =
+            Dispatchers.Main.immediate,
         traceLogger: OnlineTraceLogger = OnlineTraceLogger(),
         anonymousSessionRepository: OnlineAnonymousSessionRepository? = null,
         onlineParticipationBindingRepository:
@@ -2428,6 +2598,8 @@ class RemoteOnlineRoomRepositoryTest {
                 baseUrl = "http://localhost:8080",
             ),
             apiClient = apiClient,
+            pollingPolicy = pollingPolicy,
+            coroutineDispatcher = coroutineDispatcher,
             traceLogger = traceLogger,
             nowEpochMillis = { 1_000L },
             anonymousSessionRepository = anonymousSessionRepository,
