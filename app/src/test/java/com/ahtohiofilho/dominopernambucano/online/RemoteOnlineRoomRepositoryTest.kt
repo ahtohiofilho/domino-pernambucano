@@ -1440,9 +1440,29 @@ class RemoteOnlineRoomRepositoryTest {
                     preparation = preparation,
                 ),
             )
+            val activationTraceEntries = traceBuffer.snapshot()
+
             assertEquals(
                 1,
-                traceBuffer.snapshot().count { entry ->
+                activationTraceEntries.count { entry ->
+                    entry.event.type == OnlineTraceType.SNAPSHOT_PUBLISHED &&
+                            entry.event.attributes["trigger"] ==
+                            "pending_participation_resume_activation"
+                },
+            )
+            assertEquals(
+                1,
+                activationTraceEntries.count { entry ->
+                    entry.event.type == OnlineTraceType.SNAPSHOT_IGNORED &&
+                            entry.event.attributes["reason"] ==
+                            "duplicate_match_revision" &&
+                            entry.event.attributes["trigger"] ==
+                            "pending_participation_resume_activation"
+                },
+            )
+            assertEquals(
+                1,
+                activationTraceEntries.count { entry ->
                     entry.event.type == OnlineTraceType.POLLING_STARTED
                 },
             )

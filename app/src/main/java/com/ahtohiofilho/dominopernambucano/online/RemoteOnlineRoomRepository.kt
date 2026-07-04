@@ -1461,7 +1461,7 @@ class RemoteOnlineRoomRepository(
         if (
             currentSnapshot == null ||
             currentSnapshot.matchId != snapshot.matchId ||
-            snapshot.revision >= currentSnapshot.revision
+            snapshot.revision > currentSnapshot.revision
         ) {
             mutableMatchSnapshot.value = snapshot
             mutableMatchSnapshotEvents.emit(snapshot)
