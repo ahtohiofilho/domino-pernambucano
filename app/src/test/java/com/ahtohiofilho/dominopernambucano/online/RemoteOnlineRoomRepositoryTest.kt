@@ -1242,6 +1242,576 @@ class RemoteOnlineRoomRepositoryTest {
 
 
     @Test
+    fun prepare_pending_participation_match_resume_returns_ready_without_publishing_snapshots() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+                localSeatIndex = 2,
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val match = createMatchSnapshot(
+                revision = 5L,
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation.Ready(
+                    binding = binding,
+                    roomSnapshot = room,
+                    matchSnapshot = match,
+                ),
+                result,
+            )
+            assertEquals(
+                listOf(binding.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                listOf(match.matchId),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<CreateOnlineRoomRequestDto>(),
+                apiClient.createRoomRequests,
+            )
+            assertEquals(
+                emptyList<JoinOnlineRoomRequestDto>(),
+                apiClient.joinRoomRequests,
+            )
+            assertEquals(
+                emptyList<OnlinePlayerActionDto>(),
+                apiClient.submitActionRequests,
+            )
+            assertEquals(
+                0,
+                apiClient.createAnonymousSessionCallCount,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                listOf(
+                    session.accessToken,
+                    null,
+                ),
+                apiClient.bearerAccessTokenUpdates,
+            )
+            assertEquals(
+                listOf(
+                    null,
+                    null,
+                ),
+                apiClient.developmentPlayerIdUpdates,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_returns_not_in_match_without_fetching_match_snapshot() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = null,
+                localSeatIndex = 1,
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createWaitingRoomSnapshot().copy(
+                hostPlayerId = binding.playerId,
+                players = listOf(
+                    OnlineRoomPlayerDto(
+                        playerId = binding.playerId,
+                        name = "Jogador 1",
+                        seatIndex = binding.localSeatIndex,
+                        connected = true,
+                    ),
+                ),
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation.NotInMatch(
+                    roomSnapshot = room,
+                ),
+                result,
+            )
+            assertEquals(
+                listOf(binding.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_returns_not_recoverable_when_match_snapshot_room_id_diverges() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val mismatchedMatch = createMatchSnapshot(
+                revision = 1L,
+            ).copy(
+                roomId = "room-2",
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    room.matchId.orEmpty() to mismatchedMatch,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .NoLongerRecoverable(
+                        reason =
+                            OnlinePendingParticipationMatchResumeInvalidReason
+                                .MATCH_SNAPSHOT_ROOM_ID_MISMATCH,
+                    ),
+                result,
+            )
+            assertEquals(
+                listOf(requireNotNull(room.matchId)),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_returns_not_recoverable_when_match_snapshot_match_id_diverges() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val mismatchedMatch = createMatchSnapshot(
+                revision = 1L,
+            ).copy(
+                matchId = "match-2",
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    requireNotNull(room.matchId) to mismatchedMatch,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .NoLongerRecoverable(
+                        reason =
+                            OnlinePendingParticipationMatchResumeInvalidReason
+                                .MATCH_SNAPSHOT_MATCH_ID_MISMATCH,
+                    ),
+                result,
+            )
+            assertEquals(
+                listOf(requireNotNull(room.matchId)),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_returns_not_recoverable_when_in_match_has_no_match_id() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = null,
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            ).copy(
+                matchId = null,
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .NoLongerRecoverable(
+                        reason =
+                            OnlinePendingParticipationMatchResumeInvalidReason
+                                .MISSING_MATCH_ID,
+                    ),
+                result,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_returns_temporarily_unavailable_when_match_read_fails() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                fetchMatchSnapshotFailure = IllegalStateException(
+                    "partida indisponível",
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .TemporarilyUnavailable(
+                        reason =
+                            "Falha ao preparar retomada de participação pendente online. " +
+                                    "partida indisponível",
+                    ),
+                result,
+            )
+            assertEquals(
+                listOf(requireNotNull(room.matchId)),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                listOf(
+                    session.accessToken,
+                    null,
+                ),
+                apiClient.bearerAccessTokenUpdates,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_skips_http_when_valid_anonymous_session_is_absent() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val apiClient = FakeRemoteOnlineApiClient()
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(),
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .NotAttempted(
+                        reason = OnlinePendingParticipationRemoteBlockReason
+                            .MISSING_VALID_ANONYMOUS_SESSION,
+                    ),
+                result,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String?>(),
+                apiClient.bearerAccessTokenUpdates,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_skips_http_when_anonymous_session_identity_diverges() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val apiClient = FakeRemoteOnlineApiClient()
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = createAnonymousSession(
+                            playerId = "anonymous-player-2",
+                        ),
+                    ),
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .NotAttempted(
+                        reason = OnlinePendingParticipationRemoteBlockReason
+                            .ANONYMOUS_SESSION_IDENTITY_MISMATCH,
+                    ),
+                result,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String?>(),
+                apiClient.bearerAccessTokenUpdates,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_restores_active_participant_authentication() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val match = createMatchSnapshot(
+                revision = 1L,
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = binding.localSeatIndex,
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-local",
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            apiClient.bearerAccessTokenUpdates.clear()
+            apiClient.developmentPlayerIdUpdates.clear()
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation.Ready(
+                    binding = binding,
+                    roomSnapshot = room,
+                    matchSnapshot = match,
+                ),
+                result,
+            )
+            assertEquals(
+                listOf(
+                    session.accessToken,
+                    session.accessToken,
+                ),
+                apiClient.bearerAccessTokenUpdates,
+            )
+            assertEquals(
+                listOf(
+                    null,
+                    null,
+                ),
+                apiClient.developmentPlayerIdUpdates,
+            )
+            assertEquals(
+                room,
+                repository.roomSnapshot.value,
+            )
+            assertEquals(
+                match,
+                repository.matchSnapshot.value,
+            )
+        }
+
+    @Test
     fun inspect_pending_participation_uses_persisted_bearer_and_returns_recoverable_without_publishing_snapshots() =
         runBlocking {
             val binding = createPendingParticipationBinding(
@@ -1931,6 +2501,22 @@ class RemoteOnlineRoomRepositoryTest {
             matchId = "match-1",
             createdAtEpochMillis = 1_000L,
             updatedAtEpochMillis = updatedAtEpochMillis,
+        )
+    }
+
+    private fun createInMatchRoomSnapshotForBinding(
+        binding: OnlineParticipationBinding,
+    ): OnlineRoomSnapshotDto {
+        return createInMatchRoomSnapshot().copy(
+            hostPlayerId = binding.playerId,
+            players = listOf(
+                OnlineRoomPlayerDto(
+                    playerId = binding.playerId,
+                    name = "Jogador 1",
+                    seatIndex = binding.localSeatIndex,
+                    connected = true,
+                ),
+            ),
         )
     }
 

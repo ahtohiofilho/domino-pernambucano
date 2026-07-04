@@ -494,6 +494,127 @@ class RemoteOnlineRoomRepository(
         }
     }
 
+    override suspend fun preparePendingParticipationMatchResume(
+        binding: OnlineParticipationBinding,
+    ): OnlinePendingParticipationMatchResumePreparation {
+        val client = apiClient
+            ?: return OnlinePendingParticipationMatchResumePreparation
+                .TemporarilyUnavailable(
+                    reason = getUnavailableBackendReason(),
+                )
+
+        return refreshMutex.withLock {
+            val session = anonymousSessionRepository
+                ?.getValidSessionOrNull()
+                ?: return@withLock OnlinePendingParticipationMatchResumePreparation
+                    .NotAttempted(
+                        reason = OnlinePendingParticipationRemoteBlockReason
+                            .MISSING_VALID_ANONYMOUS_SESSION,
+                    )
+
+            if (session.playerId != binding.playerId) {
+                return@withLock OnlinePendingParticipationMatchResumePreparation
+                    .NotAttempted(
+                        reason = OnlinePendingParticipationRemoteBlockReason
+                            .ANONYMOUS_SESSION_IDENTITY_MISMATCH,
+                    )
+            }
+
+            client.setDevelopmentPlayerId(
+                playerId = null,
+            )
+            client.setBearerAccessToken(
+                accessToken = session.accessToken,
+            )
+
+            try {
+                val room = client.fetchRoomSnapshot(
+                    roomId = binding.roomId,
+                )
+
+                val inspection = inspectPendingParticipationRoom(
+                    binding = binding,
+                    room = room,
+                )
+
+                if (
+                    inspection is OnlinePendingParticipationRemoteInspection
+                        .NoLongerRecoverable
+                ) {
+                    return@withLock OnlinePendingParticipationMatchResumePreparation
+                        .NoLongerRecoverable(
+                            reason = inspection.reason.toMatchResumeInvalidReason(),
+                        )
+                }
+
+                val recoverableRoom = (
+                    inspection as OnlinePendingParticipationRemoteInspection
+                        .Recoverable
+                ).roomSnapshot
+
+                if (recoverableRoom.status != OnlineRoomStatusDto.IN_MATCH) {
+                    return@withLock OnlinePendingParticipationMatchResumePreparation
+                        .NotInMatch(
+                            roomSnapshot = recoverableRoom,
+                        )
+                }
+
+                val matchId = recoverableRoom.matchId
+                    ?.takeIf { value ->
+                        value.isNotBlank()
+                    }
+                    ?: return@withLock OnlinePendingParticipationMatchResumePreparation
+                        .NoLongerRecoverable(
+                            reason =
+                                OnlinePendingParticipationMatchResumeInvalidReason
+                                    .MISSING_MATCH_ID,
+                        )
+
+                val match = client.fetchMatchSnapshot(
+                    matchId = matchId,
+                )
+
+                if (match.roomId != binding.roomId) {
+                    return@withLock OnlinePendingParticipationMatchResumePreparation
+                        .NoLongerRecoverable(
+                            reason =
+                                OnlinePendingParticipationMatchResumeInvalidReason
+                                    .MATCH_SNAPSHOT_ROOM_ID_MISMATCH,
+                        )
+                }
+
+                if (match.matchId != matchId) {
+                    return@withLock OnlinePendingParticipationMatchResumePreparation
+                        .NoLongerRecoverable(
+                            reason =
+                                OnlinePendingParticipationMatchResumeInvalidReason
+                                    .MATCH_SNAPSHOT_MATCH_ID_MISMATCH,
+                        )
+                }
+
+                OnlinePendingParticipationMatchResumePreparation.Ready(
+                    binding = binding,
+                    roomSnapshot = recoverableRoom,
+                    matchSnapshot = match,
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                OnlinePendingParticipationMatchResumePreparation
+                    .TemporarilyUnavailable(
+                        reason = error.toOnlineFailureReason(
+                            fallback =
+                                "Falha ao preparar retomada de participação pendente online.",
+                        ),
+                    )
+            } finally {
+                restoreActiveParticipantAuthentication(
+                    client = client,
+                )
+            }
+        }
+    }
+
     override suspend fun leaveRoom() {
         onlineParticipationBindingRepository?.clear()
 
@@ -790,6 +911,43 @@ class RemoteOnlineRoomRepository(
             .Recoverable(
                 roomSnapshot = room,
             )
+    }
+
+
+    private fun OnlinePendingParticipationRemoteInvalidReason
+        .toMatchResumeInvalidReason():
+        OnlinePendingParticipationMatchResumeInvalidReason {
+        return when (this) {
+            OnlinePendingParticipationRemoteInvalidReason.ROOM_ID_MISMATCH -> {
+                OnlinePendingParticipationMatchResumeInvalidReason
+                    .ROOM_ID_MISMATCH
+            }
+
+            OnlinePendingParticipationRemoteInvalidReason.ROOM_CLOSED -> {
+                OnlinePendingParticipationMatchResumeInvalidReason
+                    .ROOM_CLOSED
+            }
+
+            OnlinePendingParticipationRemoteInvalidReason.ROOM_FINISHED -> {
+                OnlinePendingParticipationMatchResumeInvalidReason
+                    .ROOM_FINISHED
+            }
+
+            OnlinePendingParticipationRemoteInvalidReason.PLAYER_NOT_FOUND -> {
+                OnlinePendingParticipationMatchResumeInvalidReason
+                    .PLAYER_NOT_FOUND
+            }
+
+            OnlinePendingParticipationRemoteInvalidReason.LOCAL_SEAT_MISMATCH -> {
+                OnlinePendingParticipationMatchResumeInvalidReason
+                    .LOCAL_SEAT_MISMATCH
+            }
+
+            OnlinePendingParticipationRemoteInvalidReason.MATCH_ID_MISMATCH -> {
+                OnlinePendingParticipationMatchResumeInvalidReason
+                    .MATCH_ID_MISMATCH
+            }
+        }
     }
 
     private suspend fun refreshSnapshotsAfterAction(
