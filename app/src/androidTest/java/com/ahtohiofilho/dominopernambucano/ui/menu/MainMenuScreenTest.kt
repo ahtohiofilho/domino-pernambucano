@@ -1,0 +1,204 @@
+package com.ahtohiofilho.dominopernambucano.ui.menu
+
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBinding
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInvalidReason
+import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
+import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class MainMenuScreenTest {
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    @Test
+    fun ready_participation_without_completed_recoverable_inspection_shows_verification_only() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.NotRequested,
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText("Verificar participação online")
+            .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText("Retomar partida online")
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun completed_recoverable_inspection_shows_resume_and_hides_verification() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    recoverableInspection(),
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText("Retomar partida online")
+            .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText("Verificar participação online")
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun completed_non_recoverable_inspection_does_not_show_resume() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.Completed(
+                        result =
+                            OnlinePendingParticipationRemoteInspection
+                                .NoLongerRecoverable(
+                                    reason =
+                                        OnlinePendingParticipationRemoteInvalidReason
+                                            .ROOM_FINISHED,
+                                ),
+                    ),
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onAllNodesWithText("Retomar partida online")
+            .assertCountEquals(0)
+
+        composeRule
+            .onNodeWithText("Verificar participação online")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun resume_callback_runs_only_after_explicit_resume_click() {
+        var resumeClickCount = 0
+
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    recoverableInspection(),
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {
+                    resumeClickCount += 1
+                },
+            )
+        }
+
+        composeRule.runOnIdle {
+            assertEquals(
+                0,
+                resumeClickCount,
+            )
+        }
+
+        composeRule
+            .onNodeWithText("Retomar partida online")
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(
+                1,
+                resumeClickCount,
+            )
+        }
+    }
+
+    @Test
+    fun resume_in_progress_blocks_resume_and_play_actions() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    recoverableInspection(),
+                pendingOnlineMatchResumeInProgress = true,
+                onPlayClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText("Retomando...")
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsNotEnabled()
+    }
+
+    private fun readyParticipation():
+        OnlinePendingParticipationLocalResolution {
+        return OnlinePendingParticipationLocalResolution
+            .ReadyForRemoteReconciliation(
+                binding = OnlineParticipationBinding(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                    playerId = "player-1",
+                    localSeatIndex = 0,
+                ),
+            )
+    }
+
+    private fun recoverableInspection():
+        OnlinePendingParticipationInspectionState {
+        return OnlinePendingParticipationInspectionState.Completed(
+            result = OnlinePendingParticipationRemoteInspection.Recoverable(
+                roomSnapshot = OnlineRoomSnapshotDto(
+                    roomId = "room-1",
+                    roomCode = "123456",
+                    hostPlayerId = "player-1",
+                    status = OnlineRoomStatusDto.IN_MATCH,
+                    players = listOf(
+                        OnlineRoomPlayerDto(
+                            playerId = "player-1",
+                            name = "Jogador 1",
+                            seatIndex = 0,
+                            connected = true,
+                        ),
+                    ),
+                    matchId = "match-1",
+                    createdAtEpochMillis = 1_000L,
+                    updatedAtEpochMillis = 1_000L,
+                ),
+            ),
+        )
+    }
+}

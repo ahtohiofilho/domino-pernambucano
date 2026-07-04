@@ -9,19 +9,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
-import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatchResumeActivation
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatchResumePreparation
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
+import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineAnonymousSessionStore
+import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineParticipationBindingStore
+import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
 import com.ahtohiofilho.dominopernambucano.online.observability.AndroidLogcatOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.CompositeOnlineTraceSink
-import com.ahtohiofilho.dominopernambucano.online.observability.PersistentOnlineTraceOutbox
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchUploader
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
-import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineAnonymousSessionStore
-import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
-import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineParticipationBindingStore
+import com.ahtohiofilho.dominopernambucano.online.observability.PersistentOnlineTraceOutbox
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
 import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
@@ -137,6 +142,7 @@ fun DominoPernambucanoApp(
     val onlineTracePendingEntryVersion by onlineTraceOutbox
         .pendingEntryVersion
         .collectAsState()
+
     val onlineMatchSnapshot by onlineRoomRepository.matchSnapshot.collectAsState()
 
     LaunchedEffect(
@@ -176,6 +182,10 @@ fun DominoPernambucanoApp(
 
     val menuCoroutineScope = rememberCoroutineScope()
 
+    var pendingOnlineMatchResumeInProgress by remember {
+        mutableStateOf(false)
+    }
+
     when (val state = sessionState) {
         is DominoSessionState.MainMenu -> {
             MainMenuScreen(
@@ -183,11 +193,14 @@ fun DominoPernambucanoApp(
                     state.pendingOnlineParticipation,
                 pendingOnlineParticipationInspection =
                     state.pendingOnlineParticipationInspection,
+                pendingOnlineMatchResumeInProgress =
+                    pendingOnlineMatchResumeInProgress,
                 onPlayClick = {
                     if (
+                        !pendingOnlineMatchResumeInProgress &&
                         state.pendingOnlineParticipationInspection
-                            !is OnlinePendingParticipationInspectionState
-                                .InProgress
+                                !is OnlinePendingParticipationInspectionState
+                        .InProgress
                     ) {
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.OpenPlayModeSelection,
@@ -195,9 +208,101 @@ fun DominoPernambucanoApp(
                     }
                 },
                 onInspectPendingOnlineParticipationClick = {
-                    menuCoroutineScope.launch {
-                        sessionCoordinator
-                            .inspectPendingOnlineParticipation()
+                    if (!pendingOnlineMatchResumeInProgress) {
+                        menuCoroutineScope.launch {
+                            sessionCoordinator
+                                .inspectPendingOnlineParticipation()
+                        }
+                    }
+                },
+                onResumePendingOnlineMatchClick = {
+                    val pendingParticipation =
+                        state.pendingOnlineParticipation
+
+                    val completedInspection =
+                        state.pendingOnlineParticipationInspection
+                                as? OnlinePendingParticipationInspectionState
+                        .Completed
+
+                    val hasRecoverableInspection =
+                        completedInspection?.result is
+                                OnlinePendingParticipationRemoteInspection
+                                .Recoverable
+
+                    if (
+                        !pendingOnlineMatchResumeInProgress &&
+                        pendingParticipation is
+                                OnlinePendingParticipationLocalResolution
+                                .ReadyForRemoteReconciliation &&
+                        hasRecoverableInspection
+                    ) {
+                        pendingOnlineMatchResumeInProgress = true
+
+                        menuCoroutineScope.launch {
+                            var createdMatchCoordinator:
+                                    OnlineDominoMatchCoordinator? = null
+
+                            try {
+                                val preparation =
+                                    onlineRoomRepository
+                                        .preparePendingParticipationMatchResume(
+                                            binding =
+                                                pendingParticipation.binding,
+                                        )
+
+                                if (
+                                    preparation !is
+                                            OnlinePendingParticipationMatchResumePreparation
+                                            .Ready
+                                ) {
+                                    return@launch
+                                }
+
+                                val matchCoordinator =
+                                    OnlineDominoMatchCoordinator(
+                                        repository = onlineRoomRepository,
+                                        roomId =
+                                            preparation.roomSnapshot.roomId,
+                                        matchId =
+                                            preparation.matchSnapshot.matchId,
+                                        localPlayerId =
+                                            preparation.binding.playerId,
+                                        localPlayerIndex =
+                                            preparation.binding.localSeatIndex,
+                                        initialSnapshot =
+                                            preparation.matchSnapshot,
+                                        traceLogger = onlineTraceLogger,
+                                    )
+
+                                createdMatchCoordinator = matchCoordinator
+
+                                val activation =
+                                    onlineRoomRepository
+                                        .activatePendingParticipationMatchResume(
+                                            preparation = preparation,
+                                        )
+
+                                if (
+                                    activation !is
+                                            OnlinePendingParticipationMatchResumeActivation
+                                            .Activated
+                                ) {
+                                    return@launch
+                                }
+
+                                sessionCoordinator.dispatch(
+                                    DominoSessionCommand.StartOnlineMatch(
+                                        matchCoordinator = matchCoordinator,
+                                    ),
+                                )
+
+                                createdMatchCoordinator = null
+                            } finally {
+                                createdMatchCoordinator?.dispose()
+
+                                pendingOnlineMatchResumeInProgress = false
+                            }
+                        }
                     }
                 },
             )

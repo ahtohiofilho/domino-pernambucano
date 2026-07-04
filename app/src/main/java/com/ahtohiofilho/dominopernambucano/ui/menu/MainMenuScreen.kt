@@ -14,14 +14,31 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 @Composable
 fun MainMenuScreen(
     pendingOnlineParticipation:
-        OnlinePendingParticipationLocalResolution,
+    OnlinePendingParticipationLocalResolution,
     pendingOnlineParticipationInspection:
-        OnlinePendingParticipationInspectionState,
+    OnlinePendingParticipationInspectionState,
+    pendingOnlineMatchResumeInProgress: Boolean,
     onPlayClick: () -> Unit,
     onInspectPendingOnlineParticipationClick: () -> Unit,
+    onResumePendingOnlineMatchClick: () -> Unit,
 ) {
     val inspectionInProgress =
-        pendingOnlineParticipationInspection is OnlinePendingParticipationInspectionState.InProgress
+        pendingOnlineParticipationInspection is
+                OnlinePendingParticipationInspectionState.InProgress
+
+    val resumePendingOnlineMatchAvailable =
+        pendingOnlineParticipation is
+                OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation &&
+                (
+                        pendingOnlineParticipationInspection
+                                as? OnlinePendingParticipationInspectionState
+                        .Completed
+                        )?.result is OnlinePendingParticipationRemoteInspection
+                .Recoverable
+
+    val menuActionInProgress =
+        inspectionInProgress || pendingOnlineMatchResumeInProgress
 
     val inspectionMessage = when (
         val inspection = pendingOnlineParticipationInspection
@@ -38,6 +55,7 @@ fun MainMenuScreen(
             inspection.result.toInspectionMessage()
         }
     }
+
     MenuScaffold {
         Text(
             text = "MESA, PARCERIA E ESTRATÉGIA",
@@ -75,7 +93,10 @@ fun MainMenuScreen(
         }
 
         if (
-            pendingOnlineParticipation is OnlinePendingParticipationLocalResolution.ReadyForRemoteReconciliation
+            pendingOnlineParticipation is
+                    OnlinePendingParticipationLocalResolution
+                    .ReadyForRemoteReconciliation &&
+            !resumePendingOnlineMatchAvailable
         ) {
             SecondaryMenuButton(
                 text = if (inspectionInProgress) {
@@ -84,36 +105,48 @@ fun MainMenuScreen(
                     "Verificar participação online"
                 },
                 onClick = onInspectPendingOnlineParticipationClick,
-                enabled = !inspectionInProgress,
+                enabled = !menuActionInProgress,
+            )
+        }
+
+        if (resumePendingOnlineMatchAvailable) {
+            SecondaryMenuButton(
+                text = if (pendingOnlineMatchResumeInProgress) {
+                    "Retomando..."
+                } else {
+                    "Retomar partida online"
+                },
+                onClick = onResumePendingOnlineMatchClick,
+                enabled = !menuActionInProgress,
             )
         }
 
         PrimaryMenuButton(
             text = "Jogar",
             onClick = onPlayClick,
-            enabled = !inspectionInProgress,
+            enabled = !menuActionInProgress,
         )
     }
 }
 
 private fun OnlinePendingParticipationLocalResolution
-    .initialInspectionMessageOrNull(): String? {
+        .initialInspectionMessageOrNull(): String? {
     return when (this) {
         OnlinePendingParticipationLocalResolution.NoPendingParticipation,
         is OnlinePendingParticipationLocalResolution
-            .ReadyForRemoteReconciliation -> null
+        .ReadyForRemoteReconciliation -> null
 
         is OnlinePendingParticipationLocalResolution
-            .BlockedByMissingValidAnonymousSession,
+        .BlockedByMissingValidAnonymousSession,
         is OnlinePendingParticipationLocalResolution
-            .BlockedByAnonymousSessionIdentityMismatch -> {
+        .BlockedByAnonymousSessionIdentityMismatch -> {
             "A participação online anterior não pode ser verificada neste dispositivo."
         }
     }
 }
 
 private fun OnlinePendingParticipationRemoteInspection
-    .toInspectionMessage(): String {
+        .toInspectionMessage(): String {
     return when (this) {
         is OnlinePendingParticipationRemoteInspection.Recoverable -> {
             "Participação online confirmada."
