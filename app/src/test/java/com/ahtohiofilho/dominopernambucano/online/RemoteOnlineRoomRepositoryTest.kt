@@ -6,6 +6,13 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.plugins.ServerResponseException
+import io.ktor.client.request.get
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -1818,6 +1825,304 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
+    fun prepare_pending_participation_match_resume_returns_remote_session_rejected_when_room_read_returns_401_without_mutating_local_state() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val sessionStore = InMemoryOnlineAnonymousSessionStore(
+                initialSession = session,
+            )
+            val sessionRepository = OnlineAnonymousSessionRepository(
+                store = sessionStore,
+                nowEpochMillis = { 1_000L },
+            )
+            val bindingRepository = OnlineParticipationBindingRepository(
+                store = InMemoryOnlineParticipationBindingStore(),
+            )
+            bindingRepository.save(
+                binding = binding,
+            )
+
+            val preservedRoom = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val preservedMatch = createMatchSnapshot(
+                revision = 5L,
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                fetchRoomSnapshotFailure = createUnauthorizedClientRequestException(),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository = sessionRepository,
+                onlineParticipationBindingRepository = bindingRepository,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumeActivation.Activated,
+                repository.activatePendingParticipationMatchResume(
+                    preparation = OnlinePendingParticipationMatchResumePreparation.Ready(
+                        binding = binding,
+                        roomSnapshot = preservedRoom,
+                        matchSnapshot = preservedMatch,
+                    ),
+                ),
+            )
+
+            apiClient.bearerAccessTokenUpdates.clear()
+            apiClient.developmentPlayerIdUpdates.clear()
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .RemoteSessionRejected,
+                result,
+            )
+            assertEquals(
+                listOf(binding.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<CreateOnlineRoomRequestDto>(),
+                apiClient.createRoomRequests,
+            )
+            assertEquals(
+                emptyList<JoinOnlineRoomRequestDto>(),
+                apiClient.joinRoomRequests,
+            )
+            assertEquals(
+                emptyList<OnlinePlayerActionDto>(),
+                apiClient.submitActionRequests,
+            )
+            assertEquals(
+                0,
+                apiClient.createAnonymousSessionCallCount,
+            )
+            assertEquals(
+                preservedRoom,
+                repository.roomSnapshot.value,
+            )
+            assertEquals(
+                preservedMatch,
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                session,
+                sessionStore.read(),
+            )
+            assertEquals(
+                binding,
+                bindingRepository.getValidBindingOrNull(),
+            )
+            assertEquals(
+                listOf(
+                    session.accessToken,
+                    session.accessToken,
+                ),
+                apiClient.bearerAccessTokenUpdates,
+            )
+            assertEquals(
+                listOf(
+                    null,
+                    null,
+                ),
+                apiClient.developmentPlayerIdUpdates,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_returns_remote_session_rejected_when_match_read_returns_401_without_mutating_local_state() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val sessionStore = InMemoryOnlineAnonymousSessionStore(
+                initialSession = session,
+            )
+            val sessionRepository = OnlineAnonymousSessionRepository(
+                store = sessionStore,
+                nowEpochMillis = { 1_000L },
+            )
+            val bindingRepository = OnlineParticipationBindingRepository(
+                store = InMemoryOnlineParticipationBindingStore(),
+            )
+            bindingRepository.save(
+                binding = binding,
+            )
+
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                fetchMatchSnapshotFailure = createUnauthorizedClientRequestException(),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository = sessionRepository,
+                onlineParticipationBindingRepository = bindingRepository,
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .RemoteSessionRejected,
+                result,
+            )
+            assertEquals(
+                listOf(binding.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                listOf(requireNotNull(room.matchId)),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<CreateOnlineRoomRequestDto>(),
+                apiClient.createRoomRequests,
+            )
+            assertEquals(
+                emptyList<JoinOnlineRoomRequestDto>(),
+                apiClient.joinRoomRequests,
+            )
+            assertEquals(
+                emptyList<OnlinePlayerActionDto>(),
+                apiClient.submitActionRequests,
+            )
+            assertEquals(
+                0,
+                apiClient.createAnonymousSessionCallCount,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                session,
+                sessionStore.read(),
+            )
+            assertEquals(
+                binding,
+                bindingRepository.getValidBindingOrNull(),
+            )
+            assertEquals(
+                listOf(
+                    session.accessToken,
+                    null,
+                ),
+                apiClient.bearerAccessTokenUpdates,
+            )
+            assertEquals(
+                listOf(
+                    null,
+                    null,
+                ),
+                apiClient.developmentPlayerIdUpdates,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_keeps_server_5xx_as_temporarily_unavailable() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val sessionStore = InMemoryOnlineAnonymousSessionStore(
+                initialSession = session,
+            )
+            val sessionRepository = OnlineAnonymousSessionRepository(
+                store = sessionStore,
+                nowEpochMillis = { 1_000L },
+            )
+            val bindingRepository = OnlineParticipationBindingRepository(
+                store = InMemoryOnlineParticipationBindingStore(),
+            )
+            bindingRepository.save(
+                binding = binding,
+            )
+
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                fetchMatchSnapshotFailure = createInternalServerErrorException(),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository = sessionRepository,
+                onlineParticipationBindingRepository = bindingRepository,
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertTrue(
+                result is OnlinePendingParticipationMatchResumePreparation
+                    .TemporarilyUnavailable,
+            )
+            assertEquals(
+                listOf(binding.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                listOf(requireNotNull(room.matchId)),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<CreateOnlineRoomRequestDto>(),
+                apiClient.createRoomRequests,
+            )
+            assertEquals(
+                emptyList<JoinOnlineRoomRequestDto>(),
+                apiClient.joinRoomRequests,
+            )
+            assertEquals(
+                emptyList<OnlinePlayerActionDto>(),
+                apiClient.submitActionRequests,
+            )
+            assertEquals(
+                0,
+                apiClient.createAnonymousSessionCallCount,
+            )
+            assertEquals(
+                session,
+                sessionStore.read(),
+            )
+            assertEquals(
+                binding,
+                bindingRepository.getValidBindingOrNull(),
+            )
+        }
+
+    @Test
     fun prepare_pending_participation_match_resume_skips_http_when_valid_anonymous_session_is_absent() =
         runBlocking {
             val binding = createPendingParticipationBinding(
@@ -2579,6 +2884,54 @@ class RemoteOnlineRoomRepositoryTest {
             playerId = "anonymous-player-1",
             localSeatIndex = localSeatIndex,
         )
+    }
+
+    private suspend fun createUnauthorizedClientRequestException(): ClientRequestException {
+        val httpClient = HttpClient(
+            MockEngine {
+                respond(
+                    content = "",
+                    status = HttpStatusCode.Unauthorized,
+                )
+            },
+        ) {
+            expectSuccess = true
+        }
+
+        return try {
+            httpClient.get(
+                urlString = "http://localhost/unauthorized",
+            )
+            error("A resposta 401 deveria lançar ClientRequestException.")
+        } catch (error: ClientRequestException) {
+            error
+        } finally {
+            httpClient.close()
+        }
+    }
+
+    private suspend fun createInternalServerErrorException(): ServerResponseException {
+        val httpClient = HttpClient(
+            MockEngine {
+                respond(
+                    content = "",
+                    status = HttpStatusCode.InternalServerError,
+                )
+            },
+        ) {
+            expectSuccess = true
+        }
+
+        return try {
+            httpClient.get(
+                urlString = "http://localhost/internal-server-error",
+            )
+            error("A resposta 500 deveria lançar ServerResponseException.")
+        } catch (error: ServerResponseException) {
+            error
+        } finally {
+            httpClient.close()
+        }
     }
 
     private fun createAnonymousSession(

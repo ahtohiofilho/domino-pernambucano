@@ -19,6 +19,8 @@ sealed interface OnlinePendingParticipationMatchResumePreparation {
         val reason: OnlinePendingParticipationRemoteBlockReason,
     ) : OnlinePendingParticipationMatchResumePreparation
 
+    data object RemoteSessionRejected : OnlinePendingParticipationMatchResumePreparation
+
     data class TemporarilyUnavailable(
         val reason: String,
     ) : OnlinePendingParticipationMatchResumePreparation
