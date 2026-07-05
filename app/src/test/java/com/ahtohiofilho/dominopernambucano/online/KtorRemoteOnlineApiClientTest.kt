@@ -15,6 +15,8 @@ import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -25,6 +27,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KtorRemoteOnlineApiClientTest {
@@ -516,9 +519,163 @@ class KtorRemoteOnlineApiClientTest {
             )
         }
 
+    @Test
+    fun create_room_throws_client_request_exception_when_backend_returns_unauthorized() =
+        runBlocking {
+            val recordedRequests = mutableListOf<RecordedRequest>()
+            val recordedDevelopmentPlayerIds = mutableListOf<String?>()
+            val recordedAuthorizationHeaders = mutableListOf<String?>()
+
+            val apiClient = createApiClient(
+                responsesByPath = mapOf(
+                    "/rooms" to "",
+                ),
+                recordedRequests = recordedRequests,
+                responseStatusesByPath = mapOf(
+                    "/rooms" to HttpStatusCode.Unauthorized,
+                ),
+                recordedDevelopmentPlayerIds = recordedDevelopmentPlayerIds,
+                recordedAuthorizationHeaders = recordedAuthorizationHeaders,
+            )
+
+            apiClient.setBearerAccessToken(
+                accessToken = "rejected-access-token",
+            )
+
+            val failure = try {
+                apiClient.createRoom(
+                    CreateOnlineRoomRequestDto(
+                        localPlayerId = "anonymous-player-1",
+                        playerName = "Jogador 1",
+                    ),
+                )
+                null
+            } catch (error: Throwable) {
+                error
+            }
+
+            assertTrue(failure is ClientRequestException)
+            assertEquals(
+                HttpStatusCode.Unauthorized,
+                (failure as ClientRequestException).response.status,
+            )
+            assertEquals(
+                listOf(
+                    RecordedRequest(
+                        method = HttpMethod.Post.value,
+                        path = "/rooms",
+                    ),
+                ),
+                recordedRequests,
+            )
+            assertEquals(
+                listOf(null),
+                recordedDevelopmentPlayerIds,
+            )
+            assertEquals(
+                listOf("Bearer rejected-access-token"),
+                recordedAuthorizationHeaders,
+            )
+        }
+
+    @Test
+    fun fetch_room_snapshot_throws_client_request_exception_when_backend_returns_unauthorized() =
+        runBlocking {
+            val recordedRequests = mutableListOf<RecordedRequest>()
+            val recordedAuthorizationHeaders = mutableListOf<String?>()
+
+            val apiClient = createApiClient(
+                responsesByPath = mapOf(
+                    "/rooms/room-1" to "",
+                ),
+                recordedRequests = recordedRequests,
+                responseStatusesByPath = mapOf(
+                    "/rooms/room-1" to HttpStatusCode.Unauthorized,
+                ),
+                recordedAuthorizationHeaders = recordedAuthorizationHeaders,
+            )
+
+            apiClient.setBearerAccessToken(
+                accessToken = "rejected-access-token",
+            )
+
+            val failure = try {
+                apiClient.fetchRoomSnapshot(
+                    roomId = "room-1",
+                )
+                null
+            } catch (error: Throwable) {
+                error
+            }
+
+            assertTrue(failure is ClientRequestException)
+            assertEquals(
+                HttpStatusCode.Unauthorized,
+                (failure as ClientRequestException).response.status,
+            )
+            assertEquals(
+                listOf(
+                    RecordedRequest(
+                        method = HttpMethod.Get.value,
+                        path = "/rooms/room-1",
+                    ),
+                ),
+                recordedRequests,
+            )
+            assertEquals(
+                listOf("Bearer rejected-access-token"),
+                recordedAuthorizationHeaders,
+            )
+        }
+
+    @Test
+    fun create_room_throws_server_response_exception_when_backend_returns_internal_server_error() =
+        runBlocking {
+            val recordedRequests = mutableListOf<RecordedRequest>()
+
+            val apiClient = createApiClient(
+                responsesByPath = mapOf(
+                    "/rooms" to "",
+                ),
+                recordedRequests = recordedRequests,
+                responseStatusesByPath = mapOf(
+                    "/rooms" to HttpStatusCode.InternalServerError,
+                ),
+            )
+
+            val failure = try {
+                apiClient.createRoom(
+                    CreateOnlineRoomRequestDto(
+                        localPlayerId = "player-1",
+                        playerName = "Jogador 1",
+                    ),
+                )
+                null
+            } catch (error: Throwable) {
+                error
+            }
+
+            assertTrue(failure is ServerResponseException)
+            assertEquals(
+                HttpStatusCode.InternalServerError,
+                (failure as ServerResponseException).response.status,
+            )
+            assertEquals(
+                listOf(
+                    RecordedRequest(
+                        method = HttpMethod.Post.value,
+                        path = "/rooms",
+                    ),
+                ),
+                recordedRequests,
+            )
+        }
+
     private fun createApiClient(
         responsesByPath: Map<String, String>,
         recordedRequests: MutableList<RecordedRequest>,
+        responseStatusesByPath: Map<String, HttpStatusCode> =
+            emptyMap(),
         recordedDevelopmentPlayerIds: MutableList<String?>? = null,
         recordedAuthorizationHeaders: MutableList<String?>? = null,
     ): KtorRemoteOnlineApiClient {
@@ -548,7 +705,7 @@ class KtorRemoteOnlineApiClientTest {
 
             respond(
                 content = responseBody,
-                status = HttpStatusCode.OK,
+                status = responseStatusesByPath[path] ?: HttpStatusCode.OK,
                 headers = headersOf(
                     HttpHeaders.ContentType,
                     ContentType.Application.Json.toString(),
