@@ -2652,6 +2652,98 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
+    fun inspect_pending_participation_returns_remote_session_rejected_on_401_without_mutating_local_state() =
+        runBlocking {
+            val binding = createPendingParticipationBinding()
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val sessionStore = InMemoryOnlineAnonymousSessionStore(
+                initialSession = session,
+            )
+            val sessionRepository = OnlineAnonymousSessionRepository(
+                store = sessionStore,
+                nowEpochMillis = { 1_000L },
+            )
+            val bindingRepository = OnlineParticipationBindingRepository(
+                store = InMemoryOnlineParticipationBindingStore(),
+            )
+            bindingRepository.save(
+                binding = binding,
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                fetchRoomSnapshotFailure = createUnauthorizedClientRequestException(),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository = sessionRepository,
+                onlineParticipationBindingRepository = bindingRepository,
+            )
+
+            val result = repository.inspectPendingParticipation(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationRemoteInspection.RemoteSessionRejected,
+                result,
+            )
+            assertEquals(
+                listOf(binding.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<CreateOnlineRoomRequestDto>(),
+                apiClient.createRoomRequests,
+            )
+            assertEquals(
+                emptyList<JoinOnlineRoomRequestDto>(),
+                apiClient.joinRoomRequests,
+            )
+            assertEquals(
+                emptyList<OnlinePlayerActionDto>(),
+                apiClient.submitActionRequests,
+            )
+            assertEquals(
+                0,
+                apiClient.createAnonymousSessionCallCount,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                session,
+                sessionStore.read(),
+            )
+            assertEquals(
+                binding,
+                bindingRepository.getValidBindingOrNull(),
+            )
+            assertEquals(
+                listOf(
+                    session.accessToken,
+                    null,
+                ),
+                apiClient.bearerAccessTokenUpdates,
+            )
+            assertEquals(
+                listOf(
+                    null,
+                    null,
+                ),
+                apiClient.developmentPlayerIdUpdates,
+            )
+        }
+
+    @Test
     fun inspect_pending_participation_returns_temporarily_unavailable_when_room_read_fails() =
         runBlocking {
             val binding = createPendingParticipationBinding()

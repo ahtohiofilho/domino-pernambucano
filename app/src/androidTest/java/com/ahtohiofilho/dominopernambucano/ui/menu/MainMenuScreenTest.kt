@@ -116,6 +116,50 @@ class MainMenuScreenTest {
     }
 
     @Test
+    fun remote_session_rejected_inspection_shows_specific_message_without_resume() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.Completed(
+                        result =
+                            OnlinePendingParticipationRemoteInspection
+                                .RemoteSessionRejected,
+                    ),
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "N\u00e3o foi poss\u00edvel verificar a participa\u00e7\u00e3o: " +
+                        "a sess\u00e3o online deste dispositivo foi rejeitada.",
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText("Participa\u00e7\u00e3o online confirmada.")
+            .assertCountEquals(0)
+
+        composeRule
+            .onAllNodesWithText("Retomar partida online")
+            .assertCountEquals(0)
+
+        composeRule
+            .onNodeWithText("Verificar participa\u00e7\u00e3o online")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+    }
+
+    @Test
     fun completed_non_recoverable_inspection_does_not_show_resume() {
         composeRule.setContent {
             MainMenuScreen(

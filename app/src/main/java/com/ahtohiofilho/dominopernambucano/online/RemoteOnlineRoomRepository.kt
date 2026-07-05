@@ -482,6 +482,14 @@ class RemoteOnlineRoomRepository(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
+                if (
+                    error is io.ktor.client.plugins.ClientRequestException &&
+                            error.response.status == io.ktor.http.HttpStatusCode.Unauthorized
+                ) {
+                    return@withLock OnlinePendingParticipationRemoteInspection
+                        .RemoteSessionRejected
+                }
+
                 OnlinePendingParticipationRemoteInspection
                     .TemporarilyUnavailable(
                         reason = error.toOnlineFailureReason(

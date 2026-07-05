@@ -157,6 +157,11 @@ private fun OnlinePendingParticipationRemoteInspection
             "A participação online anterior não está mais disponível."
         }
 
+        OnlinePendingParticipationRemoteInspection.RemoteSessionRejected -> {
+            "N\u00e3o foi poss\u00edvel verificar a participa\u00e7\u00e3o: " +
+                    "a sess\u00e3o online deste dispositivo foi rejeitada."
+        }
+
         is OnlinePendingParticipationRemoteInspection.NotAttempted -> {
             "Não foi possível verificar sua participação neste dispositivo."
         }

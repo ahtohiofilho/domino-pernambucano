@@ -9,6 +9,9 @@ sealed interface OnlinePendingParticipationRemoteInspection {
         val reason: OnlinePendingParticipationRemoteInvalidReason,
     ) : OnlinePendingParticipationRemoteInspection
 
+    data object RemoteSessionRejected :
+        OnlinePendingParticipationRemoteInspection
+
     data class NotAttempted(
         val reason: OnlinePendingParticipationRemoteBlockReason,
     ) : OnlinePendingParticipationRemoteInspection
