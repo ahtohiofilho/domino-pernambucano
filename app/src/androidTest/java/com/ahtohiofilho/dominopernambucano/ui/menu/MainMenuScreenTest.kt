@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.ui.menu
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -70,6 +71,48 @@ class MainMenuScreenTest {
         composeRule
             .onAllNodesWithText("Verificar participação online")
             .assertCountEquals(0)
+    }
+
+    @Test
+    fun remote_session_rejected_feedback_overrides_confirmation_and_keeps_resume_available() {
+        var resumeClickCount = 0
+
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    recoverableInspection(),
+                pendingOnlineMatchResumeInProgress = false,
+                pendingOnlineMatchResumeFeedbackMessage =
+                    "N\u00e3o foi poss\u00edvel retomar a partida: " +
+                            "a sess\u00e3o online deste dispositivo foi rejeitada.",
+                onPlayClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {
+                    resumeClickCount += 1
+                },
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "N\u00e3o foi poss\u00edvel retomar a partida: " +
+                        "a sess\u00e3o online deste dispositivo foi rejeitada.",
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText("Participa\u00e7\u00e3o online confirmada.")
+            .assertCountEquals(0)
+
+        composeRule
+            .onNodeWithText("Retomar partida online")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule.runOnIdle {
+            assertEquals(0, resumeClickCount)
+        }
     }
 
     @Test

@@ -18,6 +18,7 @@ fun MainMenuScreen(
     pendingOnlineParticipationInspection:
     OnlinePendingParticipationInspectionState,
     pendingOnlineMatchResumeInProgress: Boolean,
+    pendingOnlineMatchResumeFeedbackMessage: String? = null,
     onPlayClick: () -> Unit,
     onInspectPendingOnlineParticipationClick: () -> Unit,
     onResumePendingOnlineMatchClick: () -> Unit,
@@ -40,7 +41,7 @@ fun MainMenuScreen(
     val menuActionInProgress =
         inspectionInProgress || pendingOnlineMatchResumeInProgress
 
-    val inspectionMessage = when (
+    val menuMessage = pendingOnlineMatchResumeFeedbackMessage ?: when (
         val inspection = pendingOnlineParticipationInspection
     ) {
         OnlinePendingParticipationInspectionState.NotRequested -> {
@@ -82,7 +83,7 @@ fun MainMenuScreen(
             textAlign = TextAlign.Center,
         )
 
-        inspectionMessage?.let { message ->
+        menuMessage?.let { message ->
             Text(
                 text = message,
                 color = DominoSemanticColors.primaryTextOnDark

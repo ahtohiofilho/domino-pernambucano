@@ -186,6 +186,10 @@ fun DominoPernambucanoApp(
         mutableStateOf(false)
     }
 
+    var pendingOnlineMatchResumeFeedbackMessage by remember {
+        mutableStateOf<String?>(null)
+    }
+
     when (val state = sessionState) {
         is DominoSessionState.MainMenu -> {
             MainMenuScreen(
@@ -195,6 +199,8 @@ fun DominoPernambucanoApp(
                     state.pendingOnlineParticipationInspection,
                 pendingOnlineMatchResumeInProgress =
                     pendingOnlineMatchResumeInProgress,
+                pendingOnlineMatchResumeFeedbackMessage =
+                    pendingOnlineMatchResumeFeedbackMessage,
                 onPlayClick = {
                     if (
                         !pendingOnlineMatchResumeInProgress &&
@@ -237,6 +243,7 @@ fun DominoPernambucanoApp(
                         hasRecoverableInspection
                     ) {
                         pendingOnlineMatchResumeInProgress = true
+                        pendingOnlineMatchResumeFeedbackMessage = null
 
                         menuCoroutineScope.launch {
                             var createdMatchCoordinator:
@@ -249,6 +256,17 @@ fun DominoPernambucanoApp(
                                             binding =
                                                 pendingParticipation.binding,
                                         )
+
+                                if (
+                                    preparation is
+                                            OnlinePendingParticipationMatchResumePreparation
+                                            .RemoteSessionRejected
+                                ) {
+                                    pendingOnlineMatchResumeFeedbackMessage =
+                                        "N\u00e3o foi poss\u00edvel retomar a partida: " +
+                                                "a sess\u00e3o online deste dispositivo foi rejeitada."
+                                    return@launch
+                                }
 
                                 if (
                                     preparation !is
