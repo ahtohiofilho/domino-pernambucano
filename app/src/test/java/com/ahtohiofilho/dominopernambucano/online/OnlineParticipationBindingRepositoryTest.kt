@@ -110,6 +110,77 @@ class OnlineParticipationBindingRepositoryTest {
     }
 
     @Test
+    fun clear_if_matches_removes_matching_binding() {
+        val binding = OnlineParticipationBinding(
+            roomId = "room-1",
+            matchId = "match-1",
+            playerId = "anonymous-player-1",
+            localSeatIndex = 1,
+        )
+        val store = FakeOnlineParticipationBindingStore(
+            initialBinding = binding,
+        )
+        val repository = OnlineParticipationBindingRepository(
+            store = store,
+        )
+
+        assertEquals(
+            true,
+            repository.clearIfMatches(
+                binding = binding,
+            ),
+        )
+
+        assertNull(
+            store.storedBinding,
+        )
+
+        assertEquals(
+            1,
+            store.clearCallCount,
+        )
+    }
+
+    @Test
+    fun clear_if_matches_preserves_replaced_binding() {
+        val expectedBinding = OnlineParticipationBinding(
+            roomId = "room-1",
+            matchId = "match-1",
+            playerId = "anonymous-player-1",
+            localSeatIndex = 1,
+        )
+        val replacementBinding = OnlineParticipationBinding(
+            roomId = "room-2",
+            matchId = "match-2",
+            playerId = "anonymous-player-1",
+            localSeatIndex = 2,
+        )
+        val store = FakeOnlineParticipationBindingStore(
+            initialBinding = replacementBinding,
+        )
+        val repository = OnlineParticipationBindingRepository(
+            store = store,
+        )
+
+        assertEquals(
+            false,
+            repository.clearIfMatches(
+                binding = expectedBinding,
+            ),
+        )
+
+        assertEquals(
+            replacementBinding,
+            store.storedBinding,
+        )
+
+        assertEquals(
+            0,
+            store.clearCallCount,
+        )
+    }
+
+    @Test
     fun clear_delegates_to_store() {
         val store = FakeOnlineParticipationBindingStore(
             initialBinding = OnlineParticipationBinding(

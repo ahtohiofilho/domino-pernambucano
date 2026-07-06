@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.session
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBinding
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolver
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
@@ -169,9 +170,104 @@ class LocalDominoSessionCoordinator(
                             .Completed(
                                 result = inspection,
                             ),
+                    pendingOnlineParticipationSessionRejection =
+                        inspection.toSessionRejection(
+                            binding = readyParticipation.binding,
+                        ),
                 ),
             )
         }
+    }
+
+    fun recordPendingOnlineParticipationRemoteSessionRejected(
+        binding: OnlineParticipationBinding,
+    ) {
+        val mainMenuState = mutableState.value
+            as? DominoSessionState.MainMenu
+            ?: return
+
+        val readyParticipation = mainMenuState
+            .pendingOnlineParticipation
+            as? OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation
+            ?: return
+
+        if (readyParticipation.binding != binding) {
+            return
+        }
+
+        updateMainMenuState(
+            mainMenuState.copy(
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .RemoteSessionRejected(
+                            binding = binding,
+                        ),
+            ),
+        )
+    }
+
+    fun discardRemoteSessionRejectedPendingOnlineParticipation() {
+        val mainMenuState = mutableState.value
+            as? DominoSessionState.MainMenu
+            ?: return
+
+        val sessionRejection = mainMenuState
+            .pendingOnlineParticipationSessionRejection
+            as? OnlinePendingParticipationSessionRejection
+                .RemoteSessionRejected
+            ?: return
+
+        val readyParticipation = mainMenuState
+            .pendingOnlineParticipation
+            as? OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation
+            ?: return
+
+        if (readyParticipation.binding != sessionRejection.binding) {
+            return
+        }
+
+        val bindingCleared = onlineParticipationBindingRepository
+            ?.clearIfMatches(
+                binding = sessionRejection.binding,
+            ) ?: false
+
+        if (!bindingCleared) {
+            updateMainMenuState(
+                mainMenuState.copy(
+                    pendingOnlineParticipation =
+                        resolvePendingOnlineParticipation(),
+                    pendingOnlineParticipationInspection =
+                        OnlinePendingParticipationInspectionState
+                            .NotRequested,
+                    pendingOnlineParticipationSessionRejection =
+                        OnlinePendingParticipationSessionRejection
+                            .NotRejected,
+                ),
+            )
+            return
+        }
+
+        val anonymousSession = onlineAnonymousSessionRepository
+            ?.getValidSessionOrNull()
+
+        if (anonymousSession?.playerId == sessionRejection.binding.playerId) {
+            onlineAnonymousSessionRepository.clear()
+        }
+
+        updateMainMenuState(
+            mainMenuState.copy(
+                pendingOnlineParticipation =
+                    resolvePendingOnlineParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState
+                        .NotRequested,
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .NotRejected,
+            ),
+        )
     }
 
     private fun resolvePendingOnlineParticipation():
@@ -200,6 +296,22 @@ class LocalDominoSessionCoordinator(
         if (state is DominoSessionState.OnlineMatch) {
             state.matchCoordinator.dispose()
         }
+    }
+}
+
+private fun OnlinePendingParticipationRemoteInspection
+        .toSessionRejection(
+    binding: OnlineParticipationBinding,
+): OnlinePendingParticipationSessionRejection {
+    return when (this) {
+        OnlinePendingParticipationRemoteInspection.RemoteSessionRejected -> {
+            OnlinePendingParticipationSessionRejection
+                .RemoteSessionRejected(
+                    binding = binding,
+                )
+        }
+
+        else -> OnlinePendingParticipationSessionRejection.NotRejected
     }
 }
 

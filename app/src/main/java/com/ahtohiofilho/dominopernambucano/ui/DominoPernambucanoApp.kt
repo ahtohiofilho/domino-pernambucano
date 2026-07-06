@@ -31,6 +31,7 @@ import com.ahtohiofilho.dominopernambucano.session.DominoSessionCommand
 import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
 import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
+import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
 import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.PlayModeScreen
@@ -197,6 +198,8 @@ fun DominoPernambucanoApp(
                     state.pendingOnlineParticipation,
                 pendingOnlineParticipationInspection =
                     state.pendingOnlineParticipationInspection,
+                pendingOnlineParticipationSessionRejection =
+                    state.pendingOnlineParticipationSessionRejection,
                 pendingOnlineMatchResumeInProgress =
                     pendingOnlineMatchResumeInProgress,
                 pendingOnlineMatchResumeFeedbackMessage =
@@ -221,6 +224,12 @@ fun DominoPernambucanoApp(
                         }
                     }
                 },
+                onDiscardRejectedPendingOnlineParticipationClick = {
+                    pendingOnlineMatchResumeFeedbackMessage = null
+
+                    sessionCoordinator
+                        .discardRemoteSessionRejectedPendingOnlineParticipation()
+                },
                 onResumePendingOnlineMatchClick = {
                     val pendingParticipation =
                         state.pendingOnlineParticipation
@@ -235,12 +244,18 @@ fun DominoPernambucanoApp(
                                 OnlinePendingParticipationRemoteInspection
                                 .Recoverable
 
+                    val hasRemoteSessionRejection =
+                        state.pendingOnlineParticipationSessionRejection is
+                                OnlinePendingParticipationSessionRejection
+                                .RemoteSessionRejected
+
                     if (
                         !pendingOnlineMatchResumeInProgress &&
                         pendingParticipation is
                                 OnlinePendingParticipationLocalResolution
                                 .ReadyForRemoteReconciliation &&
-                        hasRecoverableInspection
+                        hasRecoverableInspection &&
+                        !hasRemoteSessionRejection
                     ) {
                         pendingOnlineMatchResumeInProgress = true
                         pendingOnlineMatchResumeFeedbackMessage = null
@@ -262,6 +277,12 @@ fun DominoPernambucanoApp(
                                             OnlinePendingParticipationMatchResumePreparation
                                             .RemoteSessionRejected
                                 ) {
+                                    sessionCoordinator
+                                        .recordPendingOnlineParticipationRemoteSessionRejected(
+                                            binding =
+                                                pendingParticipation.binding,
+                                        )
+
                                     pendingOnlineMatchResumeFeedbackMessage =
                                         "N\u00e3o foi poss\u00edvel retomar a partida: " +
                                                 "a sess\u00e3o online deste dispositivo foi rejeitada."

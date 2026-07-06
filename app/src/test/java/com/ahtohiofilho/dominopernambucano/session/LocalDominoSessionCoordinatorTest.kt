@@ -446,6 +446,233 @@ class LocalDominoSessionCoordinatorTest {
         )
     }
 
+    @Test
+    fun inspect_remote_session_rejected_preserves_data_until_explicit_discard() {
+        val binding = createBinding()
+        val bindingStore = TestOnlineParticipationBindingStore(
+            initialBinding = binding,
+        )
+        val anonymousSessionStore = TestOnlineAnonymousSessionStore(
+            initialSession = OnlineAnonymousSessionDto(
+                playerId = binding.playerId,
+                accessToken = "test-access-token",
+                expiresAtEpochMillis = Long.MAX_VALUE,
+            ),
+        )
+        val onlineRoomRepository =
+            TestPendingParticipationOnlineRoomRepository(
+                inspectionResult =
+                    OnlinePendingParticipationRemoteInspection
+                        .RemoteSessionRejected,
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = bindingStore,
+                ),
+            onlineAnonymousSessionRepository =
+                OnlineAnonymousSessionRepository(
+                    store = anonymousSessionStore,
+                ),
+            onlineRoomRepository = onlineRoomRepository,
+        )
+
+        runBlocking {
+            coordinator.inspectPendingOnlineParticipation()
+        }
+
+        assertEquals(
+            DominoSessionState.MainMenu(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .ReadyForRemoteReconciliation(
+                            binding = binding,
+                        ),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState
+                        .Completed(
+                            result =
+                                OnlinePendingParticipationRemoteInspection
+                                    .RemoteSessionRejected,
+                        ),
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .RemoteSessionRejected(
+                            binding = binding,
+                        ),
+            ),
+            coordinator.currentState,
+        )
+        assertEquals(
+            binding,
+            bindingStore.storedBinding,
+        )
+        assertEquals(
+            binding.playerId,
+            anonymousSessionStore.storedSession?.playerId,
+        )
+        assertEquals(
+            0,
+            bindingStore.clearCallCount,
+        )
+        assertEquals(
+            0,
+            anonymousSessionStore.clearCallCount,
+        )
+
+        coordinator.discardRemoteSessionRejectedPendingOnlineParticipation()
+
+        assertEquals(
+            DominoSessionState.MainMenu(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
+            ),
+            coordinator.currentState,
+        )
+        assertNull(
+            bindingStore.storedBinding,
+        )
+        assertNull(
+            anonymousSessionStore.storedSession,
+        )
+        assertEquals(
+            1,
+            bindingStore.clearCallCount,
+        )
+        assertEquals(
+            1,
+            anonymousSessionStore.clearCallCount,
+        )
+        assertEquals(
+            listOf(binding),
+            onlineRoomRepository.inspectedBindings,
+        )
+    }
+
+    @Test
+    fun discard_remote_session_rejected_participation_is_no_op_outside_rejection_state() {
+        val binding = createBinding()
+        val bindingStore = TestOnlineParticipationBindingStore(
+            initialBinding = binding,
+        )
+        val anonymousSessionStore = TestOnlineAnonymousSessionStore(
+            initialSession = OnlineAnonymousSessionDto(
+                playerId = binding.playerId,
+                accessToken = "test-access-token",
+                expiresAtEpochMillis = Long.MAX_VALUE,
+            ),
+        )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = bindingStore,
+                ),
+            onlineAnonymousSessionRepository =
+                OnlineAnonymousSessionRepository(
+                    store = anonymousSessionStore,
+                ),
+        )
+
+        coordinator.discardRemoteSessionRejectedPendingOnlineParticipation()
+
+        assertEquals(
+            DominoSessionState.MainMenu(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .ReadyForRemoteReconciliation(
+                            binding = binding,
+                        ),
+            ),
+            coordinator.currentState,
+        )
+        assertEquals(
+            binding,
+            bindingStore.storedBinding,
+        )
+        assertEquals(
+            binding.playerId,
+            anonymousSessionStore.storedSession?.playerId,
+        )
+        assertEquals(
+            0,
+            bindingStore.clearCallCount,
+        )
+        assertEquals(
+            0,
+            anonymousSessionStore.clearCallCount,
+        )
+    }
+
+    @Test
+    fun discard_remote_session_rejected_participation_preserves_replaced_binding_and_session() {
+        val rejectedBinding = createBinding()
+        val replacementBinding = OnlineParticipationBinding(
+            roomId = "room-2",
+            matchId = "match-2",
+            playerId = rejectedBinding.playerId,
+            localSeatIndex = 1,
+        )
+        val bindingStore = TestOnlineParticipationBindingStore(
+            initialBinding = rejectedBinding,
+        )
+        val anonymousSessionStore = TestOnlineAnonymousSessionStore(
+            initialSession = OnlineAnonymousSessionDto(
+                playerId = rejectedBinding.playerId,
+                accessToken = "test-access-token",
+                expiresAtEpochMillis = Long.MAX_VALUE,
+            ),
+        )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = bindingStore,
+                ),
+            onlineAnonymousSessionRepository =
+                OnlineAnonymousSessionRepository(
+                    store = anonymousSessionStore,
+                ),
+        )
+
+        coordinator
+            .recordPendingOnlineParticipationRemoteSessionRejected(
+                binding = rejectedBinding,
+            )
+
+        bindingStore.write(
+            binding = replacementBinding,
+        )
+
+        coordinator.discardRemoteSessionRejectedPendingOnlineParticipation()
+
+        assertEquals(
+            replacementBinding,
+            bindingStore.storedBinding,
+        )
+        assertEquals(
+            rejectedBinding.playerId,
+            anonymousSessionStore.storedSession?.playerId,
+        )
+        assertEquals(
+            0,
+            bindingStore.clearCallCount,
+        )
+        assertEquals(
+            0,
+            anonymousSessionStore.clearCallCount,
+        )
+        assertEquals(
+            DominoSessionState.MainMenu(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .ReadyForRemoteReconciliation(
+                            binding = replacementBinding,
+                        ),
+            ),
+            coordinator.currentState,
+        )
+    }
+
     private fun createReadyCoordinator(
         binding: OnlineParticipationBinding,
         store: TestOnlineParticipationBindingStore,
@@ -538,7 +765,11 @@ private class TestOnlineParticipationBindingStore(
 private class TestOnlineAnonymousSessionStore(
     initialSession: OnlineAnonymousSessionDto? = null,
 ) : OnlineAnonymousSessionStore {
-    private var storedSession: OnlineAnonymousSessionDto? = initialSession
+    var storedSession: OnlineAnonymousSessionDto? = initialSession
+        private set
+
+    var clearCallCount: Int = 0
+        private set
 
     override fun read(): OnlineAnonymousSessionDto? {
         return storedSession
@@ -552,6 +783,7 @@ private class TestOnlineAnonymousSessionStore(
 
     override fun clear() {
         storedSession = null
+        clearCallCount += 1
     }
 }
 

@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
+import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
 @Composable
@@ -17,15 +18,31 @@ fun MainMenuScreen(
     OnlinePendingParticipationLocalResolution,
     pendingOnlineParticipationInspection:
     OnlinePendingParticipationInspectionState,
+    pendingOnlineParticipationSessionRejection:
+    OnlinePendingParticipationSessionRejection =
+        OnlinePendingParticipationSessionRejection.NotRejected,
     pendingOnlineMatchResumeInProgress: Boolean,
     pendingOnlineMatchResumeFeedbackMessage: String? = null,
     onPlayClick: () -> Unit,
     onInspectPendingOnlineParticipationClick: () -> Unit,
+    onDiscardRejectedPendingOnlineParticipationClick: () -> Unit = {},
     onResumePendingOnlineMatchClick: () -> Unit,
 ) {
     val inspectionInProgress =
         pendingOnlineParticipationInspection is
                 OnlinePendingParticipationInspectionState.InProgress
+
+    val rejectedBinding = (
+            pendingOnlineParticipationSessionRejection as?
+                    OnlinePendingParticipationSessionRejection
+                    .RemoteSessionRejected
+            )?.binding
+
+    val discardRejectedPendingOnlineParticipationAvailable =
+        pendingOnlineParticipation is
+                OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation &&
+                pendingOnlineParticipation.binding == rejectedBinding
 
     val resumePendingOnlineMatchAvailable =
         pendingOnlineParticipation is
@@ -36,7 +53,8 @@ fun MainMenuScreen(
                                 as? OnlinePendingParticipationInspectionState
                         .Completed
                         )?.result is OnlinePendingParticipationRemoteInspection
-                .Recoverable
+                .Recoverable &&
+                !discardRejectedPendingOnlineParticipationAvailable
 
     val menuActionInProgress =
         inspectionInProgress || pendingOnlineMatchResumeInProgress
@@ -118,6 +136,16 @@ fun MainMenuScreen(
                     "Retomar partida online"
                 },
                 onClick = onResumePendingOnlineMatchClick,
+                enabled = !menuActionInProgress,
+            )
+        }
+
+        if (discardRejectedPendingOnlineParticipationAvailable) {
+            SecondaryMenuButton(
+                text =
+                    "Remover participa\u00e7\u00e3o online rejeitada",
+                onClick =
+                    onDiscardRejectedPendingOnlineParticipationClick,
                 enabled = !menuActionInProgress,
             )
         }

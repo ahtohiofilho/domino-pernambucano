@@ -12,6 +12,10 @@ sealed interface DominoSessionState {
             OnlinePendingParticipationInspectionState =
                 OnlinePendingParticipationInspectionState
                     .NotRequested,
+        val pendingOnlineParticipationSessionRejection:
+            OnlinePendingParticipationSessionRejection =
+                OnlinePendingParticipationSessionRejection
+                    .NotRejected,
     ) : DominoSessionState {
         val hasPendingOnlineParticipation: Boolean
             get() = when (pendingOnlineParticipation) {

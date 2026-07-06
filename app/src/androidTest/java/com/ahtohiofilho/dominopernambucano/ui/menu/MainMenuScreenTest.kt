@@ -17,6 +17,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
+import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -74,23 +75,29 @@ class MainMenuScreenTest {
     }
 
     @Test
-    fun remote_session_rejected_feedback_overrides_confirmation_and_keeps_resume_available() {
-        var resumeClickCount = 0
+    fun remote_session_rejected_resume_feedback_hides_resume_and_shows_explicit_discard() {
+        var discardClickCount = 0
 
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation = readyParticipation(),
                 pendingOnlineParticipationInspection =
                     recoverableInspection(),
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .RemoteSessionRejected(
+                            binding = readyBinding(),
+                        ),
                 pendingOnlineMatchResumeInProgress = false,
                 pendingOnlineMatchResumeFeedbackMessage =
                     "N\u00e3o foi poss\u00edvel retomar a partida: " +
                             "a sess\u00e3o online deste dispositivo foi rejeitada.",
                 onPlayClick = {},
                 onInspectPendingOnlineParticipationClick = {},
-                onResumePendingOnlineMatchClick = {
-                    resumeClickCount += 1
+                onDiscardRejectedPendingOnlineParticipationClick = {
+                    discardClickCount += 1
                 },
+                onResumePendingOnlineMatchClick = {},
             )
         }
 
@@ -106,12 +113,19 @@ class MainMenuScreenTest {
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText("Retomar partida online")
+            .onAllNodesWithText("Retomar partida online")
+            .assertCountEquals(0)
+
+        composeRule
+            .onNodeWithText(
+                "Remover participa\u00e7\u00e3o online rejeitada",
+            )
             .assertIsDisplayed()
             .assertIsEnabled()
+            .performClick()
 
         composeRule.runOnIdle {
-            assertEquals(0, resumeClickCount)
+            assertEquals(1, discardClickCount)
         }
     }
 
@@ -147,6 +161,48 @@ class MainMenuScreenTest {
         composeRule
             .onAllNodesWithText("Retomar partida online")
             .assertCountEquals(0)
+
+        composeRule
+            .onNodeWithText("Verificar participa\u00e7\u00e3o online")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+    }
+
+    @Test
+    fun rejected_binding_shows_explicit_discard_only_when_it_matches_pending_participation() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.Completed(
+                        result =
+                            OnlinePendingParticipationRemoteInspection
+                                .RemoteSessionRejected,
+                    ),
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .RemoteSessionRejected(
+                            binding = readyBinding(),
+                        ),
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onDiscardRejectedPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "Remover participa\u00e7\u00e3o online rejeitada",
+            )
+            .assertIsDisplayed()
+            .assertIsEnabled()
 
         composeRule
             .onNodeWithText("Verificar participa\u00e7\u00e3o online")
@@ -255,13 +311,17 @@ class MainMenuScreenTest {
         OnlinePendingParticipationLocalResolution {
         return OnlinePendingParticipationLocalResolution
             .ReadyForRemoteReconciliation(
-                binding = OnlineParticipationBinding(
-                    roomId = "room-1",
-                    matchId = "match-1",
-                    playerId = "player-1",
-                    localSeatIndex = 0,
-                ),
+                binding = readyBinding(),
             )
+    }
+
+    private fun readyBinding(): OnlineParticipationBinding {
+        return OnlineParticipationBinding(
+            roomId = "room-1",
+            matchId = "match-1",
+            playerId = "player-1",
+            localSeatIndex = 0,
+        )
     }
 
     private fun recoverableInspection():
