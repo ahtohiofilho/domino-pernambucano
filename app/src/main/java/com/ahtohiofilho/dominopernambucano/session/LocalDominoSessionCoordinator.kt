@@ -207,6 +207,50 @@ class LocalDominoSessionCoordinator(
         )
     }
 
+    /*
+     * A remote confirmation is valid only while the persisted binding and
+     * the local anonymous session still describe the same participant.
+     * A later local block invalidates the confirmation without clearing
+     * the binding or creating a replacement session.
+     */
+    fun invalidatePendingOnlineParticipationRemoteConfirmation(
+        binding: OnlineParticipationBinding,
+    ) {
+        val mainMenuState = mutableState.value
+            as? DominoSessionState.MainMenu
+            ?: return
+
+        val readyParticipation = mainMenuState
+            .pendingOnlineParticipation
+            as? OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation
+            ?: return
+
+        if (readyParticipation.binding != binding) {
+            return
+        }
+
+        val persistedBinding = onlineParticipationBindingRepository
+            ?.getValidBindingOrNull()
+
+        if (persistedBinding != binding) {
+            return
+        }
+
+        updateMainMenuState(
+            mainMenuState.copy(
+                pendingOnlineParticipation =
+                    resolvePendingOnlineParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState
+                        .NotRequested,
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .NotRejected,
+            ),
+        )
+    }
+
     fun discardRemoteSessionRejectedPendingOnlineParticipation() {
         val mainMenuState = mutableState.value
             as? DominoSessionState.MainMenu

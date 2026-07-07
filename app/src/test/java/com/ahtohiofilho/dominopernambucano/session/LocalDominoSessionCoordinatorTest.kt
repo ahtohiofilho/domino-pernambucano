@@ -200,6 +200,95 @@ class LocalDominoSessionCoordinatorTest {
     }
 
     @Test
+    fun invalidating_completed_recoverable_inspection_after_local_session_disappears_preserves_binding_without_reinspecting() {
+        val binding = createBinding()
+        val bindingStore = TestOnlineParticipationBindingStore(
+            initialBinding = binding,
+        )
+        val bindingRepository = OnlineParticipationBindingRepository(
+            store = bindingStore,
+        )
+        val anonymousSessionStore = TestOnlineAnonymousSessionStore(
+            initialSession = OnlineAnonymousSessionDto(
+                playerId = binding.playerId,
+                accessToken = "test-access-token",
+                expiresAtEpochMillis = Long.MAX_VALUE,
+            ),
+        )
+        val inspection = OnlinePendingParticipationRemoteInspection
+            .Recoverable(
+                roomSnapshot = createRoomSnapshot(
+                    binding = binding,
+                ),
+            )
+        val onlineRoomRepository =
+            TestPendingParticipationOnlineRoomRepository(
+                inspectionResult = inspection,
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineAnonymousSessionRepository =
+                OnlineAnonymousSessionRepository(
+                    store = anonymousSessionStore,
+                    nowEpochMillis = { 0L },
+                ),
+            onlineRoomRepository = onlineRoomRepository,
+        )
+
+        runBlocking {
+            coordinator.inspectPendingOnlineParticipation()
+        }
+
+        val inspectedMainMenu = coordinator.currentState
+            as DominoSessionState.MainMenu
+
+        assertEquals(
+            OnlinePendingParticipationInspectionState.Completed(
+                result = inspection,
+            ),
+            inspectedMainMenu.pendingOnlineParticipationInspection,
+        )
+        assertEquals(
+            listOf(binding),
+            onlineRoomRepository.inspectedBindings,
+        )
+
+        anonymousSessionStore.clear()
+
+        coordinator.invalidatePendingOnlineParticipationRemoteConfirmation(
+            binding = binding,
+        )
+
+        val invalidatedMainMenu = coordinator.currentState
+            as DominoSessionState.MainMenu
+
+        assertEquals(
+            OnlinePendingParticipationLocalResolution
+                .BlockedByMissingValidAnonymousSession(
+                    binding = binding,
+                ),
+            invalidatedMainMenu.pendingOnlineParticipation,
+        )
+        assertEquals(
+            OnlinePendingParticipationInspectionState.NotRequested,
+            invalidatedMainMenu.pendingOnlineParticipationInspection,
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection.NotRejected,
+            invalidatedMainMenu.pendingOnlineParticipationSessionRejection,
+        )
+        assertEquals(
+            binding,
+            bindingRepository.getValidBindingOrNull(),
+        )
+        assertEquals(
+            listOf(binding),
+            onlineRoomRepository.inspectedBindings,
+        )
+    }
+
+    @Test
     fun inspect_pending_online_participation_clears_matching_binding_when_remote_result_is_no_longer_recoverable() {
         val binding = createBinding()
         val store = TestOnlineParticipationBindingStore(

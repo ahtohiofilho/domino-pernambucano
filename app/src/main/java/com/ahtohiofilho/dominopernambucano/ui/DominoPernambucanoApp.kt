@@ -290,6 +290,19 @@ fun DominoPernambucanoApp(
                                 }
 
                                 if (
+                                    preparation is
+                                            OnlinePendingParticipationMatchResumePreparation
+                                            .NotAttempted
+                                ) {
+                                    sessionCoordinator
+                                        .invalidatePendingOnlineParticipationRemoteConfirmation(
+                                            binding =
+                                                pendingParticipation.binding,
+                                        )
+                                    return@launch
+                                }
+
+                                if (
                                     preparation !is
                                             OnlinePendingParticipationMatchResumePreparation
                                             .Ready
@@ -320,6 +333,18 @@ fun DominoPernambucanoApp(
                                         .activatePendingParticipationMatchResume(
                                             preparation = preparation,
                                         )
+
+                                if (
+                                    activation is
+                                            OnlinePendingParticipationMatchResumeActivation
+                                            .NotAttempted
+                                ) {
+                                    sessionCoordinator
+                                        .invalidatePendingOnlineParticipationRemoteConfirmation(
+                                            binding = preparation.binding,
+                                        )
+                                    return@launch
+                                }
 
                                 if (
                                     activation !is
