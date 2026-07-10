@@ -151,11 +151,13 @@ fun OnlineCreateRoomRoute(
         roomSnapshot = roomSnapshot,
         matchRevision = matchSnapshot?.revision,
         feedbackMessage = feedbackMessage,
+        isFakeBackend = debugOptions.allowDemoRoomCreation,
         allowFakePlayerCompletion = debugOptions.allowFakePlayerCompletion,
         onCompleteWithFakePlayersClick = {
             if (!debugOptions.allowFakePlayerCompletion) {
                 feedbackMessage =
-                    "Completar mesa com fakes está desabilitado neste ambiente."
+                    "Completar a mesa com jogadores controlados pelo aplicativo " +
+                            "está desabilitado neste ambiente."
                 return@OnlineLobbyScreen
             }
 
@@ -216,6 +218,7 @@ private fun OnlineLobbyScreen(
     roomSnapshot: OnlineRoomSnapshotDto?,
     matchRevision: Long?,
     feedbackMessage: String?,
+    isFakeBackend: Boolean,
     allowFakePlayerCompletion: Boolean,
     onCompleteWithFakePlayersClick: () -> Unit,
     onBackClick: () -> Unit,
@@ -230,7 +233,24 @@ private fun OnlineLobbyScreen(
         )
 
         Text(
-            text = "Lobby fake em memória para validar criação de sala, entrada de jogadores e abertura automática da partida.",
+            text = when {
+                isFakeBackend -> {
+                    "Ambiente local de desenvolvimento para validar criação " +
+                            "de sala, entrada de jogadores e abertura " +
+                            "automática da partida."
+                }
+
+                allowFakePlayerCompletion -> {
+                    "Sala conectada ao backend online remoto. Você pode " +
+                            "aguardar outros jogadores ou completar a mesa " +
+                            "com jogadores controlados pelo aplicativo."
+                }
+
+                else -> {
+                    "Sala conectada ao backend online remoto. Aguarde os " +
+                            "demais jogadores para iniciar a partida."
+                }
+            },
             color = DominoSemanticColors.primaryTextOnDark.copy(
                 alpha = 0.78f,
             ),
@@ -273,7 +293,7 @@ private fun OnlineLobbyScreen(
                 allowFakePlayerCompletion
             ) {
                 PrimaryMenuButton(
-                    text = "Completar mesa com fakes",
+                    text = "Completar mesa com jogadores do aplicativo",
                     onClick = onCompleteWithFakePlayersClick,
                 )
             } else if (

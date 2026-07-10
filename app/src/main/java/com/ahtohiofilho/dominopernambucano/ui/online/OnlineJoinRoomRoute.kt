@@ -228,7 +228,8 @@ fun OnlineJoinRoomRoute(
         onCompleteWithFakePlayersClick = {
             if (!debugOptions.allowFakePlayerCompletion) {
                 feedbackMessage =
-                    "Completar mesa com fakes está desabilitado neste ambiente."
+                    "Completar a mesa com jogadores controlados pelo aplicativo " +
+                            "está desabilitado neste ambiente."
                 return@OnlineJoinRoomScreen
             }
 
@@ -316,7 +317,8 @@ private fun OnlineJoinRoomScreen(
         Text(
             text = if (hasJoinedRoom) {
                 if (allowFakePlayerCompletion) {
-                    "Você entrou na sala. Complete a mesa com jogadores fake para validar o fluxo ponta a ponta."
+                    "Você entrou na sala. Complete a mesa com jogadores controlados " +
+                            "pelo aplicativo para validar o fluxo ponta a ponta."
                 } else {
                     "Você entrou na sala. Aguarde os demais jogadores para iniciar a partida."
                 }
@@ -369,7 +371,7 @@ private fun OnlineJoinRoomScreen(
                     allowFakePlayerCompletion
                 ) {
                     PrimaryMenuButton(
-                        text = "Completar mesa com fakes",
+                        text = "Completar mesa com jogadores do aplicativo",
                         onClick = onCompleteWithFakePlayersClick,
                     )
                 } else if (
@@ -398,6 +400,7 @@ private fun OnlineJoinRoomScreen(
         } else {
             JoinRoomFormCard(
                 roomCodeInput = roomCodeInput,
+                isFakeBackend = allowDemoRoomCreation,
                 onRoomCodeChange = onRoomCodeChange,
             )
 
@@ -430,6 +433,7 @@ private fun OnlineJoinRoomScreen(
 @Composable
 private fun JoinRoomFormCard(
     roomCodeInput: String,
+    isFakeBackend: Boolean,
     onRoomCodeChange: (String) -> Unit,
 ) {
     Card(
@@ -491,7 +495,13 @@ private fun JoinRoomFormCard(
             )
 
             Text(
-                text = "No fake repository, a sala precisa existir nesta execução do app. Use a sala fake de teste para validar o caminho.",
+                text = if (isFakeBackend) {
+                    "No ambiente local, a sala precisa existir nesta " +
+                            "execução do aplicativo. Use a sala de teste " +
+                            "para validar o caminho."
+                } else {
+                    "Use o código compartilhado pelo criador da sala online."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = DominoSemanticColors.primaryTextOnLight.copy(
                     alpha = 0.64f,
