@@ -14,8 +14,6 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.charset.StandardCharsets
 
-private const val MAX_TRACE_BATCH_ENTRIES = 256
-
 /*
  * Arquivo de evidência por partida. Cada evento é persistido assim que chega;
  * após o primeiro snapshot em MATCH_FINISHED, os arquivos de resumo passam a
@@ -28,6 +26,8 @@ class OnlineTraceArchive(
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
+    private val ingestionPolicy: OnlineTraceIngestionPolicy =
+        OnlineTraceIngestionPolicy.Default,
     private val json: Json = Json {
         encodeDefaults = true
     },
@@ -67,21 +67,14 @@ class OnlineTraceArchive(
     fun recordClientBatch(
         batch: OnlineTraceBatchDto,
     ): OnlineTraceBatchResultDto {
-        if (batch.entries.size > MAX_TRACE_BATCH_ENTRIES) {
+        val rejectionReason = ingestionPolicy.rejectionReasonOrNull(
+            batch = batch,
+        )
+
+        if (rejectionReason != null) {
             return OnlineTraceBatchResultDto(
                 accepted = false,
-                reason = "Lote de rastreamento excede $MAX_TRACE_BATCH_ENTRIES eventos.",
-            )
-        }
-
-        val invalidEntry = batch.entries.firstOrNull { entry ->
-            !entry.isValidClientTraceEntry()
-        }
-
-        if (invalidEntry != null) {
-            return OnlineTraceBatchResultDto(
-                accepted = false,
-                reason = "Evento de rastreamento do cliente inválido.",
+                reason = rejectionReason,
             )
         }
 
@@ -110,21 +103,6 @@ class OnlineTraceArchive(
             accepted = true,
             storedEntryCount = storedEntryCount,
         )
-    }
-
-    private fun OnlineTraceEntry.isValidClientTraceEntry(): Boolean {
-        val source = event.source
-        val isClientSource = source == OnlineTraceSource.CLIENT_UI ||
-                source == OnlineTraceSource.CLIENT_COORDINATOR ||
-                source == OnlineTraceSource.CLIENT_REPOSITORY
-
-        return sequence > 0L &&
-                isClientSource &&
-                !event.context.clientSessionId.isNullOrBlank() &&
-                (
-                    !event.context.roomId.isNullOrBlank() ||
-                            !event.context.matchId.isNullOrBlank()
-                    )
     }
 
     private fun OnlineTraceEntry.clientDeduplicationKey(): String {

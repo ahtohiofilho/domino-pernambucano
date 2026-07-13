@@ -8,6 +8,7 @@ import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.bodylimit.RequestBodyLimit
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
@@ -45,7 +46,10 @@ fun main() {
 
 fun Application.module() {
     val serverEnvironment = resolveOnlineServerEnvironment()
-    val traceArchive = OnlineTraceArchive()
+    val traceIngestionPolicy = OnlineTraceIngestionPolicy.Default
+    val traceArchive = OnlineTraceArchive(
+        ingestionPolicy = traceIngestionPolicy,
+    )
     val traceLogger = OnlineTraceLogger(
         sink = traceArchive,
     )
@@ -59,6 +63,7 @@ fun Application.module() {
             traceLogger = traceLogger,
         ),
         serverEnvironment = serverEnvironment,
+        traceIngestionPolicy = traceIngestionPolicy,
         traceArchive = traceArchive,
     )
 }
@@ -66,7 +71,11 @@ fun Application.module() {
 fun Application.module(
     store: InMemoryOnlineServerStore,
     serverEnvironment: OnlineServerEnvironment,
-    traceArchive: OnlineTraceArchive = OnlineTraceArchive(),
+    traceIngestionPolicy: OnlineTraceIngestionPolicy =
+        OnlineTraceIngestionPolicy.Default,
+    traceArchive: OnlineTraceArchive = OnlineTraceArchive(
+        ingestionPolicy = traceIngestionPolicy,
+    ),
     sessionTokenService: OnlineSessionTokenService =
         createDefaultOnlineSessionTokenService(
             serverEnvironment = serverEnvironment,
@@ -80,6 +89,12 @@ fun Application.module(
     installAuthoritativeMatchTicker(
         store = store,
     )
+
+    install(RequestBodyLimit) {
+        bodyLimit {
+            traceIngestionPolicy.maxRequestBodyBytes
+        }
+    }
 
     install(ContentNegotiation) {
         json(

@@ -2,7 +2,7 @@ package com.ahtohiofilho.dominopernambucano.online.observability
 
 import kotlinx.serialization.Serializable
 
-private const val ONLINE_TRACE_SCHEMA_VERSION = 1
+const val ONLINE_TRACE_SCHEMA_VERSION = 1
 
 @Serializable
 enum class OnlineTraceLevel {
