@@ -1,12 +1,20 @@
 package com.ahtohiofilho.dominopernambucano.online
 
 import com.ahtohiofilho.dominopernambucano.BuildConfig
+import java.net.URI
 
 private const val ONLINE_BACKEND_MODE_FAKE = "fake"
 private const val ONLINE_BACKEND_MODE_REMOTE = "remote"
 
 private const val DEFAULT_LOCAL_REMOTE_BACKEND_BASE_URL =
     "http://10.0.2.2:8080"
+
+private val DEVELOPMENT_ONLY_REMOTE_BACKEND_HOSTS = setOf(
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "10.0.2.2",
+)
 
 data class OnlineAppConfig(
     val backendConfig: OnlineBackendConfig,
@@ -32,6 +40,7 @@ data class OnlineAppConfig(
         fun fromBuildConfig(
             backendMode: String,
             backendBaseUrl: String,
+            allowDevelopmentBackends: Boolean,
         ): OnlineAppConfig {
             val normalizedMode = backendMode
                 .trim()
@@ -39,21 +48,71 @@ data class OnlineAppConfig(
 
             return when (normalizedMode) {
                 ONLINE_BACKEND_MODE_REMOTE -> {
-                    val resolvedBaseUrl = backendBaseUrl
-                        .trim()
-                        .ifBlank {
-                            DEFAULT_LOCAL_REMOTE_BACKEND_BASE_URL
-                        }
-
                     remote(
-                        baseUrl = resolvedBaseUrl,
+                        baseUrl = resolveRemoteBackendBaseUrl(
+                            backendBaseUrl = backendBaseUrl,
+                            allowDevelopmentBackends =
+                                allowDevelopmentBackends,
+                        ),
                     )
                 }
 
-                ONLINE_BACKEND_MODE_FAKE -> Fake
+                ONLINE_BACKEND_MODE_FAKE -> {
+                    check(allowDevelopmentBackends) {
+                        "Backend online fake não é permitido em produção."
+                    }
 
-                else -> Fake
+                    Fake
+                }
+
+                else -> throw IllegalArgumentException(
+                    "Modo de backend online inválido: '$backendMode'.",
+                )
             }
+        }
+
+        private fun resolveRemoteBackendBaseUrl(
+            backendBaseUrl: String,
+            allowDevelopmentBackends: Boolean,
+        ): String {
+            val normalizedBaseUrl = backendBaseUrl.trim()
+
+            if (allowDevelopmentBackends) {
+                return normalizedBaseUrl.ifBlank {
+                    DEFAULT_LOCAL_REMOTE_BACKEND_BASE_URL
+                }
+            }
+
+            check(normalizedBaseUrl.isNotBlank()) {
+                "A URL do backend online é obrigatória em produção."
+            }
+
+            val parsedBaseUrl = try {
+                URI(normalizedBaseUrl)
+            } catch (cause: Exception) {
+                throw IllegalArgumentException(
+                    "A URL do backend online é inválida.",
+                    cause,
+                )
+            }
+
+            require(parsedBaseUrl.scheme.equals("https", ignoreCase = true)) {
+                "O backend online de produção deve usar HTTPS."
+            }
+
+            val normalizedHost = parsedBaseUrl.host
+                ?.trim()
+                ?.lowercase()
+
+            require(!normalizedHost.isNullOrBlank()) {
+                "A URL do backend online de produção deve informar um host."
+            }
+
+            require(normalizedHost !in DEVELOPMENT_ONLY_REMOTE_BACKEND_HOSTS) {
+                "Host de desenvolvimento não é permitido em produção."
+            }
+
+            return normalizedBaseUrl
         }
     }
 }
@@ -61,10 +120,10 @@ data class OnlineAppConfig(
 object OnlineAppEnvironment {
     /*
      * Ambiente online padrão:
-     * - fake por default
-     * - remoto local apenas quando ativado via Gradle
+     * - builds de desenvolvimento permitem fake e backend local
+     * - builds de produção exigem backend remoto HTTPS explícito
      *
-     * Build padrão:
+     * Build de desenvolvimento padrão:
      * ./gradlew assembleDebug
      *
      * Build apontando para backend local no emulador Android:
@@ -80,5 +139,6 @@ object OnlineAppEnvironment {
         OnlineAppConfig.fromBuildConfig(
             backendMode = BuildConfig.ONLINE_BACKEND_MODE,
             backendBaseUrl = BuildConfig.ONLINE_BACKEND_BASE_URL,
+            allowDevelopmentBackends = BuildConfig.DEBUG,
         )
 }
