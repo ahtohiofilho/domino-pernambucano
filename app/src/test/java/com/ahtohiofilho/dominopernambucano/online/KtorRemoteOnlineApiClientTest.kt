@@ -409,6 +409,8 @@ class KtorRemoteOnlineApiClientTest {
     fun submit_trace_batch_posts_to_traces_and_decodes_result() =
         runBlocking {
             val recordedRequests = mutableListOf<RecordedRequest>()
+            val recordedDevelopmentPlayerIds = mutableListOf<String?>()
+            val recordedAuthorizationHeaders = mutableListOf<String?>()
 
             val apiClient = createApiClient(
                 responsesByPath = mapOf(
@@ -420,6 +422,14 @@ class KtorRemoteOnlineApiClientTest {
                     """.trimIndent(),
                 ),
                 recordedRequests = recordedRequests,
+                recordedDevelopmentPlayerIds =
+                    recordedDevelopmentPlayerIds,
+                recordedAuthorizationHeaders =
+                    recordedAuthorizationHeaders,
+            )
+
+            apiClient.setBearerAccessToken(
+                accessToken = "trace-access-token",
             )
 
             val result = apiClient.submitTraceBatch(
@@ -458,6 +468,14 @@ class KtorRemoteOnlineApiClientTest {
                     ),
                 ),
                 recordedRequests,
+            )
+            assertEquals(
+                listOf("Bearer trace-access-token"),
+                recordedAuthorizationHeaders,
+            )
+            assertEquals(
+                listOf(null),
+                recordedDevelopmentPlayerIds,
             )
         }
 

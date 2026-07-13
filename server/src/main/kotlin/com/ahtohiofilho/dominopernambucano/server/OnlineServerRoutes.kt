@@ -87,7 +87,46 @@ fun Route.onlineServerRoutes(
     }
 
     post("/${OnlineRemoteRoutes.SUBMIT_TRACE_BATCH}") {
+        val identity = call.requireOnlineIdentity(
+            identityResolver = identityResolver,
+        ) ?: return@post
         val batch = call.receive<OnlineTraceBatchDto>()
+        val isAuthorizedBatch = batch.entries.all { entry ->
+            val context = entry.event.context
+            val declaredPlayerId = context.playerId
+                ?.trim()
+                ?.takeIf { value ->
+                    value.isNotBlank()
+                }
+            val roomId = context.roomId
+                ?.trim()
+                ?.takeIf { value ->
+                    value.isNotBlank()
+                }
+            val matchId = context.matchId
+                ?.trim()
+                ?.takeIf { value ->
+                    value.isNotBlank()
+                }
+
+            (declaredPlayerId == null ||
+                    declaredPlayerId == identity.playerId) &&
+                    (roomId == null || store.isRoomParticipant(
+                        roomId = roomId,
+                        playerId = identity.playerId,
+                    )) &&
+                    (matchId == null || store.isMatchParticipant(
+                        matchId = matchId,
+                        playerId = identity.playerId,
+                    ))
+        }
+
+        if (!isAuthorizedBatch) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+            )
+            return@post
+        }
 
         call.respond(
             traceArchive.recordClientBatch(

@@ -131,6 +131,9 @@ class KtorRemoteOnlineApiClient(
         ) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
+            applyProtectedAuthentication(
+                developmentPlayerId = developmentPlayerId,
+            )
             setBody(batch)
         }.body()
     }
