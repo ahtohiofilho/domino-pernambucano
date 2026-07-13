@@ -61,14 +61,22 @@ class BearerOnlineRequestIdentityResolver(
 
 internal fun createDefaultOnlineRequestIdentityResolver(
     sessionTokenService: OnlineSessionTokenService,
+    serverEnvironment: OnlineServerEnvironment,
 ): OnlineRequestIdentityResolver {
-    return CompositeOnlineRequestIdentityResolver(
-        resolvers = listOf(
+    val resolvers = buildList {
+        add(
             BearerOnlineRequestIdentityResolver(
                 sessionTokenService = sessionTokenService,
             ),
-            DevelopmentHeaderOnlineRequestIdentityResolver,
-        ),
+        )
+
+        if (serverEnvironment.allowsDevelopmentIdentityHeader) {
+            add(DevelopmentHeaderOnlineRequestIdentityResolver)
+        }
+    }
+
+    return CompositeOnlineRequestIdentityResolver(
+        resolvers = resolvers,
     )
 }
 

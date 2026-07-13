@@ -169,8 +169,13 @@ class HmacOnlineSessionTokenService(
     }
 }
 
-internal fun createDefaultOnlineSessionTokenService(): OnlineSessionTokenService {
-    val configuredSecret = System.getenv(
+internal fun createDefaultOnlineSessionTokenService(
+    serverEnvironment: OnlineServerEnvironment,
+    readEnvironmentVariable: (String) -> String? = { variableName ->
+        System.getenv(variableName)
+    },
+): OnlineSessionTokenService {
+    val configuredSecret = readEnvironmentVariable(
         SESSION_SIGNING_SECRET_ENVIRONMENT_VARIABLE,
     )
         ?.trim()
@@ -178,11 +183,22 @@ internal fun createDefaultOnlineSessionTokenService(): OnlineSessionTokenService
             value.isNotBlank()
         }
 
-    val secret = configuredSecret
-        ?.toByteArray(Charsets.UTF_8)
-        ?: ByteArray(MINIMUM_SIGNING_SECRET_BYTES).also { bytes ->
+    val secret = when {
+        configuredSecret != null -> {
+            configuredSecret.toByteArray(Charsets.UTF_8)
+        }
+
+        serverEnvironment == OnlineServerEnvironment.PRODUCTION -> {
+            throw IllegalStateException(
+                "$SESSION_SIGNING_SECRET_ENVIRONMENT_VARIABLE deve ser " +
+                        "configurada no ambiente de producao.",
+            )
+        }
+
+        else -> ByteArray(MINIMUM_SIGNING_SECRET_BYTES).also { bytes ->
             SecureRandom().nextBytes(bytes)
         }
+    }
 
     require(secret.size >= MINIMUM_SIGNING_SECRET_BYTES) {
         "$SESSION_SIGNING_SECRET_ENVIRONMENT_VARIABLE deve ter pelo menos " +

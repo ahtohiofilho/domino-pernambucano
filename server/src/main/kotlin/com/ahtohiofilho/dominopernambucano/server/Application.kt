@@ -44,6 +44,7 @@ fun main() {
 }
 
 fun Application.module() {
+    val serverEnvironment = resolveOnlineServerEnvironment()
     val traceArchive = OnlineTraceArchive()
     val traceLogger = OnlineTraceLogger(
         sink = traceArchive,
@@ -52,21 +53,28 @@ fun Application.module() {
     module(
         store = InMemoryOnlineServerStore(
             autoFillDevelopmentBotsAfterTwoHumanPlayers =
-                shouldAutoFillDevelopmentBots(),
+                shouldAutoFillDevelopmentBots(
+                    serverEnvironment = serverEnvironment,
+                ),
             traceLogger = traceLogger,
         ),
+        serverEnvironment = serverEnvironment,
         traceArchive = traceArchive,
     )
 }
 
 fun Application.module(
     store: InMemoryOnlineServerStore,
+    serverEnvironment: OnlineServerEnvironment,
     traceArchive: OnlineTraceArchive = OnlineTraceArchive(),
     sessionTokenService: OnlineSessionTokenService =
-        createDefaultOnlineSessionTokenService(),
+        createDefaultOnlineSessionTokenService(
+            serverEnvironment = serverEnvironment,
+        ),
     identityResolver: OnlineRequestIdentityResolver =
         createDefaultOnlineRequestIdentityResolver(
             sessionTokenService = sessionTokenService,
+            serverEnvironment = serverEnvironment,
         ),
 ) {
     installAuthoritativeMatchTicker(
@@ -121,7 +129,13 @@ private fun Application.installAuthoritativeMatchTicker(
     }
 }
 
-private fun shouldAutoFillDevelopmentBots(): Boolean {
+private fun shouldAutoFillDevelopmentBots(
+    serverEnvironment: OnlineServerEnvironment,
+): Boolean {
+    if (!serverEnvironment.allowsDevelopmentBots) {
+        return false
+    }
+
     return System.getenv(
         AUTO_FILL_BOTS_ENVIRONMENT_VARIABLE,
     ).equals(

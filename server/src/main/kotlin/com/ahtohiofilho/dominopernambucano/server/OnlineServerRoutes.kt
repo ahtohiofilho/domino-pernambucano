@@ -16,12 +16,8 @@ import io.ktor.server.routing.post
 fun Route.onlineServerRoutes(
     store: InMemoryOnlineServerStore,
     traceArchive: OnlineTraceArchive,
-    sessionTokenService: OnlineSessionTokenService =
-        createDefaultOnlineSessionTokenService(),
-    identityResolver: OnlineRequestIdentityResolver =
-        createDefaultOnlineRequestIdentityResolver(
-            sessionTokenService = sessionTokenService,
-        ),
+    sessionTokenService: OnlineSessionTokenService,
+    identityResolver: OnlineRequestIdentityResolver,
 ) {
     post("/${OnlineRemoteRoutes.CREATE_ANONYMOUS_SESSION}") {
         call.respond(

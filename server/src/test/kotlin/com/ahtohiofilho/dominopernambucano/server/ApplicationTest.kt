@@ -35,7 +35,12 @@ class ApplicationTest {
     @Test
     fun health_returns_ok() = testApplication {
         application {
-            module()
+            module(
+                store = InMemoryOnlineServerStore(
+                    nowEpochMillis = { 1_000L },
+                ),
+                serverEnvironment = OnlineServerEnvironment.TEST,
+            )
         }
 
         val response = client.get(
@@ -62,6 +67,7 @@ class ApplicationTest {
                     store = InMemoryOnlineServerStore(
                         nowEpochMillis = { 1_000L },
                     ),
+                    serverEnvironment = OnlineServerEnvironment.TEST,
                 )
             }
 
@@ -170,6 +176,7 @@ class ApplicationTest {
                     store = InMemoryOnlineServerStore(
                         nowEpochMillis = { 1_000L },
                     ),
+                    serverEnvironment = OnlineServerEnvironment.TEST,
                 )
             }
 
@@ -207,6 +214,7 @@ class ApplicationTest {
                     store = InMemoryOnlineServerStore(
                         nowEpochMillis = { 1_000L },
                     ),
+                    serverEnvironment = OnlineServerEnvironment.TEST,
                 )
             }
 

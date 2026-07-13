@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -61,7 +62,7 @@ class OnlineAnonymousSessionRouteTest {
     }
 
     @Test
-    fun anonymous_session_authorizes_matching_player_without_development_header() =
+    fun production_rejects_development_header_and_authorizes_matching_bearer() =
         testApplication {
             val tokenService = HmacOnlineSessionTokenService(
                 signingSecret = ByteArray(32) { index ->
@@ -82,6 +83,7 @@ class OnlineAnonymousSessionRouteTest {
                             1_000L
                         },
                     ),
+                    serverEnvironment = OnlineServerEnvironment.PRODUCTION,
                     sessionTokenService = tokenService,
                 )
             }
@@ -103,6 +105,31 @@ class OnlineAnonymousSessionRouteTest {
                 tokenService.resolveAccessToken(
                     accessToken = session.accessToken,
                 ),
+            )
+
+            val developmentHeaderResponse = client.post(
+                urlString = "/${OnlineRemoteRoutes.CREATE_ROOM}",
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    session.playerId,
+                )
+                contentType(
+                    ContentType.Application.Json,
+                )
+                setBody(
+                    json.encodeToString(
+                        CreateOnlineRoomRequestDto(
+                            localPlayerId = session.playerId,
+                            playerName = "Cabecalho de desenvolvimento",
+                        ),
+                    ),
+                )
+            }
+
+            assertEquals(
+                HttpStatusCode.Unauthorized,
+                developmentHeaderResponse.status,
             )
 
             val missingIdentityResponse = client.post(
