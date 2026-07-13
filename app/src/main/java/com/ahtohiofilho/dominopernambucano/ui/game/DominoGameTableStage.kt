@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 
@@ -69,6 +70,10 @@ fun DominoGameTableStage(
                         .getOrNull(topPlayerIndex)
                         ?.name
                         ?: "Jogador ${topPlayerIndex + 1}",
+                    participantType = gameState.players
+                        .getOrNull(topPlayerIndex)
+                        ?.participantType
+                        ?: DominoParticipantType.HUMAN,
                     pieces = visualPiecesForPlayer(topPlayerIndex),
                     isCurrent = !revealOpponentHands &&
                             gameState.currentPlayerIndex == topPlayerIndex,
@@ -102,6 +107,10 @@ fun DominoGameTableStage(
                             .getOrNull(leftPlayerIndex)
                             ?.name
                             ?: "Jogador ${leftPlayerIndex + 1}",
+                        participantType = gameState.players
+                            .getOrNull(leftPlayerIndex)
+                            ?.participantType
+                            ?: DominoParticipantType.HUMAN,
                         pieces = visualPiecesForPlayer(leftPlayerIndex),
                         isCurrent = !revealOpponentHands &&
                                 gameState.currentPlayerIndex == leftPlayerIndex,
@@ -146,6 +155,10 @@ fun DominoGameTableStage(
                             .getOrNull(rightPlayerIndex)
                             ?.name
                             ?: "Jogador ${rightPlayerIndex + 1}",
+                        participantType = gameState.players
+                            .getOrNull(rightPlayerIndex)
+                            ?.participantType
+                            ?: DominoParticipantType.HUMAN,
                         pieces = visualPiecesForPlayer(rightPlayerIndex),
                         isCurrent = !revealOpponentHands &&
                                 gameState.currentPlayerIndex == rightPlayerIndex,

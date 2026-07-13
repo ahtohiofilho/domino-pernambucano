@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.online
 
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
@@ -10,7 +11,9 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OnlineSnapshotDtoTest {
@@ -250,5 +253,238 @@ class OnlineSnapshotDtoTest {
 
         assertEquals(snapshot, decoded)
         assertEquals(runtimeState.phase, restoredRuntimeState.phase)
+    }
+
+    @Test
+    fun room_snapshot_without_participant_type_defaults_to_human() {
+        val snapshot = OnlineRoomSnapshotDto(
+            roomId = "legacy-room",
+            roomCode = "1234",
+            hostPlayerId = "legacy-player",
+            status = OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+            players = listOf(
+                OnlineRoomPlayerDto(
+                    playerId = "legacy-player",
+                    name = "Jogador legado",
+                    seatIndex = 0,
+                    connected = true,
+                ),
+            ),
+            matchId = null,
+            createdAtEpochMillis = 1_000L,
+            updatedAtEpochMillis = 1_000L,
+        )
+
+        val json = createOnlineJson()
+        val currentEncoded = json.encodeToString(snapshot)
+
+        assertTrue(
+            currentEncoded.contains(
+                "\"participantType\":\"HUMAN\"",
+            ),
+        )
+
+        val legacyEncoded = currentEncoded.replace(
+            oldValue = ",\"participantType\":\"HUMAN\"",
+            newValue = "",
+        )
+
+        assertFalse(
+            legacyEncoded.contains("\"participantType\""),
+        )
+
+        val decoded =
+            json.decodeFromString<OnlineRoomSnapshotDto>(
+                legacyEncoded,
+            )
+
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            decoded.players.single().participantType,
+        )
+    }
+
+    @Test
+    fun room_snapshot_preserves_application_participant_type() {
+        val snapshot = OnlineRoomSnapshotDto(
+            roomId = "room-application",
+            roomCode = "5678",
+            hostPlayerId = "human-player",
+            status = OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+            players = listOf(
+                OnlineRoomPlayerDto(
+                    playerId = "human-player",
+                    name = "Humano",
+                    seatIndex = 0,
+                    connected = true,
+                    participantType =
+                        OnlineParticipantTypeDto.HUMAN,
+                ),
+                OnlineRoomPlayerDto(
+                    playerId = "opaque-player-id",
+                    name = "Participante do aplicativo",
+                    seatIndex = 1,
+                    connected = true,
+                    participantType =
+                        OnlineParticipantTypeDto.APPLICATION,
+                ),
+            ),
+            matchId = null,
+            createdAtEpochMillis = 2_000L,
+            updatedAtEpochMillis = 2_000L,
+        )
+
+        val json = createOnlineJson()
+        val encoded = json.encodeToString(snapshot)
+        val decoded =
+            json.decodeFromString<OnlineRoomSnapshotDto>(
+                encoded,
+            )
+
+        assertTrue(
+            encoded.contains(
+                "\"participantType\":\"APPLICATION\"",
+            ),
+        )
+
+        assertEquals(
+            snapshot,
+            decoded,
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.APPLICATION,
+            decoded.players[1].participantType,
+        )
+    }
+
+    @Test
+    fun match_snapshot_without_participant_type_defaults_to_human() {
+        val runtimeState = DominoMatchRuntimeState(
+            gameState = createInitialDominoGameState(),
+            roundNumber = 1,
+            localPlayerIndex = 0,
+            phase = DominoMatchPhase.WaitingForLocalMove,
+            clockPolicy =
+                DominoMatchClockPolicy.OnlinePerPlayerRound,
+        )
+
+        val snapshot = runtimeState.toOnlineSnapshotDto(
+            roomId = "legacy-room",
+            matchId = "legacy-match",
+            revision = 1L,
+            serverEpochMillis = 3_000L,
+        )
+
+        val json = createOnlineJson()
+        val currentEncoded = json.encodeToString(snapshot)
+
+        assertTrue(
+            currentEncoded.contains(
+                "\"participantType\":\"HUMAN\"",
+            ),
+        )
+
+        val legacyEncoded = currentEncoded.replace(
+            oldValue = ",\"participantType\":\"HUMAN\"",
+            newValue = "",
+        )
+
+        assertFalse(
+            legacyEncoded.contains("\"participantType\""),
+        )
+
+        val decoded =
+            json.decodeFromString<OnlineMatchSnapshotDto>(
+                legacyEncoded,
+            )
+
+        assertTrue(
+            decoded.gameState.players.all { player ->
+                player.participantType ==
+                    OnlineParticipantTypeDto.HUMAN
+            },
+        )
+
+        val restoredRuntimeState = decoded.toRuntimeState(
+            localPlayerIndex = 0,
+        )
+
+        assertTrue(
+            restoredRuntimeState.gameState.players.all { player ->
+                player.participantType ==
+                    DominoParticipantType.HUMAN
+            },
+        )
+    }
+
+    @Test
+    fun match_snapshot_preserves_application_participant_type() {
+        val initialGameState = createInitialDominoGameState()
+
+        val gameStateWithApplicationParticipant =
+            initialGameState.copy(
+                players = initialGameState.players.mapIndexed {
+                        playerIndex,
+                        player,
+                    ->
+                    if (playerIndex == 2) {
+                        player.copy(
+                            participantType =
+                                DominoParticipantType.APPLICATION,
+                        )
+                    } else {
+                        player
+                    }
+                },
+            )
+
+        val runtimeState = DominoMatchRuntimeState(
+            gameState = gameStateWithApplicationParticipant,
+            roundNumber = 1,
+            localPlayerIndex = 0,
+            phase = DominoMatchPhase.WaitingForLocalMove,
+            clockPolicy =
+                DominoMatchClockPolicy.OnlinePerPlayerRound,
+        )
+
+        val snapshot = runtimeState.toOnlineSnapshotDto(
+            roomId = "room-application",
+            matchId = "match-application",
+            revision = 4L,
+            serverEpochMillis = 4_000L,
+        )
+
+        val json = createOnlineJson()
+        val encoded = json.encodeToString(snapshot)
+        val decoded =
+            json.decodeFromString<OnlineMatchSnapshotDto>(
+                encoded,
+            )
+
+        assertEquals(
+            OnlineParticipantTypeDto.APPLICATION,
+            decoded.gameState.players[2].participantType,
+        )
+
+        val restoredRuntimeState = decoded.toRuntimeState(
+            localPlayerIndex = 0,
+        )
+
+        assertEquals(
+            DominoParticipantType.APPLICATION,
+            restoredRuntimeState
+                .gameState
+                .players[2]
+                .participantType,
+        )
+
+        assertEquals(
+            DominoParticipantType.HUMAN,
+            restoredRuntimeState
+                .gameState
+                .players[0]
+                .participantType,
+        )
     }
 }

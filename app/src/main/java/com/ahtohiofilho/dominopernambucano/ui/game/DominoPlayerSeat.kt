@@ -23,9 +23,13 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+
+const val DOMINO_APPLICATION_PARTICIPANT_LABEL =
+    "Aplicativo"
 
 enum class DominoPlayerSeatOrientation {
     HORIZONTAL,
@@ -35,6 +39,8 @@ enum class DominoPlayerSeatOrientation {
 @Composable
 fun DominoPlayerSeat(
     name: String,
+    participantType: DominoParticipantType =
+        DominoParticipantType.HUMAN,
     pieces: List<DominoPiece>,
     isCurrent: Boolean,
     orientation: DominoPlayerSeatOrientation,
@@ -110,6 +116,11 @@ fun DominoPlayerSeat(
             compact = compact,
         )
 
+        PlayerSeatParticipantTypeLabel(
+            participantType = participantType,
+            compact = compact,
+        )
+
         PlayerStatusIndicatorSlot(
             isCurrent = isCurrent,
             isWinner = isWinner,
@@ -156,6 +167,30 @@ private fun PlayerSeatName(
             MaterialTheme.typography.labelMedium
         },
         fontWeight = FontWeight.Black,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+    )
+}
+
+@Composable
+private fun PlayerSeatParticipantTypeLabel(
+    participantType: DominoParticipantType,
+    compact: Boolean,
+) {
+    if (
+        participantType !=
+        DominoParticipantType.APPLICATION
+    ) {
+        return
+    }
+
+    Text(
+        text = DOMINO_APPLICATION_PARTICIPANT_LABEL,
+        color = DominoSemanticColors.primaryTextOnDark.copy(
+            alpha = 0.68f,
+        ),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
         maxLines = 1,
     )

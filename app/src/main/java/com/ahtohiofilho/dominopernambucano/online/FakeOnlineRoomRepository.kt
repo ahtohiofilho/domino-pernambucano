@@ -27,7 +27,9 @@ class FakeOnlineRoomRepository(
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
-) : OnlineRoomRepository {
+) : OnlineRoomRepository,
+    OnlineDevelopmentParticipantCompletion,
+    OnlineClientDrivenFakeProgression {
     private val mutableRoomSnapshot =
         MutableStateFlow<OnlineRoomSnapshotDto?>(null)
 
@@ -91,6 +93,8 @@ class FakeOnlineRoomRepository(
                     name = request.playerName,
                     seatIndex = 0,
                     connected = true,
+                    participantType =
+                        OnlineParticipantTypeDto.HUMAN,
                 )
             ),
             matchId = null,
@@ -110,14 +114,41 @@ class FakeOnlineRoomRepository(
     override suspend fun joinRoom(
         request: JoinOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
+        return addParticipant(
+            roomCode = request.roomCode,
+            playerId = request.localPlayerId,
+            playerName = request.playerName,
+            participantType =
+                OnlineParticipantTypeDto.HUMAN,
+        )
+    }
+
+    override suspend fun addApplicationParticipant(
+        request: OnlineDevelopmentParticipantRequest,
+    ): OnlineRoomOperationResultDto {
+        return addParticipant(
+            roomCode = request.roomCode,
+            playerId = request.playerId,
+            playerName = request.playerName,
+            participantType =
+                OnlineParticipantTypeDto.APPLICATION,
+        )
+    }
+
+    private fun addParticipant(
+        roomCode: String,
+        playerId: String,
+        playerName: String,
+        participantType: OnlineParticipantTypeDto,
+    ): OnlineRoomOperationResultDto {
         val currentRoom = mutableRoomSnapshot.value
             ?: return rejectedRoomOperation(
-                reason = "Nenhuma sala fake foi criada."
+                reason = "Nenhuma sala fake foi criada.",
             )
 
-        if (currentRoom.roomCode != request.roomCode) {
+        if (currentRoom.roomCode != roomCode) {
             return rejectedRoomOperation(
-                reason = "Código de sala inválido."
+                reason = "Código de sala inválido.",
             )
         }
 
@@ -126,29 +157,32 @@ class FakeOnlineRoomRepository(
             currentRoom.status == OnlineRoomStatusDto.FINISHED
         ) {
             return rejectedRoomOperation(
-                reason = "A sala não está mais disponível."
+                reason = "A sala não está mais disponível.",
             )
         }
 
-        val existingPlayer = currentRoom.players.firstOrNull { player ->
-            player.playerId == request.localPlayerId
-        }
+        val existingPlayer =
+            currentRoom.players.firstOrNull { player ->
+                player.playerId == playerId
+            }
 
         if (existingPlayer != null) {
-            val updatedPlayers = currentRoom.players.map { player ->
-                if (player.playerId == request.localPlayerId) {
-                    player.copy(
-                        name = request.playerName,
-                        connected = true,
-                    )
-                } else {
-                    player
+            val updatedPlayers =
+                currentRoom.players.map { player ->
+                    if (player.playerId == playerId) {
+                        player.copy(
+                            name = playerName,
+                            connected = true,
+                        )
+                    } else {
+                        player
+                    }
                 }
-            }
 
             val updatedRoom = currentRoom.copy(
                 players = updatedPlayers,
-                updatedAtEpochMillis = nowEpochMillis(),
+                updatedAtEpochMillis =
+                    nowEpochMillis(),
             )
 
             mutableRoomSnapshot.value = updatedRoom
@@ -156,34 +190,47 @@ class FakeOnlineRoomRepository(
             return OnlineRoomOperationResultDto(
                 accepted = true,
                 roomSnapshot = updatedRoom,
-                localSeatIndex = existingPlayer.seatIndex,
+                localSeatIndex =
+                    existingPlayer.seatIndex,
             )
         }
 
-        if (currentRoom.status == OnlineRoomStatusDto.IN_MATCH) {
+        if (
+            currentRoom.status ==
+            OnlineRoomStatusDto.IN_MATCH
+        ) {
             return rejectedRoomOperation(
-                reason = "A partida já foi iniciada."
+                reason = "A partida já foi iniciada.",
             )
         }
 
         val occupiedSeats = currentRoom.players
-            .mapNotNull { player -> player.seatIndex }
+            .mapNotNull { player ->
+                player.seatIndex
+            }
             .toSet()
 
-        val nextSeatIndex = (0..3).firstOrNull { seatIndex ->
-            seatIndex !in occupiedSeats
-        } ?: return rejectedRoomOperation(
-            reason = "A sala já está cheia."
-        )
+        val nextSeatIndex =
+            (0..3).firstOrNull { seatIndex ->
+                seatIndex !in occupiedSeats
+            } ?: return rejectedRoomOperation(
+                reason = "A sala já está cheia.",
+            )
 
-        val updatedPlayers = currentRoom.players + OnlineRoomPlayerDto(
-            playerId = request.localPlayerId,
-            name = request.playerName,
-            seatIndex = nextSeatIndex,
-            connected = true,
-        )
+        val updatedPlayers =
+            currentRoom.players +
+                OnlineRoomPlayerDto(
+                    playerId = playerId,
+                    name = playerName,
+                    seatIndex = nextSeatIndex,
+                    connected = true,
+                    participantType =
+                        participantType,
+                )
 
-        val shouldStartMatch = updatedPlayers.size >= 4
+        val shouldStartMatch =
+            updatedPlayers.size >= 4
+
         val nextMatchId = if (shouldStartMatch) {
             "fake-match-${nextMatchSequence++}"
         } else {
@@ -198,12 +245,16 @@ class FakeOnlineRoomRepository(
             },
             players = updatedPlayers,
             matchId = nextMatchId,
-            updatedAtEpochMillis = nowEpochMillis(),
+            updatedAtEpochMillis =
+                nowEpochMillis(),
         )
 
         mutableRoomSnapshot.value = updatedRoom
 
-        if (shouldStartMatch && nextMatchId != null) {
+        if (
+            shouldStartMatch &&
+            nextMatchId != null
+        ) {
             startMatch(
                 room = updatedRoom,
                 matchId = nextMatchId,
@@ -216,7 +267,6 @@ class FakeOnlineRoomRepository(
             localSeatIndex = nextSeatIndex,
         )
     }
-
     override suspend fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto {
@@ -398,19 +448,57 @@ class FakeOnlineRoomRepository(
         currentRoom: OnlineRoomSnapshotDto,
         currentSnapshot: OnlineMatchSnapshotDto,
     ): OnlineActionResultDto {
-        val now = nowEpochMillis()
-
         val runtimeState = currentSnapshot.toRuntimeState(
             localPlayerIndex = 0,
         )
 
-        val clockReduction = reduceClockAndRegisterAutomaticPlayer(
-            runtimeState = runtimeState,
-            elapsedMillis = getElapsedMillisSinceSnapshot(
-                snapshot = currentSnapshot,
-                nowEpochMillis = now,
-            ),
-        )
+        val currentPlayerIndex =
+            runtimeState.gameState.currentPlayerIndex
+
+        val mandatoryPassPhase =
+            runtimeState.phase as?
+                    DominoMatchPhase.PresentingPass
+
+        val isMandatoryPass =
+            mandatoryPassPhase?.playerIndex ==
+                    currentPlayerIndex
+
+        val shouldAdvanceApplication =
+            runtimeState.phase ==
+                    DominoMatchPhase.WaitingForLocalMove &&
+                    shouldAdvanceFakePlayerForSnapshotRequest(
+                        room = currentRoom,
+                        gameState = runtimeState.gameState,
+                    )
+
+        if (isMandatoryPass || shouldAdvanceApplication) {
+            val syntheticAction =
+                createFakeCurrentTurnAction(
+                    room = currentRoom,
+                    snapshot = currentSnapshot,
+                    gameState = runtimeState.gameState,
+                ) ?: return OnlineActionResultDto(
+                    accepted = true,
+                    revision = currentSnapshot.revision,
+                )
+
+            return submitGameAction(
+                action = syntheticAction,
+                currentSnapshot = currentSnapshot,
+                seatIndex = currentPlayerIndex,
+            )
+        }
+
+        val now = nowEpochMillis()
+
+        val clockReduction =
+            reduceClockAndRegisterAutomaticPlayer(
+                runtimeState = runtimeState,
+                elapsedMillis = getElapsedMillisSinceSnapshot(
+                    snapshot = currentSnapshot,
+                    nowEpochMillis = now,
+                ),
+            )
 
         if (clockReduction.turnWasResolved) {
             return publishMatchSnapshot(
@@ -421,30 +509,9 @@ class FakeOnlineRoomRepository(
         }
 
         if (
-            shouldAdvanceFakePlayerForSnapshotRequest(
-                room = currentRoom,
-                gameState = clockReduction.runtimeState.gameState,
-            )
+            clockReduction.runtimeState.playerClockMillis !=
+            runtimeState.playerClockMillis
         ) {
-            val updatedGameState = advanceSingleFakeTurn(
-                gameState = clockReduction.runtimeState.gameState,
-            )
-
-            val updatedRuntimeState = clockReduction.runtimeState.copy(
-                gameState = updatedGameState,
-                phase = determineOnlineNextPhase(
-                    gameState = updatedGameState,
-                ),
-            )
-
-            return publishMatchSnapshot(
-                previousSnapshot = currentSnapshot,
-                runtimeState = updatedRuntimeState,
-                serverEpochMillis = now,
-            )
-        }
-
-        if (clockReduction.runtimeState.playerClockMillis != runtimeState.playerClockMillis) {
             return publishMatchSnapshot(
                 previousSnapshot = currentSnapshot,
                 runtimeState = clockReduction.runtimeState,
@@ -457,7 +524,6 @@ class FakeOnlineRoomRepository(
             revision = currentSnapshot.revision,
         )
     }
-
     private fun submitGameAction(
         action: OnlinePlayerActionDto,
         currentSnapshot: OnlineMatchSnapshotDto,
@@ -653,17 +719,9 @@ class FakeOnlineRoomRepository(
             return false
         }
 
-        return when (val phase = runtimeState.phase) {
-            DominoMatchPhase.WaitingForLocalMove -> true
-
-            is DominoMatchPhase.PresentingPass -> {
-                phase.playerIndex == gameState.currentPlayerIndex
-            }
-
-            else -> false
-        }
+        return runtimeState.phase ==
+                DominoMatchPhase.WaitingForLocalMove
     }
-
     private fun shouldForceAutomaticTurnForExpiredCurrentPlayer(
         runtimeState: DominoMatchRuntimeState,
     ): Boolean {

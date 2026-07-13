@@ -7,6 +7,6 @@ object DominoMatchTiming {
     /* Reserva entregue a cada jogador no início de toda rodada. */
     const val OnlinePlayerRoundReserveMillis = 40_000L
     const val ClockTickMillis = 250L
-    const val BotDecisionDelayMillis = 850L
+    const val BotDecisionDelayMillis = 2_000L
     const val RoundSummaryAutoAdvanceMillis = 3_000L
 }

@@ -16,6 +16,8 @@ data class OnlineRoomPlayerDto(
     val name: String,
     val seatIndex: Int?,
     val connected: Boolean,
+    val participantType: OnlineParticipantTypeDto =
+        OnlineParticipantTypeDto.HUMAN,
 )
 
 @Serializable

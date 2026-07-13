@@ -5,6 +5,7 @@ import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.createOnlinePassTurnAction
@@ -21,6 +22,147 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InMemoryOnlineServerStoreTest {
+    @Test
+    fun created_room_host_is_explicitly_human() {
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+
+        val result = store.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = "human-host",
+                playerName = "Anfitrião humano",
+            ),
+        )
+
+        assertTrue(result.accepted)
+
+        val room = requireNotNull(
+            result.roomSnapshot,
+        )
+
+        val host = room.players.single()
+
+        assertEquals(
+            "human-host",
+            host.playerId,
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            host.participantType,
+        )
+    }
+
+    @Test
+    fun joined_player_is_explicitly_human_without_id_inference() {
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+
+        val room = requireNotNull(
+            store.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "human-host",
+                    playerName = "Anfitrião humano",
+                ),
+            ).roomSnapshot,
+        )
+
+        val botLikeHumanPlayerId =
+            "development-bot-seat-2-manual-human"
+
+        val joinResult = store.joinRoom(
+            JoinOnlineRoomRequestDto(
+                roomCode = room.roomCode,
+                localPlayerId = botLikeHumanPlayerId,
+                playerName = "Humano com identificador opaco",
+            ),
+        )
+
+        assertTrue(joinResult.accepted)
+
+        val joinedPlayer = requireNotNull(
+            joinResult.roomSnapshot
+                ?.players
+                ?.firstOrNull { player ->
+                    player.playerId == botLikeHumanPlayerId
+                },
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            joinedPlayer.participantType,
+        )
+    }
+
+    @Test
+    fun human_reconnection_preserves_permanent_participant_type() {
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+
+        val room = requireNotNull(
+            store.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "human-host",
+                    playerName = "Anfitrião humano",
+                ),
+            ).roomSnapshot,
+        )
+
+        val firstJoin = store.joinRoom(
+            JoinOnlineRoomRequestDto(
+                roomCode = room.roomCode,
+                localPlayerId = "human-player-2",
+                playerName = "Humano original",
+            ),
+        )
+
+        assertTrue(firstJoin.accepted)
+
+        val originalPlayer = requireNotNull(
+            firstJoin.roomSnapshot
+                ?.players
+                ?.firstOrNull { player ->
+                    player.playerId == "human-player-2"
+                },
+        )
+
+        val reconnectResult = store.joinRoom(
+            JoinOnlineRoomRequestDto(
+                roomCode = room.roomCode,
+                localPlayerId = "human-player-2",
+                playerName = "Humano reconectado",
+            ),
+        )
+
+        assertTrue(reconnectResult.accepted)
+
+        val reconnectedPlayer = requireNotNull(
+            reconnectResult.roomSnapshot
+                ?.players
+                ?.firstOrNull { player ->
+                    player.playerId == "human-player-2"
+                },
+        )
+
+        assertEquals(
+            originalPlayer.seatIndex,
+            reconnectedPlayer.seatIndex,
+        )
+
+        assertEquals(
+            "Humano reconectado",
+            reconnectedPlayer.name,
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            reconnectedPlayer.participantType,
+        )
+    }
+
     @Test
     fun fourth_player_starts_authoritative_match() {
         val store = InMemoryOnlineServerStore(
@@ -209,6 +351,29 @@ class InMemoryOnlineServerStoreTest {
             }.playerId,
         )
 
+        assertEquals(
+            listOf(2, 3),
+            startedRoom.players
+                .filter { player ->
+                    player.participantType ==
+                        OnlineParticipantTypeDto.APPLICATION
+                }
+                .mapNotNull { player ->
+                    player.seatIndex
+                },
+        )
+
+        assertTrue(
+            startedRoom.players
+                .filter { player ->
+                    player.seatIndex in 0..1
+                }
+                .all { player ->
+                    player.participantType ==
+                        OnlineParticipantTypeDto.HUMAN
+                },
+        )
+
         val matchId = requireNotNull(
             startedRoom.matchId,
         )
@@ -222,6 +387,30 @@ class InMemoryOnlineServerStoreTest {
         assertEquals(
             1L,
             initialSnapshot.revision,
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            initialSnapshot.gameState.players[0].participantType,
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            initialSnapshot.gameState.players[1].participantType,
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.APPLICATION,
+            initialSnapshot.gameState.players[2].participantType,
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.APPLICATION,
+            initialSnapshot.gameState.players[3].participantType,
+        )
+
+        assertTrue(
+            initialSnapshot.automaticPlayerIndexes.isEmpty(),
         )
     }
 
@@ -288,6 +477,160 @@ class InMemoryOnlineServerStoreTest {
         )
     }
 
+    @Test
+    fun human_with_bot_like_player_id_is_not_controlled_by_application() {
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+
+        val waitingRoom = requireNotNull(
+            store.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-1",
+                    playerName = "Jogador 1",
+                ),
+            ).roomSnapshot,
+        )
+
+        joinPlayer(
+            store = store,
+            roomCode = waitingRoom.roomCode,
+            playerId = "player-2",
+            playerName = "Jogador 2",
+        )
+
+        val botLikeHumanPlayerId =
+            "development-bot-seat-2"
+
+        joinPlayer(
+            store = store,
+            roomCode = waitingRoom.roomCode,
+            playerId = botLikeHumanPlayerId,
+            playerName = "Humano no assento 3",
+        )
+
+        val startedRoom = requireNotNull(
+            joinPlayer(
+                store = store,
+                roomCode = waitingRoom.roomCode,
+                playerId = "player-4",
+                playerName = "Jogador 4",
+            ).roomSnapshot,
+        )
+
+        val botLikeHuman = requireNotNull(
+            startedRoom.players.firstOrNull { player ->
+                player.playerId == botLikeHumanPlayerId
+            },
+        )
+
+        assertEquals(
+            2,
+            botLikeHuman.seatIndex,
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            botLikeHuman.participantType,
+        )
+
+        val matchId = requireNotNull(
+            startedRoom.matchId,
+        )
+
+        repeat(80) {
+            val snapshot = requireNotNull(
+                store.getMatchSnapshot(
+                    matchId = matchId,
+                ),
+            )
+
+            val runtimeState = snapshot.toRuntimeState(
+                localPlayerIndex =
+                    snapshot.gameState.currentPlayerIndex,
+            )
+
+            val currentPlayerIndex =
+                snapshot.gameState.currentPlayerIndex
+
+            if (
+                currentPlayerIndex == 2 &&
+                runtimeState.phase ==
+                    DominoMatchPhase.WaitingForLocalMove
+            ) {
+                assertEquals(
+                    OnlineParticipantTypeDto.HUMAN,
+                    snapshot
+                        .gameState
+                        .players[2]
+                        .participantType,
+                )
+
+                assertTrue(
+                    2 !in snapshot.automaticPlayerIndexes,
+                )
+
+                store.advanceAuthoritativeTime()
+
+                val snapshotAfterTick = requireNotNull(
+                    store.getMatchSnapshot(
+                        matchId = matchId,
+                    ),
+                )
+
+                assertEquals(
+                    snapshot,
+                    snapshotAfterTick,
+                )
+
+                return
+            }
+
+            if (
+                runtimeState.phase ==
+                    DominoMatchPhase.WaitingForLocalMove
+            ) {
+                val currentPlayerId = requireNotNull(
+                    startedRoom.players.firstOrNull { player ->
+                        player.seatIndex == currentPlayerIndex
+                    },
+                ).playerId
+
+                val move = findBasicBotMove(
+                    state = runtimeState.gameState,
+                )
+
+                val actionResult = if (move != null) {
+                    store.submitAction(
+                        createOnlinePlayMoveAction(
+                            roomId = startedRoom.roomId,
+                            matchId = matchId,
+                            playerId = currentPlayerId,
+                            revision = snapshot.revision,
+                            move = move,
+                        ),
+                    )
+                } else {
+                    store.submitAction(
+                        createOnlinePassTurnAction(
+                            roomId = startedRoom.roomId,
+                            matchId = matchId,
+                            playerId = currentPlayerId,
+                            revision = snapshot.revision,
+                        ),
+                    )
+                }
+
+                assertTrue(actionResult.accepted)
+            } else {
+                store.advanceAuthoritativeTime()
+            }
+        }
+
+        error(
+            "A partida nao alcancou um turno jogavel do humano com ID semelhante ao de bot.",
+        )
+    }
     @Test
     fun match_snapshot_read_is_observational_even_when_clock_has_elapsed() {
         var now = 1_000L

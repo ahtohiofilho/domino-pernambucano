@@ -1,14 +1,9 @@
 package com.ahtohiofilho.dominopernambucano.online
 
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
-import com.ahtohiofilho.dominopernambucano.domain.hasPlayablePiece
 import com.ahtohiofilho.dominopernambucano.domain.isGameFinished
 import com.ahtohiofilho.dominopernambucano.domain.isRoundFinished
-import com.ahtohiofilho.dominopernambucano.domain.passTurn
-import com.ahtohiofilho.dominopernambucano.domain.playMoveForCurrentPlayer
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
-
-private const val FAKE_PLAYER_ID_PREFIX = "fake-player-"
 
 internal fun shouldAdvanceFakePlayerForSnapshotRequest(
     room: OnlineRoomSnapshotDto,
@@ -18,55 +13,52 @@ internal fun shouldAdvanceFakePlayerForSnapshotRequest(
         return false
     }
 
-    val currentPlayerId = findOnlinePlayerIdForSeat(
+    val currentParticipant = findOnlineParticipantForSeat(
         room = room,
         seatIndex = gameState.currentPlayerIndex,
     ) ?: return false
 
-    return isFakeOnlinePlayerId(currentPlayerId)
+    return currentParticipant.participantType ==
+            OnlineParticipantTypeDto.APPLICATION
 }
 
-internal fun advanceSingleFakeTurn(
+internal fun createFakeCurrentTurnAction(
+    room: OnlineRoomSnapshotDto,
+    snapshot: OnlineMatchSnapshotDto,
     gameState: DominoGameState,
-): DominoGameState {
-    if (
-        !hasPlayablePiece(
-            state = gameState,
-            playerIndex = gameState.currentPlayerIndex,
-        )
-    ) {
-        return passTurn(
-            state = gameState,
-        )
-    }
+): OnlinePlayerActionDto? {
+    val currentParticipant = findOnlineParticipantForSeat(
+        room = room,
+        seatIndex = gameState.currentPlayerIndex,
+    ) ?: return null
 
-    val botMove = findBasicBotMove(
+    val move = findBasicBotMove(
         state = gameState,
     )
 
-    return if (botMove != null) {
-        playMoveForCurrentPlayer(
-            state = gameState,
-            playableMove = botMove,
+    return if (move != null) {
+        createOnlinePlayMoveAction(
+            roomId = snapshot.roomId,
+            matchId = snapshot.matchId,
+            playerId = currentParticipant.playerId,
+            revision = snapshot.revision,
+            move = move,
         )
     } else {
-        passTurn(
-            state = gameState,
+        createOnlinePassTurnAction(
+            roomId = snapshot.roomId,
+            matchId = snapshot.matchId,
+            playerId = currentParticipant.playerId,
+            revision = snapshot.revision,
         )
     }
 }
 
-private fun findOnlinePlayerIdForSeat(
+private fun findOnlineParticipantForSeat(
     room: OnlineRoomSnapshotDto,
     seatIndex: Int,
-): String? {
+): OnlineRoomPlayerDto? {
     return room.players.firstOrNull { player ->
         player.seatIndex == seatIndex
-    }?.playerId
-}
-
-private fun isFakeOnlinePlayerId(
-    playerId: String,
-): Boolean {
-    return playerId.startsWith(FAKE_PLAYER_ID_PREFIX)
+    }
 }

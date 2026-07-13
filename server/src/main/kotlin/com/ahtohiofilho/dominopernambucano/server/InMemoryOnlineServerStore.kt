@@ -17,6 +17,7 @@ import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchActionReduction
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.projectForParticipant
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionTypeDto
@@ -134,6 +135,8 @@ class InMemoryOnlineServerStore(
                         name = request.playerName,
                         seatIndex = 0,
                         connected = true,
+                        participantType =
+                            OnlineParticipantTypeDto.HUMAN,
                     ),
                 ),
                 createdAtEpochMillis = now,
@@ -287,6 +290,8 @@ class InMemoryOnlineServerStore(
                 name = request.playerName,
                 seatIndex = nextSeatIndex,
                 connected = true,
+                participantType =
+                    OnlineParticipantTypeDto.HUMAN,
             )
 
             val updatedPlayers = addDevelopmentBotsIfNeeded(
@@ -698,6 +703,8 @@ class InMemoryOnlineServerStore(
                         name = "Bot ${seatIndex + 1}",
                         seatIndex = seatIndex,
                         connected = true,
+                        participantType =
+                            OnlineParticipantTypeDto.APPLICATION,
                     )
                 }
 
@@ -740,9 +747,8 @@ class InMemoryOnlineServerStore(
             snapshot = snapshot,
             developmentBotSeatIndexes = room.players
                 .filter { player ->
-                    isDevelopmentBotPlayerId(
-                        playerId = player.playerId,
-                    )
+                    player.participantType ==
+                        OnlineParticipantTypeDto.APPLICATION
                 }
                 .mapNotNull { player ->
                     player.seatIndex
@@ -1630,11 +1636,5 @@ class InMemoryOnlineServerStore(
         )
     }
 
-    private fun isDevelopmentBotPlayerId(
-        playerId: String,
-    ): Boolean {
-        return playerId.startsWith(
-            DEVELOPMENT_BOT_PLAYER_ID_PREFIX,
-        )
-    }
+
 }

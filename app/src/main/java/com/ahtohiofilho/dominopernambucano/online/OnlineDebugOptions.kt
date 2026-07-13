@@ -12,7 +12,7 @@ data class OnlineDebugOptions(
 
         val RealBackend = OnlineDebugOptions(
             allowDemoRoomCreation = false,
-            allowFakePlayerCompletion = true,
+            allowFakePlayerCompletion = false,
         )
     }
 }

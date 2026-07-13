@@ -121,6 +121,19 @@ fun reduceOnlineGameAction(
         }
     }
 
+    val updatedRuntimeState = runtimeState.copy(
+        gameState = updatedGameState,
+        phase = determineOnlineNextPhase(
+            gameState = updatedGameState,
+        ),
+    )
+
+    if (action.type == OnlinePlayerActionTypeDto.PASS_TURN) {
+        return OnlineMatchActionReduction.Accepted(
+            runtimeState = updatedRuntimeState,
+        )
+    }
+
     val reloadedClock = reloadPlayerClockFromReserveMillis(
         clocks = runtimeState.playerClockMillis,
         reserves = runtimeState.playerClockReserveMillis,
@@ -129,18 +142,13 @@ fun reduceOnlineGameAction(
     )
 
     return OnlineMatchActionReduction.Accepted(
-        runtimeState = runtimeState.copy(
-            gameState = updatedGameState,
-            phase = determineOnlineNextPhase(
-                gameState = updatedGameState,
-            ),
+        runtimeState = updatedRuntimeState.copy(
             playerClockMillis = reloadedClock.playerClockMillis,
             playerClockReserveMillis =
                 reloadedClock.playerClockReserveMillis,
         ),
     )
 }
-
 fun reduceOnlineStartNextRoundAction(
     action: OnlinePlayerActionDto,
     currentRoom: OnlineRoomSnapshotDto,
@@ -281,16 +289,21 @@ fun applyOnlineRoomPlayerNames(
         player.seatIndex
     }
 
-    val namedPlayers = gameState.players.mapIndexed { index, player ->
+    val resolvedPlayers = gameState.players.mapIndexed { index, player ->
         val roomPlayer = playersBySeat[index]
 
         player.copy(
             name = roomPlayer?.name ?: player.name,
+            participantType =
+                roomPlayer
+                    ?.participantType
+                    ?.toDomain()
+                    ?: player.participantType,
         )
     }
 
     return gameState.copy(
-        players = namedPlayers,
+        players = resolvedPlayers,
     )
 }
 

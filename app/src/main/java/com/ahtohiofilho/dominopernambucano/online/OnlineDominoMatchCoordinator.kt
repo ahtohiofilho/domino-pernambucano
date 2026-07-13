@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.online
 
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
@@ -239,9 +240,12 @@ class OnlineDominoMatchCoordinator(
             }
 
             /*
-             * O servidor agenda bots e timeout no ticker autoritativo.
-             */
-            DominoMatchCommand.BotDecisionReady -> Unit
+             * O servidor remoto continua responsavel pela progressao
+             * autoritativa. Somente o backend fake aceita gatilhos conduzidos
+             * pelo cliente para APPLICATION, passe obrigatorio e timeout.
+             */            DominoMatchCommand.BotDecisionReady -> {
+                submitClientDrivenApplicationTurnProgression()
+            }
 
             DominoMatchCommand.PresentationFinished -> {
                 handlePresentationFinished()
@@ -286,6 +290,7 @@ class OnlineDominoMatchCoordinator(
                 playerIndex = currentPlayerIndex,
             )
         ) {
+            submitClientDrivenTimeoutProgression()
             return
         }
 
@@ -298,6 +303,15 @@ class OnlineDominoMatchCoordinator(
         mutableState.value = runtimeState.copy(
             playerClockMillis = updatedClocks,
         )
+
+        if (
+            isPlayerClockExpired(
+                clocks = updatedClocks,
+                playerIndex = currentPlayerIndex,
+            )
+        ) {
+            submitClientDrivenTimeoutProgression()
+        }
     }
 
     private fun handleRemoteSnapshot(
@@ -399,6 +413,7 @@ class OnlineDominoMatchCoordinator(
         mutableState.value = stableRuntimeState.toStableDisplayRuntimeState()
 
         advancePresentationQueue()
+        submitClientDrivenMandatoryPassProgression()
     }
 
     private fun handlePresentationFinished() {
@@ -666,6 +681,8 @@ class OnlineDominoMatchCoordinator(
                         pendingRemoteRuntimeStates.size.toString(),
             ),
         )
+
+        submitClientDrivenMandatoryPassProgression()
     }
 
     private fun isPresentationInProgress(
@@ -676,6 +693,113 @@ class OnlineDominoMatchCoordinator(
                 phase is DominoMatchPhase.PresentingPass
     }
 
+    private fun submitClientDrivenApplicationTurnProgression() {
+        if (!supportsClientDrivenFakeProgression()) {
+            return
+        }
+
+        val runtimeState = stableRuntimeState
+
+        if (
+            runtimeState.phase !=
+            DominoMatchPhase.WaitingForLocalMove
+        ) {
+            return
+        }
+
+        val currentPlayerIndex =
+            runtimeState.gameState.currentPlayerIndex
+
+        val currentParticipant =
+            runtimeState.gameState.players
+                .getOrNull(currentPlayerIndex)
+                ?: return
+
+        if (
+            currentParticipant.participantType !=
+            DominoParticipantType.APPLICATION
+        ) {
+            return
+        }
+
+        submitClientDrivenSnapshotRequest()
+    }
+
+    private fun submitClientDrivenMandatoryPassProgression() {
+        if (!supportsClientDrivenFakeProgression()) {
+            return
+        }
+
+        if (
+            activePresentationRuntimeState != null ||
+            pendingRemoteRuntimeStates.isNotEmpty()
+        ) {
+            return
+        }
+
+        val runtimeState = stableRuntimeState
+        val passPhase =
+            runtimeState.phase as?
+                    DominoMatchPhase.PresentingPass
+                ?: return
+
+        if (
+            passPhase.playerIndex !=
+            runtimeState.gameState.currentPlayerIndex
+        ) {
+            return
+        }
+
+        submitClientDrivenSnapshotRequest()
+    }
+
+    private fun submitClientDrivenTimeoutProgression() {
+        if (!supportsClientDrivenFakeProgression()) {
+            return
+        }
+
+        if (
+            stableRuntimeState.phase !=
+            DominoMatchPhase.WaitingForLocalMove
+        ) {
+            return
+        }
+
+        val displayedRuntimeState = mutableState.value
+        val currentPlayerIndex =
+            displayedRuntimeState.gameState.currentPlayerIndex
+
+        if (
+            !isPlayerClockExpired(
+                clocks =
+                    displayedRuntimeState.playerClockMillis,
+                playerIndex = currentPlayerIndex,
+            )
+        ) {
+            return
+        }
+
+        submitClientDrivenSnapshotRequest()
+    }
+
+    private fun supportsClientDrivenFakeProgression(): Boolean {
+        return repository is OnlineClientDrivenFakeProgression
+    }
+
+    private fun submitClientDrivenSnapshotRequest() {
+        if (inFlightAction != null) {
+            return
+        }
+
+        val action = createOnlineSnapshotRequestAction(
+            roomId = roomId,
+            matchId = matchId,
+            playerId = localPlayerId,
+            revision = stableRevision,
+        )
+
+        submitAction(action)
+    }
     private fun submitMove(
         command: DominoMatchCommand.LocalMoveSelected,
     ) {

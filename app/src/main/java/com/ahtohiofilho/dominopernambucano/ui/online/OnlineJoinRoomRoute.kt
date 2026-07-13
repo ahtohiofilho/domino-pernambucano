@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
+import com.ahtohiofilho.dominopernambucano.online.OnlineDevelopmentParticipantCompletion
+import com.ahtohiofilho.dominopernambucano.online.OnlineDevelopmentParticipantRequest
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
@@ -64,6 +66,13 @@ fun OnlineJoinRoomRoute(
     val matchSnapshot by roomRepository.matchSnapshot.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
+
+    val developmentParticipantCompletion =
+        roomRepository as? OnlineDevelopmentParticipantCompletion
+
+    val allowApplicationParticipantCompletion =
+        debugOptions.allowFakePlayerCompletion &&
+                developmentParticipantCompletion != null
 
     val localPlayerId = localPlayerIdentity.playerId
     val localPlayerName = localPlayerIdentity.playerName
@@ -151,7 +160,8 @@ fun OnlineJoinRoomRoute(
         hasJoinedRoom = hasJoinedRoom,
         feedbackMessage = feedbackMessage,
         allowDemoRoomCreation = debugOptions.allowDemoRoomCreation,
-        allowFakePlayerCompletion = debugOptions.allowFakePlayerCompletion,
+        allowFakePlayerCompletion =
+            allowApplicationParticipantCompletion,
         onRoomCodeChange = { value ->
             roomCodeInput = value
                 .filter { char -> char.isLetterOrDigit() }
@@ -226,7 +236,13 @@ fun OnlineJoinRoomRoute(
             }
         },
         onCompleteWithFakePlayersClick = {
-            if (!debugOptions.allowFakePlayerCompletion) {
+            val participantCompletion =
+                developmentParticipantCompletion
+
+            if (
+                !debugOptions.allowFakePlayerCompletion ||
+                participantCompletion == null
+            ) {
                 feedbackMessage =
                     "Completar a mesa com jogadores controlados pelo aplicativo " +
                             "está desabilitado neste ambiente."
@@ -251,13 +267,14 @@ fun OnlineJoinRoomRoute(
                         fakePlayerNumber = fakePlayerNumber,
                     )
 
-                    val result = roomRepository.joinRoom(
-                        JoinOnlineRoomRequestDto(
-                            roomCode = workingSnapshot.roomCode,
-                            localPlayerId = fakePlayerIdentity.playerId,
-                            playerName = fakePlayerIdentity.playerName,
-                        ),
-                    )
+                    val result =
+                        participantCompletion.addApplicationParticipant(
+                            OnlineDevelopmentParticipantRequest(
+                                roomCode = workingSnapshot.roomCode,
+                                playerId = fakePlayerIdentity.playerId,
+                                playerName = fakePlayerIdentity.playerName,
+                            ),
+                        )
 
                     if (!result.accepted) {
                         feedbackMessage = result.reason
@@ -653,6 +670,12 @@ private fun JoinPlayerSlotRow(
                     )
                 },
             )
+
+            if (player != null) {
+                OnlineParticipantTypeLabel(
+                    participantType = player.participantType,
+                )
+            }
         }
 
         Text(

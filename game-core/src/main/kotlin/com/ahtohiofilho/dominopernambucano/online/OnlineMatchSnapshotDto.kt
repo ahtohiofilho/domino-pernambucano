@@ -27,12 +27,13 @@ data class OnlineMatchSnapshotDto(
     val serverEpochMillis: Long? = null,
 
     /*
-     * Jogadores que perderam o controle manual por estouro de tempo.
+     * Assentos colocados temporariamente em modo automático por estouro de
+     * tempo na rodada atual.
      *
-     * Esse estado precisa viajar no snapshot porque o client/coordinator
-     * não pode depender apenas do relógio local. Ao iniciar uma nova rodada,
-     * os relógios voltam cheios, mas o jogador ainda deve continuar em modo
-     * automático até a partida terminar ou uma nova partida ser iniciada.
+     * Esse estado viaja no snapshot porque o client/coordinator não pode
+     * depender apenas do relógio local. Ele é independente de participantType:
+     * a natureza permanente HUMAN/APPLICATION continua em gameState.players.
+     * Esta lista é limpa ao iniciar uma nova rodada ou uma nova partida.
      */
     val automaticPlayerIndexes: List<Int> = emptyList(),
 )

@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.online
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoBoardChain
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.DominoPlayer
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
@@ -42,6 +43,8 @@ data class OnlineDominoPlayerDto(
     val id: Int,
     val name: String,
     val hand: List<OnlineDominoPieceDto>,
+    val participantType: OnlineParticipantTypeDto =
+        OnlineParticipantTypeDto.HUMAN,
 )
 
 @Serializable
@@ -139,6 +142,26 @@ fun OnlinePlayedMoveDto.toDomain(): PlayedMove {
     )
 }
 
+fun DominoParticipantType.toOnlineDto(): OnlineParticipantTypeDto {
+    return when (this) {
+        DominoParticipantType.HUMAN ->
+            OnlineParticipantTypeDto.HUMAN
+
+        DominoParticipantType.APPLICATION ->
+            OnlineParticipantTypeDto.APPLICATION
+    }
+}
+
+fun OnlineParticipantTypeDto.toDomain(): DominoParticipantType {
+    return when (this) {
+        OnlineParticipantTypeDto.HUMAN ->
+            DominoParticipantType.HUMAN
+
+        OnlineParticipantTypeDto.APPLICATION ->
+            DominoParticipantType.APPLICATION
+    }
+}
+
 fun DominoPlayer.toOnlineDto(): OnlineDominoPlayerDto {
     return OnlineDominoPlayerDto(
         id = id,
@@ -146,6 +169,7 @@ fun DominoPlayer.toOnlineDto(): OnlineDominoPlayerDto {
         hand = hand.map { piece ->
             piece.toOnlineDto()
         },
+        participantType = participantType.toOnlineDto(),
     )
 }
 
@@ -156,6 +180,7 @@ fun OnlineDominoPlayerDto.toDomain(): DominoPlayer {
         hand = hand.map { piece ->
             piece.toDomain()
         },
+        participantType = participantType.toDomain(),
     )
 }
 

@@ -4,8 +4,10 @@ import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoBoardChain
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPlayer
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
@@ -982,6 +984,432 @@ class OnlineDominoMatchCoordinatorTest {
         }
 
     @Test
+    fun client_driven_mandatory_pass_submits_snapshot_request_immediately() =
+        runBlocking {
+            val openingPiece = DominoPiece(
+                left = 6,
+                right = 6,
+            )
+
+            val runtimeState = createRuntimeState(
+                board = listOf(openingPiece),
+                boardChain = DominoBoardChain(
+                    openingPiece = openingPiece,
+                ),
+                currentPlayerIndex = 1,
+                playerHands = listOf(
+                    listOf(DominoPiece(6, 5)),
+                    listOf(DominoPiece(0, 0)),
+                    listOf(DominoPiece(6, 4)),
+                    listOf(DominoPiece(6, 3)),
+                ),
+            ).copy(
+                phase = DominoMatchPhase.PresentingPass(
+                    playerIndex = 1,
+                ),
+            )
+
+            val repository =
+                ClientDrivenTestOnlineRoomRepository(
+                    initialSnapshot = runtimeState.toSnapshot(
+                        revision = 1L,
+                    ),
+                )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher =
+                    Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                yield()
+
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+
+                assertEquals(
+                    OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT,
+                    repository.submittedActions.single().type,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun client_driven_already_expired_automatic_local_turn_submits_one_snapshot_request() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    listOf(DominoPiece(6, 6)),
+                    listOf(DominoPiece(1, 1)),
+                    listOf(DominoPiece(2, 2)),
+                    listOf(DominoPiece(3, 3)),
+                ),
+            ).copy(
+                clockPolicy =
+                    DominoMatchClockPolicy.OnlinePerPlayerRound,
+                playerClockMillis = listOf(
+                    0L,
+                    20_000L,
+                    20_000L,
+                    20_000L,
+                ),
+                playerClockReserveMillis =
+                    List(4) {
+                        40_000L
+                    },
+            )
+
+            val initialSnapshot =
+                runtimeState.toSnapshot(
+                    revision = 1L,
+                ).copy(
+                    automaticPlayerIndexes =
+                        listOf(0),
+                )
+
+            val repository =
+                ClientDrivenTestOnlineRoomRepository(
+                    initialSnapshot = initialSnapshot,
+                )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialSnapshot,
+                coroutineDispatcher =
+                    Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.TurnClockTick(
+                        elapsedMillis = 250L,
+                    ),
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.TurnClockTick(
+                        elapsedMillis = 250L,
+                    ),
+                )
+
+                yield()
+
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+
+                val action =
+                    repository.submittedActions.single()
+
+                assertEquals(
+                    OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT,
+                    action.type,
+                )
+
+                assertEquals(
+                    1L,
+                    action.revision,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun client_driven_timeout_submits_snapshot_request_at_zero() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    listOf(DominoPiece(6, 6)),
+                    listOf(DominoPiece(1, 1)),
+                    listOf(DominoPiece(2, 2)),
+                    listOf(DominoPiece(3, 3)),
+                ),
+            ).copy(
+                clockPolicy =
+                    DominoMatchClockPolicy.OnlinePerPlayerRound,
+                playerClockMillis = listOf(
+                    250L,
+                    20_000L,
+                    20_000L,
+                    20_000L,
+                ),
+                playerClockReserveMillis =
+                    List(4) {
+                        40_000L
+                    },
+            )
+
+            val repository =
+                ClientDrivenTestOnlineRoomRepository(
+                    initialSnapshot = runtimeState.toSnapshot(
+                        revision = 1L,
+                    ),
+                )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher =
+                    Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.TurnClockTick(
+                        elapsedMillis = 250L,
+                    ),
+                )
+
+                yield()
+
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+
+                assertEquals(
+                    OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT,
+                    repository.submittedActions.single().type,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun client_driven_application_turn_submits_snapshot_request() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 1,
+                playerHands = listOf(
+                    listOf(DominoPiece(0, 0)),
+                    listOf(DominoPiece(6, 6)),
+                    listOf(DominoPiece(1, 1)),
+                    listOf(DominoPiece(2, 2)),
+                ),
+                participantTypes = listOf(
+                    DominoParticipantType.HUMAN,
+                    DominoParticipantType.APPLICATION,
+                    DominoParticipantType.HUMAN,
+                    DominoParticipantType.HUMAN,
+                ),
+            )
+
+            val repository =
+                ClientDrivenTestOnlineRoomRepository(
+                    initialSnapshot = runtimeState.toSnapshot(
+                        revision = 1L,
+                    ),
+                )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher =
+                    Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.BotDecisionReady,
+                )
+
+                yield()
+
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+
+                val action =
+                    repository.submittedActions.single()
+
+                assertEquals(
+                    OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT,
+                    action.type,
+                )
+
+                assertEquals(
+                    1L,
+                    action.revision,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun client_driven_human_turn_does_not_submit_snapshot_request() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 1,
+                playerHands = listOf(
+                    listOf(DominoPiece(0, 0)),
+                    listOf(DominoPiece(6, 6)),
+                    listOf(DominoPiece(1, 1)),
+                    listOf(DominoPiece(2, 2)),
+                ),
+                participantTypes =
+                    List(4) {
+                        DominoParticipantType.HUMAN
+                    },
+            )
+
+            val repository =
+                ClientDrivenTestOnlineRoomRepository(
+                    initialSnapshot = runtimeState.toSnapshot(
+                        revision = 1L,
+                    ),
+                )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher =
+                    Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.BotDecisionReady,
+                )
+
+                yield()
+
+                assertTrue(
+                    repository.submittedActions.isEmpty(),
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun server_authoritative_repository_ignores_bot_decision_ready() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 1,
+                playerHands = listOf(
+                    listOf(DominoPiece(0, 0)),
+                    listOf(DominoPiece(6, 6)),
+                    listOf(DominoPiece(1, 1)),
+                    listOf(DominoPiece(2, 2)),
+                ),
+                participantTypes = listOf(
+                    DominoParticipantType.HUMAN,
+                    DominoParticipantType.APPLICATION,
+                    DominoParticipantType.HUMAN,
+                    DominoParticipantType.HUMAN,
+                ),
+            )
+
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+            )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher =
+                    Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.BotDecisionReady,
+                )
+
+                yield()
+
+                assertTrue(
+                    repository.submittedActions.isEmpty(),
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
     fun local_move_is_submitted_once_until_authoritative_revision_confirms_it() =
         runBlocking {
             val openingPiece = DominoPiece(
@@ -1229,6 +1657,10 @@ class OnlineDominoMatchCoordinatorTest {
         boardChain: DominoBoardChain,
         currentPlayerIndex: Int,
         playerHands: List<List<DominoPiece>>,
+        participantTypes: List<DominoParticipantType> =
+            List(playerHands.size) {
+                DominoParticipantType.HUMAN
+            },
     ): DominoMatchRuntimeState {
         return DominoMatchRuntimeState(
             gameState = DominoGameState(
@@ -1239,6 +1671,8 @@ class OnlineDominoMatchCoordinatorTest {
                         id = index,
                         name = "Jogador ${index + 1}",
                         hand = hand,
+                        participantType =
+                            participantTypes[index],
                     )
                 },
                 sleepingPieces = emptyList(),
@@ -1268,7 +1702,7 @@ class OnlineDominoMatchCoordinatorTest {
         )
     }
 
-    private class TestOnlineRoomRepository(
+    private open class TestOnlineRoomRepository(
         initialSnapshot: OnlineMatchSnapshotDto,
     ) : OnlineRoomRepository {
         private val mutableRoomSnapshot =
@@ -1320,6 +1754,13 @@ class OnlineDominoMatchCoordinatorTest {
 
         override suspend fun leaveRoom() = Unit
     }
+
+    private class ClientDrivenTestOnlineRoomRepository(
+        initialSnapshot: OnlineMatchSnapshotDto,
+    ) : TestOnlineRoomRepository(
+        initialSnapshot = initialSnapshot,
+    ),
+        OnlineClientDrivenFakeProgression
 
     private companion object {
         const val TEST_ROOM_ID = "room-1"
