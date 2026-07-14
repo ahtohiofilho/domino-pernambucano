@@ -20,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -50,8 +51,11 @@ fun Application.module() {
     val traceArchive = OnlineTraceArchive(
         ingestionPolicy = traceIngestionPolicy,
     )
+    val serverTraceSink = BoundedAsyncOnlineTraceSink(
+        delegate = traceArchive,
+    )
     val traceLogger = OnlineTraceLogger(
-        sink = traceArchive,
+        sink = serverTraceSink,
     )
 
     module(
@@ -65,6 +69,7 @@ fun Application.module() {
         serverEnvironment = serverEnvironment,
         traceIngestionPolicy = traceIngestionPolicy,
         traceArchive = traceArchive,
+        serverTraceSink = serverTraceSink,
     )
 }
 
@@ -76,6 +81,7 @@ fun Application.module(
     traceArchive: OnlineTraceArchive = OnlineTraceArchive(
         ingestionPolicy = traceIngestionPolicy,
     ),
+    serverTraceSink: BoundedAsyncOnlineTraceSink? = null,
     sessionTokenService: OnlineSessionTokenService =
         createDefaultOnlineSessionTokenService(
             serverEnvironment = serverEnvironment,
@@ -88,6 +94,7 @@ fun Application.module(
 ) {
     installAuthoritativeMatchTicker(
         store = store,
+        serverTraceSink = serverTraceSink,
     )
 
     install(RequestBodyLimit) {
@@ -125,6 +132,7 @@ fun Application.module(
 
 private fun Application.installAuthoritativeMatchTicker(
     store: InMemoryOnlineServerStore,
+    serverTraceSink: BoundedAsyncOnlineTraceSink?,
 ) {
     val tickerScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default,
@@ -141,6 +149,12 @@ private fun Application.installAuthoritativeMatchTicker(
 
     environment.monitor.subscribe(ApplicationStopping) {
         tickerScope.cancel()
+
+        serverTraceSink?.let { sink ->
+            runBlocking {
+                sink.shutdown()
+            }
+        }
     }
 }
 
