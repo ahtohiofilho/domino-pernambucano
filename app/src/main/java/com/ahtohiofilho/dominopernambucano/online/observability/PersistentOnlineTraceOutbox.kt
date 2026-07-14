@@ -22,8 +22,12 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 data class PersistentOnlineTraceOutboxHealth(
+    val capacity: Int,
+    val totalPendingEntryCount: Int,
     val queuedForPersistenceEntryCount: Int,
     val durablePendingEntryCount: Int,
+    val totalRecordedEntryCount: Long,
+    val droppedEntryCount: Long,
     val consecutivePersistenceFailureCount: Int,
     val lastPersistenceFailureAtEpochMillis: Long?,
     val lastPersistenceFailureMessage: String?,
@@ -38,6 +42,7 @@ data class PersistentOnlineTraceOutboxHealth(
  */
 class PersistentOnlineTraceOutbox(
     private val directory: File,
+    private val capacity: Int = DEFAULT_CAPACITY,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
@@ -47,6 +52,12 @@ class PersistentOnlineTraceOutbox(
         ignoreUnknownKeys = true
     },
 ) : OnlineTraceOutbox {
+    init {
+        require(capacity > 0) {
+            "A capacidade da outbox de rastreamento deve ser positiva."
+        }
+    }
+
     private val lock = Any()
     private val persistenceScope = CoroutineScope(
         SupervisorJob() + ioDispatcher,
@@ -56,8 +67,12 @@ class PersistentOnlineTraceOutbox(
     private val mutablePendingEntryVersion = MutableStateFlow(0L)
     private val mutableHealth = MutableStateFlow(
         PersistentOnlineTraceOutboxHealth(
+            capacity = capacity,
+            totalPendingEntryCount = 0,
             queuedForPersistenceEntryCount = 0,
             durablePendingEntryCount = 0,
+            totalRecordedEntryCount = 0L,
+            droppedEntryCount = 0L,
             consecutivePersistenceFailureCount = 0,
             lastPersistenceFailureAtEpochMillis = null,
             lastPersistenceFailureMessage = null,
@@ -70,6 +85,8 @@ class PersistentOnlineTraceOutbox(
     private val queuedEntries = ArrayDeque<OnlineTraceEntry>()
 
     private var nextSequence = 1L
+    private var totalRecordedEntryCount = 0L
+    private var droppedEntryCount = 0L
     private var persistenceJob: Job? = null
     private var consecutivePersistenceFailureCount = 0
     private var lastPersistenceFailureAtEpochMillis: Long? = null
@@ -90,6 +107,10 @@ class PersistentOnlineTraceOutbox(
                 loadResult.filesByEntry,
             )
             nextSequence = loadResult.nextSequence
+            totalRecordedEntryCount =
+                loadResult.totalRecordedEntryCount
+            droppedEntryCount =
+                loadResult.droppedEntryCount
 
             loadResult.failure?.let { error ->
                 registerPersistenceFailureLocked(error)
@@ -107,13 +128,23 @@ class PersistentOnlineTraceOutbox(
         event: OnlineTraceEvent,
     ) {
         synchronized(lock) {
-            queuedEntries.addLast(
-                OnlineTraceEntry(
-                    sequence = nextSequence++,
-                    event = event,
-                ),
+            val entry = OnlineTraceEntry(
+                sequence = nextSequence++,
+                event = event,
             )
 
+            totalRecordedEntryCount += 1L
+
+            val totalPendingEntryCount =
+                queuedEntries.size + durableFilesByEntry.size
+
+            if (totalPendingEntryCount >= capacity) {
+                droppedEntryCount += 1L
+                publishHealthLocked()
+                return
+            }
+
+            queuedEntries.addLast(entry)
             publishHealthLocked()
             schedulePersistenceLocked()
         }
@@ -340,6 +371,8 @@ class PersistentOnlineTraceOutbox(
             return DurableLoadResult(
                 filesByEntry = emptyMap(),
                 nextSequence = 1L,
+                totalRecordedEntryCount = 0L,
+                droppedEntryCount = 0L,
                 failure = null,
             )
         }
@@ -347,6 +380,7 @@ class PersistentOnlineTraceOutbox(
         return try {
             val filesByEntry = linkedMapOf<OnlineTraceEntry, File>()
             var largestSequence = 0L
+            var discardedEntryCount = 0L
             var firstFailure: Throwable? = null
 
             directory.listFiles()
@@ -356,7 +390,15 @@ class PersistentOnlineTraceOutbox(
                 }
                 .forEach { file ->
                     when {
-                        file.name.endsWith(TEMPORARY_FILE_SUFFIX) -> Unit
+                        file.name.endsWith(TEMPORARY_FILE_SUFFIX) -> {
+                            if (file.exists() && !file.delete()) {
+                                if (firstFailure == null) {
+                                    firstFailure = IOException(
+                                        "Não foi possível remover um trace temporário.",
+                                    )
+                                }
+                            }
+                        }
 
                         file.name.endsWith(ENTRY_FILE_SUFFIX) -> {
                             largestSequence = maxOf(
@@ -377,10 +419,38 @@ class PersistentOnlineTraceOutbox(
                                     entry.sequence,
                                 )
                             } catch (error: Throwable) {
+                                discardedEntryCount += 1L
+
                                 if (firstFailure == null) {
                                     firstFailure = error
                                 }
+
+                                if (file.exists() && !file.delete()) {
+                                    firstFailure = IOException(
+                                        "Não foi possível remover um trace inválido.",
+                                        error,
+                                    )
+                                }
                             }
+                        }
+                    }
+                }
+
+            val overflowEntryCount =
+                (filesByEntry.size - capacity).coerceAtLeast(0)
+
+            filesByEntry.entries
+                .take(overflowEntryCount)
+                .toList()
+                .forEach { (entry, file) ->
+                    filesByEntry.remove(entry)
+                    discardedEntryCount += 1L
+
+                    if (file.exists() && !file.delete()) {
+                        if (firstFailure == null) {
+                            firstFailure = IOException(
+                                "Não foi possível limitar a outbox restaurada.",
+                            )
                         }
                     }
                 }
@@ -388,12 +458,16 @@ class PersistentOnlineTraceOutbox(
             DurableLoadResult(
                 filesByEntry = filesByEntry,
                 nextSequence = largestSequence + 1L,
+                totalRecordedEntryCount = largestSequence,
+                droppedEntryCount = discardedEntryCount,
                 failure = firstFailure,
             )
         } catch (error: Throwable) {
             DurableLoadResult(
                 filesByEntry = emptyMap(),
                 nextSequence = 1L,
+                totalRecordedEntryCount = 0L,
+                droppedEntryCount = 0L,
                 failure = error,
             )
         }
@@ -445,8 +519,13 @@ class PersistentOnlineTraceOutbox(
 
     private fun publishHealthLocked() {
         mutableHealth.value = PersistentOnlineTraceOutboxHealth(
+            capacity = capacity,
+            totalPendingEntryCount =
+                queuedEntries.size + durableFilesByEntry.size,
             queuedForPersistenceEntryCount = queuedEntries.size,
             durablePendingEntryCount = durableFilesByEntry.size,
+            totalRecordedEntryCount = totalRecordedEntryCount,
+            droppedEntryCount = droppedEntryCount,
             consecutivePersistenceFailureCount =
                 consecutivePersistenceFailureCount,
             lastPersistenceFailureAtEpochMillis =
@@ -459,10 +538,13 @@ class PersistentOnlineTraceOutbox(
     private data class DurableLoadResult(
         val filesByEntry: Map<OnlineTraceEntry, File>,
         val nextSequence: Long,
+        val totalRecordedEntryCount: Long,
+        val droppedEntryCount: Long,
         val failure: Throwable?,
     )
 
     private companion object {
+        const val DEFAULT_CAPACITY = 4_000
         const val PERSISTENCE_BATCH_SIZE = 64
         const val ENTRY_FILE_SUFFIX = ".trace.json"
         const val TEMPORARY_FILE_SUFFIX = ".tmp"

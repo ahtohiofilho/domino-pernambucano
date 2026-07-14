@@ -249,6 +249,142 @@ class PersistentOnlineTraceOutboxTest {
             )
         }
 
+    @Test
+    fun drops_new_entries_when_capacity_is_saturated_and_preserves_sequence_gaps() =
+        runBlocking {
+            val directory = Files.createTempDirectory(
+                "online-trace-outbox-capacity-test",
+            ).toFile()
+            val outbox = PersistentOnlineTraceOutbox(
+                directory = directory,
+                capacity = 2,
+            )
+
+            repeat(3) {
+                outbox.record(
+                    event = event(
+                        clientSessionId = "android-session-1",
+                        roomId = "room-1",
+                        matchId = "match-1",
+                        type = OnlineTraceType.ACTION_SUBMITTED,
+                    ),
+                )
+            }
+
+            outbox.awaitPendingPersistence()
+
+            assertEquals(
+                listOf(1L, 2L),
+                outbox.pendingEntries(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                    limit = 10,
+                ).map { entry ->
+                    entry.sequence
+                },
+            )
+
+            val saturatedHealth = outbox.health.value
+
+            assertEquals(2, saturatedHealth.capacity)
+            assertEquals(2, saturatedHealth.totalPendingEntryCount)
+            assertEquals(3L, saturatedHealth.totalRecordedEntryCount)
+            assertEquals(1L, saturatedHealth.droppedEntryCount)
+
+            val firstEntry = outbox.pendingEntries(
+                roomId = "room-1",
+                matchId = "match-1",
+                limit = 1,
+            ).single()
+
+            outbox.acknowledge(
+                entries = listOf(firstEntry),
+            )
+
+            outbox.record(
+                event = event(
+                    clientSessionId = "android-session-1",
+                    roomId = "room-1",
+                    matchId = "match-1",
+                    type = OnlineTraceType.ACTION_ACCEPTED,
+                ),
+            )
+            outbox.awaitPendingPersistence()
+
+            assertEquals(
+                listOf(2L, 4L),
+                outbox.pendingEntries(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                    limit = 10,
+                ).map { entry ->
+                    entry.sequence
+                },
+            )
+
+            val recoveredHealth = outbox.health.value
+
+            assertEquals(2, recoveredHealth.totalPendingEntryCount)
+            assertEquals(4L, recoveredHealth.totalRecordedEntryCount)
+            assertEquals(1L, recoveredHealth.droppedEntryCount)
+        }
+
+    @Test
+    fun recreation_prunes_oldest_durable_entries_above_the_new_capacity() =
+        runBlocking {
+            val directory = Files.createTempDirectory(
+                "online-trace-outbox-recreation-test",
+            ).toFile()
+            val originalOutbox = PersistentOnlineTraceOutbox(
+                directory = directory,
+                capacity = 3,
+            )
+
+            repeat(3) {
+                originalOutbox.record(
+                    event = event(
+                        clientSessionId = "android-session-1",
+                        roomId = "room-1",
+                        matchId = "match-1",
+                        type = OnlineTraceType.ACTION_SUBMITTED,
+                    ),
+                )
+            }
+
+            originalOutbox.awaitPendingPersistence()
+
+            val boundedOutbox = PersistentOnlineTraceOutbox(
+                directory = directory,
+                capacity = 2,
+            )
+
+            assertEquals(
+                listOf(2L, 3L),
+                boundedOutbox.pendingEntries(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                    limit = 10,
+                ).map { entry ->
+                    entry.sequence
+                },
+            )
+
+            val health = boundedOutbox.health.value
+
+            assertEquals(2, health.capacity)
+            assertEquals(2, health.totalPendingEntryCount)
+            assertEquals(3L, health.totalRecordedEntryCount)
+            assertEquals(1L, health.droppedEntryCount)
+            assertEquals(
+                2,
+                directory.listFiles()
+                    .orEmpty()
+                    .count { file ->
+                        file.name.endsWith(".trace.json")
+                    },
+            )
+        }
+
     private fun event(
         clientSessionId: String,
         roomId: String,
