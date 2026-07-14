@@ -4,7 +4,14 @@ import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.online.observability.InMemoryOnlineTraceBuffer
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchResultDto
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceContext
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceEntry
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceEvent
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLevel
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
+import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -454,6 +461,62 @@ class RemoteOnlineRoomRepositoryTest {
                 traceBuffer.snapshot().map { entry ->
                     entry.event.type
                 },
+            )
+        }
+
+    @Test
+    fun trace_submission_preserves_structured_terminal_rejection() =
+        runBlocking {
+            val rejection = OnlineTraceBatchResultDto(
+                accepted = false,
+                reason = "Evento inválido.",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitTraceBatchResult = rejection,
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+            val batch = createTraceBatch()
+
+            val result = repository.submitTraceBatch(
+                batch = batch,
+            )
+
+            assertEquals(rejection, result)
+            assertEquals(false, result.retryable)
+            assertEquals(
+                listOf(batch),
+                apiClient.submitTraceBatchRequests,
+            )
+        }
+
+    @Test
+    fun trace_submission_marks_client_failure_as_retryable() =
+        runBlocking {
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitTraceBatchFailure =
+                    IllegalStateException("servidor fora"),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+            val batch = createTraceBatch()
+
+            val result = repository.submitTraceBatch(
+                batch = batch,
+            )
+
+            assertEquals(false, result.accepted)
+            assertEquals(true, result.retryable)
+            assertTrue(
+                result.reason.orEmpty().contains(
+                    "servidor fora",
+                ),
+            )
+            assertEquals(
+                listOf(batch),
+                apiClient.submitTraceBatchRequests,
             )
         }
 
@@ -3073,6 +3136,27 @@ class RemoteOnlineRoomRepositoryTest {
         )
     }
 
+    private fun createTraceBatch(): OnlineTraceBatchDto {
+        return OnlineTraceBatchDto(
+            entries = listOf(
+                OnlineTraceEntry(
+                    sequence = 1L,
+                    event = OnlineTraceEvent(
+                        occurredAtEpochMillis = 1_000L,
+                        level = OnlineTraceLevel.INFO,
+                        source = OnlineTraceSource.CLIENT_UI,
+                        type = OnlineTraceType.ANIMATION_FINISHED,
+                        context = OnlineTraceContext(
+                            clientSessionId = "android-session-1",
+                            roomId = "room-1",
+                            matchId = "match-1",
+                        ),
+                    ),
+                ),
+            ),
+        )
+    }
+
     private fun createTraceLogger(
         traceBuffer: InMemoryOnlineTraceBuffer,
     ): OnlineTraceLogger {
@@ -3195,9 +3279,16 @@ class RemoteOnlineRoomRepositoryTest {
                 accepted = false,
                 reason = "submitAction não configurado no teste.",
             ),
+        private val submitTraceBatchResult:
+            OnlineTraceBatchResultDto =
+            OnlineTraceBatchResultDto(
+                accepted = true,
+                storedEntryCount = 1,
+            ),
         private val createRoomFailure: Throwable? = null,
         private val joinRoomFailure: Throwable? = null,
         private val submitActionFailure: Throwable? = null,
+        private val submitTraceBatchFailure: Throwable? = null,
         private val fetchRoomSnapshotFailure: Throwable? = null,
         private val fetchMatchSnapshotFailure: Throwable? = null,
         private val roomSnapshotsById: MutableMap<String, OnlineRoomSnapshotDto> =
@@ -3210,6 +3301,8 @@ class RemoteOnlineRoomRepositoryTest {
         val createRoomRequests = mutableListOf<CreateOnlineRoomRequestDto>()
         val joinRoomRequests = mutableListOf<JoinOnlineRoomRequestDto>()
         val submitActionRequests = mutableListOf<OnlinePlayerActionDto>()
+        val submitTraceBatchRequests =
+            mutableListOf<OnlineTraceBatchDto>()
         val fetchRoomSnapshotRequests = mutableListOf<String>()
         val fetchMatchSnapshotRequests = mutableListOf<String>()
         val fetchMatchSnapshotsAfterRequests = mutableListOf<Pair<String, Long>>()
@@ -3273,6 +3366,18 @@ class RemoteOnlineRoomRepositoryTest {
             }
 
             return submitActionResult
+        }
+
+        override suspend fun submitTraceBatch(
+            batch: OnlineTraceBatchDto,
+        ): OnlineTraceBatchResultDto {
+            submitTraceBatchRequests += batch
+
+            submitTraceBatchFailure?.let { error ->
+                throw error
+            }
+
+            return submitTraceBatchResult
         }
 
         override suspend fun fetchRoomSnapshot(

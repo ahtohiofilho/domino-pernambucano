@@ -20,6 +20,9 @@ data class OnlineTraceOutboxHealth(
     val pendingEntryCount: Int,
     val oldestPendingSequence: Long?,
     val newestPendingSequence: Long?,
+    val terminallyDiscardedEntryCount: Long,
+    val lastTerminallyDiscardedSequence: Long?,
+    val lastTerminalRejectionReason: String?,
     val consecutiveFailureCount: Int,
     val lastFailureKind: OnlineTraceUploadFailureKind?,
     val lastFailureAtEpochMillis: Long?,
@@ -74,7 +77,7 @@ class OnlineTraceBatchUploader(
         matchId: String,
     ) {
         uploadMutex.withLock {
-            while (true) {
+            uploadLoop@ while (true) {
                 val lastAcknowledgedSequence =
                     lastAcknowledgedSequenceByMatchId[matchId] ?: 0L
 
@@ -112,13 +115,50 @@ class OnlineTraceBatchUploader(
                 }
 
                 if (!result.accepted) {
+                    if (result.retryable) {
+                        publishOutboxHealth(
+                            roomId = roomId,
+                            matchId = matchId,
+                            lastAcknowledgedSequence =
+                                lastAcknowledgedSequence,
+                            failureKind =
+                                OnlineTraceUploadFailureKind.TRANSPORT,
+                        )
+                        return
+                    }
+
+                    try {
+                        traceOutbox.acknowledge(
+                            entries = pendingEntries,
+                        )
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Throwable) {
+                        publishOutboxHealth(
+                            roomId = roomId,
+                            matchId = matchId,
+                            lastAcknowledgedSequence =
+                                lastAcknowledgedSequence,
+                            failureKind =
+                                OnlineTraceUploadFailureKind.ACKNOWLEDGEMENT,
+                        )
+                        return
+                    }
+
                     publishOutboxHealth(
                         roomId = roomId,
                         matchId = matchId,
-                        lastAcknowledgedSequence = lastAcknowledgedSequence,
-                        failureKind = OnlineTraceUploadFailureKind.REJECTED,
+                        lastAcknowledgedSequence =
+                            lastAcknowledgedSequence,
+                        failureKind =
+                            OnlineTraceUploadFailureKind.REJECTED,
+                        terminallyDiscardedEntries =
+                            pendingEntries,
+                        terminalRejectionReason =
+                            result.reason,
                     )
-                    return
+
+                    continue@uploadLoop
                 }
 
                 try {
@@ -171,6 +211,9 @@ class OnlineTraceBatchUploader(
         lastAcknowledgedSequence: Long,
         failureKind: OnlineTraceUploadFailureKind? = null,
         clearFailures: Boolean = false,
+        terminallyDiscardedEntries: List<OnlineTraceEntry> =
+            emptyList(),
+        terminalRejectionReason: String? = null,
     ) {
         val previousHealth = mutableOutboxHealth.value[matchId]
         val pendingEntries = findPendingEntries(
@@ -178,6 +221,27 @@ class OnlineTraceBatchUploader(
             matchId = matchId,
             limit = Int.MAX_VALUE,
         )
+
+        val terminallyDiscardedEntryCount =
+            (
+                previousHealth
+                    ?.terminallyDiscardedEntryCount
+                    ?: 0L
+                ) + terminallyDiscardedEntries.size.toLong()
+
+        val lastTerminallyDiscardedSequence =
+            terminallyDiscardedEntries
+                .lastOrNull()
+                ?.sequence
+                ?: previousHealth
+                    ?.lastTerminallyDiscardedSequence
+
+        val lastTerminalRejectionReason =
+            if (terminallyDiscardedEntries.isNotEmpty()) {
+                terminalRejectionReason
+            } else {
+                previousHealth?.lastTerminalRejectionReason
+            }
 
         val hasFailure = failureKind != null
         val consecutiveFailureCount = when {
@@ -207,6 +271,12 @@ class OnlineTraceBatchUploader(
             pendingEntryCount = pendingEntries.size,
             oldestPendingSequence = pendingEntries.firstOrNull()?.sequence,
             newestPendingSequence = pendingEntries.lastOrNull()?.sequence,
+            terminallyDiscardedEntryCount =
+                terminallyDiscardedEntryCount,
+            lastTerminallyDiscardedSequence =
+                lastTerminallyDiscardedSequence,
+            lastTerminalRejectionReason =
+                lastTerminalRejectionReason,
             consecutiveFailureCount = consecutiveFailureCount,
             lastFailureKind = lastFailureKind,
             lastFailureAtEpochMillis = lastFailureAtEpochMillis,

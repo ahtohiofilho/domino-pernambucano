@@ -414,6 +414,7 @@ class RemoteOnlineRoomRepository(
         val client = apiClient ?: return OnlineTraceBatchResultDto(
             accepted = false,
             reason = getUnavailableBackendReason(),
+            retryable = true,
         )
 
         return try {
@@ -433,6 +434,7 @@ class RemoteOnlineRoomRepository(
                 reason = error.toOnlineFailureReason(
                     fallback = "Falha ao enviar rastreamento online.",
                 ),
+                retryable = true,
             )
         }
     }

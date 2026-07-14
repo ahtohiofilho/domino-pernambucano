@@ -19,4 +19,5 @@ data class OnlineTraceBatchResultDto(
     val accepted: Boolean,
     val storedEntryCount: Int = 0,
     val reason: String? = null,
+    val retryable: Boolean = false,
 )

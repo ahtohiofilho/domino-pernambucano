@@ -132,6 +132,161 @@ class OnlineTraceBatchUploaderTest {
             assertNull(recoveredHealth.lastFailureAtEpochMillis)
         }
 
+    @Test
+    fun terminal_rejection_discards_only_the_rejected_batch_and_unblocks_later_entries() =
+        runBlocking {
+            val buffer = InMemoryOnlineTraceBuffer()
+            val repository = RecordingTraceRepository(
+                traceBatchResults = mutableListOf(
+                    OnlineTraceBatchResultDto(
+                        accepted = false,
+                        reason = "schemaVersion não suportada.",
+                    ),
+                ),
+            )
+            val uploader = OnlineTraceBatchUploader(
+                repository = repository,
+                traceBuffer = buffer,
+                batchSize = 1,
+            )
+
+            buffer.record(
+                clientEvent(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                ),
+            )
+            buffer.record(
+                clientEvent(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                ),
+            )
+
+            uploader.flushPendingEntries(
+                roomId = "room-1",
+                matchId = "match-1",
+            )
+
+            assertEquals(
+                listOf(
+                    listOf(1L),
+                    listOf(2L),
+                ),
+                repository.receivedBatches.map { batch ->
+                    batch.entries.map { entry ->
+                        entry.sequence
+                    }
+                },
+            )
+
+            assertEquals(
+                emptyList<Long>(),
+                buffer.pendingEntries(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                    limit = 10,
+                ).map { entry ->
+                    entry.sequence
+                },
+            )
+
+            val health =
+                uploader.outboxHealth.value.getValue("match-1")
+
+            assertEquals(2L, health.lastAcknowledgedSequence)
+            assertEquals(1L, health.terminallyDiscardedEntryCount)
+            assertEquals(1L, health.lastTerminallyDiscardedSequence)
+            assertEquals(
+                "schemaVersion não suportada.",
+                health.lastTerminalRejectionReason,
+            )
+            assertEquals(0, health.consecutiveFailureCount)
+            assertNull(health.lastFailureKind)
+        }
+
+    @Test
+    fun retryable_rejection_keeps_batch_pending_until_a_later_success() =
+        runBlocking {
+            val buffer = InMemoryOnlineTraceBuffer()
+            val repository = RecordingTraceRepository(
+                traceBatchResults = mutableListOf(
+                    OnlineTraceBatchResultDto(
+                        accepted = false,
+                        reason = "Backend temporariamente indisponível.",
+                        retryable = true,
+                    ),
+                ),
+            )
+            val uploader = OnlineTraceBatchUploader(
+                repository = repository,
+                traceBuffer = buffer,
+            )
+
+            buffer.record(
+                clientEvent(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                ),
+            )
+
+            uploader.flushPendingEntries(
+                roomId = "room-1",
+                matchId = "match-1",
+            )
+
+            assertEquals(
+                listOf(1L),
+                buffer.pendingEntries(
+                    roomId = "room-1",
+                    matchId = "match-1",
+                    limit = 10,
+                ).map { entry ->
+                    entry.sequence
+                },
+            )
+
+            val failedHealth =
+                uploader.outboxHealth.value.getValue("match-1")
+
+            assertEquals(
+                OnlineTraceUploadFailureKind.TRANSPORT,
+                failedHealth.lastFailureKind,
+            )
+            assertEquals(
+                0L,
+                failedHealth.terminallyDiscardedEntryCount,
+            )
+
+            uploader.flushPendingEntries(
+                roomId = "room-1",
+                matchId = "match-1",
+            )
+
+            assertEquals(
+                listOf(
+                    listOf(1L),
+                    listOf(1L),
+                ),
+                repository.receivedBatches.map { batch ->
+                    batch.entries.map { entry ->
+                        entry.sequence
+                    }
+                },
+            )
+
+            val recoveredHealth =
+                uploader.outboxHealth.value.getValue("match-1")
+
+            assertEquals(0, recoveredHealth.pendingEntryCount)
+            assertEquals(0, recoveredHealth.consecutiveFailureCount)
+            assertNull(recoveredHealth.lastFailureKind)
+            assertEquals(
+                0L,
+                recoveredHealth.terminallyDiscardedEntryCount,
+            )
+        }
+
     private fun clientEvent(
         roomId: String,
         matchId: String?,
@@ -151,6 +306,8 @@ class OnlineTraceBatchUploaderTest {
 
     private class RecordingTraceRepository(
         private var failNextTraceBatch: Boolean = false,
+        private val traceBatchResults:
+            MutableList<OnlineTraceBatchResultDto> = mutableListOf(),
     ) : OnlineRoomRepository {
         private val mutableRoomSnapshot = MutableStateFlow<OnlineRoomSnapshotDto?>(null)
         private val mutableMatchSnapshot = MutableStateFlow<OnlineMatchSnapshotDto?>(null)
@@ -187,6 +344,10 @@ class OnlineTraceBatchUploaderTest {
                 failNextTraceBatch = false
 
                 throw IllegalStateException("Falha de transporte simulada.")
+            }
+
+            if (traceBatchResults.isNotEmpty()) {
+                return traceBatchResults.removeAt(0)
             }
 
             return OnlineTraceBatchResultDto(
