@@ -28,6 +28,8 @@ class OnlineTraceArchive(
     },
     private val ingestionPolicy: OnlineTraceIngestionPolicy =
         OnlineTraceIngestionPolicy.Default,
+    private val memoryPolicy: OnlineTraceArchiveMemoryPolicy =
+        OnlineTraceArchiveMemoryPolicy.Default,
     private val json: Json = Json {
         encodeDefaults = true
     },
@@ -37,18 +39,30 @@ class OnlineTraceArchive(
         val matchId: String,
         val entries: MutableList<OnlineTraceArchiveEntry> = mutableListOf(),
         var finalSnapshotObserved: Boolean = false,
+        var totalEntryCount: Long = 0L,
+        var evictedEntryCount: Long = 0L,
+        var firstServerReceivedAtEpochMillis: Long? = null,
+        var lastServerReceivedAtEpochMillis: Long? = null,
     )
 
-    private val journalsByMatchId = mutableMapOf<String, MatchJournal>()
-    private val matchIdsByRoomId = mutableMapOf<String, String>()
+    private val journalsByMatchId =
+        linkedMapOf<String, MatchJournal>()
+    private val matchIdsByRoomId =
+        mutableMapOf<String, String>()
     private val pendingEntriesByRoomId =
-        mutableMapOf<String, MutableList<OnlineTraceArchiveEntry>>()
+        linkedMapOf<String, MutableList<OnlineTraceArchiveEntry>>()
 
     /*
      * A chave inclui clientSessionId porque a sequência reinicia após um novo
      * processo Android. Eventos do servidor não usam esse mecanismo.
      */
-    private val receivedClientEntryKeys = mutableSetOf<String>()
+    private val receivedClientEntryKeys = linkedSetOf<String>()
+
+    private var evictedJournalEntryCount = 0L
+    private var droppedPendingEntryCount = 0L
+    private var evictedFinalizedJournalCount = 0L
+    private var evictedClientDeduplicationKeyCount = 0L
+    private var untrackedJournalEntryCount = 0L
 
     @Synchronized
     override fun record(
@@ -83,11 +97,11 @@ class OnlineTraceArchive(
         batch.entries.forEach { entry ->
             val deduplicationKey = entry.clientDeduplicationKey()
 
-            if (!receivedClientEntryKeys.add(deduplicationKey)) {
+            if (!registerClientEntryKey(deduplicationKey)) {
                 return@forEach
             }
 
-            append(
+            val stored = append(
                 entry = OnlineTraceArchiveEntry(
                     serverReceivedAtEpochMillis = nowEpochMillis(),
                     origin = OnlineTraceArchiveOrigin.CLIENT,
@@ -96,7 +110,11 @@ class OnlineTraceArchive(
                 ),
             )
 
-            storedEntryCount += 1
+            if (stored) {
+                storedEntryCount += 1
+            } else {
+                receivedClientEntryKeys.remove(deduplicationKey)
+            }
         }
 
         return OnlineTraceBatchResultDto(
@@ -111,7 +129,7 @@ class OnlineTraceArchive(
 
     private fun append(
         entry: OnlineTraceArchiveEntry,
-    ) {
+    ): Boolean {
         val context = entry.event.context
         val roomId = context.roomId
         val matchId = context.matchId
@@ -122,46 +140,140 @@ class OnlineTraceArchive(
                 matchId = matchId,
             )
 
+            if (journal == null) {
+                pendingEntriesByRoomId
+                    .remove(roomId)
+                    .orEmpty()
+                    .forEach { pendingEntry ->
+                        appendTimelineEntry(
+                            matchId = matchId,
+                            entry = pendingEntry,
+                        )
+                        untrackedJournalEntryCount += 1L
+                    }
+
+                appendTimelineEntry(
+                    matchId = matchId,
+                    entry = entry,
+                )
+                untrackedJournalEntryCount += 1L
+                return true
+            }
+
             appendToJournal(
                 journal = journal,
                 entry = entry,
             )
 
-            return
+            return true
         }
 
         if (roomId.isNullOrBlank()) {
-            return
+            return false
         }
 
         val associatedMatchId = matchIdsByRoomId[roomId]
 
         if (associatedMatchId != null) {
             val journal = journalsByMatchId[associatedMatchId]
-                ?: return
+                ?: return false
 
             appendToJournal(
                 journal = journal,
                 entry = entry,
             )
 
-            return
+            return true
         }
 
-        pendingEntriesByRoomId
-            .getOrPut(roomId) { mutableListOf() }
-            .add(entry)
+        return retainPendingEntry(
+            roomId = roomId,
+            entry = entry,
+        )
+    }
+
+    private fun registerClientEntryKey(
+        deduplicationKey: String,
+    ): Boolean {
+        if (!receivedClientEntryKeys.add(deduplicationKey)) {
+            return false
+        }
+
+        while (
+            receivedClientEntryKeys.size >
+            memoryPolicy.maxClientDeduplicationKeyCount
+        ) {
+            val iterator = receivedClientEntryKeys.iterator()
+
+            check(iterator.hasNext()) {
+                "A janela de deduplicação perdeu seu estado."
+            }
+
+            iterator.next()
+            iterator.remove()
+            evictedClientDeduplicationKeyCount += 1L
+        }
+
+        return true
+    }
+
+    private fun retainPendingEntry(
+        roomId: String,
+        entry: OnlineTraceArchiveEntry,
+    ): Boolean {
+        val existingEntries = pendingEntriesByRoomId[roomId]
+
+        if (existingEntries == null) {
+            if (
+                pendingEntriesByRoomId.size >=
+                memoryPolicy.maxPendingRoomCount
+            ) {
+                droppedPendingEntryCount += 1L
+                return false
+            }
+
+            pendingEntriesByRoomId[roomId] =
+                mutableListOf(entry)
+
+            return true
+        }
+
+        if (
+            existingEntries.size >=
+            memoryPolicy.maxPendingEntriesPerRoom
+        ) {
+            droppedPendingEntryCount += 1L
+            return false
+        }
+
+        existingEntries += entry
+        return true
     }
 
     private fun getOrCreateJournal(
         roomId: String?,
         matchId: String,
-    ): MatchJournal {
-        val journal = journalsByMatchId.getOrPut(matchId) {
+    ): MatchJournal? {
+        val existingJournal = journalsByMatchId[matchId]
+
+        val journal = if (existingJournal != null) {
+            existingJournal
+        } else {
+            evictFinalizedJournalsUntilCapacity()
+
+            if (
+                journalsByMatchId.size >=
+                memoryPolicy.maxJournalCount
+            ) {
+                return null
+            }
+
             MatchJournal(
                 roomId = roomId,
                 matchId = matchId,
-            )
+            ).also { createdJournal ->
+                journalsByMatchId[matchId] = createdJournal
+            }
         }
 
         if (!roomId.isNullOrBlank()) {
@@ -182,11 +294,67 @@ class OnlineTraceArchive(
         return journal
     }
 
+    private fun evictFinalizedJournalsUntilCapacity() {
+        while (
+            journalsByMatchId.size >=
+            memoryPolicy.maxJournalCount
+        ) {
+            val candidate = journalsByMatchId.entries
+                .firstOrNull { (_, journal) ->
+                    journal.finalSnapshotObserved
+                }
+                ?: return
+
+            val removedJournal = candidate.value
+            journalsByMatchId.remove(candidate.key)
+
+            removedJournal.roomId?.let { roomId ->
+                if (matchIdsByRoomId[roomId] == candidate.key) {
+                    matchIdsByRoomId.remove(roomId)
+                }
+            }
+
+            evictedFinalizedJournalCount += 1L
+        }
+    }
+
     private fun appendToJournal(
         journal: MatchJournal,
         entry: OnlineTraceArchiveEntry,
     ) {
+        journal.totalEntryCount += 1L
+
+        journal.firstServerReceivedAtEpochMillis =
+            journal.firstServerReceivedAtEpochMillis
+                ?.let { currentFirst ->
+                    minOf(
+                        currentFirst,
+                        entry.serverReceivedAtEpochMillis,
+                    )
+                }
+                ?: entry.serverReceivedAtEpochMillis
+
+        journal.lastServerReceivedAtEpochMillis =
+            journal.lastServerReceivedAtEpochMillis
+                ?.let { currentLast ->
+                    maxOf(
+                        currentLast,
+                        entry.serverReceivedAtEpochMillis,
+                    )
+                }
+                ?: entry.serverReceivedAtEpochMillis
+
         journal.entries += entry
+
+        if (
+            journal.entries.size >
+            memoryPolicy.maxEntriesPerJournal
+        ) {
+            journal.entries.removeAt(0)
+            journal.evictedEntryCount += 1L
+            evictedJournalEntryCount += 1L
+        }
+
         appendTimelineEntry(
             matchId = journal.matchId,
             entry = entry,
@@ -241,16 +409,15 @@ class OnlineTraceArchive(
                 OnlineTraceArchiveManifest(
                     roomId = journal.roomId,
                     matchId = journal.matchId,
-                    firstServerReceivedAtEpochMillis = journal.entries
-                        .minOfOrNull { entry ->
-                            entry.serverReceivedAtEpochMillis
-                        },
-                    lastServerReceivedAtEpochMillis = journal.entries
-                        .maxOfOrNull { entry ->
-                            entry.serverReceivedAtEpochMillis
-                        },
+                    firstServerReceivedAtEpochMillis =
+                        journal.firstServerReceivedAtEpochMillis,
+                    lastServerReceivedAtEpochMillis =
+                        journal.lastServerReceivedAtEpochMillis,
                     finalSnapshotObserved = journal.finalSnapshotObserved,
-                    totalEntryCount = journal.entries.size,
+                    totalEntryCount = journal.totalEntryCount,
+                    retainedEntryCount = journal.entries.size,
+                    evictedFromMemoryEntryCount =
+                        journal.evictedEntryCount,
                     clientSessionIds = journal.entries
                         .mapNotNull { entry ->
                             entry.event.context.clientSessionId
@@ -315,6 +482,14 @@ class OnlineTraceArchive(
             appendLine("SALA: ${journal.roomId ?: "não informada"}")
             appendLine("STATUS: ${if (journal.finalSnapshotObserved) "FINALIZADA" else "EM ANDAMENTO"}")
             appendLine("EVENTOS CONSOLIDADOS: ${entries.size}")
+            appendLine(
+                "EVENTOS PERSISTIDOS NO TIMELINE: " +
+                        journal.totalEntryCount,
+            )
+            appendLine(
+                "EVENTOS FORA DA JANELA CONSOLIDADA: " +
+                        journal.evictedEntryCount,
+            )
             appendLine("REVISÕES PUBLICADAS PELO SERVIDOR: ${serverPublishedRevisions.size}")
 
             serverPublishedRevisions.lastOrNull()?.let { revision ->
@@ -390,7 +565,11 @@ class OnlineTraceArchive(
 
         return buildString {
             appendLine("PARTIDA: ${journal.matchId}")
-            appendLine("ANOMALIAS: ${anomalyEntries.size}")
+            appendLine("ANOMALIAS NA JANELA: ${anomalyEntries.size}")
+            appendLine(
+                "EVENTOS FORA DA JANELA: " +
+                        journal.evictedEntryCount,
+            )
             appendLine()
 
             if (anomalyEntries.isEmpty()) {
@@ -448,6 +627,38 @@ class OnlineTraceArchive(
         }
     }
 
+    @Synchronized
+    fun snapshotMemoryHealth(): OnlineTraceArchiveMemoryHealth {
+        return OnlineTraceArchiveMemoryHealth(
+            journalCount = journalsByMatchId.size,
+            finalizedJournalCount = journalsByMatchId.values.count {
+                    journal ->
+                journal.finalSnapshotObserved
+            },
+            retainedJournalEntryCount = journalsByMatchId.values
+                .sumOf { journal ->
+                    journal.entries.size.toLong()
+                },
+            pendingRoomCount = pendingEntriesByRoomId.size,
+            pendingEntryCount = pendingEntriesByRoomId.values
+                .sumOf { entries ->
+                    entries.size.toLong()
+                },
+            clientDeduplicationKeyCount =
+                receivedClientEntryKeys.size,
+            evictedJournalEntryCount =
+                evictedJournalEntryCount,
+            droppedPendingEntryCount =
+                droppedPendingEntryCount,
+            evictedFinalizedJournalCount =
+                evictedFinalizedJournalCount,
+            evictedClientDeduplicationKeyCount =
+                evictedClientDeduplicationKeyCount,
+            untrackedJournalEntryCount =
+                untrackedJournalEntryCount,
+        )
+    }
+
     private fun directoryForMatch(
         matchId: String,
     ): File {
@@ -501,7 +712,9 @@ private data class OnlineTraceArchiveManifest(
     val firstServerReceivedAtEpochMillis: Long? = null,
     val lastServerReceivedAtEpochMillis: Long? = null,
     val finalSnapshotObserved: Boolean,
-    val totalEntryCount: Int,
+    val totalEntryCount: Long,
+    val retainedEntryCount: Int,
+    val evictedFromMemoryEntryCount: Long,
     val clientSessionIds: List<String>,
     val generatedAtEpochMillis: Long,
 )
