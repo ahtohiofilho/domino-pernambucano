@@ -75,6 +75,40 @@ class MainMenuScreenTest {
     }
 
     @Test
+    fun completed_recoverable_waiting_inspection_shows_resume_room_and_hides_resume_match() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyWaitingParticipation(),
+                pendingOnlineParticipationInspection =
+                    recoverableWaitingInspection(),
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "Participação online confirmada. " +
+                        "A sala ainda está aguardando jogadores.",
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("Retomar sala online")
+            .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText("Retomar partida online")
+            .assertCountEquals(0)
+
+        composeRule
+            .onAllNodesWithText("Verificar participação online")
+            .assertCountEquals(0)
+    }
+
+    @Test
     fun remote_session_rejected_resume_feedback_hides_resume_and_shows_explicit_discard() {
         var discardClickCount = 0
 
@@ -315,12 +349,49 @@ class MainMenuScreenTest {
             )
     }
 
-    private fun readyBinding(): OnlineParticipationBinding {
+    private fun readyWaitingParticipation():
+        OnlinePendingParticipationLocalResolution {
+        return OnlinePendingParticipationLocalResolution
+            .ReadyForRemoteReconciliation(
+                binding = readyBinding(
+                    matchId = null,
+                ),
+            )
+    }
+
+    private fun readyBinding(
+        matchId: String? = "match-1",
+    ): OnlineParticipationBinding {
         return OnlineParticipationBinding(
             roomId = "room-1",
-            matchId = "match-1",
+            matchId = matchId,
             playerId = "player-1",
             localSeatIndex = 0,
+        )
+    }
+
+    private fun recoverableWaitingInspection():
+        OnlinePendingParticipationInspectionState {
+        return OnlinePendingParticipationInspectionState.Completed(
+            result = OnlinePendingParticipationRemoteInspection.Recoverable(
+                roomSnapshot = OnlineRoomSnapshotDto(
+                    roomId = "room-1",
+                    roomCode = "123456",
+                    hostPlayerId = "player-1",
+                    status = OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+                    players = listOf(
+                        OnlineRoomPlayerDto(
+                            playerId = "player-1",
+                            name = "Jogador 1",
+                            seatIndex = 0,
+                            connected = true,
+                        ),
+                    ),
+                    matchId = null,
+                    createdAtEpochMillis = 1_000L,
+                    updatedAtEpochMillis = 1_000L,
+                ),
+            ),
         )
     }
 

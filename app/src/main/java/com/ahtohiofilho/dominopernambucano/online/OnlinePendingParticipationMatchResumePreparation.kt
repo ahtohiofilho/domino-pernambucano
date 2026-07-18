@@ -7,7 +7,8 @@ sealed interface OnlinePendingParticipationMatchResumePreparation {
         val matchSnapshot: OnlineMatchSnapshotDto,
     ) : OnlinePendingParticipationMatchResumePreparation
 
-    data class NotInMatch(
+    data class WaitingForPlayers(
+        val binding: OnlineParticipationBinding,
         val roomSnapshot: OnlineRoomSnapshotDto,
     ) : OnlinePendingParticipationMatchResumePreparation
 
@@ -27,6 +28,7 @@ sealed interface OnlinePendingParticipationMatchResumePreparation {
 }
 
 enum class OnlinePendingParticipationMatchResumeInvalidReason {
+    ROOM_NOT_FOUND,
     ROOM_ID_MISMATCH,
     ROOM_CLOSED,
     ROOM_FINISHED,

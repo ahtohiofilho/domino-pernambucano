@@ -33,6 +33,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
 import com.ahtohiofilho.dominopernambucano.online.OnlineDevelopmentParticipantCompletion
 import com.ahtohiofilho.dominopernambucano.online.OnlineDevelopmentParticipantRequest
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBinding
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
@@ -52,6 +53,7 @@ import kotlinx.coroutines.launch
 fun OnlineCreateRoomRoute(
     roomRepository: OnlineRoomRepository,
     localPlayerIdentity: OnlinePlayerIdentity,
+    resumedParticipationBinding: OnlineParticipationBinding? = null,
     debugOptions: OnlineDebugOptions,
     traceLogger: OnlineTraceLogger,
     onStartOnlineMatch: (OnlineDominoMatchCoordinator) -> Unit,
@@ -72,27 +74,68 @@ fun OnlineCreateRoomRoute(
     val localPlayerId = localPlayerIdentity.playerId
     val localPlayerName = localPlayerIdentity.playerName
 
-    var feedbackMessage by remember {
+    var feedbackMessage by remember(
+        resumedParticipationBinding,
+    ) {
         mutableStateOf<String?>(null)
     }
 
-    var nextFakePlayerNumber by remember {
+    var nextFakePlayerNumber by remember(
+        resumedParticipationBinding,
+    ) {
         mutableIntStateOf(2)
     }
 
-    var hasOpenedMatch by remember {
+    var hasOpenedMatch by remember(
+        resumedParticipationBinding,
+    ) {
         mutableStateOf(false)
     }
 
-    var participationPlayerId by remember {
-        mutableStateOf(localPlayerId)
+    var participationPlayerId by remember(
+        resumedParticipationBinding,
+        localPlayerId,
+    ) {
+        mutableStateOf(
+            resumedParticipationBinding?.playerId ?: localPlayerId,
+        )
     }
 
     LaunchedEffect(
         roomRepository,
         localPlayerId,
         localPlayerName,
+        resumedParticipationBinding,
     ) {
+        val resumedBinding = resumedParticipationBinding
+
+        if (resumedBinding != null) {
+            participationPlayerId = resumedBinding.playerId
+
+            val resumedRoomSnapshot = roomRepository.roomSnapshot.value
+
+            feedbackMessage = when {
+                resumedRoomSnapshot == null -> {
+                    "Não foi possível carregar a sala online retomada."
+                }
+
+                resumedRoomSnapshot.roomId != resumedBinding.roomId -> {
+                    "A sala online carregada não corresponde à participação salva."
+                }
+
+                findLocalSeatIndex(
+                    roomSnapshot = resumedRoomSnapshot,
+                    localPlayerId = resumedBinding.playerId,
+                ) != resumedBinding.localSeatIndex -> {
+                    "A posição do jogador na sala não corresponde à participação salva."
+                }
+
+                else -> null
+            }
+
+            return@LaunchedEffect
+        }
+
         val result = roomRepository.createRoom(
             CreateOnlineRoomRequestDto(
                 localPlayerId = localPlayerId,

@@ -8,6 +8,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
+import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
@@ -44,16 +45,17 @@ fun MainMenuScreen(
                 .ReadyForRemoteReconciliation &&
                 pendingOnlineParticipation.binding == rejectedBinding
 
+    val recoverablePendingOnlineParticipation =
+        (
+                pendingOnlineParticipationInspection
+                        as? OnlinePendingParticipationInspectionState.Completed
+                )?.result as? OnlinePendingParticipationRemoteInspection.Recoverable
+
     val resumePendingOnlineMatchAvailable =
         pendingOnlineParticipation is
                 OnlinePendingParticipationLocalResolution
                 .ReadyForRemoteReconciliation &&
-                (
-                        pendingOnlineParticipationInspection
-                                as? OnlinePendingParticipationInspectionState
-                        .Completed
-                        )?.result is OnlinePendingParticipationRemoteInspection
-                .Recoverable &&
+                recoverablePendingOnlineParticipation != null &&
                 !discardRejectedPendingOnlineParticipationAvailable
 
     val menuActionInProgress =
@@ -133,7 +135,23 @@ fun MainMenuScreen(
                 text = if (pendingOnlineMatchResumeInProgress) {
                     "Retomando..."
                 } else {
-                    "Retomar partida online"
+                    when (
+                        recoverablePendingOnlineParticipation
+                            ?.roomSnapshot
+                            ?.status
+                    ) {
+                        OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
+                            "Retomar sala online"
+                        }
+
+                        OnlineRoomStatusDto.IN_MATCH -> {
+                            "Retomar partida online"
+                        }
+
+                        else -> {
+                            "Retomar participação online"
+                        }
+                    }
                 },
                 onClick = onResumePendingOnlineMatchClick,
                 enabled = !menuActionInProgress,
@@ -178,7 +196,20 @@ private fun OnlinePendingParticipationRemoteInspection
         .toInspectionMessage(): String {
     return when (this) {
         is OnlinePendingParticipationRemoteInspection.Recoverable -> {
-            "Participação online confirmada."
+            when (roomSnapshot.status) {
+                OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
+                    "Participação online confirmada. " +
+                            "A sala ainda está aguardando jogadores."
+                }
+
+                OnlineRoomStatusDto.IN_MATCH -> {
+                    "Participação online confirmada."
+                }
+
+                else -> {
+                    "Participação online confirmada."
+                }
+            }
         }
 
         is OnlinePendingParticipationRemoteInspection.NoLongerRecoverable -> {

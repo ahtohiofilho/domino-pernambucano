@@ -265,102 +265,163 @@ fun DominoPernambucanoApp(
                                     OnlineDominoMatchCoordinator? = null
 
                             try {
-                                val preparation =
-                                    onlineRoomRepository
-                                        .preparePendingParticipationMatchResume(
-                                            binding =
-                                                pendingParticipation.binding,
-                                        )
-
-                                if (
-                                    preparation is
-                                            OnlinePendingParticipationMatchResumePreparation
-                                            .RemoteSessionRejected
+                                when (
+                                    val preparation =
+                                        onlineRoomRepository
+                                            .preparePendingParticipationMatchResume(
+                                                binding =
+                                                    pendingParticipation.binding,
+                                            )
                                 ) {
-                                    sessionCoordinator
-                                        .recordPendingOnlineParticipationRemoteSessionRejected(
-                                            binding =
-                                                pendingParticipation.binding,
-                                        )
+                                    OnlinePendingParticipationMatchResumePreparation
+                                        .RemoteSessionRejected -> {
+                                        sessionCoordinator
+                                            .recordPendingOnlineParticipationRemoteSessionRejected(
+                                                binding =
+                                                    pendingParticipation.binding,
+                                            )
 
-                                    pendingOnlineMatchResumeFeedbackMessage =
-                                        "N\u00e3o foi poss\u00edvel retomar a partida: " +
-                                                "a sess\u00e3o online deste dispositivo foi rejeitada."
-                                    return@launch
-                                }
+                                        pendingOnlineMatchResumeFeedbackMessage =
+                                            "Não foi possível retomar a participação online: " +
+                                                    "a sessão deste dispositivo foi rejeitada."
+                                    }
 
-                                if (
-                                    preparation is
-                                            OnlinePendingParticipationMatchResumePreparation
-                                            .NotAttempted
-                                ) {
-                                    sessionCoordinator
-                                        .invalidatePendingOnlineParticipationRemoteConfirmation(
-                                            binding =
-                                                pendingParticipation.binding,
-                                        )
-                                    return@launch
-                                }
+                                    is OnlinePendingParticipationMatchResumePreparation
+                                        .NotAttempted -> {
+                                        sessionCoordinator
+                                            .invalidatePendingOnlineParticipationRemoteConfirmation(
+                                                binding =
+                                                    pendingParticipation.binding,
+                                            )
 
-                                if (
-                                    preparation !is
-                                            OnlinePendingParticipationMatchResumePreparation
-                                            .Ready
-                                ) {
-                                    return@launch
-                                }
+                                        pendingOnlineMatchResumeFeedbackMessage =
+                                            "Não foi possível retomar neste dispositivo. " +
+                                                    "Verifique a participação novamente."
+                                    }
 
-                                val matchCoordinator =
-                                    OnlineDominoMatchCoordinator(
-                                        repository = onlineRoomRepository,
-                                        roomId =
-                                            preparation.roomSnapshot.roomId,
-                                        matchId =
-                                            preparation.matchSnapshot.matchId,
-                                        localPlayerId =
-                                            preparation.binding.playerId,
-                                        localPlayerIndex =
-                                            preparation.binding.localSeatIndex,
-                                        initialSnapshot =
-                                            preparation.matchSnapshot,
-                                        traceLogger = onlineTraceLogger,
-                                    )
+                                    is OnlinePendingParticipationMatchResumePreparation
+                                        .NoLongerRecoverable -> {
+                                        sessionCoordinator
+                                            .invalidatePendingOnlineParticipationRemoteConfirmation(
+                                                binding =
+                                                    pendingParticipation.binding,
+                                            )
 
-                                createdMatchCoordinator = matchCoordinator
+                                        pendingOnlineMatchResumeFeedbackMessage =
+                                            "A participação online anterior não está mais " +
+                                                    "disponível. Verifique novamente."
+                                    }
 
-                                val activation =
-                                    onlineRoomRepository
-                                        .activatePendingParticipationMatchResume(
-                                            preparation = preparation,
-                                        )
+                                    is OnlinePendingParticipationMatchResumePreparation
+                                        .TemporarilyUnavailable -> {
+                                        pendingOnlineMatchResumeFeedbackMessage =
+                                            "Não foi possível retomar agora. Tente novamente."
+                                    }
 
-                                if (
-                                    activation is
+                                    is OnlinePendingParticipationMatchResumePreparation
+                                        .WaitingForPlayers -> {
+                                        when (
+                                            val activation =
+                                                onlineRoomRepository
+                                                    .activatePendingParticipationRoomResume(
+                                                        preparation = preparation,
+                                                    )
+                                        ) {
                                             OnlinePendingParticipationMatchResumeActivation
-                                            .NotAttempted
-                                ) {
-                                    sessionCoordinator
-                                        .invalidatePendingOnlineParticipationRemoteConfirmation(
-                                            binding = preparation.binding,
-                                        )
-                                    return@launch
-                                }
+                                                .Activated -> {
+                                                sessionCoordinator.dispatch(
+                                                    DominoSessionCommand
+                                                        .OpenResumedOnlineRoom(
+                                                            binding =
+                                                                preparation.binding,
+                                                        ),
+                                                )
+                                            }
 
-                                if (
-                                    activation !is
+                                            is OnlinePendingParticipationMatchResumeActivation
+                                                .NotAttempted -> {
+                                                sessionCoordinator
+                                                    .invalidatePendingOnlineParticipationRemoteConfirmation(
+                                                        binding =
+                                                            preparation.binding,
+                                                    )
+
+                                                pendingOnlineMatchResumeFeedbackMessage =
+                                                    "Não foi possível reabrir a sala neste " +
+                                                            "dispositivo. Verifique a " +
+                                                            "participação novamente."
+                                            }
+
+                                            is OnlinePendingParticipationMatchResumeActivation
+                                                .TemporarilyUnavailable -> {
+                                                pendingOnlineMatchResumeFeedbackMessage =
+                                                    "Não foi possível reabrir a sala agora. " +
+                                                            "Tente novamente."
+                                            }
+                                        }
+                                    }
+
+                                    is OnlinePendingParticipationMatchResumePreparation
+                                        .Ready -> {
+                                        val matchCoordinator =
+                                            OnlineDominoMatchCoordinator(
+                                                repository = onlineRoomRepository,
+                                                roomId =
+                                                    preparation.roomSnapshot.roomId,
+                                                matchId =
+                                                    preparation.matchSnapshot.matchId,
+                                                localPlayerId =
+                                                    preparation.binding.playerId,
+                                                localPlayerIndex =
+                                                    preparation.binding.localSeatIndex,
+                                                initialSnapshot =
+                                                    preparation.matchSnapshot,
+                                                traceLogger = onlineTraceLogger,
+                                            )
+
+                                        createdMatchCoordinator = matchCoordinator
+
+                                        when (
+                                            val activation =
+                                                onlineRoomRepository
+                                                    .activatePendingParticipationMatchResume(
+                                                        preparation = preparation,
+                                                    )
+                                        ) {
                                             OnlinePendingParticipationMatchResumeActivation
-                                            .Activated
-                                ) {
-                                    return@launch
+                                                .Activated -> {
+                                                sessionCoordinator.dispatch(
+                                                    DominoSessionCommand.StartOnlineMatch(
+                                                        matchCoordinator = matchCoordinator,
+                                                    ),
+                                                )
+
+                                                createdMatchCoordinator = null
+                                            }
+
+                                            is OnlinePendingParticipationMatchResumeActivation
+                                                .NotAttempted -> {
+                                                sessionCoordinator
+                                                    .invalidatePendingOnlineParticipationRemoteConfirmation(
+                                                        binding =
+                                                            preparation.binding,
+                                                    )
+
+                                                pendingOnlineMatchResumeFeedbackMessage =
+                                                    "Não foi possível retomar a partida neste " +
+                                                            "dispositivo. Verifique a " +
+                                                            "participação novamente."
+                                            }
+
+                                            is OnlinePendingParticipationMatchResumeActivation
+                                                .TemporarilyUnavailable -> {
+                                                pendingOnlineMatchResumeFeedbackMessage =
+                                                    "Não foi possível retomar a partida agora. " +
+                                                            "Tente novamente."
+                                            }
+                                        }
+                                    }
                                 }
-
-                                sessionCoordinator.dispatch(
-                                    DominoSessionCommand.StartOnlineMatch(
-                                        matchCoordinator = matchCoordinator,
-                                    ),
-                                )
-
-                                createdMatchCoordinator = null
                             } finally {
                                 createdMatchCoordinator?.dispose()
 
@@ -431,6 +492,28 @@ fun DominoPernambucanoApp(
                 onBackClick = {
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.BackToPlayModeSelection,
+                    )
+                },
+            )
+        }
+
+        is DominoSessionState.OnlineResumedRoom -> {
+            OnlineCreateRoomRoute(
+                roomRepository = onlineRoomRepository,
+                localPlayerIdentity = onlinePlayerIdentity,
+                resumedParticipationBinding = state.binding,
+                debugOptions = onlineDebugOptions,
+                traceLogger = onlineTraceLogger,
+                onStartOnlineMatch = { matchCoordinator ->
+                    sessionCoordinator.dispatch(
+                        DominoSessionCommand.StartOnlineMatch(
+                            matchCoordinator = matchCoordinator,
+                        )
+                    )
+                },
+                onBackClick = {
+                    sessionCoordinator.dispatch(
+                        DominoSessionCommand.BackToMainMenu,
                     )
                 },
             )

@@ -289,7 +289,7 @@ class LocalDominoSessionCoordinatorTest {
     }
 
     @Test
-    fun inspect_pending_online_participation_clears_matching_binding_when_remote_result_is_no_longer_recoverable() {
+    fun inspect_room_not_found_clears_matching_pending_online_participation_binding() {
         val binding = createBinding()
         val store = TestOnlineParticipationBindingStore(
             initialBinding = binding,
@@ -297,7 +297,7 @@ class LocalDominoSessionCoordinatorTest {
         val inspection = OnlinePendingParticipationRemoteInspection
             .NoLongerRecoverable(
                 reason = OnlinePendingParticipationRemoteInvalidReason
-                    .ROOM_CLOSED,
+                    .ROOM_NOT_FOUND,
             )
         val coordinator = createReadyCoordinator(
             binding = binding,
@@ -349,7 +349,7 @@ class LocalDominoSessionCoordinatorTest {
     }
 
     @Test
-    fun inspect_pending_online_participation_preserves_replaced_binding_when_remote_result_is_no_longer_recoverable() {
+    fun inspect_room_not_found_preserves_replaced_pending_online_participation_binding() {
         val inspectedBinding = createBinding()
         val replacementBinding = OnlineParticipationBinding(
             roomId = "room-2",
@@ -363,7 +363,7 @@ class LocalDominoSessionCoordinatorTest {
         val inspection = OnlinePendingParticipationRemoteInspection
             .NoLongerRecoverable(
                 reason = OnlinePendingParticipationRemoteInvalidReason
-                    .ROOM_CLOSED,
+                    .ROOM_NOT_FOUND,
             )
         val onlineRoomRepository =
             TestPendingParticipationOnlineRoomRepository(
@@ -757,6 +757,40 @@ class LocalDominoSessionCoordinatorTest {
                         .ReadyForRemoteReconciliation(
                             binding = replacementBinding,
                         ),
+            ),
+            coordinator.currentState,
+        )
+    }
+
+    @Test
+    fun open_resumed_online_room_preserves_binding_and_returns_to_main_menu() {
+        val binding = createBinding().copy(
+            matchId = null,
+        )
+        val coordinator = LocalDominoSessionCoordinator()
+
+        coordinator.dispatch(
+            DominoSessionCommand.OpenResumedOnlineRoom(
+                binding = binding,
+            ),
+        )
+
+        assertEquals(
+            DominoSessionState.OnlineResumedRoom(
+                binding = binding,
+            ),
+            coordinator.currentState,
+        )
+
+        coordinator.dispatch(
+            DominoSessionCommand.BackToMainMenu,
+        )
+
+        assertEquals(
+            DominoSessionState.MainMenu(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
             ),
             coordinator.currentState,
         )

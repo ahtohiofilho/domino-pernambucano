@@ -492,6 +492,17 @@ class RemoteOnlineRoomRepository(
                         .RemoteSessionRejected
                 }
 
+                if (
+                    error is io.ktor.client.plugins.ClientRequestException &&
+                            error.response.status == io.ktor.http.HttpStatusCode.NotFound
+                ) {
+                    return@withLock OnlinePendingParticipationRemoteInspection
+                        .NoLongerRecoverable(
+                            reason = OnlinePendingParticipationRemoteInvalidReason
+                                .ROOM_NOT_FOUND,
+                        )
+                }
+
                 OnlinePendingParticipationRemoteInspection
                     .TemporarilyUnavailable(
                         reason = error.toOnlineFailureReason(
@@ -567,7 +578,8 @@ class RemoteOnlineRoomRepository(
 
                 if (recoverableRoom.status != OnlineRoomStatusDto.IN_MATCH) {
                     return@withLock OnlinePendingParticipationMatchResumePreparation
-                        .NotInMatch(
+                        .WaitingForPlayers(
+                            binding = binding,
                             roomSnapshot = recoverableRoom,
                         )
                 }
@@ -636,8 +648,39 @@ class RemoteOnlineRoomRepository(
         }
     }
 
+    override suspend fun activatePendingParticipationRoomResume(
+        preparation:
+            OnlinePendingParticipationMatchResumePreparation
+                .WaitingForPlayers,
+    ): OnlinePendingParticipationMatchResumeActivation {
+        return activatePendingParticipationResume(
+            binding = preparation.binding,
+            roomSnapshot = preparation.roomSnapshot,
+            matchSnapshot = null,
+            expectedRoomStatus = OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+            traceTrigger =
+                "pending_participation_room_resume_activation",
+        )
+    }
+
     override suspend fun activatePendingParticipationMatchResume(
         preparation: OnlinePendingParticipationMatchResumePreparation.Ready,
+    ): OnlinePendingParticipationMatchResumeActivation {
+        return activatePendingParticipationResume(
+            binding = preparation.binding,
+            roomSnapshot = preparation.roomSnapshot,
+            matchSnapshot = preparation.matchSnapshot,
+            expectedRoomStatus = OnlineRoomStatusDto.IN_MATCH,
+            traceTrigger = "pending_participation_resume_activation",
+        )
+    }
+
+    private suspend fun activatePendingParticipationResume(
+        binding: OnlineParticipationBinding,
+        roomSnapshot: OnlineRoomSnapshotDto,
+        matchSnapshot: OnlineMatchSnapshotDto?,
+        expectedRoomStatus: OnlineRoomStatusDto,
+        traceTrigger: String,
     ): OnlinePendingParticipationMatchResumeActivation {
         val client = apiClient
             ?: return OnlinePendingParticipationMatchResumeActivation
@@ -654,7 +697,7 @@ class RemoteOnlineRoomRepository(
                             .MISSING_VALID_ANONYMOUS_SESSION,
                     )
 
-            if (session.playerId != preparation.binding.playerId) {
+            if (session.playerId != binding.playerId) {
                 return@withLock OnlinePendingParticipationMatchResumeActivation
                     .NotAttempted(
                         reason = OnlinePendingParticipationRemoteBlockReason
@@ -662,11 +705,24 @@ class RemoteOnlineRoomRepository(
                     )
             }
 
-            if (
-                preparation.roomSnapshot.roomId != preparation.binding.roomId ||
-                preparation.matchSnapshot.roomId != preparation.binding.roomId ||
-                preparation.roomSnapshot.matchId != preparation.matchSnapshot.matchId
-            ) {
+            val preparedPlayer = roomSnapshot.players.firstOrNull { player ->
+                player.playerId == binding.playerId
+            }
+
+            val preparationMatchesBinding =
+                roomSnapshot.roomId == binding.roomId &&
+                        roomSnapshot.status == expectedRoomStatus &&
+                        preparedPlayer?.seatIndex == binding.localSeatIndex &&
+                        (
+                                matchSnapshot == null ||
+                                        (
+                                                matchSnapshot.roomId == binding.roomId &&
+                                                        roomSnapshot.matchId ==
+                                                        matchSnapshot.matchId
+                                                )
+                                )
+
+            if (!preparationMatchesBinding) {
                 return@withLock OnlinePendingParticipationMatchResumeActivation
                     .TemporarilyUnavailable(
                         reason =
@@ -701,13 +757,29 @@ class RemoteOnlineRoomRepository(
             }
 
             try {
-                mutableRoomSnapshot.value = preparation.roomSnapshot
+                mutableRoomSnapshot.value = roomSnapshot
 
-                publishMatchSnapshotIfNewer(
-                    snapshot = preparation.matchSnapshot,
-                    trigger = "pending_participation_resume_activation",
-                    playerId = session.playerId,
-                )
+                if (matchSnapshot == null) {
+                    mutableMatchSnapshot.value = null
+
+                    trace(
+                        level = OnlineTraceLevel.INFO,
+                        type = OnlineTraceType.SNAPSHOT_RECEIVED,
+                        roomId = roomSnapshot.roomId,
+                        matchId = roomSnapshot.matchId,
+                        playerId = session.playerId,
+                        localSeatIndex = binding.localSeatIndex,
+                        attributes = roomSnapshot.traceAttributes(
+                            trigger = traceTrigger,
+                        ),
+                    )
+                } else {
+                    publishMatchSnapshotIfNewer(
+                        snapshot = matchSnapshot,
+                        trigger = traceTrigger,
+                        playerId = session.playerId,
+                    )
+                }
             } catch (error: CancellationException) {
                 activePlayerId = previousActivePlayerId
                 activeAnonymousSession = previousActiveAnonymousSession
@@ -735,7 +807,7 @@ class RemoteOnlineRoomRepository(
             }
 
             startPolling(
-                roomId = preparation.roomSnapshot.roomId,
+                roomId = roomSnapshot.roomId,
                 client = client,
             )
 
@@ -1046,6 +1118,11 @@ class RemoteOnlineRoomRepository(
         .toMatchResumeInvalidReason():
         OnlinePendingParticipationMatchResumeInvalidReason {
         return when (this) {
+            OnlinePendingParticipationRemoteInvalidReason.ROOM_NOT_FOUND -> {
+                OnlinePendingParticipationMatchResumeInvalidReason
+                    .ROOM_NOT_FOUND
+            }
+
             OnlinePendingParticipationRemoteInvalidReason.ROOM_ID_MISMATCH -> {
                 OnlinePendingParticipationMatchResumeInvalidReason
                     .ROOM_ID_MISMATCH

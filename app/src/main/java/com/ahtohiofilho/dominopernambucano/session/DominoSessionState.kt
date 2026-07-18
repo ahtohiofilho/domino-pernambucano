@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.session
 
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBinding
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 
 sealed interface DominoSessionState {
@@ -33,6 +34,10 @@ sealed interface DominoSessionState {
     data object OnlineCreateRoom : DominoSessionState
 
     data object OnlineJoinRoom : DominoSessionState
+
+    data class OnlineResumedRoom(
+        val binding: OnlineParticipationBinding,
+    ) : DominoSessionState
 
     data class OnlineMatch(
         val matchCoordinator: OnlineDominoMatchCoordinator,

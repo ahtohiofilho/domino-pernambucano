@@ -22,6 +22,7 @@ sealed interface OnlinePendingParticipationRemoteInspection {
 }
 
 enum class OnlinePendingParticipationRemoteInvalidReason {
+    ROOM_NOT_FOUND,
     ROOM_ID_MISMATCH,
     ROOM_CLOSED,
     ROOM_FINISHED,
