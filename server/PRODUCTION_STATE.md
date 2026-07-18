@@ -38,3 +38,16 @@ O servidor nunca substitui silenciosamente um arquivo ilegível. Corrupção,
 arquivo vazio, lock concorrente ou falha de persistência interrompem a operação
 para evitar divergência entre o estado confirmado ao cliente e o estado
 recuperável depois de um reinício.
+
+## Liveness e readiness
+
+`GET /health` confirma somente que o processo HTTP está respondendo. O endpoint
+`GET /ready` retorna HTTP 200 enquanto o ticker autoritativo está ativo e o
+store consegue persistir. Durante o encerramento, depois de uma falha do ticker
+ou enquanto a persistência estiver indisponível, `/ready` retorna HTTP 503 sem
+expor caminhos ou mensagens internas.
+
+Uma escrita persistente bem-sucedida permite que o sinal do store se recupere
+de uma falha transitória. Uma falha do ticker exige reinício do processo, pois
+o avanço autoritativo não deve ser anunciado como saudável depois que sua
+coroutine terminou.

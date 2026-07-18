@@ -8,13 +8,25 @@ seguinte contrato:
 
 - uma unica instancia ativa;
 - porta interna `8080`;
-- `GET /health` retorna `{"status":"ok"}`;
+- `GET /health` confirma liveness com `{"status":"ok"}`;
+- `GET /ready` retorna HTTP 200 somente enquanto ticker e persistência
+  autoritativos estiverem operacionais;
 - volume persistente gravavel montado em `/data`;
 - estado em `/data/authoritative-state.json`;
 - `DOMINO_SERVER_ENVIRONMENT=production`;
 - `DOMINO_SESSION_SIGNING_SECRET` com pelo menos 32 bytes;
 - encerramento gracioso por `SIGTERM`;
 - logs coletados de stdout/stderr.
+
+O servidor também aplica limites de frequência em memória. A emissão de sessão
+anônima usa um orçamento global de 60 requisições por minuto. Por identidade
+validada, mutações permitem 120, leituras 240 e lotes de traces 30 requisições
+por minuto. Rejeições retornam HTTP 429 com `Retry-After`. Essa defesa da
+aplicação não substitui o rate limiting do proxy de borda.
+
+Não habilite confiança em `Forwarded` ou `X-Forwarded-*` apenas para obter o IP
+do cliente. Esses cabeçalhos só podem participar de decisões de segurança se o
+container aceitar conexões exclusivamente de um proxy confiável configurado.
 
 O processo roda sem privilegios, com UID e GID `10001`. Em um host Linux, o
 diretorio ou volume montado em `/data` deve permitir escrita para esse usuario.

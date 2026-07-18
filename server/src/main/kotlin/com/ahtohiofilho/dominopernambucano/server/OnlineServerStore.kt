@@ -8,6 +8,11 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomOperationResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 
+enum class OnlineServerStoreReadiness {
+    READY,
+    UNAVAILABLE,
+}
+
 interface OnlineServerStore : AutoCloseable {
     fun createRoom(
         request: CreateOnlineRoomRequestDto,
@@ -59,6 +64,9 @@ interface OnlineServerStore : AutoCloseable {
         matchId: String,
         afterRevision: Long,
     ): List<OnlineMatchSnapshotDto>?
+
+    fun readiness(): OnlineServerStoreReadiness =
+        OnlineServerStoreReadiness.READY
 
     override fun close() = Unit
 }

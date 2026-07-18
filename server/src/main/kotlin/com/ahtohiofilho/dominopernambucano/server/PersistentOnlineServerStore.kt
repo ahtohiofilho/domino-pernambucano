@@ -28,13 +28,16 @@ internal const val ONLINE_SERVER_STATE_FILE_ENVIRONMENT_VARIABLE =
 
 class PersistentOnlineServerStore private constructor(
     private val delegate: InMemoryOnlineServerStore,
-    private val statePersistence: FileOnlineServerStatePersistence,
+    private val statePersistence: OnlineServerStatePersistence,
     private val lockChannel: FileChannel,
     private val processLock: FileLock,
     initialState: OnlineServerStoreState,
 ) : OnlineServerStore {
     private val lock = Any()
     private var lastPersistedState = initialState
+    @Volatile
+    private var persistenceAvailable = true
+    @Volatile
     private var closed = false
 
     override fun createRoom(
@@ -133,6 +136,14 @@ class PersistentOnlineServerStore private constructor(
         )
     }
 
+    override fun readiness(): OnlineServerStoreReadiness {
+        return if (!closed && persistenceAvailable) {
+            OnlineServerStoreReadiness.READY
+        } else {
+            OnlineServerStoreReadiness.UNAVAILABLE
+        }
+    }
+
     override fun close() {
         synchronized(lock) {
             if (closed) {
@@ -180,11 +191,13 @@ class PersistentOnlineServerStore private constructor(
         try {
             statePersistence.write(updatedState)
         } catch (error: Exception) {
+            persistenceAvailable = false
             delegate.restorePersistentState(lastPersistedState)
             throw error
         }
 
         lastPersistedState = updatedState
+        persistenceAvailable = true
     }
 
     private fun checkOpen() {
@@ -208,10 +221,34 @@ class PersistentOnlineServerStore private constructor(
                 nowEpochMillis = nowEpochMillis,
             ),
         ): PersistentOnlineServerStore {
-            val persistence = FileOnlineServerStatePersistence(
-                stateFile = stateFile,
+            return open(
+                statePersistence = FileOnlineServerStatePersistence(
+                    stateFile = stateFile,
+                ),
+                clockPolicy = clockPolicy,
+                autoFillDevelopmentBotsAfterTwoHumanPlayers =
+                    autoFillDevelopmentBotsAfterTwoHumanPlayers,
+                resourcePolicy = resourcePolicy,
+                nowEpochMillis = nowEpochMillis,
+                traceLogger = traceLogger,
             )
-            val lockChannel = persistence.openLockChannel()
+        }
+
+        internal fun open(
+            statePersistence: OnlineServerStatePersistence,
+            clockPolicy: DominoMatchClockPolicy =
+                DominoMatchClockPolicy.OnlinePerPlayerRound,
+            autoFillDevelopmentBotsAfterTwoHumanPlayers: Boolean = false,
+            resourcePolicy: OnlineServerStoreResourcePolicy =
+                OnlineServerStoreResourcePolicy.Default,
+            nowEpochMillis: () -> Long = {
+                System.currentTimeMillis()
+            },
+            traceLogger: OnlineTraceLogger = OnlineTraceLogger(
+                nowEpochMillis = nowEpochMillis,
+            ),
+        ): PersistentOnlineServerStore {
+            val lockChannel = statePersistence.openLockChannel()
             val processLock = try {
                 lockChannel.tryLock()
             } catch (_: OverlappingFileLockException) {
@@ -222,12 +259,12 @@ class PersistentOnlineServerStore private constructor(
                 lockChannel.close()
                 throw IllegalStateException(
                     "O arquivo de estado autoritativo já está em uso: " +
-                            stateFile.absolutePath,
+                            statePersistence.description,
                 )
             }
 
             try {
-                val initialState = persistence.readOrCreate()
+                val initialState = statePersistence.readOrCreate()
                 val delegate = InMemoryOnlineServerStore(
                     clockPolicy = clockPolicy,
                     autoFillDevelopmentBotsAfterTwoHumanPlayers =
@@ -241,7 +278,7 @@ class PersistentOnlineServerStore private constructor(
 
                 return PersistentOnlineServerStore(
                     delegate = delegate,
-                    statePersistence = persistence,
+                    statePersistence = statePersistence,
                     lockChannel = lockChannel,
                     processLock = processLock,
                     initialState = initialState,
@@ -308,15 +345,30 @@ internal fun createDefaultOnlineServerStore(
     )
 }
 
+internal interface OnlineServerStatePersistence {
+    val description: String
+
+    fun openLockChannel(): FileChannel
+
+    fun readOrCreate(): OnlineServerStoreState
+
+    fun write(
+        state: OnlineServerStoreState,
+    )
+}
+
 internal class FileOnlineServerStatePersistence(
     stateFile: File,
     private val json: Json = Json {
         encodeDefaults = true
     },
-) {
+) : OnlineServerStatePersistence {
     private val stateFile = stateFile.absoluteFile
 
-    fun openLockChannel(): FileChannel {
+    override val description: String
+        get() = stateFile.absolutePath
+
+    override fun openLockChannel(): FileChannel {
         ensureParentDirectory()
 
         return FileChannel.open(
@@ -329,7 +381,7 @@ internal class FileOnlineServerStatePersistence(
         )
     }
 
-    fun readOrCreate(): OnlineServerStoreState {
+    override fun readOrCreate(): OnlineServerStoreState {
         if (!stateFile.exists()) {
             return OnlineServerStoreState.Empty.also { emptyState ->
                 write(emptyState)
@@ -359,7 +411,7 @@ internal class FileOnlineServerStatePersistence(
         }
     }
 
-    fun write(
+    override fun write(
         state: OnlineServerStoreState,
     ) {
         ensureParentDirectory()

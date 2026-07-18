@@ -290,6 +290,67 @@ class PersistentOnlineServerStoreTest {
     }
 
     @Test
+    fun persistence_failure_changes_readiness_until_a_write_succeeds() {
+        val root = temporaryRoot()
+        val stateFile = File(root, "authoritative-state.json")
+        val persistence = SwitchableFailingStatePersistence(
+            delegate = FileOnlineServerStatePersistence(
+                stateFile = stateFile,
+            ),
+        )
+        val store = PersistentOnlineServerStore.open(
+            statePersistence = persistence,
+            nowEpochMillis = { 1_000L },
+        )
+
+        try {
+            assertEquals(
+                OnlineServerStoreReadiness.READY,
+                store.readiness(),
+            )
+
+            persistence.failWrites = true
+
+            assertThrows(
+                IllegalStateException::class.java,
+            ) {
+                store.createRoom(
+                    CreateOnlineRoomRequestDto(
+                        localPlayerId = "player-failed",
+                        playerName = "Falha",
+                    ),
+                )
+            }
+
+            assertEquals(
+                OnlineServerStoreReadiness.UNAVAILABLE,
+                store.readiness(),
+            )
+            assertNull(
+                store.getRoomSnapshot("server-room-1"),
+            )
+
+            persistence.failWrites = false
+
+            val recoveredResult = store.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = "player-recovered",
+                    playerName = "Recuperado",
+                ),
+            )
+
+            assertTrue(recoveredResult.accepted)
+            assertEquals(
+                OnlineServerStoreReadiness.READY,
+                store.readiness(),
+            )
+        } finally {
+            store.close()
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun expired_waiting_rooms_are_pruned_before_capacity_is_reused() {
         var nowEpochMillis = 1_000L
         val store = InMemoryOnlineServerStore(
@@ -361,6 +422,22 @@ class PersistentOnlineServerStoreTest {
         return requireNotNull(
             store.getRoomSnapshot(waitingRoom.roomId),
         )
+    }
+
+    private class SwitchableFailingStatePersistence(
+        private val delegate: OnlineServerStatePersistence,
+    ) : OnlineServerStatePersistence by delegate {
+        var failWrites = false
+
+        override fun write(
+            state: OnlineServerStoreState,
+        ) {
+            if (failWrites) {
+                throw IllegalStateException("persistence failure")
+            }
+
+            delegate.write(state)
+        }
     }
 
     private fun legalAction(
