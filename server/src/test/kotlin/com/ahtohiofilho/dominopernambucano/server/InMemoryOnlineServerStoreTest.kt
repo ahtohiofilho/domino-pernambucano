@@ -748,6 +748,104 @@ class InMemoryOnlineServerStoreTest {
     }
 
     @Test
+    fun reconnected_human_reclaims_temporary_automatic_control() {
+        var now = 1_000L
+
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+
+        val startedRoom = startFourHumanMatch(
+            store = store,
+        )
+
+        val matchId = requireNotNull(startedRoom.matchId)
+        val initialSnapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+        val expiredSeatIndex =
+            initialSnapshot.gameState.currentPlayerIndex
+        val reconnectingPlayer = requireNotNull(
+            startedRoom.players.firstOrNull { player ->
+                player.seatIndex == expiredSeatIndex
+            },
+        )
+
+        now += 31_000L
+        store.advanceAuthoritativeTime()
+
+        val automaticSnapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        assertTrue(
+            expiredSeatIndex in
+                    automaticSnapshot.automaticPlayerIndexes,
+        )
+
+        val reconnectResult = store.joinRoom(
+            JoinOnlineRoomRequestDto(
+                roomCode = startedRoom.roomCode,
+                localPlayerId = reconnectingPlayer.playerId,
+                playerName = reconnectingPlayer.name,
+            ),
+        )
+
+        assertTrue(reconnectResult.accepted)
+
+        val reconnectedRoomPlayer = requireNotNull(
+            reconnectResult.roomSnapshot
+                ?.players
+                ?.firstOrNull { player ->
+                    player.playerId == reconnectingPlayer.playerId
+                },
+        )
+        val reclaimedSnapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        assertTrue(reconnectedRoomPlayer.connected)
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            reconnectedRoomPlayer.participantType,
+        )
+        assertTrue(
+            expiredSeatIndex !in
+                    reclaimedSnapshot.automaticPlayerIndexes,
+        )
+        assertEquals(
+            automaticSnapshot.revision + 1L,
+            reclaimedSnapshot.revision,
+        )
+        assertEquals(
+            automaticSnapshot.gameState,
+            reclaimedSnapshot.gameState,
+        )
+        assertEquals(
+            automaticSnapshot.serverEpochMillis,
+            reclaimedSnapshot.serverEpochMillis,
+        )
+
+        val publishedReclaim = requireNotNull(
+            store.getMatchSnapshotsAfter(
+                matchId = matchId,
+                afterRevision = automaticSnapshot.revision,
+            ),
+        )
+
+        assertEquals(
+            listOf(reclaimedSnapshot),
+            publishedReclaim,
+        )
+    }
+
+    @Test
     fun repeated_action_id_returns_cached_result_without_advancing_revision() {
         val store = InMemoryOnlineServerStore(
             nowEpochMillis = { 1_000L },

@@ -24,6 +24,9 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
 
+    // Ktor e Netty usam SLF4J. Sem provider, o runtime descarta os logs.
+    runtimeOnly("org.slf4j:slf4j-simple:2.0.18")
+
     testImplementation(libs.junit)
     testImplementation(libs.ktor.server.test.host)
 }

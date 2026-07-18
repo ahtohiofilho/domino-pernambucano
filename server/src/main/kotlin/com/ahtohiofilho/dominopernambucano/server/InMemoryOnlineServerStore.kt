@@ -52,18 +52,23 @@ private const val LAST_DEVELOPMENT_BOT_SEAT_INDEX = 3
  * que o cliente apresente cada transiÃ§Ã£o, em vez de pular ao snapshot atual.
  */
 private const val MATCH_REVISION_HISTORY_CAPACITY = 2_048
+private const val MAX_SERVER_IDENTIFIER_CHARACTERS = 160
+private const val MAX_SERVER_PLAYER_NAME_CHARACTERS = 160
+private const val MAX_SERVER_ROOM_CODE_CHARACTERS = 16
 
 class InMemoryOnlineServerStore(
     private val clockPolicy: DominoMatchClockPolicy =
         DominoMatchClockPolicy.OnlinePerPlayerRound,
     private val autoFillDevelopmentBotsAfterTwoHumanPlayers: Boolean = false,
+    private val resourcePolicy: OnlineServerStoreResourcePolicy =
+        OnlineServerStoreResourcePolicy.Default,
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
     private val traceLogger: OnlineTraceLogger = OnlineTraceLogger(
         nowEpochMillis = nowEpochMillis,
     ),
-) {
+) : OnlineServerStore {
     private data class MatchRecord(
         val roomId: String,
         val matchId: String,
@@ -94,11 +99,25 @@ class InMemoryOnlineServerStore(
 
     private var nextRoomSequence = 1
     private var nextMatchSequence = 1
+    private var lastPruneAtEpochMillis: Long? = null
 
-    fun createRoom(
+    override fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
         return synchronized(lock) {
+            pruneExpiredRecords(
+                nowEpochMillis = nowEpochMillis(),
+                force = true,
+            )
+
+            if (roomsById.size >= resourcePolicy.maxRoomCount) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "create_room",
+                    playerId = request.localPlayerId,
+                    reason = "Capacidade temporária de salas atingida.",
+                )
+            }
+
             if (request.localPlayerId.isBlank()) {
                 return@synchronized rejectedRoomOperationWithTrace(
                     operation = "create_room",
@@ -107,11 +126,33 @@ class InMemoryOnlineServerStore(
                 )
             }
 
+            if (
+                request.localPlayerId.length >
+                MAX_SERVER_IDENTIFIER_CHARACTERS
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "create_room",
+                    playerId = request.localPlayerId,
+                    reason = "Identificador do jogador acima do limite.",
+                )
+            }
+
             if (request.playerName.isBlank()) {
                 return@synchronized rejectedRoomOperationWithTrace(
                     operation = "create_room",
                     playerId = request.localPlayerId,
                     reason = "Nome do jogador não informado.",
+                )
+            }
+
+            if (
+                request.playerName.length >
+                MAX_SERVER_PLAYER_NAME_CHARACTERS
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "create_room",
+                    playerId = request.localPlayerId,
+                    reason = "Nome do jogador acima do limite.",
                 )
             }
 
@@ -166,11 +207,28 @@ class InMemoryOnlineServerStore(
         }
     }
 
-    fun joinRoom(
+    override fun joinRoom(
         request: JoinOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
         return synchronized(lock) {
+            pruneExpiredRecords(
+                nowEpochMillis = nowEpochMillis(),
+                force = true,
+            )
+
             val normalizedRoomCode = request.roomCode.trim()
+
+            if (
+                normalizedRoomCode.isBlank() ||
+                normalizedRoomCode.length >
+                MAX_SERVER_ROOM_CODE_CHARACTERS
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    playerId = request.localPlayerId,
+                    reason = "Código de sala inválido.",
+                )
+            }
 
             val roomId = roomIdsByCode[normalizedRoomCode]
                 ?: return@synchronized rejectedRoomOperationWithTrace(
@@ -209,6 +267,19 @@ class InMemoryOnlineServerStore(
                 )
             }
 
+            if (
+                request.localPlayerId.length >
+                MAX_SERVER_IDENTIFIER_CHARACTERS
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = request.localPlayerId,
+                    reason = "Identificador do jogador acima do limite.",
+                )
+            }
+
             if (request.playerName.isBlank()) {
                 return@synchronized rejectedRoomOperationWithTrace(
                     operation = "join_room",
@@ -216,6 +287,19 @@ class InMemoryOnlineServerStore(
                     matchId = currentRoom.matchId,
                     playerId = request.localPlayerId,
                     reason = "Nome do jogador não informado.",
+                )
+            }
+
+            if (
+                request.playerName.length >
+                MAX_SERVER_PLAYER_NAME_CHARACTERS
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = request.localPlayerId,
+                    reason = "Nome do jogador acima do limite.",
                 )
             }
 
@@ -240,6 +324,11 @@ class InMemoryOnlineServerStore(
 
                 roomsById[updatedRoom.roomId] = updatedRoom
 
+                val controlReclaimed = reclaimHumanSeatControlIfNeeded(
+                    room = updatedRoom,
+                    player = existingPlayer,
+                )
+
                 trace(
                     level = OnlineTraceLevel.INFO,
                     source = OnlineTraceSource.SERVER_STORE,
@@ -251,6 +340,7 @@ class InMemoryOnlineServerStore(
                     attributes = updatedRoom.traceAttributes() + mapOf(
                         "operation" to "join_room",
                         "reconnected" to "true",
+                        "controlReclaimed" to controlReclaimed.toString(),
                     ),
                 )
 
@@ -348,7 +438,7 @@ class InMemoryOnlineServerStore(
         }
     }
 
-    fun submitAction(
+    override fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto {
         return synchronized(lock) {
@@ -359,6 +449,28 @@ class InMemoryOnlineServerStore(
                 action = action,
                 attributes = action.traceAttributes(),
             )
+
+            val invalidActionReason = action.validationReasonOrNull()
+
+            if (invalidActionReason != null) {
+                val result = rejectedAction(
+                    reason = invalidActionReason,
+                ).copy(
+                    actionId = action.actionId,
+                )
+
+                trace(
+                    level = OnlineTraceLevel.WARN,
+                    source = OnlineTraceSource.SERVER_STORE,
+                    type = OnlineTraceType.ACTION_REJECTED,
+                    action = action,
+                    attributes = action.traceAttributes() + mapOf(
+                        "reason" to invalidActionReason,
+                    ),
+                )
+
+                return@synchronized result
+            }
 
             actionResultsByKey[action.toActionResultCacheKey()]?.let { cachedResult ->
                 trace(
@@ -520,9 +632,12 @@ class InMemoryOnlineServerStore(
      * observacionais. Cada chamada publica no máximo uma transição por partida,
      * preservando uma cadência consumível pela fila visual dos clientes.
      */
-    fun advanceAuthoritativeTime() {
-        synchronized(lock) {
+    override fun advanceAuthoritativeTime(): Boolean {
+        return synchronized(lock) {
             val now = nowEpochMillis()
+            var stateChanged = pruneExpiredRecords(
+                nowEpochMillis = now,
+            )
 
             matchesById.values.forEach { matchRecord ->
                 val previousRevision = matchRecord.snapshot.revision
@@ -535,6 +650,7 @@ class InMemoryOnlineServerStore(
                 )
 
                 if (changed) {
+                    stateChanged = true
                     trace(
                         level = OnlineTraceLevel.INFO,
                         source = OnlineTraceSource.SERVER_TICKER,
@@ -553,10 +669,12 @@ class InMemoryOnlineServerStore(
                     )
                 }
             }
+
+            stateChanged
         }
     }
 
-    fun getRoomSnapshot(
+    override fun getRoomSnapshot(
         roomId: String,
     ): OnlineRoomSnapshotDto? {
         return synchronized(lock) {
@@ -564,7 +682,7 @@ class InMemoryOnlineServerStore(
         }
     }
 
-    fun isRoomParticipant(
+    override fun isRoomParticipant(
         roomId: String,
         playerId: String,
     ): Boolean {
@@ -577,7 +695,7 @@ class InMemoryOnlineServerStore(
         }
     }
 
-    fun isMatchParticipant(
+    override fun isMatchParticipant(
         matchId: String,
         playerId: String,
     ): Boolean {
@@ -591,7 +709,7 @@ class InMemoryOnlineServerStore(
         }
     }
 
-    fun getMatchSnapshotForParticipant(
+    override fun getMatchSnapshotForParticipant(
         matchId: String,
         playerId: String,
     ): OnlineMatchSnapshotDto? {
@@ -613,7 +731,7 @@ class InMemoryOnlineServerStore(
         }
     }
 
-    fun getMatchSnapshotsAfterForParticipant(
+    override fun getMatchSnapshotsAfterForParticipant(
         matchId: String,
         playerId: String,
         afterRevision: Long,
@@ -649,7 +767,7 @@ class InMemoryOnlineServerStore(
      * revisão. A mutação é exclusividade de [advanceAuthoritativeTime] e das
      * ações explícitas de jogo aceitas pelo servidor.
      */
-    fun getMatchSnapshot(
+    override fun getMatchSnapshot(
         matchId: String,
     ): OnlineMatchSnapshotDto? {
         return synchronized(lock) {
@@ -661,7 +779,7 @@ class InMemoryOnlineServerStore(
      * Retorna em ordem todas as revisÃµes posteriores Ã  referÃªncia do cliente.
      * A consulta Ã© observacional e nÃ£o avança relÃ³gios ou turnos.
      */
-    fun getMatchSnapshotsAfter(
+    override fun getMatchSnapshotsAfter(
         matchId: String,
         afterRevision: Long,
     ): List<OnlineMatchSnapshotDto>? {
@@ -673,6 +791,282 @@ class InMemoryOnlineServerStore(
                 }
                 ?.toList()
         }
+    }
+
+    internal fun snapshotPersistentState(): OnlineServerStoreState {
+        return synchronized(lock) {
+            OnlineServerStoreState(
+                nextRoomSequence = nextRoomSequence,
+                nextMatchSequence = nextMatchSequence,
+                rooms = roomsById.values.sortedBy { room ->
+                    room.roomId
+                },
+                matches = matchesById.values
+                    .sortedBy { matchRecord ->
+                        matchRecord.matchId
+                    }
+                    .map { matchRecord ->
+                        OnlineServerStoredMatch(
+                            roomId = matchRecord.roomId,
+                            matchId = matchRecord.matchId,
+                            snapshot = matchRecord.snapshot,
+                            revisionHistory =
+                                matchRecord.revisionHistory.toList(),
+                            automaticSeatIndexes =
+                                matchRecord.automaticSeatIndexes.sorted(),
+                            applicationSeatIndexes =
+                                matchRecord.developmentBotSeatIndexes.sorted(),
+                        )
+                    },
+                actionResults = actionResultsByKey.entries
+                    .map { (key, result) ->
+                        OnlineServerStoredActionResult(
+                            matchId = key.matchId,
+                            playerId = key.playerId,
+                            actionId = key.actionId,
+                            result = result,
+                        )
+                    },
+            )
+        }
+    }
+
+    internal fun restorePersistentState(
+        state: OnlineServerStoreState,
+    ) {
+        synchronized(lock) {
+            validatePersistentState(state)
+
+            roomsById.clear()
+            roomIdsByCode.clear()
+            matchesById.clear()
+            actionResultsByKey.clear()
+
+            state.rooms.forEach { room ->
+                roomsById[room.roomId] = room
+                roomIdsByCode[room.roomCode] = room.roomId
+            }
+
+            state.matches.forEach { storedMatch ->
+                matchesById[storedMatch.matchId] = MatchRecord(
+                    roomId = storedMatch.roomId,
+                    matchId = storedMatch.matchId,
+                    snapshot = storedMatch.snapshot,
+                    revisionHistory =
+                        ArrayDeque<OnlineMatchSnapshotDto>().apply {
+                            addAll(storedMatch.revisionHistory)
+                        },
+                    automaticSeatIndexes = storedMatch
+                        .automaticSeatIndexes
+                        .toMutableSet(),
+                    developmentBotSeatIndexes = storedMatch
+                        .applicationSeatIndexes
+                        .toSet(),
+                )
+            }
+
+            state.actionResults.forEach { storedAction ->
+                actionResultsByKey[
+                    ActionResultCacheKey(
+                        matchId = storedAction.matchId,
+                        playerId = storedAction.playerId,
+                        actionId = storedAction.actionId,
+                    )
+                ] = storedAction.result
+            }
+
+            nextRoomSequence = state.nextRoomSequence
+            nextMatchSequence = state.nextMatchSequence
+            lastPruneAtEpochMillis = null
+        }
+    }
+
+    private fun validatePersistentState(
+        state: OnlineServerStoreState,
+    ) {
+        require(
+            state.schemaVersion ==
+                    ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION
+        ) {
+            "Versão de estado autoritativo não suportada: " +
+                    state.schemaVersion
+        }
+        require(state.nextRoomSequence > 0)
+        require(state.nextMatchSequence > 0)
+        require(state.rooms.size <= resourcePolicy.maxRoomCount) {
+            "O estado persistido excede a capacidade de salas."
+        }
+        require(
+            state.actionResults.size <=
+                    resourcePolicy.maxActionResultCount
+        ) {
+            "O estado persistido excede a capacidade de idempotência."
+        }
+
+        val roomIds = state.rooms.map { room -> room.roomId }
+        val roomCodes = state.rooms.map { room -> room.roomCode }
+        val matchIds = state.matches.map { match -> match.matchId }
+
+        require(roomIds.none { roomId -> roomId.isBlank() })
+        require(roomIds.distinct().size == roomIds.size)
+        require(roomCodes.none { roomCode -> roomCode.isBlank() })
+        require(roomCodes.distinct().size == roomCodes.size)
+        require(matchIds.none { matchId -> matchId.isBlank() })
+        require(matchIds.distinct().size == matchIds.size)
+
+        val roomsByPersistedId = state.rooms.associateBy { room ->
+            room.roomId
+        }
+        val matchesByPersistedId = state.matches.associateBy { match ->
+            match.matchId
+        }
+
+        state.matches.forEach { storedMatch ->
+            val room = requireNotNull(
+                roomsByPersistedId[storedMatch.roomId],
+            ) {
+                "Partida persistida referencia sala inexistente."
+            }
+
+            require(room.matchId == storedMatch.matchId)
+            require(storedMatch.snapshot.roomId == storedMatch.roomId)
+            require(storedMatch.snapshot.matchId == storedMatch.matchId)
+            require(storedMatch.revisionHistory.isNotEmpty())
+            require(
+                storedMatch.revisionHistory.size <=
+                        MATCH_REVISION_HISTORY_CAPACITY
+            )
+            require(
+                storedMatch.revisionHistory.last() ==
+                        storedMatch.snapshot
+            )
+            require(
+                storedMatch.revisionHistory
+                    .zipWithNext()
+                    .all { (previous, next) ->
+                        next.revision == previous.revision + 1L
+                    }
+            )
+            require(
+                storedMatch.automaticSeatIndexes.all { index ->
+                    index in 0..3
+                }
+            )
+            require(
+                storedMatch.applicationSeatIndexes.all { index ->
+                    index in 0..3
+                }
+            )
+        }
+
+        state.rooms.forEach { room ->
+            room.matchId?.let { matchId ->
+                require(matchesByPersistedId[matchId]?.roomId == room.roomId)
+            }
+        }
+
+        val actionKeys = state.actionResults.map { storedAction ->
+            Triple(
+                storedAction.matchId,
+                storedAction.playerId,
+                storedAction.actionId,
+            )
+        }
+
+        require(actionKeys.distinct().size == actionKeys.size)
+        require(
+            state.actionResults.all { storedAction ->
+                storedAction.matchId.isNotBlank() &&
+                        storedAction.playerId.isNotBlank() &&
+                        storedAction.actionId.isNotBlank() &&
+                        storedAction.result.actionId == storedAction.actionId
+            }
+        )
+
+        val maximumRoomSequence = roomIds.maxOfOrNull { roomId ->
+            roomId.removePrefix("server-room-").toIntOrNull() ?: 0
+        } ?: 0
+        val maximumMatchSequence = matchIds.maxOfOrNull { matchId ->
+            matchId.removePrefix("server-match-").toIntOrNull() ?: 0
+        } ?: 0
+
+        require(state.nextRoomSequence > maximumRoomSequence)
+        require(state.nextMatchSequence > maximumMatchSequence)
+    }
+
+    private fun pruneExpiredRecords(
+        nowEpochMillis: Long,
+        force: Boolean = false,
+    ): Boolean {
+        val previousPruneAtEpochMillis = lastPruneAtEpochMillis
+
+        if (
+            !force &&
+            previousPruneAtEpochMillis != null &&
+            nowEpochMillis >= previousPruneAtEpochMillis &&
+            nowEpochMillis - previousPruneAtEpochMillis <
+            resourcePolicy.pruneIntervalMillis
+        ) {
+            return false
+        }
+
+        lastPruneAtEpochMillis = nowEpochMillis
+
+        val expiredRoomIds = roomsById.values
+            .filter { room ->
+                val lastUpdatedAtEpochMillis =
+                    room.updatedAtEpochMillis
+                        ?: room.createdAtEpochMillis
+                        ?: return@filter false
+                val ageMillis = (
+                    nowEpochMillis - lastUpdatedAtEpochMillis
+                ).coerceAtLeast(0L)
+
+                when (room.status) {
+                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
+                        ageMillis >=
+                                resourcePolicy.waitingRoomRetentionMillis
+                    }
+
+                    OnlineRoomStatusDto.FINISHED,
+                    OnlineRoomStatusDto.CLOSED -> {
+                        ageMillis >=
+                                resourcePolicy.finalizedRoomRetentionMillis
+                    }
+
+                    OnlineRoomStatusDto.IN_MATCH -> false
+                }
+            }
+            .map { room -> room.roomId }
+            .toSet()
+
+        if (expiredRoomIds.isEmpty()) {
+            return false
+        }
+
+        val expiredMatchIds = matchesById.values
+            .filter { matchRecord ->
+                matchRecord.roomId in expiredRoomIds
+            }
+            .map { matchRecord ->
+                matchRecord.matchId
+            }
+            .toSet()
+
+        roomIdsByCode.entries.removeAll { (_, roomId) ->
+            roomId in expiredRoomIds
+        }
+        expiredRoomIds.forEach { roomId ->
+            roomsById.remove(roomId)
+        }
+        expiredMatchIds.forEach { matchId ->
+            matchesById.remove(matchId)
+        }
+        actionResultsByKey.keys.removeAll { key ->
+            key.matchId in expiredMatchIds
+        }
+
+        return true
     }
 
     private fun addDevelopmentBotsIfNeeded(
@@ -1406,6 +1800,69 @@ class InMemoryOnlineServerStore(
         )
     }
 
+    /**
+     * Devolve ao dono humano o controle temporariamente assumido pelo
+     * servidor. A reconexão já ocorre sob o lock autoritativo, portanto a
+     * troca acontece entre ações e nunca no meio de uma redução de jogada.
+     *
+     * O snapshot preserva o mesmo instante-base do relógio. Assim, publicar a
+     * troca de controlador não concede tempo adicional ao jogador da vez.
+     */
+    private fun reclaimHumanSeatControlIfNeeded(
+        room: OnlineRoomSnapshotDto,
+        player: OnlineRoomPlayerDto,
+    ): Boolean {
+        if (
+            room.status != OnlineRoomStatusDto.IN_MATCH ||
+            player.participantType != OnlineParticipantTypeDto.HUMAN
+        ) {
+            return false
+        }
+
+        val matchId = room.matchId ?: return false
+        val seatIndex = player.seatIndex ?: return false
+        val matchRecord = matchesById[matchId] ?: return false
+
+        if (!matchRecord.automaticSeatIndexes.remove(seatIndex)) {
+            return false
+        }
+
+        val previousSnapshot = matchRecord.snapshot
+        val updatedSnapshot = previousSnapshot.copy(
+            revision = previousSnapshot.revision + 1L,
+            automaticPlayerIndexes =
+                matchRecord.automaticSeatIndexes.sorted(),
+        )
+
+        matchRecord.snapshot = updatedSnapshot
+        recordSnapshotInHistory(
+            matchRecord = matchRecord,
+            snapshot = updatedSnapshot,
+        )
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            source = OnlineTraceSource.SERVER_STORE,
+            type = OnlineTraceType.SNAPSHOT_PUBLISHED,
+            roomId = room.roomId,
+            matchId = matchId,
+            playerId = player.playerId,
+            localSeatIndex = seatIndex,
+            snapshotRevision = updatedSnapshot.revision,
+            runtimeState = updatedSnapshot.toRuntimeState(
+                localPlayerIndex = seatIndex,
+            ),
+            automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
+            attributes = mapOf(
+                "trigger" to "human_reconnected:control_reclaimed",
+                "previousRevision" to
+                    previousSnapshot.revision.toString(),
+            ),
+        )
+
+        return true
+    }
+
     private fun getElapsedMillisSinceSnapshot(
         snapshot: OnlineMatchSnapshotDto,
         nowEpochMillis: Long,
@@ -1425,6 +1882,30 @@ class InMemoryOnlineServerStore(
         )
     }
 
+    private fun OnlinePlayerActionDto.validationReasonOrNull(): String? {
+        val identifiers = listOf(
+            "roomId" to roomId,
+            "matchId" to matchId,
+            "playerId" to playerId,
+            "actionId" to actionId,
+        )
+
+        val invalidIdentifier = identifiers.firstOrNull { (_, value) ->
+            value.isBlank() ||
+                    value.length > MAX_SERVER_IDENTIFIER_CHARACTERS
+        }
+
+        if (invalidIdentifier != null) {
+            return "${invalidIdentifier.first} ausente ou acima do limite."
+        }
+
+        if (revision < 0L) {
+            return "Revisão negativa não é permitida."
+        }
+
+        return null
+    }
+
     private fun cacheActionResult(
         action: OnlinePlayerActionDto,
         result: OnlineActionResultDto,
@@ -1434,6 +1915,20 @@ class InMemoryOnlineServerStore(
         )
 
         actionResultsByKey[action.toActionResultCacheKey()] = cachedResult
+
+        while (
+            actionResultsByKey.size >
+            resourcePolicy.maxActionResultCount
+        ) {
+            val iterator = actionResultsByKey.entries.iterator()
+
+            check(iterator.hasNext()) {
+                "O cache de idempotência perdeu seu estado."
+            }
+
+            iterator.next()
+            iterator.remove()
+        }
 
         return cachedResult
     }

@@ -57,24 +57,31 @@ fun Application.module() {
     val traceLogger = OnlineTraceLogger(
         sink = serverTraceSink,
     )
-
-    module(
-        store = InMemoryOnlineServerStore(
-            autoFillDevelopmentBotsAfterTwoHumanPlayers =
-                shouldAutoFillDevelopmentBots(
-                    serverEnvironment = serverEnvironment,
-                ),
-            traceLogger = traceLogger,
-        ),
+    val store = createDefaultOnlineServerStore(
         serverEnvironment = serverEnvironment,
-        traceIngestionPolicy = traceIngestionPolicy,
-        traceArchive = traceArchive,
-        serverTraceSink = serverTraceSink,
+        autoFillDevelopmentBotsAfterTwoHumanPlayers =
+            shouldAutoFillDevelopmentBots(
+                serverEnvironment = serverEnvironment,
+            ),
+        traceLogger = traceLogger,
     )
+
+    try {
+        module(
+            store = store,
+            serverEnvironment = serverEnvironment,
+            traceIngestionPolicy = traceIngestionPolicy,
+            traceArchive = traceArchive,
+            serverTraceSink = serverTraceSink,
+        )
+    } catch (error: Exception) {
+        store.close()
+        throw error
+    }
 }
 
 fun Application.module(
-    store: InMemoryOnlineServerStore,
+    store: OnlineServerStore,
     serverEnvironment: OnlineServerEnvironment,
     traceIngestionPolicy: OnlineTraceIngestionPolicy =
         OnlineTraceIngestionPolicy.Default,
@@ -131,7 +138,7 @@ fun Application.module(
 }
 
 private fun Application.installAuthoritativeMatchTicker(
-    store: InMemoryOnlineServerStore,
+    store: OnlineServerStore,
     serverTraceSink: BoundedAsyncOnlineTraceSink?,
 ) {
     val tickerScope = CoroutineScope(
@@ -150,10 +157,14 @@ private fun Application.installAuthoritativeMatchTicker(
     environment.monitor.subscribe(ApplicationStopping) {
         tickerScope.cancel()
 
-        serverTraceSink?.let { sink ->
-            runBlocking {
-                sink.shutdown()
+        try {
+            serverTraceSink?.let { sink ->
+                runBlocking {
+                    sink.shutdown()
+                }
             }
+        } finally {
+            store.close()
         }
     }
 }

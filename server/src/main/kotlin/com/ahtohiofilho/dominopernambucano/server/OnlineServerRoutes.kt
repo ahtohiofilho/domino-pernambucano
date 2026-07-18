@@ -14,7 +14,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 
 fun Route.onlineServerRoutes(
-    store: InMemoryOnlineServerStore,
+    store: OnlineServerStore,
     traceArchive: OnlineTraceArchive,
     sessionTokenService: OnlineSessionTokenService,
     identityResolver: OnlineRequestIdentityResolver,

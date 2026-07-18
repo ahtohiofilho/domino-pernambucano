@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1
+
+FROM eclipse-temurin:11-jdk-jammy AS jdk11
+
+FROM eclipse-temurin:21-jdk-jammy AS build
+
+WORKDIR /workspace
+
+COPY --from=jdk11 /opt/java/openjdk /opt/jdk11
+
+COPY gradlew gradlew.bat ./
+COPY gradle ./gradle
+COPY settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY game-core ./game-core
+COPY server ./server
+
+# Gradle 9.4 requires every project declared in settings.gradle.kts to have a
+# directory, even when only :server is built. The Android sources stay outside
+# this server-only context; an empty project directory satisfies that contract.
+RUN mkdir -p app && \
+    chmod +x ./gradlew && \
+    ./gradlew :server:installDist --no-daemon \
+        -Dorg.gradle.java.installations.paths=/opt/jdk11 \
+        -Dorg.gradle.java.installations.auto-download=false
+
+FROM eclipse-temurin:21-jre-jammy
+
+RUN groupadd --system --gid 10001 domino && \
+    useradd \
+        --system \
+        --uid 10001 \
+        --gid domino \
+        --home-dir /opt/domino \
+        --shell /usr/sbin/nologin \
+        domino && \
+    mkdir -p /opt/domino /data && \
+    chown -R domino:domino /opt/domino /data
+
+WORKDIR /opt/domino
+
+COPY --from=build --chown=domino:domino \
+    /workspace/server/build/install/server/ ./
+
+RUN chmod +x ./bin/server
+
+ENV LANG=C.UTF-8 \
+    JAVA_OPTS="-XX:MaxRAMPercentage=50.0 -XX:MaxDirectMemorySize=96m -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8"
+
+EXPOSE 8080
+
+USER 10001:10001
+
+STOPSIGNAL SIGTERM
+
+ENTRYPOINT ["/opt/domino/bin/server"]
