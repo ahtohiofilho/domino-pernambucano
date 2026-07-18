@@ -26,32 +26,46 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        val onlineBackendMode = providers
-            .gradleProperty("onlineBackendMode")
-            .orElse("fake")
-            .get()
-
-        val onlineBackendBaseUrl = providers
-            .gradleProperty("onlineBackendBaseUrl")
-            .orElse("")
-            .get()
-
-        buildConfigField(
-            type = "String",
-            name = "ONLINE_BACKEND_MODE",
-            value = onlineBackendMode.toBuildConfigString(),
-        )
-
-        buildConfigField(
-            type = "String",
-            name = "ONLINE_BACKEND_BASE_URL",
-            value = onlineBackendBaseUrl.toBuildConfigString(),
-        )
     }
 
     buildTypes {
+        debug {
+            val onlineBackendMode = providers
+                .gradleProperty("onlineBackendMode")
+                .orElse("fake")
+                .get()
+
+            val onlineBackendBaseUrl = providers
+                .gradleProperty("onlineBackendBaseUrl")
+                .orElse("")
+                .get()
+
+            buildConfigField(
+                type = "String",
+                name = "ONLINE_BACKEND_MODE",
+                value = onlineBackendMode.toBuildConfigString(),
+            )
+
+            buildConfigField(
+                type = "String",
+                name = "ONLINE_BACKEND_BASE_URL",
+                value = onlineBackendBaseUrl.toBuildConfigString(),
+            )
+        }
+
         release {
+            buildConfigField(
+                type = "String",
+                name = "ONLINE_BACKEND_MODE",
+                value = "remote".toBuildConfigString(),
+            )
+
+            buildConfigField(
+                type = "String",
+                name = "ONLINE_BACKEND_BASE_URL",
+                value = "https://api.dominope.com.br".toBuildConfigString(),
+            )
+
             optimization {
                 enable = false
             }
