@@ -11,6 +11,34 @@ fun String.toBuildConfigString(): String {
     return "\"$escapedValue\""
 }
 
+val releaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("release", ignoreCase = true)
+}
+val releaseStoreFile = providers
+    .environmentVariable("DOMINO_UPLOAD_STORE_FILE")
+    .orNull
+val releaseStorePassword = providers
+    .environmentVariable("DOMINO_UPLOAD_STORE_PASSWORD")
+    .orNull
+val releaseKeyAlias = providers
+    .environmentVariable("DOMINO_UPLOAD_KEY_ALIAS")
+    .orNull
+val releaseKeyPassword = providers
+    .environmentVariable("DOMINO_UPLOAD_KEY_PASSWORD")
+    .orNull
+val releaseSigningConfigured = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
+if (releaseBuildRequested) {
+    check(releaseSigningConfigured) {
+        "Release signing requires the DOMINO_UPLOAD_* process environment."
+    }
+}
+
 android {
     namespace = "com.ahtohiofilho.dominopernambucano"
 
@@ -26,6 +54,17 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(checkNotNull(releaseStoreFile))
+                storePassword = checkNotNull(releaseStorePassword)
+                keyAlias = checkNotNull(releaseKeyAlias)
+                keyPassword = checkNotNull(releaseKeyPassword)
+            }
+        }
     }
 
     buildTypes {
@@ -54,6 +93,10 @@ android {
         }
 
         release {
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+
             buildConfigField(
                 type = "String",
                 name = "ONLINE_BACKEND_MODE",
