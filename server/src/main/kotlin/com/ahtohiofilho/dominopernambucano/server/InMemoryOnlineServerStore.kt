@@ -1,7 +1,12 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerIdentity
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
 import com.ahtohiofilho.dominopernambucano.competitive.accumulateRankedMatchTransition
+import com.ahtohiofilho.dominopernambucano.competitive.buildRankedMatchResult
+import com.ahtohiofilho.dominopernambucano.competitive.createRankedMatchResultId
 import com.ahtohiofilho.dominopernambucano.competitive.didRankedSeatPlayPiece
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
@@ -66,6 +71,8 @@ class InMemoryOnlineServerStore(
     private val autoFillDevelopmentBotsAfterTwoHumanPlayers: Boolean = false,
     private val resourcePolicy: OnlineServerStoreResourcePolicy =
         OnlineServerStoreResourcePolicy.Default,
+    private val newMatchClassification: RankedMatchClassification =
+        RankedMatchClassification.UNRANKED,
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
@@ -81,6 +88,7 @@ class InMemoryOnlineServerStore(
         val automaticSeatIndexes: MutableSet<Int> = mutableSetOf(),
         val automaticRoundSeatIndexes: MutableSet<Int> = mutableSetOf(),
         val developmentBotSeatIndexes: Set<Int> = emptySet(),
+        val classification: RankedMatchClassification,
         var rankedMetricAccumulator: RankedMatchMetricAccumulator,
     )
 
@@ -102,6 +110,8 @@ class InMemoryOnlineServerStore(
     private val matchesById = mutableMapOf<String, MatchRecord>()
     private val actionResultsByKey =
         mutableMapOf<ActionResultCacheKey, OnlineActionResultDto>()
+    private val rankedResultsById =
+        mutableMapOf<String, RankedMatchResult>()
 
     private var nextRoomSequence = 1
     private var nextMatchSequence = 1
@@ -807,6 +817,24 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    internal fun getRankedMatchClassification(
+        matchId: String,
+    ): RankedMatchClassification? {
+        return synchronized(lock) {
+            matchesById[matchId]?.classification
+        }
+    }
+
+    internal fun getRankedMatchResult(
+        matchId: String,
+    ): RankedMatchResult? {
+        return synchronized(lock) {
+            rankedResultsById[
+                createRankedMatchResultId(matchId)
+            ]
+        }
+    }
+
     internal fun snapshotPersistentState(): OnlineServerStoreState {
         return synchronized(lock) {
             OnlineServerStoreState(
@@ -828,8 +856,15 @@ class InMemoryOnlineServerStore(
                                 matchRecord.revisionHistory.toList(),
                             automaticSeatIndexes =
                                 matchRecord.automaticSeatIndexes.sorted(),
+                            automaticRoundSeatIndexes =
+                                matchRecord
+                                    .automaticRoundSeatIndexes
+                                    .sorted(),
                             applicationSeatIndexes =
                                 matchRecord.developmentBotSeatIndexes.sorted(),
+                            classification = matchRecord.classification,
+                            rankedMetricAccumulator =
+                                matchRecord.rankedMetricAccumulator,
                         )
                     },
                 actionResults = actionResultsByKey.entries
@@ -841,6 +876,8 @@ class InMemoryOnlineServerStore(
                             result = result,
                         )
                     },
+                rankedResults = rankedResultsById.values
+                    .sortedBy { result -> result.resultId },
             )
         }
     }
@@ -855,6 +892,7 @@ class InMemoryOnlineServerStore(
             roomIdsByCode.clear()
             matchesById.clear()
             actionResultsByKey.clear()
+            rankedResultsById.clear()
 
             state.rooms.forEach { room ->
                 roomsById[room.roomId] = room
@@ -873,22 +911,27 @@ class InMemoryOnlineServerStore(
                     automaticSeatIndexes = storedMatch
                         .automaticSeatIndexes
                         .toMutableSet(),
+                    automaticRoundSeatIndexes = storedMatch
+                        .automaticRoundSeatIndexes
+                        .toMutableSet(),
                     developmentBotSeatIndexes = storedMatch
                         .applicationSeatIndexes
                         .toSet(),
+                    classification = storedMatch.classification,
                     rankedMetricAccumulator =
-                        RankedMatchMetricAccumulator.empty(
-                            playerCount = storedMatch
-                                .snapshot
-                                .gameState
-                                .players
-                                .size,
-                            teamCount = storedMatch
-                                .snapshot
-                                .gameState
-                                .teamScores
-                                .size,
-                        ),
+                        storedMatch.rankedMetricAccumulator
+                            ?: RankedMatchMetricAccumulator.empty(
+                                playerCount = storedMatch
+                                    .snapshot
+                                    .gameState
+                                    .players
+                                    .size,
+                                teamCount = storedMatch
+                                    .snapshot
+                                    .gameState
+                                    .teamScores
+                                    .size,
+                            ),
                 )
             }
 
@@ -902,6 +945,11 @@ class InMemoryOnlineServerStore(
                 ] = storedAction.result
             }
 
+            state.rankedResults.forEach { rankedResult ->
+                rankedResultsById[rankedResult.resultId] =
+                    rankedResult
+            }
+
             nextRoomSequence = state.nextRoomSequence
             nextMatchSequence = state.nextMatchSequence
             lastPruneAtEpochMillis = null
@@ -912,7 +960,8 @@ class InMemoryOnlineServerStore(
         state: OnlineServerStoreState,
     ) {
         require(
-            state.schemaVersion ==
+            state.schemaVersion in
+                    MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION..
                     ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION
         ) {
             "Versão de estado autoritativo não suportada: " +
@@ -984,6 +1033,29 @@ class InMemoryOnlineServerStore(
                     index in 0..3
                 }
             )
+            require(
+                storedMatch.automaticRoundSeatIndexes.all { index ->
+                    index in 0..3
+                }
+            )
+
+            storedMatch.rankedMetricAccumulator?.let { accumulator ->
+                require(
+                    accumulator.seatMetrics.size ==
+                            storedMatch.snapshot.gameState.players.size,
+                )
+                require(
+                    accumulator.collectiveCountPointsByTeam.size ==
+                            storedMatch.snapshot.gameState.teamScores.size,
+                )
+            }
+
+            if (
+                storedMatch.classification ==
+                RankedMatchClassification.RANKED
+            ) {
+                require(storedMatch.applicationSeatIndexes.isEmpty())
+            }
         }
 
         state.rooms.forEach { room ->
@@ -1009,6 +1081,48 @@ class InMemoryOnlineServerStore(
                         storedAction.result.actionId == storedAction.actionId
             }
         )
+
+        val rankedResultIds = state.rankedResults.map { result ->
+            result.resultId
+        }
+        val rankedResultMatchIds = state.rankedResults.map { result ->
+            result.matchId
+        }
+
+        require(
+            rankedResultIds.distinct().size ==
+                    rankedResultIds.size,
+        )
+        require(
+            rankedResultMatchIds.distinct().size ==
+                    rankedResultMatchIds.size,
+        )
+        require(
+            state.rankedResults.all { result ->
+                result.resultId ==
+                        createRankedMatchResultId(result.matchId)
+            },
+        )
+
+        val rankedResultsByMatchId = state.rankedResults.associateBy {
+            result -> result.matchId
+        }
+
+        state.matches.forEach { storedMatch ->
+            val result = rankedResultsByMatchId[storedMatch.matchId]
+            val matchFinished =
+                storedMatch.snapshot.gameState.gameWinnerTeamIndex != null
+
+            when (storedMatch.classification) {
+                RankedMatchClassification.UNRANKED -> {
+                    require(result == null)
+                }
+
+                RankedMatchClassification.RANKED -> {
+                    require(!matchFinished || result != null)
+                }
+            }
+        }
 
         val maximumRoomSequence = roomIds.maxOfOrNull { roomId ->
             roomId.removePrefix("server-room-").toIntOrNull() ?: 0
@@ -1136,6 +1250,21 @@ class InMemoryOnlineServerStore(
         room: OnlineRoomSnapshotDto,
         matchId: String,
     ) {
+        if (
+            newMatchClassification ==
+            RankedMatchClassification.RANKED
+        ) {
+            require(
+                room.players.size == 4 &&
+                        room.players.all { player ->
+                            player.participantType ==
+                                    OnlineParticipantTypeDto.HUMAN
+                        },
+            ) {
+                "Partida ranqueada exige quatro jogadores humanos."
+            }
+        }
+
         val gameState = applyOnlineRoomPlayerNames(
             gameState = createInitialDominoGameState(),
             room = room,
@@ -1175,6 +1304,7 @@ class InMemoryOnlineServerStore(
                     player.seatIndex
                 }
                 .toSet(),
+            classification = newMatchClassification,
             rankedMetricAccumulator =
                 RankedMatchMetricAccumulator.empty(
                     playerCount = gameState.players.size,
@@ -1555,6 +1685,17 @@ class InMemoryOnlineServerStore(
         currentRoom: OnlineRoomSnapshotDto,
         matchRecord: MatchRecord,
     ): OnlineActionResultDto {
+        if (
+            matchRecord.classification ==
+            RankedMatchClassification.RANKED
+        ) {
+            return rejectedAction(
+                reason =
+                    "Partida ranqueada concluída não pode ser reiniciada.",
+                revision = matchRecord.snapshot.revision,
+            )
+        }
+
         return when (
             val reduction = reduceOnlineStartNewMatchAction(
                 action = action,
@@ -1827,6 +1968,18 @@ class InMemoryOnlineServerStore(
                     matchRecord.automaticRoundSeatIndexes,
             )
 
+        if (
+            matchRecord.classification ==
+                    RankedMatchClassification.RANKED &&
+            isGameFinished(runtimeState.gameState)
+        ) {
+            materializeRankedMatchResult(
+                matchRecord = matchRecord,
+                finalState = runtimeState.gameState,
+                completedAtEpochMillis = serverEpochMillis,
+            )
+        }
+
         val updatedSnapshot = runtimeState.toOnlineSnapshotDto(
             roomId = previousSnapshot.roomId,
             matchId = previousSnapshot.matchId,
@@ -1877,6 +2030,59 @@ class InMemoryOnlineServerStore(
             accepted = true,
             revision = updatedSnapshot.revision,
         )
+    }
+
+    private fun materializeRankedMatchResult(
+        matchRecord: MatchRecord,
+        finalState: DominoGameState,
+        completedAtEpochMillis: Long,
+    ) {
+        val currentRoom = requireNotNull(
+            roomsById[matchRecord.roomId],
+        ) {
+            "Partida ranqueada referencia sala inexistente."
+        }
+        val resultId = createRankedMatchResultId(
+            matchId = matchRecord.matchId,
+        )
+        val existingResult = rankedResultsById[resultId]
+        val stableCompletedAtEpochMillis =
+            existingResult?.completedAtEpochMillis
+                ?: completedAtEpochMillis
+
+        val playerIdentitiesBySeat =
+            finalState.players.indices.map { seatIndex ->
+                val roomPlayer = requireNotNull(
+                    currentRoom.players.singleOrNull { player ->
+                        player.seatIndex == seatIndex
+                    },
+                ) {
+                    "Assento ranqueado sem identidade de jogador."
+                }
+
+                RankedMatchPlayerIdentity(
+                    playerId = roomPlayer.playerId,
+                    accountId = null,
+                )
+            }
+
+        val candidate = buildRankedMatchResult(
+            matchId = matchRecord.matchId,
+            completedAtEpochMillis =
+                stableCompletedAtEpochMillis,
+            finalState = finalState,
+            playerIdentitiesBySeat = playerIdentitiesBySeat,
+            accumulator = matchRecord.rankedMetricAccumulator,
+        )
+
+        check(
+            existingResult == null ||
+                    existingResult == candidate,
+        ) {
+            "Resultado ranqueado conflitante para a mesma partida."
+        }
+
+        rankedResultsById[resultId] = candidate
     }
 
     private fun recordSnapshotInHistory(

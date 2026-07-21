@@ -1,7 +1,9 @@
 package com.ahtohiofilho.dominopernambucano.competitive
 
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class RankedMatchMetricAccumulator(
     val seatMetrics: List<RankedSeatMatchMetrics>,
     val collectiveCountPointsByTeam: List<Int>,

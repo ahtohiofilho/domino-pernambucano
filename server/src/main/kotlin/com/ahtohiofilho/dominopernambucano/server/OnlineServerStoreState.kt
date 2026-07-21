@@ -1,11 +1,15 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
-const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
+const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 2
+const val MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
 
 @Serializable
 data class OnlineServerStoreState(
@@ -15,6 +19,7 @@ data class OnlineServerStoreState(
     val rooms: List<OnlineRoomSnapshotDto> = emptyList(),
     val matches: List<OnlineServerStoredMatch> = emptyList(),
     val actionResults: List<OnlineServerStoredActionResult> = emptyList(),
+    val rankedResults: List<RankedMatchResult> = emptyList(),
 ) {
     companion object {
         val Empty = OnlineServerStoreState()
@@ -28,7 +33,11 @@ data class OnlineServerStoredMatch(
     val snapshot: OnlineMatchSnapshotDto,
     val revisionHistory: List<OnlineMatchSnapshotDto>,
     val automaticSeatIndexes: List<Int> = emptyList(),
+    val automaticRoundSeatIndexes: List<Int> = emptyList(),
     val applicationSeatIndexes: List<Int> = emptyList(),
+    val classification: RankedMatchClassification =
+        RankedMatchClassification.UNRANKED,
+    val rankedMetricAccumulator: RankedMatchMetricAccumulator? = null,
 )
 
 @Serializable

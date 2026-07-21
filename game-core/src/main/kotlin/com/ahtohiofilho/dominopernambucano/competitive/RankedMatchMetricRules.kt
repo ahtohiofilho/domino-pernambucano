@@ -6,6 +6,7 @@ import com.ahtohiofilho.dominopernambucano.domain.getTeamIndexForPlayer
 import com.ahtohiofilho.dominopernambucano.domain.hasPlayablePiece
 import com.ahtohiofilho.dominopernambucano.domain.isGameFinished
 import com.ahtohiofilho.dominopernambucano.domain.isRoundFinished
+import kotlinx.serialization.Serializable
 
 data class RankedRoundMetricDelta(
     val roundWinKind: RoundWinKind,
@@ -16,6 +17,7 @@ data class RankedRoundMetricDelta(
     val automaticRoundSeatIndexes: Set<Int>,
 )
 
+@Serializable
 data class RankedSeatMatchMetrics(
     val individualPoints: Int = 0,
     val touchesGiven: Int = 0,
