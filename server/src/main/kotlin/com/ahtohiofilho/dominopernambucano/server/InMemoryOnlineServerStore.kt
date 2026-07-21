@@ -1,5 +1,9 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
+import com.ahtohiofilho.dominopernambucano.competitive.accumulateRankedMatchTransition
+import com.ahtohiofilho.dominopernambucano.competitive.didRankedSeatPlayPiece
+import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.isGameFinished
 import com.ahtohiofilho.dominopernambucano.domain.isRoundFinished
@@ -75,7 +79,9 @@ class InMemoryOnlineServerStore(
         var snapshot: OnlineMatchSnapshotDto,
         val revisionHistory: ArrayDeque<OnlineMatchSnapshotDto> = ArrayDeque(),
         val automaticSeatIndexes: MutableSet<Int> = mutableSetOf(),
+        val automaticRoundSeatIndexes: MutableSet<Int> = mutableSetOf(),
         val developmentBotSeatIndexes: Set<Int> = emptySet(),
+        var rankedMetricAccumulator: RankedMatchMetricAccumulator,
     )
 
     private data class ClockReductionResult(
@@ -793,6 +799,14 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    internal fun getRankedMatchMetricAccumulator(
+        matchId: String,
+    ): RankedMatchMetricAccumulator? {
+        return synchronized(lock) {
+            matchesById[matchId]?.rankedMetricAccumulator
+        }
+    }
+
     internal fun snapshotPersistentState(): OnlineServerStoreState {
         return synchronized(lock) {
             OnlineServerStoreState(
@@ -862,6 +876,19 @@ class InMemoryOnlineServerStore(
                     developmentBotSeatIndexes = storedMatch
                         .applicationSeatIndexes
                         .toSet(),
+                    rankedMetricAccumulator =
+                        RankedMatchMetricAccumulator.empty(
+                            playerCount = storedMatch
+                                .snapshot
+                                .gameState
+                                .players
+                                .size,
+                            teamCount = storedMatch
+                                .snapshot
+                                .gameState
+                                .teamScores
+                                .size,
+                        ),
                 )
             }
 
@@ -1148,6 +1175,11 @@ class InMemoryOnlineServerStore(
                     player.seatIndex
                 }
                 .toSet(),
+            rankedMetricAccumulator =
+                RankedMatchMetricAccumulator.empty(
+                    playerCount = gameState.players.size,
+                    teamCount = gameState.teamScores.size,
+                ),
         )
 
         recordSnapshotInHistory(
@@ -1233,6 +1265,8 @@ class InMemoryOnlineServerStore(
         val clockReduction = reduceClockAndRegisterAutomaticPlayer(
             runtimeState = runtimeState,
             automaticSeatIndexes = matchRecord.automaticSeatIndexes,
+            automaticRoundSeatIndexes =
+                matchRecord.automaticRoundSeatIndexes,
             elapsedMillis = getElapsedMillisSinceSnapshot(
                 snapshot = currentSnapshot,
                 nowEpochMillis = nowEpochMillis,
@@ -1390,6 +1424,14 @@ class InMemoryOnlineServerStore(
             state = gameState,
         )
 
+        registerAutomaticPiecePlayIfNeeded(
+            previousState = gameState,
+            updatedState = updatedGameState,
+            seatIndex = currentPlayerIndex,
+            automaticRoundSeatIndexes =
+                matchRecord.automaticRoundSeatIndexes,
+        )
+
         return runtimeState.copy(
             gameState = updatedGameState,
             phase = determineOnlineNextPhase(
@@ -1411,6 +1453,8 @@ class InMemoryOnlineServerStore(
         val clockReduction = reduceClockAndRegisterAutomaticPlayer(
             runtimeState = runtimeState,
             automaticSeatIndexes = matchRecord.automaticSeatIndexes,
+            automaticRoundSeatIndexes =
+                matchRecord.automaticRoundSeatIndexes,
             elapsedMillis = getElapsedMillisSinceSnapshot(
                 snapshot = currentSnapshot,
                 nowEpochMillis = now,
@@ -1486,6 +1530,7 @@ class InMemoryOnlineServerStore(
                  * Ao começar a próxima rodada, todos recuperam o controle.
                  */
                 matchRecord.automaticSeatIndexes.clear()
+                matchRecord.automaticRoundSeatIndexes.clear()
 
                 publishMatchSnapshot(
                     matchRecord = matchRecord,
@@ -1519,6 +1564,20 @@ class InMemoryOnlineServerStore(
         ) {
             is OnlineMatchActionReduction.Accepted -> {
                 matchRecord.automaticSeatIndexes.clear()
+                matchRecord.automaticRoundSeatIndexes.clear()
+                matchRecord.rankedMetricAccumulator =
+                    RankedMatchMetricAccumulator.empty(
+                        playerCount = reduction
+                            .runtimeState
+                            .gameState
+                            .players
+                            .size,
+                        teamCount = reduction
+                            .runtimeState
+                            .gameState
+                            .teamScores
+                            .size,
+                    )
 
                 publishMatchSnapshot(
                     matchRecord = matchRecord,
@@ -1541,6 +1600,7 @@ class InMemoryOnlineServerStore(
     private fun reduceClockAndRegisterAutomaticPlayer(
         runtimeState: DominoMatchRuntimeState,
         automaticSeatIndexes: MutableSet<Int>,
+        automaticRoundSeatIndexes: MutableSet<Int>,
         elapsedMillis: Long,
     ): ClockReductionResult {
         val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
@@ -1551,10 +1611,19 @@ class InMemoryOnlineServerStore(
                 automaticSeatIndexes = automaticSeatIndexes,
             )
         ) {
+            val forcedRuntimeState = forceAutomaticTurnForCurrentPlayer(
+                runtimeState = runtimeState,
+            )
+
+            registerAutomaticPiecePlayIfNeeded(
+                previousState = runtimeState.gameState,
+                updatedState = forcedRuntimeState.gameState,
+                seatIndex = currentPlayerIndex,
+                automaticRoundSeatIndexes = automaticRoundSeatIndexes,
+            )
+
             return ClockReductionResult(
-                runtimeState = forceAutomaticTurnForCurrentPlayer(
-                    runtimeState = runtimeState,
-                ),
+                runtimeState = forcedRuntimeState,
                 turnWasResolved = true,
             )
         }
@@ -1579,6 +1648,13 @@ class InMemoryOnlineServerStore(
         }
 
         if (turnWasResolved) {
+            registerAutomaticPiecePlayIfNeeded(
+                previousState = runtimeState.gameState,
+                updatedState = clockedRuntimeState.gameState,
+                seatIndex = currentPlayerIndex,
+                automaticRoundSeatIndexes = automaticRoundSeatIndexes,
+            )
+
             return ClockReductionResult(
                 runtimeState = clockedRuntimeState,
                 turnWasResolved = true,
@@ -1599,12 +1675,38 @@ class InMemoryOnlineServerStore(
 
         automaticSeatIndexes.add(currentPlayerIndex)
 
+        val forcedRuntimeState = forceAutomaticTurnForCurrentPlayer(
+            runtimeState = clockedRuntimeState,
+        )
+
+        registerAutomaticPiecePlayIfNeeded(
+            previousState = clockedRuntimeState.gameState,
+            updatedState = forcedRuntimeState.gameState,
+            seatIndex = currentPlayerIndex,
+            automaticRoundSeatIndexes = automaticRoundSeatIndexes,
+        )
+
         return ClockReductionResult(
-            runtimeState = forceAutomaticTurnForCurrentPlayer(
-                runtimeState = clockedRuntimeState,
-            ),
+            runtimeState = forcedRuntimeState,
             turnWasResolved = true,
         )
+    }
+
+    private fun registerAutomaticPiecePlayIfNeeded(
+        previousState: DominoGameState,
+        updatedState: DominoGameState,
+        seatIndex: Int,
+        automaticRoundSeatIndexes: MutableSet<Int>,
+    ) {
+        if (
+            didRankedSeatPlayPiece(
+                previousState = previousState,
+                updatedState = updatedState,
+                seatIndex = seatIndex,
+            )
+        ) {
+            automaticRoundSeatIndexes.add(seatIndex)
+        }
     }
 
     private fun shouldForceAutomaticTurnForMarkedCurrentPlayer(
@@ -1714,6 +1816,17 @@ class InMemoryOnlineServerStore(
         trigger: String,
         traceSource: OnlineTraceSource = OnlineTraceSource.SERVER_STORE,
     ): OnlineActionResultDto {
+        matchRecord.rankedMetricAccumulator =
+            accumulateRankedMatchTransition(
+                accumulator = matchRecord.rankedMetricAccumulator,
+                previousState = previousSnapshot.toRuntimeState(
+                    localPlayerIndex = 0,
+                ).gameState,
+                updatedState = runtimeState.gameState,
+                automaticSeatIndexes =
+                    matchRecord.automaticRoundSeatIndexes,
+            )
+
         val updatedSnapshot = runtimeState.toOnlineSnapshotDto(
             roomId = previousSnapshot.roomId,
             matchId = previousSnapshot.matchId,
