@@ -4,10 +4,6 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.ApplicationCall
 
-data class OnlineRequestIdentity(
-    val playerId: String,
-)
-
 fun interface OnlineRequestIdentityResolver {
     fun resolve(
         call: ApplicationCall,
@@ -83,8 +79,9 @@ internal fun createDefaultOnlineRequestIdentityResolver(
 /*
  * Resolver exclusivo de homologação local/remota controlada.
  *
- * Em produção, esta implementação deve ser substituída por um resolver que
- * valide JWT e construa a identidade a partir do principal autenticado.
+ * Em produção, esta implementação não é registrada. O principal sintético
+ * abaixo existe apenas para manter os fluxos de desenvolvimento compatíveis
+ * com o contrato autenticado abstrato.
  */
 object DevelopmentHeaderOnlineRequestIdentityResolver :
     OnlineRequestIdentityResolver {
@@ -102,6 +99,10 @@ object DevelopmentHeaderOnlineRequestIdentityResolver :
 
         return OnlineRequestIdentity(
             playerId = playerId,
+            principalId = "development-principal:$playerId",
+            sessionId = "development-session:$playerId",
+            kind = OnlinePrincipalKind.ANONYMOUS,
+            accountId = null,
         )
     }
 }

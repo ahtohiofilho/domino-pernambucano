@@ -11,12 +11,17 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 private const val SESSION_SIGNING_SECRET_ENVIRONMENT_VARIABLE =
     "DOMINO_SESSION_SIGNING_SECRET"
 
 private const val HMAC_SHA_256 = "HmacSHA256"
+private const val SHA_256 = "SHA-256"
 private const val MINIMUM_SIGNING_SECRET_BYTES = 32
+private const val CURRENT_SESSION_TOKEN_VERSION = 2
 
 internal const val DEFAULT_ANONYMOUS_SESSION_TTL_MILLIS =
     1000L * 60L * 60L * 24L * 30L
@@ -36,8 +41,20 @@ class HmacOnlineSessionTokenService(
     },
     private val sessionTtlMillis: Long =
         DEFAULT_ANONYMOUS_SESSION_TTL_MILLIS,
+    /*
+     * Mantem a emissao legada por padrao ate existir uma janela de rollout
+     * em que o binario anterior tambem reconheca tokens v2. O resolver ja
+     * aceita os dois formatos, permitindo ativacao coordenada no futuro.
+     */
+    private val emitVersion2Tokens: Boolean = false,
     private val playerIdFactory: () -> String = {
         "anonymous-${UUID.randomUUID()}"
+    },
+    private val principalIdFactory: () -> String = {
+        "principal-${UUID.randomUUID()}"
+    },
+    private val sessionIdFactory: () -> String = {
+        "session-${UUID.randomUUID()}"
     },
     private val json: Json = Json {
         encodeDefaults = true
@@ -57,39 +74,49 @@ class HmacOnlineSessionTokenService(
 
     override fun issueAnonymousSession(): OnlineAnonymousSessionDto {
         val now = nowEpochMillis()
-        val playerId = playerIdFactory()
-            .trim()
-            .also { value ->
-                require(value.isNotBlank()) {
-                    "O playerId emitido para a sessão não pode ser vazio."
-                }
-            }
-
-        val expiresAtEpochMillis = now + sessionTtlMillis
-        val payload = OnlineSessionTokenPayload(
-            playerId = playerId,
-            expiresAtEpochMillis = expiresAtEpochMillis,
+        val playerId = requireIdentifier(
+            value = playerIdFactory(),
+            fieldName = "playerId",
         )
+        val expiresAtEpochMillis = now + sessionTtlMillis
 
-        val encodedPayload = Base64
-            .getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(
-                json.encodeToString(payload).toByteArray(Charsets.UTF_8),
+        val accessToken = if (emitVersion2Tokens) {
+            val principalId = requireIdentifier(
+                value = principalIdFactory(),
+                fieldName = "principalId",
+            )
+            val sessionId = requireIdentifier(
+                value = sessionIdFactory(),
+                fieldName = "sessionId",
+            )
+            val payload = OnlineSessionTokenPayloadV2(
+                tokenVersion = CURRENT_SESSION_TOKEN_VERSION,
+                principalId = principalId,
+                sessionId = sessionId,
+                principalKind = OnlinePrincipalKind.ANONYMOUS,
+                playerId = playerId,
+                accountId = null,
+                issuedAtEpochMillis = now,
+                expiresAtEpochMillis = expiresAtEpochMillis,
             )
 
-        val encodedSignature = Base64
-            .getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(
-                sign(
-                    encodedPayload = encodedPayload,
-                ),
+            encodeAndSign(
+                payload = json.encodeToString(payload),
             )
+        } else {
+            val payload = OnlineSessionTokenPayloadV1(
+                playerId = playerId,
+                expiresAtEpochMillis = expiresAtEpochMillis,
+            )
+
+            encodeAndSign(
+                payload = json.encodeToString(payload),
+            )
+        }
 
         return OnlineAnonymousSessionDto(
             playerId = playerId,
-            accessToken = "$encodedPayload.$encodedSignature",
+            accessToken = accessToken,
             expiresAtEpochMillis = expiresAtEpochMillis,
         )
     }
@@ -97,12 +124,11 @@ class HmacOnlineSessionTokenService(
     override fun resolveAccessToken(
         accessToken: String,
     ): OnlineRequestIdentity? {
-        val tokenParts = accessToken
-            .trim()
-            .split(
-                '.',
-                limit = 2,
-            )
+        val normalizedToken = accessToken.trim()
+        val tokenParts = normalizedToken.split(
+            '.',
+            limit = 2,
+        )
 
         if (
             tokenParts.size != 2 ||
@@ -126,29 +152,130 @@ class HmacOnlineSessionTokenService(
             return null
         }
 
-        val payload = runCatching {
-            val decodedPayload = String(
-                Base64
-                    .getUrlDecoder()
-                    .decode(encodedPayload),
+        val decodedPayload = runCatching {
+            String(
+                Base64.getUrlDecoder().decode(encodedPayload),
                 Charsets.UTF_8,
             )
+        }.getOrNull() ?: return null
 
-            json.decodeFromString<OnlineSessionTokenPayload>(
+        val tokenVersion = runCatching {
+            json.parseToJsonElement(decodedPayload)
+                .jsonObject["tokenVersion"]
+                ?.jsonPrimitive
+                ?.intOrNull
+        }.getOrNull()
+
+        return when (tokenVersion) {
+            null -> resolveLegacyPayload(
+                decodedPayload = decodedPayload,
+                accessToken = normalizedToken,
+            )
+
+            CURRENT_SESSION_TOKEN_VERSION -> resolveVersion2Payload(
+                decodedPayload = decodedPayload,
+            )
+
+            else -> null
+        }
+    }
+
+    private fun resolveLegacyPayload(
+        decodedPayload: String,
+        accessToken: String,
+    ): OnlineRequestIdentity? {
+        val payload = runCatching {
+            json.decodeFromString<OnlineSessionTokenPayloadV1>(
                 decodedPayload,
             )
         }.getOrNull() ?: return null
 
+        val playerId = payload.playerId.trim()
         if (
-            payload.playerId.isBlank() ||
+            playerId.isBlank() ||
             nowEpochMillis() >= payload.expiresAtEpochMillis
         ) {
             return null
         }
 
         return OnlineRequestIdentity(
-            playerId = payload.playerId,
+            playerId = playerId,
+            principalId = "legacy-principal:$playerId",
+            sessionId = legacySessionId(
+                accessToken = accessToken,
+            ),
+            kind = OnlinePrincipalKind.ANONYMOUS,
+            accountId = null,
         )
+    }
+
+    private fun resolveVersion2Payload(
+        decodedPayload: String,
+    ): OnlineRequestIdentity? {
+        val payload = runCatching {
+            json.decodeFromString<OnlineSessionTokenPayloadV2>(
+                decodedPayload,
+            )
+        }.getOrNull() ?: return null
+
+        val principalId = payload.principalId.trim()
+        val sessionId = payload.sessionId.trim()
+        val playerId = payload.playerId.trim()
+        val accountId = payload.accountId?.trim()
+        val now = nowEpochMillis()
+
+        if (
+            payload.tokenVersion != CURRENT_SESSION_TOKEN_VERSION ||
+            principalId.isBlank() ||
+            sessionId.isBlank() ||
+            playerId.isBlank() ||
+            payload.issuedAtEpochMillis > payload.expiresAtEpochMillis ||
+            now >= payload.expiresAtEpochMillis
+        ) {
+            return null
+        }
+
+        val normalizedAccountId = when (payload.principalKind) {
+            OnlinePrincipalKind.ANONYMOUS -> {
+                if (accountId != null) {
+                    return null
+                }
+                null
+            }
+
+            OnlinePrincipalKind.ACCOUNT -> {
+                accountId?.takeIf { value ->
+                    value.isNotBlank()
+                } ?: return null
+            }
+        }
+
+        return OnlineRequestIdentity(
+            playerId = playerId,
+            principalId = principalId,
+            sessionId = sessionId,
+            kind = payload.principalKind,
+            accountId = normalizedAccountId,
+        )
+    }
+
+    private fun encodeAndSign(
+        payload: String,
+    ): String {
+        val encodedPayload = Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                payload.toByteArray(Charsets.UTF_8),
+            )
+        val encodedSignature = Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                sign(
+                    encodedPayload = encodedPayload,
+                ),
+            )
+
+        return "$encodedPayload.$encodedSignature"
     }
 
     private fun sign(
@@ -166,6 +293,31 @@ class HmacOnlineSessionTokenService(
             .doFinal(
                 encodedPayload.toByteArray(Charsets.UTF_8),
             )
+    }
+
+    private fun legacySessionId(
+        accessToken: String,
+    ): String {
+        val digest = MessageDigest.getInstance(SHA_256)
+            .digest(
+                accessToken.toByteArray(Charsets.UTF_8),
+            )
+        val encodedDigest = Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(digest)
+
+        return "legacy-session:$encodedDigest"
+    }
+
+    private fun requireIdentifier(
+        value: String,
+        fieldName: String,
+    ): String {
+        return value.trim().also { normalizedValue ->
+            require(normalizedValue.isNotBlank()) {
+                "O $fieldName emitido para a sessão não pode ser vazio."
+            }
+        }
     }
 }
 
@@ -211,7 +363,19 @@ internal fun createDefaultOnlineSessionTokenService(
 }
 
 @Serializable
-private data class OnlineSessionTokenPayload(
+private data class OnlineSessionTokenPayloadV1(
     val playerId: String,
+    val expiresAtEpochMillis: Long,
+)
+
+@Serializable
+private data class OnlineSessionTokenPayloadV2(
+    val tokenVersion: Int,
+    val principalId: String,
+    val sessionId: String,
+    val principalKind: OnlinePrincipalKind,
+    val playerId: String,
+    val accountId: String? = null,
+    val issuedAtEpochMillis: Long,
     val expiresAtEpochMillis: Long,
 )
