@@ -41,6 +41,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerId
 import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerIdentity
+import com.ahtohiofilho.dominopernambucano.online.resolvedDisplayName
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.ui.menu.MenuScaffold
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
@@ -72,7 +73,7 @@ fun OnlineCreateRoomRoute(
                 developmentParticipantCompletion != null
 
     val localPlayerId = localPlayerIdentity.playerId
-    val localPlayerName = localPlayerIdentity.playerName
+    val localPlayerName = localPlayerIdentity.displayName
 
     var feedbackMessage by remember(
         resumedParticipationBinding,
@@ -244,7 +245,7 @@ fun OnlineCreateRoomRoute(
                             OnlineDevelopmentParticipantRequest(
                                 roomCode = workingSnapshot.roomCode,
                                 playerId = fakePlayerIdentity.playerId,
-                                playerName = fakePlayerIdentity.playerName,
+                                playerName = fakePlayerIdentity.displayName,
                             ),
                         )
 
@@ -516,7 +517,7 @@ private fun PlayerSlotRow(
             )
 
             Text(
-                text = player?.name ?: "Aguardando jogador",
+                text = player?.resolvedDisplayName ?: "Aguardando jogador",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (isOccupied) {
                     FontWeight.Black

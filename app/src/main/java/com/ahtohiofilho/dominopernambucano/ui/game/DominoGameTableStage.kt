@@ -20,6 +20,7 @@ import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import com.ahtohiofilho.dominopernambucano.online.createDefaultOnlineTableName
 
 @Composable
 fun DominoGameTableStage(
@@ -66,10 +67,10 @@ fun DominoGameTableStage(
                 contentAlignment = Alignment.TopCenter,
             ) {
                 DominoPlayerSeat(
-                    name = gameState.players
-                        .getOrNull(topPlayerIndex)
-                        ?.name
-                        ?: "Jogador ${topPlayerIndex + 1}",
+                    name = resolveTablePlayerName(
+                        gameState = gameState,
+                        playerIndex = topPlayerIndex,
+                    ),
                     participantType = gameState.players
                         .getOrNull(topPlayerIndex)
                         ?.participantType
@@ -103,10 +104,10 @@ fun DominoGameTableStage(
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     DominoPlayerSeat(
-                        name = gameState.players
-                            .getOrNull(leftPlayerIndex)
-                            ?.name
-                            ?: "Jogador ${leftPlayerIndex + 1}",
+                        name = resolveTablePlayerName(
+                            gameState = gameState,
+                            playerIndex = leftPlayerIndex,
+                        ),
                         participantType = gameState.players
                             .getOrNull(leftPlayerIndex)
                             ?.participantType
@@ -151,10 +152,10 @@ fun DominoGameTableStage(
                     contentAlignment = Alignment.CenterEnd,
                 ) {
                     DominoPlayerSeat(
-                        name = gameState.players
-                            .getOrNull(rightPlayerIndex)
-                            ?.name
-                            ?: "Jogador ${rightPlayerIndex + 1}",
+                        name = resolveTablePlayerName(
+                            gameState = gameState,
+                            playerIndex = rightPlayerIndex,
+                        ),
                         participantType = gameState.players
                             .getOrNull(rightPlayerIndex)
                             ?.participantType
@@ -177,4 +178,18 @@ fun DominoGameTableStage(
             }
         }
     }
+}
+
+private fun resolveTablePlayerName(
+    gameState: DominoGameState,
+    playerIndex: Int,
+): String {
+    val displayName = gameState.players
+        .getOrNull(playerIndex)
+        ?.name
+        ?: "Jogador ${playerIndex + 1}"
+
+    return createDefaultOnlineTableName(
+        displayName = displayName,
+    )
 }

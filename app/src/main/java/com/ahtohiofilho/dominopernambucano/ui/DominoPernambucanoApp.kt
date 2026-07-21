@@ -435,11 +435,12 @@ fun DominoPernambucanoApp(
 
         DominoSessionState.PlayModeSelection -> {
             PlayModeScreen(
-                onlinePlayerName = onlinePlayerIdentity.playerName,
-                onOnlinePlayerNameChange = { playerName ->
+                onlineDisplayName = onlinePlayerIdentity.displayName,
+                onlineTableName = onlinePlayerIdentity.tableName,
+                onOnlineDisplayNameChange = { displayName ->
                     onlinePlayerIdentity =
-                        onlinePlayerIdentityStore.updatePlayerName(
-                            playerName = playerName,
+                        onlinePlayerIdentityStore.updateDisplayName(
+                            displayName = displayName,
                         )
                 },
                 onBackClick = {

@@ -2,50 +2,66 @@ package com.ahtohiofilho.dominopernambucano.online
 
 import java.util.UUID
 
-const val DEFAULT_ONLINE_PLAYER_NAME = "Jogador"
-const val MAX_ONLINE_PLAYER_NAME_LENGTH = 24
+@Deprecated(
+    message = "Use DEFAULT_ONLINE_DISPLAY_NAME.",
+    replaceWith = ReplaceWith("DEFAULT_ONLINE_DISPLAY_NAME"),
+)
+const val DEFAULT_ONLINE_PLAYER_NAME = DEFAULT_ONLINE_DISPLAY_NAME
 
-private val nameWhitespaceRegex = Regex("\\s+")
+@Deprecated(
+    message = "Use MAX_ONLINE_DISPLAY_NAME_LENGTH.",
+    replaceWith = ReplaceWith("MAX_ONLINE_DISPLAY_NAME_LENGTH"),
+)
+const val MAX_ONLINE_PLAYER_NAME_LENGTH = MAX_ONLINE_DISPLAY_NAME_LENGTH
 
 data class OnlinePlayerIdentity(
     val playerId: String,
-    val playerName: String,
-)
+    val displayName: String,
+    val tableName: String,
+) {
+    @Deprecated(
+        message = "Use displayName ou tableName conforme a superfície.",
+        replaceWith = ReplaceWith("displayName"),
+    )
+    val playerName: String
+        get() = displayName
+}
 
 fun createOnlinePlayerId(): String {
     return "player-${UUID.randomUUID()}"
 }
 
+@Deprecated(
+    message = "Use normalizeOnlineDisplayName.",
+    replaceWith = ReplaceWith("normalizeOnlineDisplayName(rawName)"),
+)
 fun normalizeOnlinePlayerName(
     rawName: String?,
 ): String {
-    val normalizedName = rawName
-        .orEmpty()
-        .trim()
-        .replace(
-            regex = nameWhitespaceRegex,
-            replacement = " ",
-        )
-        .take(MAX_ONLINE_PLAYER_NAME_LENGTH)
-
-    return normalizedName.ifBlank {
-        DEFAULT_ONLINE_PLAYER_NAME
-    }
+    return normalizeOnlineDisplayName(
+        rawName = rawName,
+    )
 }
 
 fun createDebugHostOnlinePlayerIdentity(): OnlinePlayerIdentity {
+    val displayName = "Anfitrião fake"
+
     return OnlinePlayerIdentity(
         playerId = "fake-host",
-        playerName = "Anfitrião fake",
+        displayName = displayName,
+        tableName = createDefaultOnlineTableName(displayName),
     )
 }
 
 fun createDebugFakeOnlinePlayerIdentity(
     fakePlayerNumber: Int,
 ): OnlinePlayerIdentity {
+    val displayName = "Jogador $fakePlayerNumber"
+
     return OnlinePlayerIdentity(
         playerId = createDebugFakeOnlinePlayerId(fakePlayerNumber),
-        playerName = "Jogador $fakePlayerNumber",
+        displayName = displayName,
+        tableName = createDefaultOnlineTableName(displayName),
     )
 }
 

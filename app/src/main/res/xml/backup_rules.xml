@@ -6,4 +6,7 @@
     <exclude
         domain="sharedpref"
         path="online_participation_binding.xml" />
+    <exclude
+        domain="sharedpref"
+        path="online_player_identity.xml" />
 </full-backup-content>

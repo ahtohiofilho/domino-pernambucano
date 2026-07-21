@@ -19,12 +19,24 @@ class SharedPreferencesOnlinePlayerIdentityStore(
         return repository.getOrCreate()
     }
 
-    override fun updatePlayerName(
-        playerName: String,
+    override fun updateDisplayName(
+        displayName: String,
     ): OnlinePlayerIdentity {
-        return repository.updatePlayerName(
-            playerName = playerName,
+        return repository.updateDisplayName(
+            displayName = displayName,
         )
+    }
+
+    override fun updateTableName(
+        tableName: String,
+    ): OnlinePlayerIdentity {
+        return repository.updateTableName(
+            tableName = tableName,
+        )
+    }
+
+    override fun resetTableNameToGenerated(): OnlinePlayerIdentity {
+        return repository.resetTableNameToGenerated()
     }
 }
 

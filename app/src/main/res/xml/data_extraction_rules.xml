@@ -7,6 +7,9 @@
         <exclude
             domain="sharedpref"
             path="online_participation_binding.xml" />
+        <exclude
+            domain="sharedpref"
+            path="online_player_identity.xml" />
     </cloud-backup>
 
     <device-transfer>
@@ -16,5 +19,8 @@
         <exclude
             domain="sharedpref"
             path="online_participation_binding.xml" />
+        <exclude
+            domain="sharedpref"
+            path="online_player_identity.xml" />
     </device-transfer>
 </data-extraction-rules>

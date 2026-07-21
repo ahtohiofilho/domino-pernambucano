@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.domain.DominoPlayer
 import com.ahtohiofilho.dominopernambucano.domain.getTeamIndexForPlayer
+import com.ahtohiofilho.dominopernambucano.online.createDefaultOnlineTableName
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import kotlinx.coroutines.delay
@@ -97,7 +98,9 @@ private fun buildRoundIntroTeamPresentation(
             getTeamIndexForPlayer(playerIndex) == teamIndex
         }
         .map { player ->
-            player.name
+            createDefaultOnlineTableName(
+                displayName = player.name,
+            )
         }
 
     return RoundIntroTeamPresentation(

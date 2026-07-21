@@ -88,7 +88,7 @@ fun MainMenuScreen(
         )
 
         Text(
-            text = "Dominó\nPernambucano",
+            text = "Dominó PE",
             color = DominoSemanticColors.primaryTextOnDark,
             fontSize = 42.sp,
             lineHeight = 40.sp,
