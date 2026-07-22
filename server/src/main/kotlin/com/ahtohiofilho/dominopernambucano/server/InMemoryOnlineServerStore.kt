@@ -79,6 +79,9 @@ class InMemoryOnlineServerStore(
     private val traceLogger: OnlineTraceLogger = OnlineTraceLogger(
         nowEpochMillis = nowEpochMillis,
     ),
+    private val accountIdFactory: () -> String = {
+        "account-${java.util.UUID.randomUUID()}"
+    },
 ) : OnlineServerStore {
     private data class MatchRecord(
         val roomId: String,
@@ -112,10 +115,65 @@ class InMemoryOnlineServerStore(
         mutableMapOf<ActionResultCacheKey, OnlineActionResultDto>()
     private val rankedResultsById =
         mutableMapOf<String, RankedMatchResult>()
+    private val accountsByPlayerId =
+        mutableMapOf<String, OnlineServerAccount>()
 
     private var nextRoomSequence = 1
     private var nextMatchSequence = 1
     private var lastPruneAtEpochMillis: Long? = null
+
+    override fun promoteAccount(
+        playerId: String,
+        expectedAccountId: String?,
+    ): OnlineServerAccount? {
+        return synchronized(lock) {
+            val normalizedPlayerId = playerId.trim()
+            require(
+                normalizedPlayerId.isNotBlank() &&
+                    normalizedPlayerId.length <= MAX_SERVER_IDENTIFIER_CHARACTERS
+            ) {
+                "O playerId da promoção de conta é inválido."
+            }
+
+            val existingAccount = accountsByPlayerId[normalizedPlayerId]
+            val normalizedExpectedAccountId = expectedAccountId
+                ?.trim()
+                ?.takeIf { value -> value.isNotBlank() }
+
+            if (expectedAccountId != null) {
+                return@synchronized existingAccount?.takeIf { account ->
+                    account.accountId == normalizedExpectedAccountId
+                }
+            }
+
+            if (existingAccount != null) {
+                return@synchronized existingAccount
+            }
+
+            val accountId = accountIdFactory().trim()
+            require(
+                accountId.isNotBlank() &&
+                    accountId.length <= MAX_SERVER_IDENTIFIER_CHARACTERS
+            ) {
+                "O accountId emitido para a promoção é inválido."
+            }
+            check(
+                accountsByPlayerId.values.none { account ->
+                    account.accountId == accountId
+                }
+            ) {
+                "O accountId emitido já está vinculado a outro player."
+            }
+
+            OnlineServerAccount(
+                accountId = accountId,
+                playerId = normalizedPlayerId,
+                createdAtEpochMillis = nowEpochMillis(),
+            ).also { account ->
+                accountsByPlayerId[normalizedPlayerId] = account
+            }
+        }
+    }
 
     override fun createRoom(
         request: CreateOnlineRoomRequestDto,
@@ -878,6 +936,8 @@ class InMemoryOnlineServerStore(
                     },
                 rankedResults = rankedResultsById.values
                     .sortedBy { result -> result.resultId },
+                accounts = accountsByPlayerId.values
+                    .sortedBy { account -> account.accountId },
             )
         }
     }
@@ -893,6 +953,7 @@ class InMemoryOnlineServerStore(
             matchesById.clear()
             actionResultsByKey.clear()
             rankedResultsById.clear()
+            accountsByPlayerId.clear()
 
             state.rooms.forEach { room ->
                 roomsById[room.roomId] = room
@@ -950,6 +1011,10 @@ class InMemoryOnlineServerStore(
                     rankedResult
             }
 
+            state.accounts.forEach { account ->
+                accountsByPlayerId[account.playerId] = account
+            }
+
             nextRoomSequence = state.nextRoomSequence
             nextMatchSequence = state.nextMatchSequence
             lastPruneAtEpochMillis = null
@@ -969,6 +1034,27 @@ class InMemoryOnlineServerStore(
         }
         require(state.nextRoomSequence > 0)
         require(state.nextMatchSequence > 0)
+        val accountIds = state.accounts.map { account ->
+            account.accountId
+        }
+        val accountPlayerIds = state.accounts.map { account ->
+            account.playerId
+        }
+        require(accountIds.distinct().size == accountIds.size)
+        require(accountPlayerIds.distinct().size == accountPlayerIds.size)
+        require(
+            state.accounts.all { account ->
+                account.accountId.isNotBlank() &&
+                    account.accountId.length <=
+                    MAX_SERVER_IDENTIFIER_CHARACTERS &&
+                    account.playerId.isNotBlank() &&
+                    account.playerId.length <=
+                    MAX_SERVER_IDENTIFIER_CHARACTERS &&
+                    account.createdAtEpochMillis >= 0L
+            }
+        ) {
+            "O estado persistido contém uma conta inválida."
+        }
         require(state.rooms.size <= resourcePolicy.maxRoomCount) {
             "O estado persistido excede a capacidade de salas."
         }

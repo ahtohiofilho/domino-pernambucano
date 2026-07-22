@@ -30,6 +30,30 @@ fun Route.onlineServerRoutes(
     }
 
     rateLimit(AUTHENTICATED_MUTATION_RATE_LIMIT_NAME) {
+        post("/${OnlineRemoteRoutes.PROMOTE_ACCOUNT}") {
+            val identity = call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@post
+            val account = store.promoteAccount(
+                playerId = identity.playerId,
+                expectedAccountId = identity.accountId,
+            )
+
+            if (account == null) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                )
+                return@post
+            }
+
+            call.respond(
+                sessionTokenService.issueAccountSession(
+                    playerId = account.playerId,
+                    accountId = account.accountId,
+                ),
+            )
+        }
+
         post("/${OnlineRemoteRoutes.CREATE_ROOM}") {
             val identity = call.requireOnlineIdentity(
                 identityResolver = identityResolver,

@@ -14,6 +14,18 @@ enum class OnlineServerStoreReadiness {
 }
 
 interface OnlineServerStore : AutoCloseable {
+    /**
+     * Promove um player autenticado para uma única conta persistente.
+     *
+     * Quando expectedAccountId é nulo, cria ou reutiliza a conta do player.
+     * Quando não é nulo, somente confirma a conta já vinculada, permitindo
+     * retries autenticados com uma credencial ACCOUNT sem criar novo vínculo.
+     */
+    fun promoteAccount(
+        playerId: String,
+        expectedAccountId: String? = null,
+    ): OnlineServerAccount?
+
     fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

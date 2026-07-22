@@ -40,6 +40,16 @@ class PersistentOnlineServerStore private constructor(
     @Volatile
     private var closed = false
 
+    override fun promoteAccount(
+        playerId: String,
+        expectedAccountId: String?,
+    ): OnlineServerAccount? = mutate {
+        delegate.promoteAccount(
+            playerId = playerId,
+            expectedAccountId = expectedAccountId,
+        )
+    }
+
     override fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto = mutate {
@@ -220,6 +230,9 @@ class PersistentOnlineServerStore private constructor(
             traceLogger: OnlineTraceLogger = OnlineTraceLogger(
                 nowEpochMillis = nowEpochMillis,
             ),
+            accountIdFactory: () -> String = {
+                "account-${UUID.randomUUID()}"
+            },
         ): PersistentOnlineServerStore {
             return open(
                 statePersistence = FileOnlineServerStatePersistence(
@@ -230,6 +243,7 @@ class PersistentOnlineServerStore private constructor(
                     autoFillDevelopmentBotsAfterTwoHumanPlayers,
                 resourcePolicy = resourcePolicy,
                 nowEpochMillis = nowEpochMillis,
+                accountIdFactory = accountIdFactory,
                 traceLogger = traceLogger,
             )
         }
@@ -247,6 +261,9 @@ class PersistentOnlineServerStore private constructor(
             traceLogger: OnlineTraceLogger = OnlineTraceLogger(
                 nowEpochMillis = nowEpochMillis,
             ),
+            accountIdFactory: () -> String = {
+                "account-${UUID.randomUUID()}"
+            },
         ): PersistentOnlineServerStore {
             val lockChannel = statePersistence.openLockChannel()
             val processLock = try {
@@ -271,6 +288,7 @@ class PersistentOnlineServerStore private constructor(
                         autoFillDevelopmentBotsAfterTwoHumanPlayers,
                     resourcePolicy = resourcePolicy,
                     nowEpochMillis = nowEpochMillis,
+                    accountIdFactory = accountIdFactory,
                     traceLogger = traceLogger,
                 )
 

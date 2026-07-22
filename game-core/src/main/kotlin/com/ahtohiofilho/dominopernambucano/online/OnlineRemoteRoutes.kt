@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.online
 
 object OnlineRemoteRoutes {
     const val CREATE_ANONYMOUS_SESSION = "sessions/anonymous"
+    const val PROMOTE_ACCOUNT = "accounts/promote"
     const val CREATE_ROOM = "rooms"
     const val JOIN_ROOM = "rooms/join"
     const val SUBMIT_ACTION = "matches/actions"

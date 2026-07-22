@@ -8,7 +8,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
-const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 2
+const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 3
 const val MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
 
 @Serializable
@@ -20,11 +20,19 @@ data class OnlineServerStoreState(
     val matches: List<OnlineServerStoredMatch> = emptyList(),
     val actionResults: List<OnlineServerStoredActionResult> = emptyList(),
     val rankedResults: List<RankedMatchResult> = emptyList(),
+    val accounts: List<OnlineServerAccount> = emptyList(),
 ) {
     companion object {
         val Empty = OnlineServerStoreState()
     }
 }
+
+@Serializable
+data class OnlineServerAccount(
+    val accountId: String,
+    val playerId: String,
+    val createdAtEpochMillis: Long,
+)
 
 @Serializable
 data class OnlineServerStoredMatch(

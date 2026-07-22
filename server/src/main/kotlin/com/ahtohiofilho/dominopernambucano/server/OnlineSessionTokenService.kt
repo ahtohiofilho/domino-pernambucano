@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountSessionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionDto
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -28,6 +29,11 @@ internal const val DEFAULT_ANONYMOUS_SESSION_TTL_MILLIS =
 
 interface OnlineSessionTokenService {
     fun issueAnonymousSession(): OnlineAnonymousSessionDto
+
+    fun issueAccountSession(
+        playerId: String,
+        accountId: String,
+    ): OnlineAccountSessionDto
 
     fun resolveAccessToken(
         accessToken: String,
@@ -117,6 +123,45 @@ class HmacOnlineSessionTokenService(
         return OnlineAnonymousSessionDto(
             playerId = playerId,
             accessToken = accessToken,
+            expiresAtEpochMillis = expiresAtEpochMillis,
+        )
+    }
+
+    override fun issueAccountSession(
+        playerId: String,
+        accountId: String,
+    ): OnlineAccountSessionDto {
+        val normalizedPlayerId = requireIdentifier(
+            value = playerId,
+            fieldName = "playerId",
+        )
+        val normalizedAccountId = requireIdentifier(
+            value = accountId,
+            fieldName = "accountId",
+        )
+        val sessionId = requireIdentifier(
+            value = sessionIdFactory(),
+            fieldName = "sessionId",
+        )
+        val now = nowEpochMillis()
+        val expiresAtEpochMillis = now + sessionTtlMillis
+        val payload = OnlineSessionTokenPayloadV2(
+            tokenVersion = CURRENT_SESSION_TOKEN_VERSION,
+            principalId = normalizedAccountId,
+            sessionId = sessionId,
+            principalKind = OnlinePrincipalKind.ACCOUNT,
+            playerId = normalizedPlayerId,
+            accountId = normalizedAccountId,
+            issuedAtEpochMillis = now,
+            expiresAtEpochMillis = expiresAtEpochMillis,
+        )
+
+        return OnlineAccountSessionDto(
+            accountId = normalizedAccountId,
+            playerId = normalizedPlayerId,
+            accessToken = encodeAndSign(
+                payload = json.encodeToString(payload),
+            ),
             expiresAtEpochMillis = expiresAtEpochMillis,
         )
     }
