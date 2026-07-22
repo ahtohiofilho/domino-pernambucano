@@ -7,6 +7,72 @@ import org.junit.Test
 
 class OnlineGoogleIdentityRepositoryTest {
     @Test
+    fun connect_links_current_anonymous_player() = runBlocking {
+        val anonymous = anonymousCredential()
+        val credentialStore = FakeGoogleCredentialStore(anonymous)
+        val apiClient = FakeGoogleIdentityApiClient()
+        val repository = createRepository(
+            store = credentialStore,
+            apiClient = apiClient,
+        )
+
+        val connected = repository.connectGoogleIdentity(
+            idToken = "google-id-token",
+        )
+
+        assertEquals(OnlineSessionKind.ACCOUNT, connected.sessionKind)
+        assertEquals(anonymous.playerId, connected.playerId)
+        assertEquals(0, apiClient.recoverCallCount)
+        assertEquals(0, apiClient.createAnonymousCallCount)
+        assertEquals(anonymous.accessToken, apiClient.linkAccessToken)
+    }
+
+    @Test
+    fun connect_recovers_known_account_without_creating_player() =
+        runBlocking {
+            val credentialStore = FakeGoogleCredentialStore()
+            val apiClient = FakeGoogleIdentityApiClient()
+            val repository = createRepository(
+                store = credentialStore,
+                apiClient = apiClient,
+            )
+
+            val connected = repository.connectGoogleIdentity(
+                idToken = "google-id-token",
+            )
+
+            assertEquals(OnlineSessionKind.ACCOUNT, connected.sessionKind)
+            assertEquals(1, apiClient.recoverCallCount)
+            assertEquals(0, apiClient.createAnonymousCallCount)
+            assertEquals(null, apiClient.linkAccessToken)
+        }
+
+    @Test
+    fun connect_creates_and_links_only_when_recovery_finds_no_account() =
+        runBlocking {
+            val credentialStore = FakeGoogleCredentialStore()
+            val apiClient = FakeGoogleIdentityApiClient(
+                recoverFailure = OnlineGoogleIdentityException(
+                    OnlineGoogleIdentityFailureReason.ACCOUNT_NOT_FOUND,
+                ),
+            )
+            val repository = createRepository(
+                store = credentialStore,
+                apiClient = apiClient,
+            )
+
+            val connected = repository.connectGoogleIdentity(
+                idToken = "google-id-token",
+            )
+
+            assertEquals(OnlineSessionKind.ACCOUNT, connected.sessionKind)
+            assertEquals("player-1", connected.playerId)
+            assertEquals(1, apiClient.recoverCallCount)
+            assertEquals(1, apiClient.createAnonymousCallCount)
+            assertEquals("anonymous-token", apiClient.linkAccessToken)
+        }
+
+    @Test
     fun link_preserves_player_and_pending_participation() = runBlocking {
         val anonymous = anonymousCredential()
         val credentialStore = FakeGoogleCredentialStore(anonymous)
@@ -302,6 +368,7 @@ private class FakeGoogleIdentityApiClient(
         ),
     private val recoveredSession: OnlineAccountSessionDto = linkedSession,
     private val linkFailure: Throwable? = null,
+    private val recoverFailure: Throwable? = null,
 ) : RemoteOnlineApiClient {
     var linkedIdToken: String? = null
         private set
@@ -309,6 +376,18 @@ private class FakeGoogleIdentityApiClient(
         private set
     var recoverCallCount: Int = 0
         private set
+    var createAnonymousCallCount: Int = 0
+        private set
+
+    override suspend fun createAnonymousSession():
+        OnlineAnonymousSessionDto {
+        createAnonymousCallCount += 1
+        return OnlineAnonymousSessionDto(
+            playerId = "player-1",
+            accessToken = "anonymous-token",
+            expiresAtEpochMillis = 2_000L,
+        )
+    }
 
     override suspend fun linkGoogleIdentity(
         request: OnlineGoogleIdentityRequestDto,
@@ -326,6 +405,9 @@ private class FakeGoogleIdentityApiClient(
         request: OnlineGoogleIdentityRequestDto,
     ): OnlineAccountSessionDto {
         recoverCallCount += 1
+        recoverFailure?.let { failure ->
+            throw failure
+        }
         return recoveredSession
     }
 

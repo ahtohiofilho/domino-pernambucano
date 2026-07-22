@@ -26,6 +26,13 @@ val releaseKeyAlias = providers
 val releaseKeyPassword = providers
     .environmentVariable("DOMINO_UPLOAD_KEY_PASSWORD")
     .orNull
+val googleWebClientId = providers
+    .gradleProperty("googleWebClientId")
+    .orElse(
+        providers.environmentVariable("DOMINO_GOOGLE_WEB_CLIENT_ID"),
+    )
+    .orElse("")
+    .get()
 val releaseSigningConfigured = listOf(
     releaseStoreFile,
     releaseStorePassword,
@@ -36,6 +43,10 @@ val releaseSigningConfigured = listOf(
 if (releaseBuildRequested) {
     check(releaseSigningConfigured) {
         "Release signing requires the DOMINO_UPLOAD_* process environment."
+    }
+    check(googleWebClientId.isNotBlank()) {
+        "Release Google sign-in requires DOMINO_GOOGLE_WEB_CLIENT_ID " +
+            "or -PgoogleWebClientId."
     }
 }
 
@@ -54,6 +65,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            type = "String",
+            name = "GOOGLE_WEB_CLIENT_ID",
+            value = googleWebClientId.toBuildConfigString(),
+        )
     }
 
     signingConfigs {
@@ -137,6 +154,9 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.id)
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.ktor.client.core)

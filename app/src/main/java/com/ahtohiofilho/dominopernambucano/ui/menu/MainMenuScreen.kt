@@ -2,16 +2,23 @@ package com.ahtohiofilho.dominopernambucano.ui.menu
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
+import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
 
 @Composable
 fun MainMenuScreen(
@@ -24,11 +31,20 @@ fun MainMenuScreen(
         OnlinePendingParticipationSessionRejection.NotRejected,
     pendingOnlineMatchResumeInProgress: Boolean,
     pendingOnlineMatchResumeFeedbackMessage: String? = null,
+    onlineGoogleAccountStatus: OnlineGoogleAccountStatus =
+        OnlineGoogleAccountStatus.UNAVAILABLE,
+    onlineGoogleAccountActionInProgress: Boolean = false,
+    onlineGoogleAccountFeedbackMessage: String? = null,
     onPlayClick: () -> Unit,
     onInspectPendingOnlineParticipationClick: () -> Unit,
     onDiscardRejectedPendingOnlineParticipationClick: () -> Unit = {},
     onResumePendingOnlineMatchClick: () -> Unit,
+    onConnectGoogleAccountClick: () -> Unit = {},
 ) {
+    var accountDialogVisible by remember {
+        mutableStateOf(false)
+    }
+
     val inspectionInProgress =
         pendingOnlineParticipationInspection is
                 OnlinePendingParticipationInspectionState.InProgress
@@ -172,6 +188,33 @@ fun MainMenuScreen(
             text = "Jogar",
             onClick = onPlayClick,
             enabled = !menuActionInProgress,
+        )
+
+        TextButton(
+            onClick = {
+                accountDialogVisible = true
+            },
+            enabled = !menuActionInProgress,
+        ) {
+            Text(
+                text = "Conta",
+                color = DominoSemanticColors.primaryTextOnDark
+                    .copy(alpha = 0.82f),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+
+    if (accountDialogVisible) {
+        OnlineAccountDialog(
+            status = onlineGoogleAccountStatus,
+            actionInProgress = onlineGoogleAccountActionInProgress,
+            feedbackMessage = onlineGoogleAccountFeedbackMessage,
+            onConnectGoogleClick = onConnectGoogleAccountClick,
+            onDismissRequest = {
+                accountDialogVisible = false
+            },
         )
     }
 }

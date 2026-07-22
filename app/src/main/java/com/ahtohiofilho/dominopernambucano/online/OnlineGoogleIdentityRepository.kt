@@ -5,6 +5,45 @@ class OnlineGoogleIdentityRepository(
     private val sessionCredentialRepository:
         OnlineSessionCredentialRepository,
 ) {
+    suspend fun connectGoogleIdentity(
+        idToken: String,
+    ): OnlineSessionCredential {
+        val storedCredential = sessionCredentialRepository
+            .getStoredCredentialOrNull()
+        val usableCredential = sessionCredentialRepository
+            .getValidCredentialOrNull()
+
+        if (
+            usableCredential?.sessionKind ==
+            OnlineSessionKind.ANONYMOUS
+        ) {
+            return linkGoogleIdentity(idToken)
+        }
+
+        return try {
+            recoverGoogleAccount(idToken)
+        } catch (error: OnlineGoogleIdentityException) {
+            if (
+                storedCredential?.sessionKind == OnlineSessionKind.ACCOUNT ||
+                error.reason !=
+                OnlineGoogleIdentityFailureReason.ACCOUNT_NOT_FOUND
+            ) {
+                throw error
+            }
+
+            sessionCredentialRepository.getOrCreateUsableCredential(
+                createAnonymousSession = {
+                    apiClient.createAnonymousSession()
+                },
+                refreshAccountSession = {
+                    apiClient.promoteAccount()
+                },
+            )
+
+            linkGoogleIdentity(idToken)
+        }
+    }
+
     suspend fun linkGoogleIdentity(
         idToken: String,
     ): OnlineSessionCredential {

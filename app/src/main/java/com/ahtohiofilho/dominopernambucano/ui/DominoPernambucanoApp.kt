@@ -9,9 +9,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.ahtohiofilho.dominopernambucano.online.AndroidGoogleIdTokenProvider
+import com.ahtohiofilho.dominopernambucano.online.GoogleSignInConfig
+import com.ahtohiofilho.dominopernambucano.online.GoogleSignInEnvironment
+import com.ahtohiofilho.dominopernambucano.online.KtorRemoteOnlineApiClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
+import com.ahtohiofilho.dominopernambucano.online.OnlineBackendMode
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountActionResult
+import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountManager
+import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatchResumeActivation
@@ -44,6 +52,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun DominoPernambucanoApp(
     onlineAppConfig: OnlineAppConfig = OnlineAppEnvironment.Current,
+    googleSignInConfig: GoogleSignInConfig =
+        GoogleSignInEnvironment.Current,
 ) {
     val context = LocalContext.current
 
@@ -88,6 +98,59 @@ fun DominoPernambucanoApp(
             store = SharedPreferencesOnlineSessionCredentialStore(
                 context = context.applicationContext,
             ),
+        )
+    }
+
+    val googleIdentityApiClient = remember(
+        onlineAppConfig.backendConfig,
+    ) {
+        if (
+            onlineAppConfig.backendConfig.mode ==
+            OnlineBackendMode.REMOTE
+        ) {
+            KtorRemoteOnlineApiClient(
+                config = onlineAppConfig.backendConfig,
+            )
+        } else {
+            null
+        }
+    }
+
+    val onlineGoogleAccountManager = remember(
+        context,
+        googleSignInConfig,
+        googleIdentityApiClient,
+        onlineSessionCredentialRepository,
+    ) {
+        val googleIdentityRepository = googleIdentityApiClient?.let {
+                apiClient ->
+            OnlineGoogleIdentityRepository(
+                apiClient = apiClient,
+                sessionCredentialRepository =
+                    onlineSessionCredentialRepository,
+            )
+        }
+
+        val tokenProvider = if (
+            googleSignInConfig.isConfigured &&
+            googleIdentityRepository != null
+        ) {
+            AndroidGoogleIdTokenProvider(
+                activityContext = context,
+                config = googleSignInConfig,
+            )
+        } else {
+            null
+        }
+
+        OnlineGoogleAccountManager(
+            available =
+                googleSignInConfig.isConfigured &&
+                    googleIdentityRepository != null,
+            googleIdTokenProvider = tokenProvider,
+            googleIdentityRepository = googleIdentityRepository,
+            sessionCredentialRepository =
+                onlineSessionCredentialRepository,
         )
     }
 
@@ -192,6 +255,14 @@ fun DominoPernambucanoApp(
         mutableStateOf<String?>(null)
     }
 
+    var onlineGoogleAccountActionInProgress by remember {
+        mutableStateOf(false)
+    }
+
+    var onlineGoogleAccountFeedbackMessage by remember {
+        mutableStateOf<String?>(null)
+    }
+
     when (val state = sessionState) {
         is DominoSessionState.MainMenu -> {
             MainMenuScreen(
@@ -205,6 +276,12 @@ fun DominoPernambucanoApp(
                     pendingOnlineMatchResumeInProgress,
                 pendingOnlineMatchResumeFeedbackMessage =
                     pendingOnlineMatchResumeFeedbackMessage,
+                onlineGoogleAccountStatus =
+                    onlineGoogleAccountManager.currentStatus(),
+                onlineGoogleAccountActionInProgress =
+                    onlineGoogleAccountActionInProgress,
+                onlineGoogleAccountFeedbackMessage =
+                    onlineGoogleAccountFeedbackMessage,
                 onPlayClick = {
                     if (
                         !pendingOnlineMatchResumeInProgress &&
@@ -427,6 +504,37 @@ fun DominoPernambucanoApp(
                                 createdMatchCoordinator?.dispose()
 
                                 pendingOnlineMatchResumeInProgress = false
+                            }
+                        }
+                    }
+                },
+                onConnectGoogleAccountClick = {
+                    if (!onlineGoogleAccountActionInProgress) {
+                        onlineGoogleAccountActionInProgress = true
+                        onlineGoogleAccountFeedbackMessage = null
+
+                        menuCoroutineScope.launch {
+                            try {
+                                when (
+                                    val result =
+                                        onlineGoogleAccountManager.connect()
+                                ) {
+                                    is OnlineGoogleAccountActionResult.Success -> {
+                                        onlineGoogleAccountFeedbackMessage =
+                                            "Conta conectada com sucesso."
+                                    }
+
+                                    OnlineGoogleAccountActionResult.Cancelled -> {
+                                        onlineGoogleAccountFeedbackMessage = null
+                                    }
+
+                                    is OnlineGoogleAccountActionResult.Failure -> {
+                                        onlineGoogleAccountFeedbackMessage =
+                                            result.message
+                                    }
+                                }
+                            } finally {
+                                onlineGoogleAccountActionInProgress = false
                             }
                         }
                     }
