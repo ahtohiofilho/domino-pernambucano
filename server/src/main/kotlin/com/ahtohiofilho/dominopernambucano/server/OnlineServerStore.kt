@@ -13,6 +13,14 @@ enum class OnlineServerStoreReadiness {
     UNAVAILABLE,
 }
 
+sealed interface OnlineExternalIdentityLinkResult {
+    data class Linked(
+        val account: OnlineServerAccount,
+    ) : OnlineExternalIdentityLinkResult
+
+    data object Conflict : OnlineExternalIdentityLinkResult
+}
+
 interface OnlineServerStore : AutoCloseable {
     /**
      * Promove um player autenticado para uma única conta persistente.
@@ -24,6 +32,22 @@ interface OnlineServerStore : AutoCloseable {
     fun promoteAccount(
         playerId: String,
         expectedAccountId: String? = null,
+    ): OnlineServerAccount?
+
+    /**
+     * Vincula uma identidade externa sem fundir contas existentes.
+     * A mesma operacao e idempotente apenas para a conta canonica original.
+     */
+    fun linkExternalIdentity(
+        playerId: String,
+        expectedAccountId: String? = null,
+        provider: OnlineExternalIdentityProvider,
+        subject: String,
+    ): OnlineExternalIdentityLinkResult
+
+    fun findAccountByExternalIdentity(
+        provider: OnlineExternalIdentityProvider,
+        subject: String,
     ): OnlineServerAccount?
 
     fun createRoom(

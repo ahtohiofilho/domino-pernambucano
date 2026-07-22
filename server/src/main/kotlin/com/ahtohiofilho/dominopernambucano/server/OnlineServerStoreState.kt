@@ -8,7 +8,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
-const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 3
+const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 4
 const val MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
 
 @Serializable
@@ -21,6 +21,7 @@ data class OnlineServerStoreState(
     val actionResults: List<OnlineServerStoredActionResult> = emptyList(),
     val rankedResults: List<RankedMatchResult> = emptyList(),
     val accounts: List<OnlineServerAccount> = emptyList(),
+    val externalIdentities: List<OnlineServerExternalIdentity> = emptyList(),
 ) {
     companion object {
         val Empty = OnlineServerStoreState()
@@ -32,6 +33,19 @@ data class OnlineServerAccount(
     val accountId: String,
     val playerId: String,
     val createdAtEpochMillis: Long,
+)
+
+@Serializable
+enum class OnlineExternalIdentityProvider {
+    GOOGLE,
+}
+
+@Serializable
+data class OnlineServerExternalIdentity(
+    val provider: OnlineExternalIdentityProvider,
+    val subject: String,
+    val accountId: String,
+    val linkedAtEpochMillis: Long,
 )
 
 @Serializable

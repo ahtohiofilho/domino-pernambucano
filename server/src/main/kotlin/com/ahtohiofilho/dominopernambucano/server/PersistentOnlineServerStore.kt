@@ -50,6 +50,30 @@ class PersistentOnlineServerStore private constructor(
         )
     }
 
+    override fun linkExternalIdentity(
+        playerId: String,
+        expectedAccountId: String?,
+        provider: OnlineExternalIdentityProvider,
+        subject: String,
+    ): OnlineExternalIdentityLinkResult = mutate {
+        delegate.linkExternalIdentity(
+            playerId = playerId,
+            expectedAccountId = expectedAccountId,
+            provider = provider,
+            subject = subject,
+        )
+    }
+
+    override fun findAccountByExternalIdentity(
+        provider: OnlineExternalIdentityProvider,
+        subject: String,
+    ): OnlineServerAccount? = read {
+        delegate.findAccountByExternalIdentity(
+            provider = provider,
+            subject = subject,
+        )
+    }
+
     override fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto = mutate {

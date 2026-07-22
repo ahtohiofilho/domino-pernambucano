@@ -24,6 +24,7 @@ dependencies {
     implementation(libs.ktor.server.rate.limit)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.google.api.client.gson)
 
     // Ktor e Netty usam SLF4J. Sem provider, o runtime descarta os logs.
     runtimeOnly("org.slf4j:slf4j-simple:2.0.18")

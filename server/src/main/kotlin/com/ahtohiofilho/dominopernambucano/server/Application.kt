@@ -101,6 +101,8 @@ fun Application.module(
             sessionTokenService = sessionTokenService,
             serverEnvironment = serverEnvironment,
         ),
+    googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier =
+        createDefaultOnlineGoogleIdentityTokenVerifier(),
     rateLimitPolicy: OnlineServerRateLimitPolicy =
         OnlineServerRateLimitPolicy.Default,
     readiness: OnlineServerReadiness = OnlineServerReadiness(
@@ -169,6 +171,7 @@ fun Application.module(
             traceArchive = traceArchive,
             sessionTokenService = sessionTokenService,
             identityResolver = identityResolver,
+            googleIdentityTokenVerifier = googleIdentityTokenVerifier,
         )
     }
 }

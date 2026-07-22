@@ -11,8 +11,8 @@ class OnlineAccountStateCompatibilityTest {
     }
 
     @Test
-    fun schemas_one_and_two_without_accounts_restore_with_empty_registry() {
-        listOf(1, 2).forEach { schemaVersion ->
+    fun schemas_one_to_three_without_external_identities_restore() {
+        listOf(1, 2, 3).forEach { schemaVersion ->
             val state = json.decodeFromString<OnlineServerStoreState>(
                 """
                 {
@@ -33,7 +33,11 @@ class OnlineAccountStateCompatibilityTest {
             store.restorePersistentState(state)
 
             assertTrue(state.accounts.isEmpty())
+            assertTrue(state.externalIdentities.isEmpty())
             assertTrue(store.snapshotPersistentState().accounts.isEmpty())
+            assertTrue(
+                store.snapshotPersistentState().externalIdentities.isEmpty(),
+            )
         }
     }
 }

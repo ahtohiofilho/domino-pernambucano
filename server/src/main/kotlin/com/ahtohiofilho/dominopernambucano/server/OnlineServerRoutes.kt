@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
@@ -19,12 +20,51 @@ fun Route.onlineServerRoutes(
     traceArchive: OnlineTraceArchive,
     sessionTokenService: OnlineSessionTokenService,
     identityResolver: OnlineRequestIdentityResolver,
+    googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier,
 ) {
     rateLimit(ANONYMOUS_SESSION_RATE_LIMIT_NAME) {
         post("/${OnlineRemoteRoutes.CREATE_ANONYMOUS_SESSION}") {
             call.respond(
                 HttpStatusCode.Created,
                 sessionTokenService.issueAnonymousSession(),
+            )
+        }
+
+        post("/${OnlineRemoteRoutes.RECOVER_GOOGLE_ACCOUNT}") {
+            val request = call.receive<OnlineGoogleIdentityRequestDto>()
+            val verification = googleIdentityTokenVerifier.verify(
+                idToken = request.idToken,
+            )
+            val subject = when (verification) {
+                is OnlineGoogleIdentityVerificationResult.Verified -> {
+                    verification.subject
+                }
+
+                OnlineGoogleIdentityVerificationResult.Invalid -> {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@post
+                }
+
+                OnlineGoogleIdentityVerificationResult.Unavailable -> {
+                    call.respond(HttpStatusCode.ServiceUnavailable)
+                    return@post
+                }
+            }
+            val account = store.findAccountByExternalIdentity(
+                provider = OnlineExternalIdentityProvider.GOOGLE,
+                subject = subject,
+            )
+
+            if (account == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@post
+            }
+
+            call.respond(
+                sessionTokenService.issueAccountSession(
+                    playerId = account.playerId,
+                    accountId = account.accountId,
+                ),
             )
         }
     }
@@ -52,6 +92,53 @@ fun Route.onlineServerRoutes(
                     accountId = account.accountId,
                 ),
             )
+        }
+
+        post("/${OnlineRemoteRoutes.LINK_GOOGLE_IDENTITY}") {
+            val identity = call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@post
+            val request = call.receive<OnlineGoogleIdentityRequestDto>()
+            val verification = googleIdentityTokenVerifier.verify(
+                idToken = request.idToken,
+            )
+            val subject = when (verification) {
+                is OnlineGoogleIdentityVerificationResult.Verified -> {
+                    verification.subject
+                }
+
+                OnlineGoogleIdentityVerificationResult.Invalid -> {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@post
+                }
+
+                OnlineGoogleIdentityVerificationResult.Unavailable -> {
+                    call.respond(HttpStatusCode.ServiceUnavailable)
+                    return@post
+                }
+            }
+
+            when (
+                val result = store.linkExternalIdentity(
+                    playerId = identity.playerId,
+                    expectedAccountId = identity.accountId,
+                    provider = OnlineExternalIdentityProvider.GOOGLE,
+                    subject = subject,
+                )
+            ) {
+                is OnlineExternalIdentityLinkResult.Linked -> {
+                    call.respond(
+                        sessionTokenService.issueAccountSession(
+                            playerId = result.account.playerId,
+                            accountId = result.account.accountId,
+                        ),
+                    )
+                }
+
+                OnlineExternalIdentityLinkResult.Conflict -> {
+                    call.respond(HttpStatusCode.Conflict)
+                }
+            }
         }
 
         post("/${OnlineRemoteRoutes.CREATE_ROOM}") {

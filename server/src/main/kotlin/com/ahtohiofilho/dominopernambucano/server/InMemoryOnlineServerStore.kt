@@ -106,6 +106,11 @@ class InMemoryOnlineServerStore(
         val actionId: String,
     )
 
+    private data class ExternalIdentityKey(
+        val provider: OnlineExternalIdentityProvider,
+        val subject: String,
+    )
+
     private val lock = Any()
 
     private val roomsById = mutableMapOf<String, OnlineRoomSnapshotDto>()
@@ -117,6 +122,8 @@ class InMemoryOnlineServerStore(
         mutableMapOf<String, RankedMatchResult>()
     private val accountsByPlayerId =
         mutableMapOf<String, OnlineServerAccount>()
+    private val externalIdentitiesByKey =
+        mutableMapOf<ExternalIdentityKey, OnlineServerExternalIdentity>()
 
     private var nextRoomSequence = 1
     private var nextMatchSequence = 1
@@ -171,6 +178,107 @@ class InMemoryOnlineServerStore(
                 createdAtEpochMillis = nowEpochMillis(),
             ).also { account ->
                 accountsByPlayerId[normalizedPlayerId] = account
+            }
+        }
+    }
+
+    override fun linkExternalIdentity(
+        playerId: String,
+        expectedAccountId: String?,
+        provider: OnlineExternalIdentityProvider,
+        subject: String,
+    ): OnlineExternalIdentityLinkResult {
+        return synchronized(lock) {
+            val normalizedPlayerId = requireStoreIdentifier(
+                value = playerId,
+                fieldName = "playerId",
+            )
+            val normalizedSubject = requireStoreIdentifier(
+                value = subject,
+                fieldName = "external subject",
+            )
+            val normalizedExpectedAccountId = expectedAccountId
+                ?.let { value ->
+                    requireStoreIdentifier(
+                        value = value,
+                        fieldName = "expectedAccountId",
+                    )
+                }
+            val key = ExternalIdentityKey(
+                provider = provider,
+                subject = normalizedSubject,
+            )
+            val existingIdentity = externalIdentitiesByKey[key]
+
+            if (existingIdentity != null) {
+                val existingAccount = accountsByPlayerId.values
+                    .firstOrNull { account ->
+                        account.accountId == existingIdentity.accountId
+                    }
+                val isSameCanonicalAccount =
+                    existingAccount?.playerId == normalizedPlayerId &&
+                        (
+                            normalizedExpectedAccountId == null ||
+                                existingAccount.accountId ==
+                                normalizedExpectedAccountId
+                        )
+
+                return@synchronized if (isSameCanonicalAccount) {
+                    OnlineExternalIdentityLinkResult.Linked(
+                        account = requireNotNull(existingAccount),
+                    )
+                } else {
+                    OnlineExternalIdentityLinkResult.Conflict
+                }
+            }
+
+            val account = promoteAccount(
+                playerId = normalizedPlayerId,
+                expectedAccountId = normalizedExpectedAccountId,
+            ) ?: return@synchronized OnlineExternalIdentityLinkResult.Conflict
+
+            val hasDifferentIdentityForProvider =
+                externalIdentitiesByKey.values.any { identity ->
+                    identity.provider == provider &&
+                        identity.accountId == account.accountId &&
+                        identity.subject != normalizedSubject
+                }
+
+            if (hasDifferentIdentityForProvider) {
+                return@synchronized OnlineExternalIdentityLinkResult.Conflict
+            }
+
+            externalIdentitiesByKey[key] = OnlineServerExternalIdentity(
+                provider = provider,
+                subject = normalizedSubject,
+                accountId = account.accountId,
+                linkedAtEpochMillis = nowEpochMillis(),
+            )
+
+            OnlineExternalIdentityLinkResult.Linked(
+                account = account,
+            )
+        }
+    }
+
+    override fun findAccountByExternalIdentity(
+        provider: OnlineExternalIdentityProvider,
+        subject: String,
+    ): OnlineServerAccount? {
+        return synchronized(lock) {
+            val normalizedSubject = requireStoreIdentifier(
+                value = subject,
+                fieldName = "external subject",
+            )
+            val identity = externalIdentitiesByKey[
+                ExternalIdentityKey(
+                    provider = provider,
+                    subject = normalizedSubject,
+                )
+            ] ?: return@synchronized null
+
+            accountsByPlayerId.values.firstOrNull { account ->
+                account.accountId == identity.accountId
             }
         }
     }
@@ -938,6 +1046,13 @@ class InMemoryOnlineServerStore(
                     .sortedBy { result -> result.resultId },
                 accounts = accountsByPlayerId.values
                     .sortedBy { account -> account.accountId },
+                externalIdentities = externalIdentitiesByKey.values
+                    .sortedWith(
+                        compareBy<OnlineServerExternalIdentity>(
+                            { identity -> identity.provider.name },
+                            { identity -> identity.subject },
+                        ),
+                    ),
             )
         }
     }
@@ -954,6 +1069,7 @@ class InMemoryOnlineServerStore(
             actionResultsByKey.clear()
             rankedResultsById.clear()
             accountsByPlayerId.clear()
+            externalIdentitiesByKey.clear()
 
             state.rooms.forEach { room ->
                 roomsById[room.roomId] = room
@@ -1015,6 +1131,15 @@ class InMemoryOnlineServerStore(
                 accountsByPlayerId[account.playerId] = account
             }
 
+            state.externalIdentities.forEach { identity ->
+                externalIdentitiesByKey[
+                    ExternalIdentityKey(
+                        provider = identity.provider,
+                        subject = identity.subject,
+                    )
+                ] = identity
+            }
+
             nextRoomSequence = state.nextRoomSequence
             nextMatchSequence = state.nextMatchSequence
             lastPruneAtEpochMillis = null
@@ -1054,6 +1179,29 @@ class InMemoryOnlineServerStore(
             }
         ) {
             "O estado persistido contém uma conta inválida."
+        }
+        val persistedAccountIds = accountIds.toSet()
+        val externalIdentityKeys = state.externalIdentities.map { identity ->
+            identity.provider to identity.subject
+        }
+        val externalIdentityAccountsByProvider =
+            state.externalIdentities.map { identity ->
+                identity.provider to identity.accountId
+            }
+        require(
+            externalIdentityKeys.distinct().size ==
+                externalIdentityKeys.size &&
+                externalIdentityAccountsByProvider.distinct().size ==
+                externalIdentityAccountsByProvider.size &&
+                state.externalIdentities.all { identity ->
+                    identity.subject.isNotBlank() &&
+                        identity.subject.length <=
+                        MAX_SERVER_IDENTIFIER_CHARACTERS &&
+                        identity.accountId in persistedAccountIds &&
+                        identity.linkedAtEpochMillis >= 0L
+                }
+        ) {
+            "O estado persistido contem uma identidade externa invalida."
         }
         require(state.rooms.size <= resourcePolicy.maxRoomCount) {
             "O estado persistido excede a capacidade de salas."
@@ -1219,6 +1367,21 @@ class InMemoryOnlineServerStore(
 
         require(state.nextRoomSequence > maximumRoomSequence)
         require(state.nextMatchSequence > maximumMatchSequence)
+    }
+
+    private fun requireStoreIdentifier(
+        value: String,
+        fieldName: String,
+    ): String {
+        return value.trim().also { normalizedValue ->
+            require(
+                normalizedValue.isNotBlank() &&
+                    normalizedValue.length <=
+                    MAX_SERVER_IDENTIFIER_CHARACTERS
+            ) {
+                "O $fieldName e invalido."
+            }
+        }
     }
 
     private fun pruneExpiredRecords(
