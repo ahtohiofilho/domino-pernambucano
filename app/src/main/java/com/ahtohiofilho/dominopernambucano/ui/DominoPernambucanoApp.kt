@@ -9,7 +9,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
@@ -19,7 +18,8 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatc
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatchResumePreparation
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
-import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineAnonymousSessionStore
+import com.ahtohiofilho.dominopernambucano.online.OnlineSessionCredentialRepository
+import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineSessionCredentialStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineParticipationBindingStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
 import com.ahtohiofilho.dominopernambucano.online.observability.AndroidLogcatOnlineTraceSink
@@ -81,11 +81,11 @@ fun DominoPernambucanoApp(
         )
     }
 
-    val onlineAnonymousSessionRepository = remember(
+    val onlineSessionCredentialRepository = remember(
         context.applicationContext,
     ) {
-        OnlineAnonymousSessionRepository(
-            store = SharedPreferencesOnlineAnonymousSessionStore(
+        OnlineSessionCredentialRepository(
+            store = SharedPreferencesOnlineSessionCredentialStore(
                 context = context.applicationContext,
             ),
         )
@@ -104,13 +104,14 @@ fun DominoPernambucanoApp(
     val onlineRoomRepository = remember(
         onlineAppConfig.backendConfig,
         onlineTraceLogger,
-        onlineAnonymousSessionRepository,
+        onlineSessionCredentialRepository,
         onlineParticipationBindingRepository,
     ) {
         OnlineRepositoryFactory.create(
             config = onlineAppConfig.backendConfig,
             traceLogger = onlineTraceLogger,
-            anonymousSessionRepository = onlineAnonymousSessionRepository,
+            sessionCredentialRepository =
+                onlineSessionCredentialRepository,
             onlineParticipationBindingRepository =
                 onlineParticipationBindingRepository,
         )
@@ -118,14 +119,14 @@ fun DominoPernambucanoApp(
 
     val sessionCoordinator = remember(
         onlineParticipationBindingRepository,
-        onlineAnonymousSessionRepository,
+        onlineSessionCredentialRepository,
         onlineRoomRepository,
     ) {
         LocalDominoSessionCoordinator(
             onlineParticipationBindingRepository =
                 onlineParticipationBindingRepository,
-            onlineAnonymousSessionRepository =
-                onlineAnonymousSessionRepository,
+            onlineSessionCredentialRepository =
+                onlineSessionCredentialRepository,
             onlineRoomRepository = onlineRoomRepository,
         )
     }

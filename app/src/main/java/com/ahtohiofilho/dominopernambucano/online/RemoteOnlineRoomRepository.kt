@@ -40,6 +40,8 @@ class RemoteOnlineRoomRepository(
     },
     private val anonymousSessionRepository:
         OnlineAnonymousSessionRepository? = null,
+    private val sessionCredentialRepository:
+        OnlineSessionCredentialRepository? = null,
     private val onlineParticipationBindingRepository:
         OnlineParticipationBindingRepository? = null,
 ) : OnlineRoomRepository {
@@ -72,11 +74,11 @@ class RemoteOnlineRoomRepository(
     private var pollingJob: Job? = null
     private var pollingRoomId: String? = null
     private var activePlayerId: String? = null
-    private var activeAnonymousSession: OnlineAnonymousSessionDto? = null
+    private var activeSessionCredential: OnlineSessionCredential? = null
 
     private data class PreparedRoomParticipant(
         val playerId: String,
-        val anonymousSession: OnlineAnonymousSessionDto? = null,
+        val sessionCredential: OnlineSessionCredential? = null,
         val usesDevelopmentAuthentication: Boolean,
     )
 
@@ -152,7 +154,7 @@ class RemoteOnlineRoomRepository(
                     client = client,
                     operation = "create_room",
                     playerId = participant.playerId,
-                    anonymousSession = participant.anonymousSession,
+                    sessionCredential = participant.sessionCredential,
                     activateParticipant = !participant.usesDevelopmentAuthentication,
                 )
 
@@ -235,7 +237,7 @@ class RemoteOnlineRoomRepository(
                     client = client,
                     operation = "join_room",
                     playerId = participant.playerId,
-                    anonymousSession = participant.anonymousSession,
+                    sessionCredential = participant.sessionCredential,
                     activateParticipant = !participant.usesDevelopmentAuthentication,
                 )
 
@@ -449,8 +451,7 @@ class RemoteOnlineRoomRepository(
                 )
 
         return refreshMutex.withLock {
-            val session = anonymousSessionRepository
-                ?.getValidSessionOrNull()
+            val session = getValidSessionCredentialOrNull()
                 ?: return@withLock OnlinePendingParticipationRemoteInspection
                     .NotAttempted(
                         reason = OnlinePendingParticipationRemoteBlockReason
@@ -528,8 +529,7 @@ class RemoteOnlineRoomRepository(
                 )
 
         return refreshMutex.withLock {
-            val session = anonymousSessionRepository
-                ?.getValidSessionOrNull()
+            val session = getValidSessionCredentialOrNull()
                 ?: return@withLock OnlinePendingParticipationMatchResumePreparation
                     .NotAttempted(
                         reason = OnlinePendingParticipationRemoteBlockReason
@@ -689,8 +689,7 @@ class RemoteOnlineRoomRepository(
                 )
 
         return refreshMutex.withLock {
-            val session = anonymousSessionRepository
-                ?.getValidSessionOrNull()
+            val session = getValidSessionCredentialOrNull()
                 ?: return@withLock OnlinePendingParticipationMatchResumeActivation
                     .NotAttempted(
                         reason = OnlinePendingParticipationRemoteBlockReason
@@ -731,10 +730,10 @@ class RemoteOnlineRoomRepository(
             }
 
             val previousActivePlayerId = activePlayerId
-            val previousActiveAnonymousSession = activeAnonymousSession
+            val previousActiveSessionCredential = activeSessionCredential
 
             activePlayerId = session.playerId
-            activeAnonymousSession = session
+            activeSessionCredential = session
 
             val authenticationFailure =
                 configureActiveParticipantAuthentication(
@@ -744,7 +743,7 @@ class RemoteOnlineRoomRepository(
 
             if (authenticationFailure != null) {
                 activePlayerId = previousActivePlayerId
-                activeAnonymousSession = previousActiveAnonymousSession
+                activeSessionCredential = previousActiveSessionCredential
 
                 restoreActiveParticipantAuthentication(
                     client = client,
@@ -782,7 +781,7 @@ class RemoteOnlineRoomRepository(
                 }
             } catch (error: CancellationException) {
                 activePlayerId = previousActivePlayerId
-                activeAnonymousSession = previousActiveAnonymousSession
+                activeSessionCredential = previousActiveSessionCredential
 
                 restoreActiveParticipantAuthentication(
                     client = client,
@@ -791,7 +790,7 @@ class RemoteOnlineRoomRepository(
                 throw error
             } catch (error: Throwable) {
                 activePlayerId = previousActivePlayerId
-                activeAnonymousSession = previousActiveAnonymousSession
+                activeSessionCredential = previousActiveSessionCredential
 
                 restoreActiveParticipantAuthentication(
                     client = client,
@@ -922,7 +921,7 @@ class RemoteOnlineRoomRepository(
         mutableRoomSnapshot.value = null
         mutableMatchSnapshot.value = null
         activePlayerId = null
-        activeAnonymousSession = null
+        activeSessionCredential = null
         client?.setBearerAccessToken(
             accessToken = null,
         )
@@ -936,7 +935,7 @@ class RemoteOnlineRoomRepository(
         client: RemoteOnlineApiClient,
         operation: String,
         playerId: String,
-        anonymousSession: OnlineAnonymousSessionDto?,
+        sessionCredential: OnlineSessionCredential?,
         activateParticipant: Boolean,
     ) {
         val room = result.roomSnapshot ?: return
@@ -958,12 +957,12 @@ class RemoteOnlineRoomRepository(
         persistAcceptedAuthenticatedParticipationBinding(
             result = result,
             room = room,
-            anonymousSession = anonymousSession,
+            sessionCredential = sessionCredential,
         )
 
         if (result.accepted && activateParticipant) {
             activePlayerId = playerId
-            activeAnonymousSession = anonymousSession
+            activeSessionCredential = sessionCredential
 
             val authenticationFailure =
                 configureActiveParticipantAuthentication(
@@ -1007,7 +1006,7 @@ class RemoteOnlineRoomRepository(
     private fun persistAcceptedAuthenticatedParticipationBinding(
         result: OnlineRoomOperationResultDto,
         room: OnlineRoomSnapshotDto,
-        anonymousSession: OnlineAnonymousSessionDto?,
+        sessionCredential: OnlineSessionCredential?,
     ) {
         if (!result.accepted) {
             return
@@ -1017,7 +1016,7 @@ class RemoteOnlineRoomRepository(
             onlineParticipationBindingRepository
                 ?: return
 
-        val authenticatedPlayerId = anonymousSession
+        val authenticatedPlayerId = sessionCredential
             ?.playerId
             ?.takeIf { playerId ->
                 playerId.isNotBlank()
@@ -1619,9 +1618,13 @@ class RemoteOnlineRoomRepository(
             )
         }
 
-        val sessionRepository = anonymousSessionRepository
+        val credentialRepository = sessionCredentialRepository
+        val legacySessionRepository = anonymousSessionRepository
 
-        if (sessionRepository == null) {
+        if (
+            credentialRepository == null &&
+            legacySessionRepository == null
+        ) {
             client.setBearerAccessToken(
                 accessToken = null,
             )
@@ -1635,8 +1638,27 @@ class RemoteOnlineRoomRepository(
             )
         }
 
-        val session = sessionRepository.getOrCreateValidSession {
-            client.createAnonymousSession()
+        val session = if (credentialRepository != null) {
+            credentialRepository.getOrCreateUsableCredential(
+                createAnonymousSession = {
+                    client.createAnonymousSession()
+                },
+                refreshAccountSession = { accessToken ->
+                    client.setDevelopmentPlayerId(
+                        playerId = null,
+                    )
+                    client.setBearerAccessToken(
+                        accessToken = accessToken,
+                    )
+                    client.promoteAccount()
+                },
+            )
+        } else {
+            requireNotNull(legacySessionRepository)
+                .getOrCreateValidSession {
+                    client.createAnonymousSession()
+                }
+                .toOnlineSessionCredential()
         }
 
         client.setDevelopmentPlayerId(
@@ -1648,7 +1670,7 @@ class RemoteOnlineRoomRepository(
 
         return PreparedRoomParticipant(
             playerId = session.playerId,
-            anonymousSession = session,
+            sessionCredential = session,
             usesDevelopmentAuthentication = false,
         )
     }
@@ -1685,9 +1707,11 @@ class RemoteOnlineRoomRepository(
             }
             ?: return "Identidade do participante online não está disponível."
 
-        val sessionRepository = anonymousSessionRepository
+        val hasPersistentSessionRepository =
+            sessionCredentialRepository != null ||
+                    anonymousSessionRepository != null
 
-        if (sessionRepository == null) {
+        if (!hasPersistentSessionRepository) {
             client.setBearerAccessToken(
                 accessToken = null,
             )
@@ -1697,7 +1721,7 @@ class RemoteOnlineRoomRepository(
             return null
         }
 
-        val activeSession = activeAnonymousSession
+        val activeSession = activeSessionCredential
 
         if (
             activeSession == null ||
@@ -1707,23 +1731,25 @@ class RemoteOnlineRoomRepository(
                 client = client,
             )
 
-            return "Sessão anônima ativa não está disponível."
+            return "Credencial online ativa não está disponível."
         }
 
-        val storedSession = sessionRepository.getValidSessionOrNull()
+        val storedSession = getValidSessionCredentialOrNull()
 
         if (
             storedSession == null ||
             storedSession.playerId != activeSession.playerId ||
-            storedSession.accessToken != activeSession.accessToken
+            storedSession.accessToken != activeSession.accessToken ||
+            storedSession.sessionKind != activeSession.sessionKind ||
+            storedSession.accountId != activeSession.accountId
         ) {
-            activeAnonymousSession = null
+            activeSessionCredential = null
 
             clearClientAuthentication(
                 client = client,
             )
 
-            return "Sessão anônima ativa expirou ou não é mais válida."
+            return "Credencial online ativa expirou ou não é mais válida."
         }
 
         client.setDevelopmentPlayerId(
@@ -1734,6 +1760,19 @@ class RemoteOnlineRoomRepository(
         )
 
         return null
+    }
+
+    private fun getValidSessionCredentialOrNull():
+        OnlineSessionCredential? {
+        val credentialRepository = sessionCredentialRepository
+
+        if (credentialRepository != null) {
+            return credentialRepository.getValidCredentialOrNull()
+        }
+
+        return anonymousSessionRepository
+            ?.getValidSessionOrNull()
+            ?.toOnlineSessionCredential()
     }
 
     private fun clearClientAuthentication(

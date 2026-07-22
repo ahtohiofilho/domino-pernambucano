@@ -66,6 +66,20 @@ class KtorRemoteOnlineApiClient(
         }.body()
     }
 
+    override suspend fun promoteAccount(): OnlineAccountSessionDto {
+        return httpClient.post(
+            urlString = endpoint(
+                OnlineRemoteRoutes.PROMOTE_ACCOUNT,
+            ),
+        ) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            applyProtectedAuthentication(
+                developmentPlayerId = null,
+            )
+        }.body()
+    }
+
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {

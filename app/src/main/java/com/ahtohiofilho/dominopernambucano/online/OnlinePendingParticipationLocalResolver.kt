@@ -26,7 +26,9 @@ class OnlinePendingParticipationLocalResolver(
     private val onlineParticipationBindingRepository:
         OnlineParticipationBindingRepository?,
     private val onlineAnonymousSessionRepository:
-        OnlineAnonymousSessionRepository?,
+        OnlineAnonymousSessionRepository? = null,
+    private val onlineSessionCredentialRepository:
+        OnlineSessionCredentialRepository? = null,
 ) {
     fun resolve(): OnlinePendingParticipationLocalResolution {
         val binding = onlineParticipationBindingRepository
@@ -34,14 +36,17 @@ class OnlinePendingParticipationLocalResolver(
             ?: return OnlinePendingParticipationLocalResolution
                 .NoPendingParticipation
 
-        val anonymousSession = onlineAnonymousSessionRepository
-            ?.getValidSessionOrNull()
+        val credential = onlineSessionCredentialRepository
+            ?.getValidCredentialOrNull()
+            ?: onlineAnonymousSessionRepository
+                ?.getValidSessionOrNull()
+                ?.toOnlineSessionCredential()
             ?: return OnlinePendingParticipationLocalResolution
                 .BlockedByMissingValidAnonymousSession(
                     binding = binding,
                 )
 
-        if (anonymousSession.playerId != binding.playerId) {
+        if (credential.playerId != binding.playerId) {
             return OnlinePendingParticipationLocalResolution
                 .BlockedByAnonymousSessionIdentityMismatch(
                     binding = binding,

@@ -29,6 +29,12 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun promoteAccount(): OnlineAccountSessionDto {
+        throw UnsupportedOperationException(
+            "Promoção de conta não configurada para este cliente remoto.",
+        )
+    }
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

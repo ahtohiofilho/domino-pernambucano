@@ -9,6 +9,8 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLoca
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineSessionCredentialRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineSessionKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +25,8 @@ class LocalDominoSessionCoordinator(
         OnlineParticipationBindingRepository? = null,
     private val onlineAnonymousSessionRepository:
         OnlineAnonymousSessionRepository? = null,
+    private val onlineSessionCredentialRepository:
+        OnlineSessionCredentialRepository? = null,
     private val onlineRoomRepository: OnlineRoomRepository? = null,
 ) : DominoSessionCoordinator {
     private val pendingOnlineParticipationOnInitialization =
@@ -301,11 +305,24 @@ class LocalDominoSessionCoordinator(
             return
         }
 
-        val anonymousSession = onlineAnonymousSessionRepository
-            ?.getValidSessionOrNull()
+        val sessionCredential = onlineSessionCredentialRepository
+            ?.getStoredCredentialOrNull()
 
-        if (anonymousSession?.playerId == sessionRejection.binding.playerId) {
-            onlineAnonymousSessionRepository.clear()
+        if (
+            sessionCredential?.playerId == sessionRejection.binding.playerId &&
+            sessionCredential.sessionKind == OnlineSessionKind.ANONYMOUS
+        ) {
+            onlineSessionCredentialRepository.clear()
+        } else if (onlineSessionCredentialRepository == null) {
+            val anonymousSession = onlineAnonymousSessionRepository
+                ?.getValidSessionOrNull()
+
+            if (
+                anonymousSession?.playerId ==
+                sessionRejection.binding.playerId
+            ) {
+                onlineAnonymousSessionRepository.clear()
+            }
         }
 
         updateMainMenuState(
@@ -329,6 +346,8 @@ class LocalDominoSessionCoordinator(
                 onlineParticipationBindingRepository,
             onlineAnonymousSessionRepository =
                 onlineAnonymousSessionRepository,
+            onlineSessionCredentialRepository =
+                onlineSessionCredentialRepository,
         ).resolve()
     }
 
