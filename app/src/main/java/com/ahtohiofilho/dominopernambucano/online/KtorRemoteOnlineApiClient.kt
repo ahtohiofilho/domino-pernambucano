@@ -7,6 +7,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.android.Android
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.accept
@@ -78,6 +79,48 @@ class KtorRemoteOnlineApiClient(
                 developmentPlayerId = null,
             )
         }.body()
+    }
+
+    override suspend fun linkGoogleIdentity(
+        request: OnlineGoogleIdentityRequestDto,
+        accessToken: String,
+    ): OnlineAccountSessionDto {
+        val normalizedAccessToken = accessToken.trim()
+        require(normalizedAccessToken.isNotBlank()) {
+            "A vinculação Google exige uma credencial online válida."
+        }
+
+        return executeGoogleIdentityRequest {
+            httpClient.post(
+                urlString = endpoint(
+                    OnlineRemoteRoutes.LINK_GOOGLE_IDENTITY,
+                ),
+            ) {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                header(
+                    HttpHeaders.Authorization,
+                    "Bearer $normalizedAccessToken",
+                )
+                setBody(request)
+            }.body()
+        }
+    }
+
+    override suspend fun recoverGoogleAccount(
+        request: OnlineGoogleIdentityRequestDto,
+    ): OnlineAccountSessionDto {
+        return executeGoogleIdentityRequest {
+            httpClient.post(
+                urlString = endpoint(
+                    OnlineRemoteRoutes.RECOVER_GOOGLE_ACCOUNT,
+                ),
+            ) {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
     }
 
     override suspend fun createRoom(
@@ -240,6 +283,16 @@ class KtorRemoteOnlineApiClient(
         path: String,
     ): String {
         return "$baseUrl/${path.trimStart('/')}"
+    }
+
+    private suspend fun executeGoogleIdentityRequest(
+        request: suspend () -> OnlineAccountSessionDto,
+    ): OnlineAccountSessionDto {
+        return try {
+            request()
+        } catch (error: ResponseException) {
+            throw error.toOnlineGoogleIdentityExceptionOrSelf()
+        }
     }
 }
 

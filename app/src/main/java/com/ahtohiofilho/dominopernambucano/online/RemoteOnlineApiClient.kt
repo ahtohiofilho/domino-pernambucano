@@ -35,6 +35,23 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun linkGoogleIdentity(
+        request: OnlineGoogleIdentityRequestDto,
+        accessToken: String,
+    ): OnlineAccountSessionDto {
+        throw UnsupportedOperationException(
+            "Vinculação Google não configurada para este cliente remoto.",
+        )
+    }
+
+    suspend fun recoverGoogleAccount(
+        request: OnlineGoogleIdentityRequestDto,
+    ): OnlineAccountSessionDto {
+        throw UnsupportedOperationException(
+            "Recuperação Google não configurada para este cliente remoto.",
+        )
+    }
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

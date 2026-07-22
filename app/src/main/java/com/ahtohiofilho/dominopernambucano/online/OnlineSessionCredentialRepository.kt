@@ -10,6 +10,11 @@ class OnlineSessionCredentialPersistenceException : IllegalStateException(
     "O armazenamento local não confirmou a nova credencial online.",
 )
 
+class OnlineAccountRecoveryBlockedByAnonymousSessionException :
+    IllegalStateException(
+        "Uma sessão anônima local deve ser vinculada, não substituída por recuperação.",
+    )
+
 class OnlineSessionCredentialRepository(
     private val store: OnlineSessionCredentialStore,
     private val nowEpochMillis: () -> Long = {
@@ -123,6 +128,43 @@ class OnlineSessionCredentialRepository(
             currentCredential = currentCredential,
             promoteAccount = promoteAccount,
         )
+    }
+
+    suspend fun recoverAccountCredential(
+        recoverAccount: suspend () -> OnlineAccountSessionDto,
+    ): OnlineSessionCredential {
+        val currentCredential = getStoredCredentialOrNull()
+
+        if (
+            currentCredential?.sessionKind ==
+            OnlineSessionKind.ANONYMOUS
+        ) {
+            throw OnlineAccountRecoveryBlockedByAnonymousSessionException()
+        }
+
+        val recoveredCredential = recoverAccount()
+            .toOnlineSessionCredential()
+
+        requireValidForStorage(recoveredCredential)
+
+        if (currentCredential != null) {
+            require(
+                recoveredCredential.playerId == currentCredential.playerId
+            ) {
+                "A recuperação alterou o playerId da conta online."
+            }
+            require(
+                recoveredCredential.accountId == currentCredential.accountId
+            ) {
+                "A recuperação alterou o accountId da conta online."
+            }
+        }
+
+        if (!store.write(recoveredCredential)) {
+            throw OnlineSessionCredentialPersistenceException()
+        }
+
+        return recoveredCredential
     }
 
     fun clear(): Boolean {
