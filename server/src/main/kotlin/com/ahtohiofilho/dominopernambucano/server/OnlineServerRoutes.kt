@@ -5,6 +5,7 @@ import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
+import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueEnterRequestDto
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -12,6 +13,7 @@ import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 
@@ -141,6 +143,42 @@ fun Route.onlineServerRoutes(
             }
         }
 
+        post("/${OnlineRemoteRoutes.RANKED_QUEUE}") {
+            val identity = call.requirePublicRankedAccountIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@post
+            val request =
+                call.receive<PublicRankedQueueEnterRequestDto>()
+            val playerName = request.playerName.trim()
+
+            if (playerName.isBlank()) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@post
+            }
+
+            call.respondPublicRankedQueueResult(
+                result = store.enqueuePublicRanked(
+                    request = CreateOnlineRoomRequestDto(
+                        localPlayerId = identity.playerId,
+                        playerName = playerName,
+                    ),
+                    identity = identity,
+                ),
+            )
+        }
+
+        delete("/${OnlineRemoteRoutes.RANKED_QUEUE}") {
+            val identity = call.requirePublicRankedAccountIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@delete
+
+            call.respondPublicRankedQueueResult(
+                result = store.cancelPublicRankedQueue(
+                    identity = identity,
+                ),
+            )
+        }
+
         post("/${OnlineRemoteRoutes.CREATE_ROOM}") {
             val identity = call.requireOnlineIdentity(
                 identityResolver = identityResolver,
@@ -254,6 +292,18 @@ fun Route.onlineServerRoutes(
     }
 
     rateLimit(AUTHENTICATED_READ_RATE_LIMIT_NAME) {
+        get("/${OnlineRemoteRoutes.RANKED_QUEUE}") {
+            val identity = call.requirePublicRankedAccountIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@get
+
+            call.respondPublicRankedQueueResult(
+                result = store.getPublicRankedQueueStatus(
+                    identity = identity,
+                ),
+            )
+        }
+
         get("/rooms/{roomId}") {
             val identity = call.requireOnlineIdentity(
                 identityResolver = identityResolver,
@@ -408,6 +458,25 @@ fun Route.onlineServerRoutes(
             call.respond(snapshots)
         }
     }
+}
+
+
+private suspend fun ApplicationCall.requirePublicRankedAccountIdentity(
+    identityResolver: OnlineRequestIdentityResolver,
+): OnlineRequestIdentity? {
+    val identity = requireOnlineIdentity(
+        identityResolver = identityResolver,
+    ) ?: return null
+
+    if (
+        identity.kind != OnlinePrincipalKind.ACCOUNT ||
+        identity.accountId.isNullOrBlank()
+    ) {
+        respond(HttpStatusCode.Forbidden)
+        return null
+    }
+
+    return identity
 }
 
 private suspend fun ApplicationCall.requireOnlineIdentity(

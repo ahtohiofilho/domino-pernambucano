@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -33,6 +34,19 @@ class OnlineServerStoreStateCompatibilityTest {
         val legacyRoot = encodedState.toMutableMap().apply {
             this["schemaVersion"] = JsonPrimitive(1)
             remove("rankedResults")
+            remove("publicRankedFormationHistory")
+
+            this["rooms"] = JsonArray(
+                getValue("rooms").jsonArray.map { roomElement ->
+                    JsonObject(
+                        roomElement.jsonObject
+                            .toMutableMap()
+                            .apply {
+                                remove("matchMode")
+                            },
+                    )
+                },
+            )
 
             this["matches"] = JsonArray(
                 getValue("matches").jsonArray.map { matchElement ->
@@ -41,6 +55,7 @@ class OnlineServerStoreStateCompatibilityTest {
                             .toMutableMap()
                             .apply {
                                 remove("automaticRoundSeatIndexes")
+                                remove("matchMode")
                                 remove("classification")
                                 remove("rankedMetricAccumulator")
                             },
@@ -60,6 +75,17 @@ class OnlineServerStoreStateCompatibilityTest {
 
         assertEquals(1, legacyState.schemaVersion)
         assertTrue(legacyState.rankedResults.isEmpty())
+        assertTrue(legacyState.publicRankedFormationHistory.isEmpty())
+        assertEquals(
+            DominoMatchMode.PRIVATE_UNRANKED,
+            requireNotNull(
+                restoredStore.getRoomSnapshot(room.roomId),
+            ).matchMode,
+        )
+        assertEquals(
+            DominoMatchMode.PRIVATE_UNRANKED,
+            restoredStore.getMatchMode(matchId),
+        )
         assertEquals(
             RankedMatchClassification.UNRANKED,
             restoredStore.getRankedMatchClassification(matchId),

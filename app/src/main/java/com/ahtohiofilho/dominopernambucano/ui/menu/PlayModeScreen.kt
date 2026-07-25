@@ -24,6 +24,8 @@ fun PlayModeScreen(
     onlineTableName: String,
     onOnlineDisplayNameChange: (String) -> Unit,
     onBackClick: () -> Unit,
+    rankedAccountAvailable: Boolean,
+    onRankedGameClick: () -> Unit,
     onLocalGameClick: () -> Unit,
     onCreateOnlineRoomClick: () -> Unit,
     onJoinOnlineRoomClick: () -> Unit,
@@ -51,6 +53,25 @@ fun PlayModeScreen(
         )
 
         PrimaryMenuButton(
+            text = "Jogar rankeado",
+            onClick = onRankedGameClick,
+            enabled = rankedAccountAvailable,
+        )
+
+        if (!rankedAccountAvailable) {
+            Text(
+                text =
+                    "Conecte ou recupere sua conta para participar do ranking.",
+                color =
+                    DominoSemanticColors.primaryTextOnDark.copy(
+                        alpha = 0.72f,
+                    ),
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        SecondaryMenuButton(
             text = "Partida local",
             onClick = onLocalGameClick,
         )

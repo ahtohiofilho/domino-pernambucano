@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
@@ -84,11 +85,12 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
         )
         val store = InMemoryOnlineServerStore(
             resourcePolicy = resourcePolicy,
-            newMatchClassification =
-                RankedMatchClassification.RANKED,
             nowEpochMillis = { now },
         )
-        val room = startFourHumanMatch(store)
+        val room = startFourHumanMatch(
+            store = store,
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+        )
         val matchId = requireNotNull(room.matchId)
 
         val finalSnapshot = playUntilMatchFinished(
@@ -121,6 +123,27 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
                 .map { player -> player.playerId },
             resultBeforeRestart.players.map { player ->
                 player.playerId
+            },
+        )
+        val expectedAccountIds = room.players
+            .sortedBy { player -> player.seatIndex }
+            .map { player ->
+                requireNotNull(
+                    store.promoteAccount(
+                        playerId = player.playerId,
+                    ),
+                ).accountId
+            }
+
+        assertEquals(
+            expectedAccountIds,
+            resultBeforeRestart.players.map { player ->
+                player.accountId
+            },
+        )
+        assertTrue(
+            resultBeforeRestart.players.all { player ->
+                !player.accountId.isNullOrBlank()
             },
         )
 
@@ -306,35 +329,81 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
 
     private fun startFourHumanMatch(
         store: InMemoryOnlineServerStore,
+        matchMode: DominoMatchMode =
+            DominoMatchMode.PRIVATE_UNRANKED,
     ): OnlineRoomSnapshotDto {
+        val createRequest = CreateOnlineRoomRequestDto(
+            localPlayerId = "player-1",
+            playerName = "Jogador 1",
+        )
         val room = requireNotNull(
-            store.createRoom(
-                CreateOnlineRoomRequestDto(
-                    localPlayerId = "player-1",
-                    playerName = "Jogador 1",
-                ),
-            ).roomSnapshot,
+            if (matchMode == DominoMatchMode.PRIVATE_UNRANKED) {
+                store.createRoom(createRequest)
+            } else {
+                val account = requireNotNull(
+                    store.promoteAccount(
+                        playerId = createRequest.localPlayerId,
+                    ),
+                )
+                store.createPublicRankedRoom(
+                    request = createRequest,
+                    identity = account.toRequestIdentity(),
+                )
+            }.roomSnapshot,
         )
 
         listOf(2, 3).forEach { playerNumber ->
-            val result = store.joinRoom(
-                JoinOnlineRoomRequestDto(
-                    roomCode = room.roomCode,
-                    localPlayerId = "player-$playerNumber",
-                    playerName = "Jogador $playerNumber",
-                ),
+            val request = JoinOnlineRoomRequestDto(
+                roomCode = room.roomCode,
+                localPlayerId = "player-$playerNumber",
+                playerName = "Jogador $playerNumber",
             )
+            val result =
+                if (matchMode == DominoMatchMode.PRIVATE_UNRANKED) {
+                    store.joinRoom(request)
+                } else {
+                    val account = requireNotNull(
+                        store.promoteAccount(
+                            playerId = request.localPlayerId,
+                        ),
+                    )
+                    store.joinPublicRankedRoom(
+                        request = request,
+                        identity = account.toRequestIdentity(),
+                    )
+                }
             assertTrue(result.accepted)
         }
 
+        val finalRequest = JoinOnlineRoomRequestDto(
+            roomCode = room.roomCode,
+            localPlayerId = "player-4",
+            playerName = "Jogador 4",
+        )
+
         return requireNotNull(
-            store.joinRoom(
-                JoinOnlineRoomRequestDto(
-                    roomCode = room.roomCode,
-                    localPlayerId = "player-4",
-                    playerName = "Jogador 4",
-                ),
-            ).roomSnapshot,
+            if (matchMode == DominoMatchMode.PRIVATE_UNRANKED) {
+                store.joinRoom(finalRequest)
+            } else {
+                val account = requireNotNull(
+                    store.promoteAccount(
+                        playerId = finalRequest.localPlayerId,
+                    ),
+                )
+                store.joinPublicRankedRoom(
+                    request = finalRequest,
+                    identity = account.toRequestIdentity(),
+                )
+            }.roomSnapshot,
         )
     }
+
+    private fun OnlineServerAccount.toRequestIdentity() =
+        OnlineRequestIdentity(
+            playerId = playerId,
+            principalId = accountId,
+            sessionId = "ranked-session:$playerId",
+            kind = OnlinePrincipalKind.ACCOUNT,
+            accountId = accountId,
+        )
 }

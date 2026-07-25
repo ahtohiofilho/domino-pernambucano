@@ -814,6 +814,157 @@ class RemoteOnlineRoomRepository(
         }
     }
 
+    override suspend fun activatePublicRankedMatch(
+        matchId: String,
+        localSeatIndex: Int,
+    ): OnlinePublicRankedMatchActivation {
+        val normalizedMatchId = matchId.trim()
+
+        if (
+            normalizedMatchId.isBlank() ||
+            localSeatIndex !in 0..3
+        ) {
+            return OnlinePublicRankedMatchActivation.Failure(
+                kind =
+                    OnlinePublicRankedMatchActivationFailureKind
+                        .INVALID_MATCH,
+            )
+        }
+
+        val client = apiClient
+            ?: return OnlinePublicRankedMatchActivation.Failure(
+                kind =
+                    OnlinePublicRankedMatchActivationFailureKind
+                        .UNAVAILABLE,
+            )
+
+        return refreshMutex.withLock {
+            val session = getValidSessionCredentialOrNull()
+                ?: return@withLock OnlinePublicRankedMatchActivation.Failure(
+                        kind =
+                            OnlinePublicRankedMatchActivationFailureKind
+                                .AUTHENTICATION_REQUIRED,
+                    )
+
+            if (
+                session.sessionKind != OnlineSessionKind.ACCOUNT ||
+                session.accountId.isNullOrBlank()
+            ) {
+                return@withLock OnlinePublicRankedMatchActivation.Failure(
+                        kind =
+                            OnlinePublicRankedMatchActivationFailureKind
+                                .ACCOUNT_REQUIRED,
+                    )
+            }
+
+            client.setDevelopmentPlayerId(
+                playerId = null,
+            )
+            client.setBearerAccessToken(
+                accessToken = session.accessToken,
+            )
+
+            try {
+                val matchSnapshot = client.fetchMatchSnapshot(
+                    matchId = normalizedMatchId,
+                )
+
+                if (
+                    matchSnapshot.matchId != normalizedMatchId ||
+                    matchSnapshot.roomId.isBlank() ||
+                    matchSnapshot.gameState.players.size != 4 ||
+                    localSeatIndex !in
+                        matchSnapshot.gameState.players.indices
+                ) {
+                    return@withLock OnlinePublicRankedMatchActivation.Failure(
+                            kind =
+                                OnlinePublicRankedMatchActivationFailureKind
+                                    .INVALID_MATCH,
+                        )
+                }
+
+                val roomSnapshot = client.fetchRoomSnapshot(
+                    roomId = matchSnapshot.roomId,
+                )
+
+                val localParticipant =
+                    roomSnapshot.players.singleOrNull { player ->
+                        player.seatIndex == localSeatIndex
+                    }
+
+                if (
+                    roomSnapshot.roomId != matchSnapshot.roomId ||
+                    roomSnapshot.matchId != normalizedMatchId ||
+                    roomSnapshot.status != OnlineRoomStatusDto.IN_MATCH ||
+                    localParticipant?.playerId != session.playerId
+                ) {
+                    return@withLock OnlinePublicRankedMatchActivation.Failure(
+                            kind =
+                                OnlinePublicRankedMatchActivationFailureKind
+                                    .INVALID_MATCH,
+                        )
+                }
+
+                onlineParticipationBindingRepository?.save(
+                    binding = OnlineParticipationBinding(
+                        roomId = roomSnapshot.roomId,
+                        matchId = normalizedMatchId,
+                        playerId = session.playerId,
+                        localSeatIndex = localSeatIndex,
+                    ),
+                )
+
+                activePlayerId = session.playerId
+                activeSessionCredential = session
+                mutableRoomSnapshot.value = roomSnapshot
+
+                publishMatchSnapshotIfNewer(
+                    snapshot = matchSnapshot,
+                    trigger = "public_ranked_match_activation",
+                    playerId = session.playerId,
+                )
+
+                startPolling(
+                    roomId = roomSnapshot.roomId,
+                    client = client,
+                )
+
+                OnlinePublicRankedMatchActivation.Ready(
+                    playerId = session.playerId,
+                    roomId = roomSnapshot.roomId,
+                    matchId = normalizedMatchId,
+                    localSeatIndex = localSeatIndex,
+                    initialSnapshot = matchSnapshot,
+                )
+            } catch (error: CancellationException) {
+                restoreActiveParticipantAuthentication(
+                    client = client,
+                )
+                throw error
+            } catch (error: Throwable) {
+                restoreActiveParticipantAuthentication(
+                    client = client,
+                )
+
+                val failureKind = if (
+                    error is io.ktor.client.plugins.ClientRequestException &&
+                    error.response.status ==
+                        io.ktor.http.HttpStatusCode.Unauthorized
+                ) {
+                    OnlinePublicRankedMatchActivationFailureKind
+                        .SESSION_REJECTED
+                } else {
+                    OnlinePublicRankedMatchActivationFailureKind
+                        .UNAVAILABLE
+                }
+
+                OnlinePublicRankedMatchActivation.Failure(
+                    kind = failureKind,
+                )
+            }
+        }
+    }
+
     override suspend fun leaveRoom() {
         onlineParticipationBindingRepository?.clear()
 

@@ -50,6 +50,25 @@ interface OnlineServerStore : AutoCloseable {
         subject: String,
     ): OnlineServerAccount?
 
+    /**
+     * Server-owned competitive admission boundary.
+     *
+     * Enters the FIFO queue for the single public ranked pool. The caller
+     * cannot select a room, code, seat, partner, or opponent.
+     */
+    fun enqueuePublicRanked(
+        request: CreateOnlineRoomRequestDto,
+        identity: OnlineRequestIdentity,
+    ): PublicRankedQueueResult
+
+    fun cancelPublicRankedQueue(
+        identity: OnlineRequestIdentity,
+    ): PublicRankedQueueResult
+
+    fun getPublicRankedQueueStatus(
+        identity: OnlineRequestIdentity,
+    ): PublicRankedQueueResult
+
     fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

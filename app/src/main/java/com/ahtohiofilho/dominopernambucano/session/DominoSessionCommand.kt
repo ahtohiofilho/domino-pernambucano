@@ -12,6 +12,8 @@ sealed interface DominoSessionCommand {
         val matchCoordinator: OnlineDominoMatchCoordinator,
     ) : DominoSessionCommand
 
+    data object OpenOnlineRankedQueue : DominoSessionCommand
+
     data object OpenOnlineCreateRoom : DominoSessionCommand
 
     data object OpenOnlineJoinRoom : DominoSessionCommand

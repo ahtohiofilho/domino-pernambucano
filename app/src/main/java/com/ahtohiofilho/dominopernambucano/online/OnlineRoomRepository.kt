@@ -82,5 +82,14 @@ interface OnlineRoomRepository {
             )
     }
 
+    suspend fun activatePublicRankedMatch(
+        matchId: String,
+        localSeatIndex: Int,
+    ): OnlinePublicRankedMatchActivation {
+        return OnlinePublicRankedMatchActivation.Failure(
+            kind = OnlinePublicRankedMatchActivationFailureKind.UNAVAILABLE,
+        )
+    }
+
     suspend fun leaveRoom()
 }

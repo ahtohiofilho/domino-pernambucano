@@ -75,6 +75,12 @@ class LocalDominoSessionCoordinator(
                 )
             }
 
+            DominoSessionCommand.OpenOnlineRankedQueue -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
+                mutableState.value = DominoSessionState.OnlineRankedQueue
+            }
+
             DominoSessionCommand.OpenOnlineCreateRoom -> {
                 disposeCurrentOnlineCoordinatorIfNeeded()
 

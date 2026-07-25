@@ -19,8 +19,10 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineBackendMode
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountActionResult
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountManager
+import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatchResumeActivation
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatchResumePreparation
@@ -42,9 +44,11 @@ import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationIns
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
 import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
+import com.ahtohiofilho.dominopernambucano.ui.menu.MenuPlaceholderScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.PlayModeScreen
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineCreateRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
+import com.ahtohiofilho.dominopernambucano.ui.online.OnlineRankedQueueRoute
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.launch
@@ -152,6 +156,19 @@ fun DominoPernambucanoApp(
             sessionCredentialRepository =
                 onlineSessionCredentialRepository,
         )
+    }
+
+    val onlineRankedQueueRemoteClient = remember(
+        googleIdentityApiClient,
+        onlineSessionCredentialRepository,
+    ) {
+        googleIdentityApiClient?.let { apiClient ->
+            OnlineRankedQueueRemoteClient(
+                remoteApiClient = apiClient,
+                sessionCredentialRepository =
+                    onlineSessionCredentialRepository,
+            )
+        }
     }
 
     val onlineParticipationBindingRepository = remember(
@@ -263,6 +280,14 @@ fun DominoPernambucanoApp(
         mutableStateOf<String?>(null)
     }
 
+    val onlineGoogleAccountStatus =
+        onlineGoogleAccountManager.currentStatus()
+
+    val rankedAccountAvailable =
+        onlineRankedQueueRemoteClient != null &&
+            onlineGoogleAccountStatus ==
+                OnlineGoogleAccountStatus.CONNECTED
+
     when (val state = sessionState) {
         is DominoSessionState.MainMenu -> {
             MainMenuScreen(
@@ -277,7 +302,7 @@ fun DominoPernambucanoApp(
                 pendingOnlineMatchResumeFeedbackMessage =
                     pendingOnlineMatchResumeFeedbackMessage,
                 onlineGoogleAccountStatus =
-                    onlineGoogleAccountManager.currentStatus(),
+                    onlineGoogleAccountStatus,
                 onlineGoogleAccountActionInProgress =
                     onlineGoogleAccountActionInProgress,
                 onlineGoogleAccountFeedbackMessage =
@@ -557,6 +582,12 @@ fun DominoPernambucanoApp(
                         DominoSessionCommand.BackToMainMenu,
                     )
                 },
+                rankedAccountAvailable = rankedAccountAvailable,
+                onRankedGameClick = {
+                    sessionCoordinator.dispatch(
+                        DominoSessionCommand.OpenOnlineRankedQueue,
+                    )
+                },
                 onLocalGameClick = {
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.StartLocalMatch,
@@ -584,6 +615,56 @@ fun DominoPernambucanoApp(
                     )
                 },
             )
+        }
+
+        DominoSessionState.OnlineRankedQueue -> {
+            val queueClient = onlineRankedQueueRemoteClient
+
+            if (queueClient == null) {
+                MenuPlaceholderScreen(
+                        title = "Partida rankeada",
+                        description =
+                            "A fila rankeada não está disponível neste ambiente.",
+                        onBackClick = {
+                            sessionCoordinator.dispatch(
+                                DominoSessionCommand
+                                    .BackToPlayModeSelection,
+                            )
+                        },
+                    )
+            } else {
+                OnlineRankedQueueRoute(
+                    queueClient = queueClient,
+                    roomRepository = onlineRoomRepository,
+                    playerName = onlinePlayerIdentity.tableName,
+                    onStartOnlineMatch = { activation ->
+                        val matchCoordinator =
+                            OnlineDominoMatchCoordinator(
+                                repository = onlineRoomRepository,
+                                roomId = activation.roomId,
+                                matchId = activation.matchId,
+                                localPlayerId = activation.playerId,
+                                localPlayerIndex =
+                                    activation.localSeatIndex,
+                                initialSnapshot =
+                                    activation.initialSnapshot,
+                                traceLogger = onlineTraceLogger,
+                            )
+
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.StartOnlineMatch(
+                                matchCoordinator = matchCoordinator,
+                            ),
+                        )
+                    },
+                    onBackClick = {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand
+                                .BackToPlayModeSelection,
+                        )
+                    },
+                )
+            }
         }
 
         DominoSessionState.OnlineCreateRoom -> {

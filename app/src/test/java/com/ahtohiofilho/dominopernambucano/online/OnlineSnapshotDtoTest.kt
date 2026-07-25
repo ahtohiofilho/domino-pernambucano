@@ -6,6 +6,7 @@ import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.domain.createInitialDominoGameState
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import kotlinx.serialization.decodeFromString
@@ -301,6 +302,50 @@ class OnlineSnapshotDtoTest {
         assertEquals(
             OnlineParticipantTypeDto.HUMAN,
             decoded.players.single().participantType,
+        )
+    }
+
+    @Test
+    fun room_snapshot_without_match_mode_defaults_to_private_unranked() {
+        val snapshot = OnlineRoomSnapshotDto(
+            roomId = "legacy-private-room",
+            roomCode = "2468",
+            hostPlayerId = "legacy-player",
+            status = OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+            players = listOf(
+                OnlineRoomPlayerDto(
+                    playerId = "legacy-player",
+                    name = "Jogador legado",
+                    seatIndex = 0,
+                    connected = true,
+                ),
+            ),
+        )
+
+        val json = createOnlineJson()
+        val currentEncoded = json.encodeToString(snapshot)
+
+        assertTrue(
+            currentEncoded.contains(
+                "\"matchMode\":\"PRIVATE_UNRANKED\"",
+            ),
+        )
+
+        val legacyEncoded = currentEncoded.replace(
+            oldValue = ",\"matchMode\":\"PRIVATE_UNRANKED\"",
+            newValue = "",
+        )
+
+        assertFalse(legacyEncoded.contains("\"matchMode\""))
+
+        val decoded =
+            json.decodeFromString<OnlineRoomSnapshotDto>(
+                legacyEncoded,
+            )
+
+        assertEquals(
+            DominoMatchMode.PRIVATE_UNRANKED,
+            decoded.matchMode,
         )
     }
 

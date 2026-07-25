@@ -74,6 +74,32 @@ class PersistentOnlineServerStore private constructor(
         )
     }
 
+    override fun enqueuePublicRanked(
+        request: CreateOnlineRoomRequestDto,
+        identity: OnlineRequestIdentity,
+    ): PublicRankedQueueResult = mutate {
+        delegate.enqueuePublicRanked(
+            request = request,
+            identity = identity,
+        )
+    }
+
+    override fun cancelPublicRankedQueue(
+        identity: OnlineRequestIdentity,
+    ): PublicRankedQueueResult = mutate {
+        delegate.cancelPublicRankedQueue(
+            identity = identity,
+        )
+    }
+
+    override fun getPublicRankedQueueStatus(
+        identity: OnlineRequestIdentity,
+    ): PublicRankedQueueResult = mutate {
+        delegate.getPublicRankedQueueStatus(
+            identity = identity,
+        )
+    }
+
     override fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto = mutate {

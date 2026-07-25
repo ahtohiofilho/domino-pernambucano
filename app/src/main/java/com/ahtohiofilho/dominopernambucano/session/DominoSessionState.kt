@@ -31,6 +31,8 @@ sealed interface DominoSessionState {
         val matchCoordinator: DominoMatchCoordinator,
     ) : DominoSessionState
 
+    data object OnlineRankedQueue : DominoSessionState
+
     data object OnlineCreateRoom : DominoSessionState
 
     data object OnlineJoinRoom : DominoSessionState

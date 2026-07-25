@@ -15,6 +15,7 @@ import com.ahtohiofilho.dominopernambucano.domain.isRoundFinished
 import com.ahtohiofilho.dominopernambucano.domain.passTurn
 import com.ahtohiofilho.dominopernambucano.domain.playMoveForCurrentPlayer
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
@@ -71,8 +72,6 @@ class InMemoryOnlineServerStore(
     private val autoFillDevelopmentBotsAfterTwoHumanPlayers: Boolean = false,
     private val resourcePolicy: OnlineServerStoreResourcePolicy =
         OnlineServerStoreResourcePolicy.Default,
-    private val newMatchClassification: RankedMatchClassification =
-        RankedMatchClassification.UNRANKED,
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
@@ -82,6 +81,9 @@ class InMemoryOnlineServerStore(
     private val accountIdFactory: () -> String = {
         "account-${java.util.UUID.randomUUID()}"
     },
+    private val publicRankedFormationEntropy:
+        PublicRankedFormationEntropy =
+        SecurePublicRankedFormationEntropy(),
 ) : OnlineServerStore {
     private data class MatchRecord(
         val roomId: String,
@@ -91,7 +93,10 @@ class InMemoryOnlineServerStore(
         val automaticSeatIndexes: MutableSet<Int> = mutableSetOf(),
         val automaticRoundSeatIndexes: MutableSet<Int> = mutableSetOf(),
         val developmentBotSeatIndexes: Set<Int> = emptySet(),
+        val matchMode: DominoMatchMode,
         val classification: RankedMatchClassification,
+        val rankedPlayerIdentitiesBySeat:
+            List<RankedMatchPlayerIdentity>,
         var rankedMetricAccumulator: RankedMatchMetricAccumulator,
     )
 
@@ -111,6 +116,14 @@ class InMemoryOnlineServerStore(
         val subject: String,
     )
 
+    private data class PublicRankedQueueEntry(
+        val playerId: String,
+        val accountId: String,
+        var playerName: String,
+        val enqueuedAtEpochMillis: Long,
+        var lastSeenAtEpochMillis: Long,
+    )
+
     private val lock = Any()
 
     private val roomsById = mutableMapOf<String, OnlineRoomSnapshotDto>()
@@ -124,6 +137,11 @@ class InMemoryOnlineServerStore(
         mutableMapOf<String, OnlineServerAccount>()
     private val externalIdentitiesByKey =
         mutableMapOf<ExternalIdentityKey, OnlineServerExternalIdentity>()
+
+    private val publicRankedQueueByAccountId =
+        linkedMapOf<String, PublicRankedQueueEntry>()
+    private val publicRankedFormationHistory =
+        mutableListOf<PublicRankedFormationHistoryEntry>()
 
     private var nextRoomSequence = 1
     private var nextMatchSequence = 1
@@ -283,10 +301,293 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    internal fun createPublicRankedRoom(
+        request: CreateOnlineRoomRequestDto,
+        identity: OnlineRequestIdentity,
+    ): OnlineRoomOperationResultDto {
+        return createServerManagedRoom(
+            request = request,
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+            rankedIdentity = identity,
+        )
+    }
+
+    internal fun joinPublicRankedRoom(
+        request: JoinOnlineRoomRequestDto,
+        identity: OnlineRequestIdentity,
+    ): OnlineRoomOperationResultDto {
+        return joinServerManagedRoom(
+            request = request,
+            expectedMatchMode = DominoMatchMode.PUBLIC_RANKED,
+            rankedIdentity = identity,
+        )
+    }
+
+    override fun enqueuePublicRanked(
+        request: CreateOnlineRoomRequestDto,
+        identity: OnlineRequestIdentity,
+    ): PublicRankedQueueResult {
+        return synchronized(lock) {
+            val now = nowEpochMillis()
+            pruneExpiredRecords(
+                nowEpochMillis = now,
+                force = true,
+            )
+
+            val rankedIdentity = resolveRankedPlayerIdentityOrNull(
+                identity = identity,
+                expectedPlayerId = request.localPlayerId,
+            ) ?: return@synchronized rejectedPublicRankedQueueResult(
+                reason =
+                    "Conta autenticada obrigatória para entrar na fila ranqueada.",
+            )
+
+            if (request.playerName.isBlank()) {
+                return@synchronized rejectedPublicRankedQueueResult(
+                    reason = "Nome do jogador não informado.",
+                )
+            }
+
+            if (
+                request.playerName.length >
+                MAX_SERVER_PLAYER_NAME_CHARACTERS
+            ) {
+                return@synchronized rejectedPublicRankedQueueResult(
+                    reason = "Nome do jogador acima do limite.",
+                )
+            }
+
+            findActivePublicRankedRoom(
+                playerId = rankedIdentity.playerId,
+            )?.let { room ->
+                return@synchronized matchedPublicRankedQueueResult(
+                    room = room,
+                    playerId = rankedIdentity.playerId,
+                )
+            }
+
+            val activeOtherRoom = roomsById.values.firstOrNull { room ->
+                room.status in setOf(
+                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+                    OnlineRoomStatusDto.IN_MATCH,
+                ) &&
+                    room.players.any { player ->
+                        player.playerId == rankedIdentity.playerId
+                    }
+            }
+
+            if (activeOtherRoom != null) {
+                return@synchronized rejectedPublicRankedQueueResult(
+                    reason =
+                        "O jogador já participa de outra sala ativa.",
+                )
+            }
+
+            val accountId = requireNotNull(
+                rankedIdentity.accountId,
+            )
+            val conflictingPlayerEntry =
+                publicRankedQueueByAccountId.values.firstOrNull { entry ->
+                    entry.playerId == rankedIdentity.playerId &&
+                        entry.accountId != accountId
+                }
+
+            if (conflictingPlayerEntry != null) {
+                return@synchronized rejectedPublicRankedQueueResult(
+                    reason =
+                        "O jogador já possui outra identidade na fila.",
+                )
+            }
+
+            val existingEntry = publicRankedQueueByAccountId[accountId]
+            if (existingEntry != null) {
+                existingEntry.playerName = request.playerName
+                existingEntry.lastSeenAtEpochMillis = now
+            } else {
+                if (
+                    publicRankedQueueByAccountId.size >=
+                    resourcePolicy.maxPublicRankedQueueSize
+                ) {
+                    return@synchronized rejectedPublicRankedQueueResult(
+                        reason =
+                            "Capacidade temporária da fila ranqueada atingida.",
+                    )
+                }
+
+                publicRankedQueueByAccountId[accountId] =
+                    PublicRankedQueueEntry(
+                        playerId = rankedIdentity.playerId,
+                        accountId = accountId,
+                        playerName = request.playerName,
+                        enqueuedAtEpochMillis = now,
+                        lastSeenAtEpochMillis = now,
+                    )
+            }
+
+            formPublicRankedMatchesFromQueue(
+                nowEpochMillis = now,
+            )
+
+            findActivePublicRankedRoom(
+                playerId = rankedIdentity.playerId,
+            )?.let { room ->
+                return@synchronized matchedPublicRankedQueueResult(
+                    room = room,
+                    playerId = rankedIdentity.playerId,
+                )
+            }
+
+            queuedPublicRankedResult(
+                accountId = accountId,
+            )
+        }
+    }
+
+    override fun cancelPublicRankedQueue(
+        identity: OnlineRequestIdentity,
+    ): PublicRankedQueueResult {
+        return synchronized(lock) {
+            val now = nowEpochMillis()
+            pruneExpiredRecords(
+                nowEpochMillis = now,
+                force = true,
+            )
+
+            val rankedIdentity = resolveRankedPlayerIdentityOrNull(
+                identity = identity,
+                expectedPlayerId = identity.playerId,
+            ) ?: return@synchronized rejectedPublicRankedQueueResult(
+                reason =
+                    "Conta autenticada obrigatória para cancelar a fila ranqueada.",
+            )
+
+            findActivePublicRankedRoom(
+                playerId = rankedIdentity.playerId,
+            )?.let { room ->
+                return@synchronized PublicRankedQueueResult(
+                    accepted = false,
+                    status = PublicRankedQueueStatus.MATCHED,
+                    roomSnapshot = room,
+                    localSeatIndex = room.players.firstOrNull { player ->
+                        player.playerId == rankedIdentity.playerId
+                    }?.seatIndex,
+                    reason =
+                        "A mesa já foi formada e não pode ser cancelada pela fila.",
+                )
+            }
+
+            val accountId = requireNotNull(rankedIdentity.accountId)
+            publicRankedQueueByAccountId.remove(accountId)
+
+            PublicRankedQueueResult(
+                accepted = true,
+                status = PublicRankedQueueStatus.NOT_QUEUED,
+            )
+        }
+    }
+
+    override fun getPublicRankedQueueStatus(
+        identity: OnlineRequestIdentity,
+    ): PublicRankedQueueResult {
+        return synchronized(lock) {
+            val now = nowEpochMillis()
+            pruneExpiredRecords(
+                nowEpochMillis = now,
+                force = true,
+            )
+
+            val rankedIdentity = resolveRankedPlayerIdentityOrNull(
+                identity = identity,
+                expectedPlayerId = identity.playerId,
+            ) ?: return@synchronized rejectedPublicRankedQueueResult(
+                reason =
+                    "Conta autenticada obrigatória para consultar a fila ranqueada.",
+            )
+
+            findActivePublicRankedRoom(
+                playerId = rankedIdentity.playerId,
+            )?.let { room ->
+                return@synchronized matchedPublicRankedQueueResult(
+                    room = room,
+                    playerId = rankedIdentity.playerId,
+                )
+            }
+
+            val accountId = requireNotNull(rankedIdentity.accountId)
+            val queuedEntry = publicRankedQueueByAccountId[accountId]
+            if (queuedEntry != null) {
+                queuedEntry.lastSeenAtEpochMillis = now
+                queuedPublicRankedResult(
+                    accountId = accountId,
+                )
+            } else {
+                PublicRankedQueueResult(
+                    accepted = true,
+                    status = PublicRankedQueueStatus.NOT_QUEUED,
+                )
+            }
+        }
+    }
+
     override fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
+        return createServerManagedRoom(
+            request = request,
+            matchMode = DominoMatchMode.PRIVATE_UNRANKED,
+        )
+    }
+
+    /**
+     * Internal server-owned mode seam.
+     *
+     * This method is not exposed by the HTTP room-by-code interface.
+     * PUBLIC_RANKED requires a server-resolved ACCOUNT identity whose
+     * playerId/accountId pair matches the persistent account registry.
+     */
+    internal fun createServerManagedRoom(
+        request: CreateOnlineRoomRequestDto,
+        matchMode: DominoMatchMode,
+        rankedIdentity: OnlineRequestIdentity? = null,
+    ): OnlineRoomOperationResultDto {
         return synchronized(lock) {
+            require(matchMode.isServerHosted) {
+                "A modalidade da sala deve ser hospedada pelo servidor."
+            }
+            require(matchMode.isEnabledInMvp) {
+                "A modalidade da sala não está habilitada no MVP."
+            }
+
+            val rankedPlayerIdentity =
+                resolveRankedPlayerIdentityOrNull(
+                    identity = rankedIdentity,
+                    expectedPlayerId = request.localPlayerId,
+                )
+
+            if (
+                matchMode.contributesToRanking &&
+                rankedPlayerIdentity == null
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "create_public_ranked_room",
+                    playerId = request.localPlayerId,
+                    reason =
+                        "Conta autenticada obrigatória para partida ranqueada.",
+                )
+            }
+
+            if (
+                !matchMode.contributesToRanking &&
+                rankedIdentity != null
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "create_room",
+                    playerId = request.localPlayerId,
+                    reason =
+                        "Identidade competitiva não permitida nesta modalidade.",
+                )
+            }
+
             pruneExpiredRecords(
                 nowEpochMillis = nowEpochMillis(),
                 force = true,
@@ -362,6 +663,7 @@ class InMemoryOnlineServerStore(
                             OnlineParticipantTypeDto.HUMAN,
                     ),
                 ),
+                matchMode = matchMode,
                 createdAtEpochMillis = now,
                 updatedAtEpochMillis = now,
             )
@@ -392,7 +694,30 @@ class InMemoryOnlineServerStore(
     override fun joinRoom(
         request: JoinOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto {
+        return joinServerManagedRoom(
+            request = request,
+            expectedMatchMode = DominoMatchMode.PRIVATE_UNRANKED,
+        )
+    }
+
+    /**
+     * Internal counterpart for a server-selected mode.
+     * Public code/invite routes continue to call [joinRoom], which accepts
+     * only PRIVATE_UNRANKED rooms.
+     */
+    internal fun joinServerManagedRoom(
+        request: JoinOnlineRoomRequestDto,
+        expectedMatchMode: DominoMatchMode,
+        rankedIdentity: OnlineRequestIdentity? = null,
+    ): OnlineRoomOperationResultDto {
         return synchronized(lock) {
+            require(expectedMatchMode.isServerHosted) {
+                "A modalidade esperada deve ser hospedada pelo servidor."
+            }
+            require(expectedMatchMode.isEnabledInMvp) {
+                "A modalidade esperada não está habilitada no MVP."
+            }
+
             pruneExpiredRecords(
                 nowEpochMillis = nowEpochMillis(),
                 force = true,
@@ -426,6 +751,50 @@ class InMemoryOnlineServerStore(
                     playerId = request.localPlayerId,
                     reason = "Sala não encontrada.",
                 )
+
+            if (currentRoom.matchMode != expectedMatchMode) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = request.localPlayerId,
+                    reason = "A sala não pertence a esta modalidade.",
+                )
+            }
+
+            val rankedPlayerIdentity =
+                resolveRankedPlayerIdentityOrNull(
+                    identity = rankedIdentity,
+                    expectedPlayerId = request.localPlayerId,
+                )
+
+            if (
+                expectedMatchMode.contributesToRanking &&
+                rankedPlayerIdentity == null
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_public_ranked_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = request.localPlayerId,
+                    reason =
+                        "Conta autenticada obrigatória para partida ranqueada.",
+                )
+            }
+
+            if (
+                !expectedMatchMode.contributesToRanking &&
+                rankedIdentity != null
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "join_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = request.localPlayerId,
+                    reason =
+                        "Identidade competitiva não permitida nesta modalidade.",
+                )
+            }
 
             if (
                 currentRoom.status == OnlineRoomStatusDto.CLOSED ||
@@ -566,9 +935,14 @@ class InMemoryOnlineServerStore(
                     OnlineParticipantTypeDto.HUMAN,
             )
 
-            val updatedPlayers = addDevelopmentBotsIfNeeded(
-                players = playersAfterHumanJoin,
-            )
+            val updatedPlayers =
+                if (currentRoom.matchMode.contributesToRanking) {
+                    playersAfterHumanJoin
+                } else {
+                    addDevelopmentBotsIfNeeded(
+                        players = playersAfterHumanJoin,
+                    )
+                }
 
             val shouldStartMatch = updatedPlayers.size == 4
             val nextMatchId = if (shouldStartMatch) {
@@ -983,11 +1357,29 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    internal fun getMatchMode(
+        matchId: String,
+    ): DominoMatchMode? {
+        return synchronized(lock) {
+            matchesById[matchId]?.matchMode
+        }
+    }
+
     internal fun getRankedMatchClassification(
         matchId: String,
     ): RankedMatchClassification? {
         return synchronized(lock) {
             matchesById[matchId]?.classification
+        }
+    }
+
+    internal fun getRankedPlayerIdentities(
+        matchId: String,
+    ): List<RankedMatchPlayerIdentity>? {
+        return synchronized(lock) {
+            matchesById[matchId]
+                ?.rankedPlayerIdentitiesBySeat
+                ?.toList()
         }
     }
 
@@ -1028,6 +1420,7 @@ class InMemoryOnlineServerStore(
                                     .sorted(),
                             applicationSeatIndexes =
                                 matchRecord.developmentBotSeatIndexes.sorted(),
+                            matchMode = matchRecord.matchMode,
                             classification = matchRecord.classification,
                             rankedMetricAccumulator =
                                 matchRecord.rankedMetricAccumulator,
@@ -1053,6 +1446,8 @@ class InMemoryOnlineServerStore(
                             { identity -> identity.subject },
                         ),
                     ),
+                publicRankedFormationHistory =
+                    publicRankedFormationHistory.toList(),
             )
         }
     }
@@ -1061,7 +1456,8 @@ class InMemoryOnlineServerStore(
         state: OnlineServerStoreState,
     ) {
         synchronized(lock) {
-            validatePersistentState(state)
+            val normalizedState = normalizePersistentState(state)
+            validatePersistentState(normalizedState)
 
             roomsById.clear()
             roomIdsByCode.clear()
@@ -1070,13 +1466,19 @@ class InMemoryOnlineServerStore(
             rankedResultsById.clear()
             accountsByPlayerId.clear()
             externalIdentitiesByKey.clear()
+            publicRankedQueueByAccountId.clear()
+            publicRankedFormationHistory.clear()
 
-            state.rooms.forEach { room ->
+            normalizedState.rooms.forEach { room ->
                 roomsById[room.roomId] = room
                 roomIdsByCode[room.roomCode] = room.roomId
             }
 
-            state.matches.forEach { storedMatch ->
+            normalizedState.accounts.forEach { account ->
+                accountsByPlayerId[account.playerId] = account
+            }
+
+            normalizedState.matches.forEach { storedMatch ->
                 matchesById[storedMatch.matchId] = MatchRecord(
                     roomId = storedMatch.roomId,
                     matchId = storedMatch.matchId,
@@ -1094,7 +1496,20 @@ class InMemoryOnlineServerStore(
                     developmentBotSeatIndexes = storedMatch
                         .applicationSeatIndexes
                         .toSet(),
+                    matchMode = storedMatch.matchMode,
                     classification = storedMatch.classification,
+                    rankedPlayerIdentitiesBySeat =
+                        if (storedMatch.matchMode.contributesToRanking) {
+                            resolveRankedPlayerIdentitiesBySeat(
+                                room = requireNotNull(
+                                    normalizedState.rooms.singleOrNull { room ->
+                                        room.roomId == storedMatch.roomId
+                                    },
+                                ),
+                            )
+                        } else {
+                            emptyList()
+                        },
                     rankedMetricAccumulator =
                         storedMatch.rankedMetricAccumulator
                             ?: RankedMatchMetricAccumulator.empty(
@@ -1112,7 +1527,7 @@ class InMemoryOnlineServerStore(
                 )
             }
 
-            state.actionResults.forEach { storedAction ->
+            normalizedState.actionResults.forEach { storedAction ->
                 actionResultsByKey[
                     ActionResultCacheKey(
                         matchId = storedAction.matchId,
@@ -1122,16 +1537,12 @@ class InMemoryOnlineServerStore(
                 ] = storedAction.result
             }
 
-            state.rankedResults.forEach { rankedResult ->
+            normalizedState.rankedResults.forEach { rankedResult ->
                 rankedResultsById[rankedResult.resultId] =
                     rankedResult
             }
 
-            state.accounts.forEach { account ->
-                accountsByPlayerId[account.playerId] = account
-            }
-
-            state.externalIdentities.forEach { identity ->
+            normalizedState.externalIdentities.forEach { identity ->
                 externalIdentitiesByKey[
                     ExternalIdentityKey(
                         provider = identity.provider,
@@ -1140,10 +1551,44 @@ class InMemoryOnlineServerStore(
                 ] = identity
             }
 
-            nextRoomSequence = state.nextRoomSequence
-            nextMatchSequence = state.nextMatchSequence
+            publicRankedFormationHistory.addAll(
+                normalizedState.publicRankedFormationHistory,
+            )
+
+            nextRoomSequence = normalizedState.nextRoomSequence
+            nextMatchSequence = normalizedState.nextMatchSequence
             lastPruneAtEpochMillis = null
         }
+    }
+
+    private fun normalizePersistentState(
+        state: OnlineServerStoreState,
+    ): OnlineServerStoreState {
+        if (state.schemaVersion >= 6) {
+            return state
+        }
+
+        if (state.schemaVersion == 5) {
+            return state.copy(
+                publicRankedFormationHistory = emptyList(),
+            )
+        }
+
+        return state.copy(
+            rooms = state.rooms.map { room ->
+                room.copy(
+                    matchMode = DominoMatchMode.PRIVATE_UNRANKED,
+                )
+            },
+            matches = state.matches.map { storedMatch ->
+                storedMatch.copy(
+                    matchMode = DominoMatchMode.PRIVATE_UNRANKED,
+                    classification =
+                        RankedMatchClassification.UNRANKED,
+                )
+            },
+            rankedResults = emptyList(),
+        )
     }
 
     private fun validatePersistentState(
@@ -1181,6 +1626,57 @@ class InMemoryOnlineServerStore(
             "O estado persistido contém uma conta inválida."
         }
         val persistedAccountIds = accountIds.toSet()
+        val persistedAccountsByPlayerId =
+            state.accounts.associateBy { account ->
+                account.playerId
+            }
+
+        require(
+            state.publicRankedFormationHistory.size <=
+                resourcePolicy.maxPublicRankedFormationHistoryCount
+        ) {
+            "O histórico de formação ranqueada excede o limite."
+        }
+        state.publicRankedFormationHistory.forEach { entry ->
+            require(
+                entry.roomId.isNotBlank() &&
+                    entry.matchId.isNotBlank() &&
+                    entry.formedAtEpochMillis >= 0L &&
+                    (
+                        entry.completedAtEpochMillis == null ||
+                            entry.completedAtEpochMillis >=
+                                entry.formedAtEpochMillis
+                    ) &&
+                    entry.selectedAccountIdsInQueueOrder.size == 4 &&
+                    entry.accountIdsBySeat.size == 4 &&
+                    entry.selectedAccountIdsInQueueOrder.distinct().size ==
+                        4 &&
+                    entry.accountIdsBySeat.distinct().size == 4 &&
+                    entry.selectedAccountIdsInQueueOrder.toSet() ==
+                        entry.accountIdsBySeat.toSet() &&
+                    entry.accountIdsBySeat.all { accountId ->
+                        accountId in persistedAccountIds
+                    } &&
+                    entry.auditNonce.matches(
+                        Regex("[0-9a-f]{64}"),
+                    ) &&
+                    entry.auditCommitment ==
+                        createPublicRankedFormationAuditCommitment(
+                            roomId = entry.roomId,
+                            matchId = entry.matchId,
+                            formedAtEpochMillis =
+                                entry.formedAtEpochMillis,
+                            selectedAccountIdsInQueueOrder =
+                                entry.selectedAccountIdsInQueueOrder,
+                            accountIdsBySeat =
+                                entry.accountIdsBySeat,
+                            auditNonce = entry.auditNonce,
+                        )
+            ) {
+                "O estado persistido contém formação ranqueada inválida."
+            }
+        }
+
         val externalIdentityKeys = state.externalIdentities.map { identity ->
             identity.provider to identity.subject
         }
@@ -1221,6 +1717,37 @@ class InMemoryOnlineServerStore(
         require(roomIds.distinct().size == roomIds.size)
         require(roomCodes.none { roomCode -> roomCode.isBlank() })
         require(roomCodes.distinct().size == roomCodes.size)
+        require(
+            state.rooms.all { room ->
+                room.matchMode.isServerHosted &&
+                    room.matchMode.isEnabledInMvp
+            }
+        )
+        require(
+            state.rooms.all { room ->
+                if (room.matchMode != DominoMatchMode.PUBLIC_RANKED) {
+                    true
+                } else {
+                    room.players.all { player ->
+                        player.participantType ==
+                            OnlineParticipantTypeDto.HUMAN &&
+                            player.seatIndex != null &&
+                            persistedAccountsByPlayerId[
+                                player.playerId
+                            ] != null
+                    } &&
+                        room.players.map { player ->
+                            requireNotNull(
+                                persistedAccountsByPlayerId[
+                                    player.playerId
+                                ],
+                            ).accountId
+                        }.distinct().size == room.players.size
+                }
+            }
+        ) {
+            "Sala PUBLIC_RANKED contém jogador sem conta autenticada."
+        }
         require(matchIds.none { matchId -> matchId.isBlank() })
         require(matchIds.distinct().size == matchIds.size)
 
@@ -1272,6 +1799,11 @@ class InMemoryOnlineServerStore(
                     index in 0..3
                 }
             )
+            require(room.matchMode == storedMatch.matchMode)
+            require(
+                storedMatch.classification ==
+                    storedMatch.matchMode.rankedMatchClassification
+            )
 
             storedMatch.rankedMetricAccumulator?.let { accumulator ->
                 require(
@@ -1284,10 +1816,7 @@ class InMemoryOnlineServerStore(
                 )
             }
 
-            if (
-                storedMatch.classification ==
-                RankedMatchClassification.RANKED
-            ) {
+            if (storedMatch.matchMode.contributesToRanking) {
                 require(storedMatch.applicationSeatIndexes.isEmpty())
             }
         }
@@ -1353,7 +1882,43 @@ class InMemoryOnlineServerStore(
                 }
 
                 RankedMatchClassification.RANKED -> {
+                    require(
+                        storedMatch.matchMode ==
+                            DominoMatchMode.PUBLIC_RANKED
+                    )
                     require(!matchFinished || result != null)
+
+                    result?.let { rankedResult ->
+                        val room = requireNotNull(
+                            roomsByPersistedId[
+                                storedMatch.roomId
+                            ],
+                        )
+                        val expectedAccountsBySeat =
+                            room.players.associate { player ->
+                                val seatIndex = requireNotNull(
+                                    player.seatIndex,
+                                )
+                                val account = requireNotNull(
+                                    persistedAccountsByPlayerId[
+                                        player.playerId
+                                    ],
+                                )
+
+                                seatIndex to account.accountId
+                            }
+
+                        require(
+                            rankedResult.players.all { player ->
+                                player.accountId ==
+                                    expectedAccountsBySeat[
+                                        player.seatIndex
+                                    ]
+                            }
+                        ) {
+                            "Resultado ranqueado diverge das contas da sala."
+                        }
+                    }
                 }
             }
         }
@@ -1367,6 +1932,309 @@ class InMemoryOnlineServerStore(
 
         require(state.nextRoomSequence > maximumRoomSequence)
         require(state.nextMatchSequence > maximumMatchSequence)
+    }
+
+    private fun rejectedPublicRankedQueueResult(
+        reason: String,
+    ): PublicRankedQueueResult {
+        return PublicRankedQueueResult(
+            accepted = false,
+            status = PublicRankedQueueStatus.REJECTED,
+            reason = reason,
+        )
+    }
+
+    private fun queuedPublicRankedResult(
+        accountId: String,
+    ): PublicRankedQueueResult {
+        val position = publicRankedQueueByAccountId.keys
+            .indexOf(accountId)
+            .takeIf { index -> index >= 0 }
+            ?.plus(1)
+
+        return PublicRankedQueueResult(
+            accepted = true,
+            status = PublicRankedQueueStatus.QUEUED,
+            queuePosition = position,
+        )
+    }
+
+    private fun matchedPublicRankedQueueResult(
+        room: OnlineRoomSnapshotDto,
+        playerId: String,
+    ): PublicRankedQueueResult {
+        return PublicRankedQueueResult(
+            accepted = true,
+            status = PublicRankedQueueStatus.MATCHED,
+            roomSnapshot = room,
+            localSeatIndex = room.players.firstOrNull { player ->
+                player.playerId == playerId
+            }?.seatIndex,
+        )
+    }
+
+    private fun findActivePublicRankedRoom(
+        playerId: String,
+    ): OnlineRoomSnapshotDto? {
+        return roomsById.values.firstOrNull { room ->
+            room.matchMode == DominoMatchMode.PUBLIC_RANKED &&
+                (
+                    room.status ==
+                        OnlineRoomStatusDto.WAITING_FOR_PLAYERS ||
+                        room.status == OnlineRoomStatusDto.IN_MATCH
+                ) &&
+                room.players.any { player ->
+                    player.playerId == playerId
+                }
+        }
+    }
+
+    private fun formPublicRankedMatchesFromQueue(
+        nowEpochMillis: Long,
+    ) {
+        while (publicRankedQueueByAccountId.size >= 4) {
+            if (roomsById.size >= resourcePolicy.maxRoomCount) {
+                return
+            }
+
+            val invalidAccountIds =
+                publicRankedQueueByAccountId.values
+                    .filter { entry ->
+                        accountsByPlayerId[entry.playerId]?.accountId !=
+                            entry.accountId ||
+                            roomsById.values.any { room ->
+                                room.status in setOf(
+                                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+                                    OnlineRoomStatusDto.IN_MATCH,
+                                ) &&
+                                    room.players.any { player ->
+                                        player.playerId == entry.playerId
+                                    }
+                            }
+                    }
+                    .map { entry -> entry.accountId }
+
+            if (invalidAccountIds.isNotEmpty()) {
+                invalidAccountIds.forEach { accountId ->
+                    publicRankedQueueByAccountId.remove(accountId)
+                }
+                continue
+            }
+
+            val plan = planPublicRankedMatchFormation(
+                queuedCandidates =
+                    publicRankedQueueByAccountId.values.map { entry ->
+                        PublicRankedFormationCandidate(
+                            playerId = entry.playerId,
+                            accountId = entry.accountId,
+                            playerName = entry.playerName,
+                            enqueuedAtEpochMillis =
+                                entry.enqueuedAtEpochMillis,
+                        )
+                    },
+                recentHistory = publicRankedFormationHistory,
+                nowEpochMillis = nowEpochMillis,
+                policy = resourcePolicy,
+                entropy = publicRankedFormationEntropy,
+            ) ?: return
+
+            check(
+                plan.selectedCandidatesInQueueOrder
+                    .map { candidate -> candidate.accountId }
+                    .distinct()
+                    .size == 4
+            ) {
+                "A formação ranqueada contém conta duplicada."
+            }
+            check(
+                plan.selectedCandidatesInQueueOrder
+                    .map { candidate -> candidate.playerId }
+                    .distinct()
+                    .size == 4
+            ) {
+                "A formação ranqueada contém jogador duplicado."
+            }
+
+            val roomSequence = nextRoomSequence++
+            val roomId = "server-room-$roomSequence"
+            val roomCode = roomSequence.toString().padStart(
+                length = 4,
+                padChar = '0',
+            )
+            val matchId = "server-match-${nextMatchSequence++}"
+            val players =
+                plan.candidatesBySeat.mapIndexed { seatIndex, candidate ->
+                    OnlineRoomPlayerDto(
+                        playerId = candidate.playerId,
+                        name = candidate.playerName,
+                        seatIndex = seatIndex,
+                        connected = true,
+                        participantType =
+                            OnlineParticipantTypeDto.HUMAN,
+                    )
+                }
+            val room = OnlineRoomSnapshotDto(
+                roomId = roomId,
+                roomCode = roomCode,
+                hostPlayerId = players.first().playerId,
+                status = OnlineRoomStatusDto.IN_MATCH,
+                players = players,
+                matchId = matchId,
+                matchMode = DominoMatchMode.PUBLIC_RANKED,
+                createdAtEpochMillis = nowEpochMillis,
+                updatedAtEpochMillis = nowEpochMillis,
+            )
+            val selectedAccountIdsInQueueOrder =
+                plan.selectedCandidatesInQueueOrder.map { candidate ->
+                    candidate.accountId
+                }
+            val accountIdsBySeat =
+                plan.candidatesBySeat.map { candidate ->
+                    candidate.accountId
+                }
+            val auditCommitment =
+                createPublicRankedFormationAuditCommitment(
+                    roomId = roomId,
+                    matchId = matchId,
+                    formedAtEpochMillis = nowEpochMillis,
+                    selectedAccountIdsInQueueOrder =
+                        selectedAccountIdsInQueueOrder,
+                    accountIdsBySeat = accountIdsBySeat,
+                    auditNonce = plan.auditNonce,
+                )
+
+            roomsById[roomId] = room
+            roomIdsByCode[roomCode] = roomId
+            selectedAccountIdsInQueueOrder.forEach { accountId ->
+                publicRankedQueueByAccountId.remove(accountId)
+            }
+            publicRankedFormationHistory +=
+                PublicRankedFormationHistoryEntry(
+                    roomId = roomId,
+                    matchId = matchId,
+                    formedAtEpochMillis = nowEpochMillis,
+                    selectedAccountIdsInQueueOrder =
+                        selectedAccountIdsInQueueOrder,
+                    accountIdsBySeat = accountIdsBySeat,
+                    auditNonce = plan.auditNonce,
+                    auditCommitment = auditCommitment,
+                )
+            trimPublicRankedFormationHistory()
+            createMatch(
+                room = room,
+                matchId = matchId,
+            )
+
+            trace(
+                level = OnlineTraceLevel.INFO,
+                source = OnlineTraceSource.SERVER_STORE,
+                type = OnlineTraceType.ROOM_CREATED,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = players.first().playerId,
+                localSeatIndex = 0,
+                attributes = room.traceAttributes() + mapOf(
+                    "operation" to "public_ranked_queue_match",
+                    "queueSizeAfterMatch" to
+                        publicRankedQueueByAccountId.size.toString(),
+                    "formationAuditCommitment" to auditCommitment,
+                    "repeatedEncounterScore" to
+                        plan.repeatedEncounterScore.toString(),
+                    "repeatedPartnerScore" to
+                        plan.repeatedPartnerScore.toString(),
+                    "seatAssignmentAuthority" to "server",
+                ),
+            )
+        }
+    }
+
+    private fun trimPublicRankedFormationHistory() {
+        while (
+            publicRankedFormationHistory.size >
+                resourcePolicy.maxPublicRankedFormationHistoryCount
+        ) {
+            publicRankedFormationHistory.removeAt(0)
+        }
+    }
+
+    private fun resolveRankedPlayerIdentityOrNull(
+        identity: OnlineRequestIdentity?,
+        expectedPlayerId: String,
+    ): RankedMatchPlayerIdentity? {
+        val normalizedExpectedPlayerId = expectedPlayerId.trim()
+        val normalizedAccountId = identity
+            ?.accountId
+            ?.trim()
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+
+        if (
+            identity == null ||
+            expectedPlayerId != normalizedExpectedPlayerId ||
+            identity.kind != OnlinePrincipalKind.ACCOUNT ||
+            identity.playerId != normalizedExpectedPlayerId ||
+            normalizedAccountId == null
+        ) {
+            return null
+        }
+
+        val account = accountsByPlayerId[normalizedExpectedPlayerId]
+            ?: return null
+
+        if (account.accountId != normalizedAccountId) {
+            return null
+        }
+
+        return RankedMatchPlayerIdentity(
+            playerId = account.playerId,
+            accountId = account.accountId,
+        )
+    }
+
+    private fun resolveRankedPlayerIdentitiesBySeat(
+        room: OnlineRoomSnapshotDto,
+    ): List<RankedMatchPlayerIdentity> {
+        check(room.matchMode == DominoMatchMode.PUBLIC_RANKED) {
+            "Somente PUBLIC_RANKED exige identidades de conta."
+        }
+        check(
+            room.players.size == 4 &&
+                room.players.all { player ->
+                    player.participantType ==
+                        OnlineParticipantTypeDto.HUMAN &&
+                        player.seatIndex != null
+                }
+        ) {
+            "Partida ranqueada exige quatro assentos humanos."
+        }
+
+        val identities = room.players
+            .sortedBy { player ->
+                requireNotNull(player.seatIndex)
+            }
+            .map { player ->
+                val account = requireNotNull(
+                    accountsByPlayerId[player.playerId],
+                ) {
+                    "Jogador ranqueado sem conta persistente."
+                }
+
+                RankedMatchPlayerIdentity(
+                    playerId = account.playerId,
+                    accountId = account.accountId,
+                )
+            }
+
+        check(
+            identities.mapNotNull { identity ->
+                identity.accountId
+            }.distinct().size == identities.size
+        ) {
+            "Uma conta não pode ocupar mais de um assento ranqueado."
+        }
+
+        return identities
     }
 
     private fun requireStoreIdentifier(
@@ -1402,6 +2270,35 @@ class InMemoryOnlineServerStore(
 
         lastPruneAtEpochMillis = nowEpochMillis
 
+        val expiredQueueAccountIds = publicRankedQueueByAccountId.values
+            .filter { entry ->
+                (
+                    nowEpochMillis - entry.lastSeenAtEpochMillis
+                ).coerceAtLeast(0L) >=
+                    resourcePolicy.publicRankedQueueEntryRetentionMillis
+            }
+            .map { entry -> entry.accountId }
+
+        expiredQueueAccountIds.forEach { accountId ->
+            publicRankedQueueByAccountId.remove(accountId)
+        }
+
+        val historySizeBeforePrune =
+            publicRankedFormationHistory.size
+        publicRankedFormationHistory.removeAll { entry ->
+            val referenceEpochMillis =
+                entry.completedAtEpochMillis
+                    ?: entry.formedAtEpochMillis
+            (
+                nowEpochMillis - referenceEpochMillis
+            ).coerceAtLeast(0L) >
+                resourcePolicy
+                    .publicRankedFormationHistoryRetentionMillis
+        }
+        val formationHistoryChanged =
+            historySizeBeforePrune !=
+                publicRankedFormationHistory.size
+
         val expiredRoomIds = roomsById.values
             .filter { room ->
                 val lastUpdatedAtEpochMillis =
@@ -1431,7 +2328,8 @@ class InMemoryOnlineServerStore(
             .toSet()
 
         if (expiredRoomIds.isEmpty()) {
-            return false
+            return expiredQueueAccountIds.isNotEmpty() ||
+                formationHistoryChanged
         }
 
         val expiredMatchIds = matchesById.values
@@ -1499,10 +2397,10 @@ class InMemoryOnlineServerStore(
         room: OnlineRoomSnapshotDto,
         matchId: String,
     ) {
-        if (
-            newMatchClassification ==
-            RankedMatchClassification.RANKED
-        ) {
+        val matchMode = room.matchMode
+        val classification = matchMode.rankedMatchClassification
+
+        if (matchMode.contributesToRanking) {
             require(
                 room.players.size == 4 &&
                         room.players.all { player ->
@@ -1513,6 +2411,15 @@ class InMemoryOnlineServerStore(
                 "Partida ranqueada exige quatro jogadores humanos."
             }
         }
+
+        val rankedPlayerIdentitiesBySeat =
+            if (matchMode.contributesToRanking) {
+                resolveRankedPlayerIdentitiesBySeat(
+                    room = room,
+                )
+            } else {
+                emptyList()
+            }
 
         val gameState = applyOnlineRoomPlayerNames(
             gameState = createInitialDominoGameState(),
@@ -1553,7 +2460,10 @@ class InMemoryOnlineServerStore(
                     player.seatIndex
                 }
                 .toSet(),
-            classification = newMatchClassification,
+            matchMode = matchMode,
+            classification = classification,
+            rankedPlayerIdentitiesBySeat =
+                rankedPlayerIdentitiesBySeat,
             rankedMetricAccumulator =
                 RankedMatchMetricAccumulator.empty(
                     playerCount = gameState.players.size,
@@ -1934,10 +2844,7 @@ class InMemoryOnlineServerStore(
         currentRoom: OnlineRoomSnapshotDto,
         matchRecord: MatchRecord,
     ): OnlineActionResultDto {
-        if (
-            matchRecord.classification ==
-            RankedMatchClassification.RANKED
-        ) {
+        if (matchRecord.matchMode.contributesToRanking) {
             return rejectedAction(
                 reason =
                     "Partida ranqueada concluída não pode ser reiniciada.",
@@ -2218,8 +3125,9 @@ class InMemoryOnlineServerStore(
             )
 
         if (
+            matchRecord.matchMode.contributesToRanking &&
             matchRecord.classification ==
-                    RankedMatchClassification.RANKED &&
+                matchRecord.matchMode.rankedMatchClassification &&
             isGameFinished(runtimeState.gameState)
         ) {
             materializeRankedMatchResult(
@@ -2286,11 +3194,25 @@ class InMemoryOnlineServerStore(
         finalState: DominoGameState,
         completedAtEpochMillis: Long,
     ) {
+        check(matchRecord.matchMode == DominoMatchMode.PUBLIC_RANKED) {
+            "Somente PUBLIC_RANKED pode materializar resultado ranqueado."
+        }
+        check(
+            matchRecord.classification ==
+                RankedMatchClassification.RANKED
+        ) {
+            "Modalidade competitiva com classificação inconsistente."
+        }
+
         val currentRoom = requireNotNull(
             roomsById[matchRecord.roomId],
         ) {
             "Partida ranqueada referencia sala inexistente."
         }
+        check(currentRoom.matchMode == matchRecord.matchMode) {
+            "A modalidade da sala diverge da partida ranqueada."
+        }
+
         val resultId = createRankedMatchResultId(
             matchId = matchRecord.matchId,
         )
@@ -2300,20 +3222,28 @@ class InMemoryOnlineServerStore(
                 ?: completedAtEpochMillis
 
         val playerIdentitiesBySeat =
-            finalState.players.indices.map { seatIndex ->
-                val roomPlayer = requireNotNull(
-                    currentRoom.players.singleOrNull { player ->
-                        player.seatIndex == seatIndex
-                    },
-                ) {
-                    "Assento ranqueado sem identidade de jogador."
-                }
+            matchRecord.rankedPlayerIdentitiesBySeat
 
-                RankedMatchPlayerIdentity(
-                    playerId = roomPlayer.playerId,
-                    accountId = null,
-                )
-            }
+        check(
+            playerIdentitiesBySeat.size ==
+                finalState.players.size &&
+                playerIdentitiesBySeat.all { identity ->
+                    !identity.accountId.isNullOrBlank()
+                }
+        ) {
+            "Partida ranqueada sem quatro contas autenticadas."
+        }
+
+        check(
+            currentRoom.players
+                .sortedBy { player -> player.seatIndex }
+                .map { player -> player.playerId } ==
+                playerIdentitiesBySeat.map { identity ->
+                    identity.playerId
+                }
+        ) {
+            "Identidades ranqueadas divergem dos assentos da sala."
+        }
 
         val candidate = buildRankedMatchResult(
             matchId = matchRecord.matchId,
@@ -2332,6 +3262,20 @@ class InMemoryOnlineServerStore(
         }
 
         rankedResultsById[resultId] = candidate
+
+        val formationIndex =
+            publicRankedFormationHistory.indexOfFirst { entry ->
+                entry.matchId == matchRecord.matchId
+            }
+        if (formationIndex >= 0) {
+            val formation =
+                publicRankedFormationHistory[formationIndex]
+            publicRankedFormationHistory[formationIndex] =
+                formation.copy(
+                    completedAtEpochMillis =
+                        stableCompletedAtEpochMillis,
+                )
+        }
     }
 
     private fun recordSnapshotInHistory(
@@ -2659,6 +3603,7 @@ class InMemoryOnlineServerStore(
     private fun OnlineRoomSnapshotDto.traceAttributes(): Map<String, String> {
         return mapOf(
             "roomStatus" to status.name,
+            "matchMode" to matchMode.name,
             "playerCount" to players.size.toString(),
             "roomCode" to roomCode,
         )

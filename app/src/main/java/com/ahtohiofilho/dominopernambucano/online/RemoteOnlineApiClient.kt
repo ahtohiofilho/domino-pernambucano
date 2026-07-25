@@ -52,6 +52,28 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun enqueuePublicRankedQueue(
+        request: PublicRankedQueueEnterRequestDto,
+    ): PublicRankedQueueHttpResponseDto {
+        throw UnsupportedOperationException(
+            "Entrada na fila rankeada não configurada para este cliente remoto.",
+        )
+    }
+
+    suspend fun fetchPublicRankedQueueStatus():
+        PublicRankedQueueHttpResponseDto {
+        throw UnsupportedOperationException(
+            "Consulta da fila rankeada não configurada para este cliente remoto.",
+        )
+    }
+
+    suspend fun cancelPublicRankedQueue():
+        PublicRankedQueueHttpResponseDto {
+        throw UnsupportedOperationException(
+            "Cancelamento da fila rankeada não configurado para este cliente remoto.",
+        )
+    }
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

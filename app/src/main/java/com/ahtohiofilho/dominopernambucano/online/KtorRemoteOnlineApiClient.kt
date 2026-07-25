@@ -8,16 +8,20 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.android.Android
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.accept
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.parameter
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -120,6 +124,66 @@ class KtorRemoteOnlineApiClient(
                 accept(ContentType.Application.Json)
                 setBody(request)
             }.body()
+        }
+    }
+
+    override suspend fun enqueuePublicRankedQueue(
+        request: PublicRankedQueueEnterRequestDto,
+    ): PublicRankedQueueHttpResponseDto {
+        return executeRankedQueueRequest(
+            acceptedConflict = false,
+        ) {
+            httpClient.post(
+                urlString = endpoint(
+                    OnlineRemoteRoutes.RANKED_QUEUE,
+                ),
+            ) {
+                expectSuccess = false
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                applyProtectedAuthentication(
+                    developmentPlayerId = null,
+                )
+                setBody(request)
+            }
+        }
+    }
+
+    override suspend fun fetchPublicRankedQueueStatus():
+        PublicRankedQueueHttpResponseDto {
+        return executeRankedQueueRequest(
+            acceptedConflict = false,
+        ) {
+            httpClient.get(
+                urlString = endpoint(
+                    OnlineRemoteRoutes.RANKED_QUEUE,
+                ),
+            ) {
+                expectSuccess = false
+                accept(ContentType.Application.Json)
+                applyProtectedAuthentication(
+                    developmentPlayerId = null,
+                )
+            }
+        }
+    }
+
+    override suspend fun cancelPublicRankedQueue():
+        PublicRankedQueueHttpResponseDto {
+        return executeRankedQueueRequest(
+            acceptedConflict = true,
+        ) {
+            httpClient.delete(
+                urlString = endpoint(
+                    OnlineRemoteRoutes.RANKED_QUEUE,
+                ),
+            ) {
+                expectSuccess = false
+                accept(ContentType.Application.Json)
+                applyProtectedAuthentication(
+                    developmentPlayerId = null,
+                )
+            }
         }
     }
 
@@ -293,6 +357,28 @@ class KtorRemoteOnlineApiClient(
         } catch (error: ResponseException) {
             throw error.toOnlineGoogleIdentityExceptionOrSelf()
         }
+    }
+
+    private suspend fun executeRankedQueueRequest(
+        acceptedConflict: Boolean,
+        request: suspend () -> HttpResponse,
+    ): PublicRankedQueueHttpResponseDto {
+        val response = request()
+        val statusCode = response.status.value
+        val accepted =
+            statusCode in 200..299 ||
+                    (
+                            acceptedConflict &&
+                                    response.status == HttpStatusCode.Conflict
+                            )
+
+        if (!accepted) {
+            throw OnlineRankedQueueHttpException(
+                statusCode = statusCode,
+            )
+        }
+
+        return response.body()
     }
 }
 

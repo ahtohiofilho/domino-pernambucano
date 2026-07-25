@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -27,6 +28,8 @@ data class OnlineRoomSnapshotDto(
     val hostPlayerId: String,
     val status: OnlineRoomStatusDto,
     val players: List<OnlineRoomPlayerDto>,
+    val matchMode: DominoMatchMode =
+        DominoMatchMode.PRIVATE_UNRANKED,
     val matchId: String? = null,
     val createdAtEpochMillis: Long? = null,
     val updatedAtEpochMillis: Long? = null,
