@@ -17,8 +17,9 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemo
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
+import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
 @Composable
 fun MainMenuScreen(
@@ -35,7 +36,16 @@ fun MainMenuScreen(
         OnlineGoogleAccountStatus.UNAVAILABLE,
     onlineGoogleAccountActionInProgress: Boolean = false,
     onlineGoogleAccountFeedbackMessage: String? = null,
+    onlineAccountProfileUiState: OnlineAccountProfileUiState =
+        OnlineAccountProfileUiState.NotAvailable,
+    onAccountDialogOpened: () -> Unit = {},
+    onAccountProfilePublicDisplayNameChange: (String) -> Unit =
+        {},
+    onAccountProfileTableNameChange: (String) -> Unit = {},
+    onAccountProfileSaveClick: () -> Unit = {},
+    onAccountProfileRetryClick: () -> Unit = {},
     onPlayClick: () -> Unit,
+    onRankingClick: () -> Unit,
     onInspectPendingOnlineParticipationClick: () -> Unit,
     onDiscardRejectedPendingOnlineParticipationClick: () -> Unit = {},
     onResumePendingOnlineMatchClick: () -> Unit,
@@ -191,8 +201,22 @@ fun MainMenuScreen(
         )
 
         TextButton(
+            onClick = onRankingClick,
+            enabled = !menuActionInProgress,
+        ) {
+            Text(
+                text = "Ranking",
+                color = DominoSemanticColors.primaryTextOnDark
+                    .copy(alpha = 0.82f),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        TextButton(
             onClick = {
                 accountDialogVisible = true
+                onAccountDialogOpened()
             },
             enabled = !menuActionInProgress,
         ) {
@@ -211,6 +235,15 @@ fun MainMenuScreen(
             status = onlineGoogleAccountStatus,
             actionInProgress = onlineGoogleAccountActionInProgress,
             feedbackMessage = onlineGoogleAccountFeedbackMessage,
+            profileState = onlineAccountProfileUiState,
+            onPublicDisplayNameChange =
+                onAccountProfilePublicDisplayNameChange,
+            onTableNameChange =
+                onAccountProfileTableNameChange,
+            onSaveProfileClick =
+                onAccountProfileSaveClick,
+            onRetryProfileClick =
+                onAccountProfileRetryClick,
             onConnectGoogleClick = onConnectGoogleAccountClick,
             onDismissRequest = {
                 accountDialogVisible = false

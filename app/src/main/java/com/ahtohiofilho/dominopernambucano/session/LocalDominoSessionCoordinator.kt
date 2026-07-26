@@ -59,6 +59,12 @@ class LocalDominoSessionCoordinator(
                 mutableState.value = DominoSessionState.PlayModeSelection
             }
 
+            DominoSessionCommand.OpenPublicRanking -> {
+                disposeCurrentOnlineCoordinatorIfNeeded()
+
+                mutableState.value = DominoSessionState.PublicRanking
+            }
+
             DominoSessionCommand.StartLocalMatch -> {
                 disposeCurrentOnlineCoordinatorIfNeeded()
 

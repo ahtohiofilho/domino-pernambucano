@@ -2,6 +2,8 @@ package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileResponseDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileUpdateRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
@@ -16,6 +18,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 
 fun Route.onlineServerRoutes(
     store: OnlineServerStore,
@@ -23,6 +26,9 @@ fun Route.onlineServerRoutes(
     sessionTokenService: OnlineSessionTokenService,
     identityResolver: OnlineRequestIdentityResolver,
     googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier,
+    nowEpochMillis: () -> Long = {
+        System.currentTimeMillis()
+    },
 ) {
     rateLimit(ANONYMOUS_SESSION_RATE_LIMIT_NAME) {
         post("/${OnlineRemoteRoutes.CREATE_ANONYMOUS_SESSION}") {
@@ -141,6 +147,46 @@ fun Route.onlineServerRoutes(
                     call.respond(HttpStatusCode.Conflict)
                 }
             }
+        }
+
+        put("/${OnlineRemoteRoutes.ACCOUNT_PROFILE}") {
+            val identity = call.requirePublicRankedAccountIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@put
+            val request =
+                call.receive<OnlineAccountProfileUpdateRequestDto>()
+            val accountId = identity.accountId
+
+            if (accountId.isNullOrBlank()) {
+                call.respond(HttpStatusCode.Forbidden)
+                return@put
+            }
+
+            val profile = try {
+                store.updateAccountProfile(
+                    accountId = accountId,
+                    publicDisplayName = request.publicDisplayName,
+                    tableName = request.tableName,
+                )
+            } catch (_: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@put
+            }
+
+            if (profile == null) {
+                call.respond(HttpStatusCode.Forbidden)
+                return@put
+            }
+
+            call.respond(
+                OnlineAccountProfileResponseDto(
+                    publicDisplayName =
+                        profile.publicDisplayName,
+                    tableName = profile.tableName,
+                    updatedAtEpochMillis =
+                        profile.updatedAtEpochMillis,
+                ),
+            )
         }
 
         post("/${OnlineRemoteRoutes.RANKED_QUEUE}") {
@@ -292,6 +338,104 @@ fun Route.onlineServerRoutes(
     }
 
     rateLimit(AUTHENTICATED_READ_RATE_LIMIT_NAME) {
+        get("/${OnlineRemoteRoutes.RANKING}") {
+            val identity = call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@get
+            val cycle = parsePublicRankingCycle(
+                value = call.request.queryParameters["cycle"],
+            )
+
+            if (cycle == null) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            val rawOffset = call.request.queryParameters["offset"]
+            val parsedOffset = rawOffset?.toIntOrNull()
+            val rawLimit = call.request.queryParameters["limit"]
+            val parsedLimit = rawLimit?.toIntOrNull()
+
+            if (
+                (rawOffset != null && parsedOffset == null) ||
+                (rawLimit != null && parsedLimit == null)
+            ) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            val offset = parsedOffset ?: 0
+            val limit =
+                parsedLimit ?: DEFAULT_PUBLIC_RANKING_PAGE_SIZE
+
+            if (
+                offset < 0 ||
+                limit !in 1..MAXIMUM_PUBLIC_RANKING_PAGE_SIZE
+            ) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            val ladder = store.getRankedCycleLadder(
+                kind = cycle.toRankingCycleKind(),
+                completedAtEpochMillis = nowEpochMillis(),
+            )
+            val pageAccountIds = ladder.standings
+                .drop(offset)
+                .take(limit)
+                .mapTo(mutableSetOf()) { standing ->
+                    standing.accountId
+                }
+
+            identity.accountId
+                ?.trim()
+                ?.takeIf { accountId -> accountId.isNotBlank() }
+                ?.let(pageAccountIds::add)
+
+            call.respondPublicRanking(
+                cycle = cycle,
+                ladder = ladder,
+                viewerAccountId = identity.accountId,
+                publicDisplayNames =
+                    store.getPublicDisplayNames(
+                        accountIds = pageAccountIds,
+                    ),
+                offset = offset,
+                limit = limit,
+            )
+        }
+
+        get("/${OnlineRemoteRoutes.ACCOUNT_PROFILE}") {
+            val identity = call.requirePublicRankedAccountIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@get
+            val accountId = identity.accountId
+
+            if (accountId.isNullOrBlank()) {
+                call.respond(HttpStatusCode.Forbidden)
+                return@get
+            }
+
+            val profile = store.getAccountProfile(
+                accountId = accountId,
+            )
+
+            if (profile == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+
+            call.respond(
+                OnlineAccountProfileResponseDto(
+                    publicDisplayName =
+                        profile.publicDisplayName,
+                    tableName = profile.tableName,
+                    updatedAtEpochMillis =
+                        profile.updatedAtEpochMillis,
+                ),
+            )
+        }
+
         get("/${OnlineRemoteRoutes.RANKED_QUEUE}") {
             val identity = call.requirePublicRankedAccountIdentity(
                 identityResolver = identityResolver,

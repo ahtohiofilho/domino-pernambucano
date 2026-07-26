@@ -27,6 +27,8 @@ sealed interface DominoSessionState {
 
     data object PlayModeSelection : DominoSessionState
 
+    data object PublicRanking : DominoSessionState
+
     data class LocalMatch(
         val matchCoordinator: DominoMatchCoordinator,
     ) : DominoSessionState

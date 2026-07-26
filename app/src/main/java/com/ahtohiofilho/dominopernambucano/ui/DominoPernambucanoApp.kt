@@ -14,6 +14,7 @@ import com.ahtohiofilho.dominopernambucano.online.GoogleSignInConfig
 import com.ahtohiofilho.dominopernambucano.online.GoogleSignInEnvironment
 import com.ahtohiofilho.dominopernambucano.online.KtorRemoteOnlineApiClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppConfig
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
 import com.ahtohiofilho.dominopernambucano.online.OnlineBackendMode
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
@@ -22,6 +23,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountManager
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatchResumeActivation
@@ -42,6 +44,8 @@ import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
 import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
+import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiCoordinator
+import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
 import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.MenuPlaceholderScreen
@@ -49,6 +53,7 @@ import com.ahtohiofilho.dominopernambucano.ui.menu.PlayModeScreen
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineCreateRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineRankedQueueRoute
+import com.ahtohiofilho.dominopernambucano.ui.ranking.OnlinePublicRankingRoute
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.launch
@@ -171,6 +176,19 @@ fun DominoPernambucanoApp(
         }
     }
 
+    val onlinePublicRankingRemoteClient = remember(
+        googleIdentityApiClient,
+        onlineSessionCredentialRepository,
+    ) {
+        googleIdentityApiClient?.let { apiClient ->
+            OnlinePublicRankingRemoteClient(
+                remoteApiClient = apiClient,
+                sessionCredentialRepository =
+                    onlineSessionCredentialRepository,
+            )
+        }
+    }
+
     val onlineParticipationBindingRepository = remember(
         context.applicationContext,
     ) {
@@ -258,6 +276,23 @@ fun DominoPernambucanoApp(
         )
     }
 
+    val onlineAccountProfileUiCoordinator = remember(
+        googleIdentityApiClient,
+        onlineSessionCredentialRepository,
+        onlinePlayerIdentityStore,
+    ) {
+        googleIdentityApiClient?.let { apiClient ->
+            OnlineAccountProfileUiCoordinator(
+                client = OnlineAccountProfileRemoteClient(
+                    remoteApiClient = apiClient,
+                    sessionCredentialRepository =
+                        onlineSessionCredentialRepository,
+                ),
+                identityStore = onlinePlayerIdentityStore,
+            )
+        }
+    }
+
     val onlineDebugOptions = onlineAppConfig.debugOptions
 
     val sessionState by sessionCoordinator.state.collectAsState()
@@ -280,6 +315,12 @@ fun DominoPernambucanoApp(
         mutableStateOf<String?>(null)
     }
 
+    var onlineAccountProfileUiState by remember {
+        mutableStateOf<OnlineAccountProfileUiState>(
+            OnlineAccountProfileUiState.NotAvailable,
+        )
+    }
+
     val onlineGoogleAccountStatus =
         onlineGoogleAccountManager.currentStatus()
 
@@ -287,6 +328,36 @@ fun DominoPernambucanoApp(
         onlineRankedQueueRemoteClient != null &&
             onlineGoogleAccountStatus ==
                 OnlineGoogleAccountStatus.CONNECTED
+
+    fun requestOnlineAccountProfile() {
+        val coordinator = onlineAccountProfileUiCoordinator
+
+        if (
+            onlineGoogleAccountStatus !=
+                OnlineGoogleAccountStatus.CONNECTED ||
+            coordinator == null
+        ) {
+            onlineAccountProfileUiState =
+                OnlineAccountProfileUiState.NotAvailable
+            return
+        }
+
+        onlineAccountProfileUiState =
+            OnlineAccountProfileUiState.Loading
+
+        menuCoroutineScope.launch {
+            val outcome = coordinator.load(
+                fallbackIdentity = onlinePlayerIdentity,
+            )
+
+            onlineAccountProfileUiState = outcome.state
+
+            outcome.synchronizedIdentity?.let {
+                    synchronizedIdentity ->
+                onlinePlayerIdentity = synchronizedIdentity
+            }
+        }
+    }
 
     when (val state = sessionState) {
         is DominoSessionState.MainMenu -> {
@@ -307,6 +378,72 @@ fun DominoPernambucanoApp(
                     onlineGoogleAccountActionInProgress,
                 onlineGoogleAccountFeedbackMessage =
                     onlineGoogleAccountFeedbackMessage,
+                onlineAccountProfileUiState =
+                    onlineAccountProfileUiState,
+                onAccountDialogOpened = {
+                    requestOnlineAccountProfile()
+                },
+                onAccountProfilePublicDisplayNameChange = {
+                        publicDisplayName ->
+                    val editor =
+                        onlineAccountProfileUiState as?
+                            OnlineAccountProfileUiState.Editing
+
+                    if (editor != null) {
+                        onlineAccountProfileUiState =
+                            editor.withPublicDisplayName(
+                                value = publicDisplayName,
+                            )
+                    }
+                },
+                onAccountProfileTableNameChange = { tableName ->
+                    val editor =
+                        onlineAccountProfileUiState as?
+                            OnlineAccountProfileUiState.Editing
+
+                    if (editor != null) {
+                        onlineAccountProfileUiState =
+                            editor.withTableName(
+                                value = tableName,
+                            )
+                    }
+                },
+                onAccountProfileSaveClick = {
+                    val editor =
+                        onlineAccountProfileUiState as?
+                            OnlineAccountProfileUiState.Editing
+                    val coordinator =
+                        onlineAccountProfileUiCoordinator
+
+                    if (
+                        editor != null &&
+                        coordinator != null &&
+                        editor.saveEnabled
+                    ) {
+                        onlineAccountProfileUiState =
+                            editor.copy(
+                                actionInProgress = true,
+                                feedbackMessage = null,
+                            )
+
+                        menuCoroutineScope.launch {
+                            val outcome =
+                                coordinator.save(editor)
+
+                            onlineAccountProfileUiState =
+                                outcome.state
+
+                            outcome.synchronizedIdentity?.let {
+                                    synchronizedIdentity ->
+                                onlinePlayerIdentity =
+                                    synchronizedIdentity
+                            }
+                        }
+                    }
+                },
+                onAccountProfileRetryClick = {
+                    requestOnlineAccountProfile()
+                },
                 onPlayClick = {
                     if (
                         !pendingOnlineMatchResumeInProgress &&
@@ -316,6 +453,13 @@ fun DominoPernambucanoApp(
                     ) {
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.OpenPlayModeSelection,
+                        )
+                    }
+                },
+                onRankingClick = {
+                    if (!pendingOnlineMatchResumeInProgress) {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.OpenPublicRanking,
                         )
                     }
                 },
@@ -547,6 +691,29 @@ fun DominoPernambucanoApp(
                                     is OnlineGoogleAccountActionResult.Success -> {
                                         onlineGoogleAccountFeedbackMessage =
                                             "Conta conectada com sucesso."
+
+                                        val coordinator =
+                                            onlineAccountProfileUiCoordinator
+
+                                        if (coordinator != null) {
+                                            onlineAccountProfileUiState =
+                                                OnlineAccountProfileUiState
+                                                    .Loading
+                                            val outcome =
+                                                coordinator.load(
+                                                    fallbackIdentity =
+                                                        onlinePlayerIdentity,
+                                                )
+
+                                            onlineAccountProfileUiState =
+                                                outcome.state
+
+                                            outcome.synchronizedIdentity?.let {
+                                                    synchronizedIdentity ->
+                                                onlinePlayerIdentity =
+                                                    synchronizedIdentity
+                                            }
+                                        }
                                     }
 
                                     OnlineGoogleAccountActionResult.Cancelled -> {
@@ -567,15 +734,50 @@ fun DominoPernambucanoApp(
             )
         }
 
+        DominoSessionState.PublicRanking -> {
+            val rankingClient = onlinePublicRankingRemoteClient
+
+            if (rankingClient == null) {
+                MenuPlaceholderScreen(
+                    title = "Ranking",
+                    description =
+                        "O ranking não está disponível neste ambiente.",
+                    onBackClick = {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.BackToMainMenu,
+                        )
+                    },
+                )
+            } else {
+                OnlinePublicRankingRoute(
+                    rankingClient = rankingClient,
+                    onBackClick = {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.BackToMainMenu,
+                        )
+                    },
+                )
+            }
+        }
+
         DominoSessionState.PlayModeSelection -> {
             PlayModeScreen(
                 onlineDisplayName = onlinePlayerIdentity.displayName,
                 onlineTableName = onlinePlayerIdentity.tableName,
+                onlineIdentityManagedByAccount =
+                    onlineGoogleAccountStatus ==
+                        OnlineGoogleAccountStatus.CONNECTED,
                 onOnlineDisplayNameChange = { displayName ->
-                    onlinePlayerIdentity =
-                        onlinePlayerIdentityStore.updateDisplayName(
-                            displayName = displayName,
-                        )
+                    if (
+                        onlineGoogleAccountStatus !=
+                        OnlineGoogleAccountStatus.CONNECTED
+                    ) {
+                        onlinePlayerIdentity =
+                            onlinePlayerIdentityStore
+                                .updateDisplayName(
+                                    displayName = displayName,
+                                )
+                    }
                 },
                 onBackClick = {
                     sessionCoordinator.dispatch(

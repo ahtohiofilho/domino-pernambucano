@@ -74,6 +74,31 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun fetchPublicRanking(
+        cycle: PublicRankingCycleDto,
+        offset: Int = 0,
+        limit: Int = 50,
+    ): PublicRankingResponseDto {
+        throw UnsupportedOperationException(
+            "Consulta do ranking público não configurada para este cliente remoto.",
+        )
+    }
+
+    suspend fun fetchAccountProfile():
+        OnlineAccountProfileResponseDto {
+        throw UnsupportedOperationException(
+            "Consulta do perfil da conta não configurada para este cliente remoto.",
+        )
+    }
+
+    suspend fun updateAccountProfile(
+        request: OnlineAccountProfileUpdateRequestDto,
+    ): OnlineAccountProfileResponseDto {
+        throw UnsupportedOperationException(
+            "Atualização do perfil da conta não configurada para este cliente remoto.",
+        )
+    }
+
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto

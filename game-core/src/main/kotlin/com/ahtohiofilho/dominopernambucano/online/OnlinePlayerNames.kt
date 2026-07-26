@@ -4,7 +4,7 @@ import java.util.Locale
 
 const val DEFAULT_ONLINE_DISPLAY_NAME = "Jogador"
 const val DEFAULT_ONLINE_TABLE_NAME = "JOGADOR"
-const val MAX_ONLINE_DISPLAY_NAME_LENGTH = 30
+const val MAX_ONLINE_DISPLAY_NAME_LENGTH = MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
 const val MAX_ONLINE_TABLE_NAME_LENGTH = 10
 
 private val onlineNameWhitespaceRegex = Regex("\\s+")

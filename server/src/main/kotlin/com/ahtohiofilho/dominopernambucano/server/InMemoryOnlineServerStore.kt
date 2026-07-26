@@ -1,6 +1,10 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
+import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
+import com.ahtohiofilho.dominopernambucano.competitive.buildRankedCycleLadder
+import com.ahtohiofilho.dominopernambucano.competitive.resolveRankingCycle
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerIdentity
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
@@ -24,6 +28,8 @@ import com.ahtohiofilho.dominopernambucano.match.findRandomPlayableMove
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
+import com.ahtohiofilho.dominopernambucano.online.createOnlineAccountProfile
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchActionReduction
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
@@ -146,6 +152,23 @@ class InMemoryOnlineServerStore(
     private var nextRoomSequence = 1
     private var nextMatchSequence = 1
     private var lastPruneAtEpochMillis: Long? = null
+
+    override fun getRankedCycleLadder(
+        kind: RankingCycleKind,
+        completedAtEpochMillis: Long,
+        rankingRuleVersion: Int,
+    ): RankedCycleLadder {
+        return synchronized(lock) {
+            buildRankedCycleLadder(
+                period = resolveRankingCycle(
+                    kind = kind,
+                    completedAtEpochMillis = completedAtEpochMillis,
+                    rankingRuleVersion = rankingRuleVersion,
+                ),
+                results = rankedResultsById.values.toList(),
+            )
+        }
+    }
 
     override fun promoteAccount(
         playerId: String,
@@ -298,6 +321,89 @@ class InMemoryOnlineServerStore(
             accountsByPlayerId.values.firstOrNull { account ->
                 account.accountId == identity.accountId
             }
+        }
+    }
+
+    override fun getAccountProfile(
+        accountId: String,
+    ): OnlineAccountProfile? {
+        return synchronized(lock) {
+            val normalizedAccountId = requireStoreIdentifier(
+                value = accountId,
+                fieldName = "accountId",
+            )
+
+            accountsByPlayerId.values
+                .firstOrNull { account ->
+                    account.accountId == normalizedAccountId
+                }
+                ?.toOnlineAccountProfileOrNull()
+        }
+    }
+
+    override fun updateAccountProfile(
+        accountId: String,
+        publicDisplayName: String,
+        tableName: String?,
+    ): OnlineAccountProfile? {
+        return synchronized(lock) {
+            val normalizedAccountId = requireStoreIdentifier(
+                value = accountId,
+                fieldName = "accountId",
+            )
+            val account = accountsByPlayerId.values
+                .firstOrNull { candidate ->
+                    candidate.accountId == normalizedAccountId
+                }
+                ?: return@synchronized null
+            val updatedAtEpochMillis = maxOf(
+                nowEpochMillis(),
+                account.createdAtEpochMillis,
+                account.profileUpdatedAtEpochMillis ?: 0L,
+            )
+            val profile = createOnlineAccountProfile(
+                publicDisplayName = publicDisplayName,
+                tableName = tableName,
+                updatedAtEpochMillis = updatedAtEpochMillis,
+            )
+
+            accountsByPlayerId[account.playerId] = account.copy(
+                publicDisplayName = profile.publicDisplayName,
+                tableName = profile.tableName,
+                profileUpdatedAtEpochMillis =
+                    profile.updatedAtEpochMillis,
+            )
+
+            profile
+        }
+    }
+
+    override fun getPublicDisplayNames(
+        accountIds: Set<String>,
+    ): Map<String, String> {
+        return synchronized(lock) {
+            if (accountIds.isEmpty()) {
+                return@synchronized emptyMap()
+            }
+
+            val normalizedAccountIds = accountIds.map { accountId ->
+                requireStoreIdentifier(
+                    value = accountId,
+                    fieldName = "accountId",
+                )
+            }.toSet()
+
+            accountsByPlayerId.values
+                .asSequence()
+                .filter { account ->
+                    account.accountId in normalizedAccountIds
+                }
+                .mapNotNull { account ->
+                    account.publicDisplayName?.let { displayName ->
+                        account.accountId to displayName
+                    }
+                }
+                .toMap()
         }
     }
 
@@ -1564,17 +1670,28 @@ class InMemoryOnlineServerStore(
     private fun normalizePersistentState(
         state: OnlineServerStoreState,
     ): OnlineServerStoreState {
-        if (state.schemaVersion >= 6) {
+        if (state.schemaVersion >= 7) {
             return state
+        }
+
+        if (state.schemaVersion == 6) {
+            return state.copy(
+                schemaVersion =
+                    ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+            )
         }
 
         if (state.schemaVersion == 5) {
             return state.copy(
+                schemaVersion =
+                    ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
                 publicRankedFormationHistory = emptyList(),
             )
         }
 
         return state.copy(
+            schemaVersion =
+                ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
             rooms = state.rooms.map { room ->
                 room.copy(
                     matchMode = DominoMatchMode.PRIVATE_UNRANKED,
@@ -1620,7 +1737,28 @@ class InMemoryOnlineServerStore(
                     account.playerId.isNotBlank() &&
                     account.playerId.length <=
                     MAX_SERVER_IDENTIFIER_CHARACTERS &&
-                    account.createdAtEpochMillis >= 0L
+                    account.createdAtEpochMillis >= 0L &&
+                    (
+                        (
+                            account.publicDisplayName == null &&
+                            account.tableName == null &&
+                            account.profileUpdatedAtEpochMillis == null
+                        ) ||
+                        (
+                            account.publicDisplayName != null &&
+                            account.tableName != null &&
+                            account.profileUpdatedAtEpochMillis != null &&
+                            account.profileUpdatedAtEpochMillis >=
+                                account.createdAtEpochMillis &&
+                            createOnlineAccountProfile(
+                                publicDisplayName =
+                                    account.publicDisplayName,
+                                tableName = account.tableName,
+                                updatedAtEpochMillis =
+                                    account.profileUpdatedAtEpochMillis,
+                            ) == account.toOnlineAccountProfileOrNull()
+                        )
+                    )
             }
         ) {
             "O estado persistido contém uma conta inválida."

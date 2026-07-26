@@ -6,10 +6,11 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
-const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 6
+const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 7
 const val MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
 
 @Serializable
@@ -36,7 +37,25 @@ data class OnlineServerAccount(
     val accountId: String,
     val playerId: String,
     val createdAtEpochMillis: Long,
+    val publicDisplayName: String? = null,
+    val tableName: String? = null,
+    val profileUpdatedAtEpochMillis: Long? = null,
 )
+
+internal fun OnlineServerAccount.toOnlineAccountProfileOrNull():
+    OnlineAccountProfile? {
+    val resolvedPublicDisplayName =
+        publicDisplayName ?: return null
+    val resolvedTableName = tableName ?: return null
+    val resolvedUpdatedAtEpochMillis =
+        profileUpdatedAtEpochMillis ?: return null
+
+    return OnlineAccountProfile(
+        publicDisplayName = resolvedPublicDisplayName,
+        tableName = resolvedTableName,
+        updatedAtEpochMillis = resolvedUpdatedAtEpochMillis,
+    )
+}
 
 @Serializable
 enum class OnlineExternalIdentityProvider {

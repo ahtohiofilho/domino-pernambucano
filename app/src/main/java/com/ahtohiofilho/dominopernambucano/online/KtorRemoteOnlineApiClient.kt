@@ -16,6 +16,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.parameter
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -183,6 +184,84 @@ class KtorRemoteOnlineApiClient(
                 applyProtectedAuthentication(
                     developmentPlayerId = null,
                 )
+            }
+        }
+    }
+
+    override suspend fun fetchPublicRanking(
+        cycle: PublicRankingCycleDto,
+        offset: Int,
+        limit: Int,
+    ): PublicRankingResponseDto {
+        require(offset >= 0)
+        require(limit in 1..100)
+
+        val response = httpClient.get(
+            urlString = endpoint(
+                OnlineRemoteRoutes.RANKING,
+            ),
+        ) {
+            expectSuccess = false
+            parameter(
+                key = "cycle",
+                value = cycle.name,
+            )
+            parameter(
+                key = "offset",
+                value = offset,
+            )
+            parameter(
+                key = "limit",
+                value = limit,
+            )
+            accept(ContentType.Application.Json)
+            applyProtectedAuthentication(
+                developmentPlayerId = developmentPlayerId,
+            )
+        }
+
+        if (response.status.value !in 200..299) {
+            throw OnlinePublicRankingHttpException(
+                statusCode = response.status.value,
+            )
+        }
+
+        return response.body()
+    }
+
+    override suspend fun fetchAccountProfile():
+        OnlineAccountProfileResponseDto {
+        return executeAccountProfileRequest {
+            httpClient.get(
+                urlString = endpoint(
+                    OnlineRemoteRoutes.ACCOUNT_PROFILE,
+                ),
+            ) {
+                expectSuccess = false
+                accept(ContentType.Application.Json)
+                applyProtectedAuthentication(
+                    developmentPlayerId = null,
+                )
+            }
+        }
+    }
+
+    override suspend fun updateAccountProfile(
+        request: OnlineAccountProfileUpdateRequestDto,
+    ): OnlineAccountProfileResponseDto {
+        return executeAccountProfileRequest {
+            httpClient.put(
+                urlString = endpoint(
+                    OnlineRemoteRoutes.ACCOUNT_PROFILE,
+                ),
+            ) {
+                expectSuccess = false
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                applyProtectedAuthentication(
+                    developmentPlayerId = null,
+                )
+                setBody(request)
             }
         }
     }
@@ -357,6 +436,20 @@ class KtorRemoteOnlineApiClient(
         } catch (error: ResponseException) {
             throw error.toOnlineGoogleIdentityExceptionOrSelf()
         }
+    }
+
+    private suspend fun executeAccountProfileRequest(
+        request: suspend () -> HttpResponse,
+    ): OnlineAccountProfileResponseDto {
+        val response = request()
+
+        if (response.status.value !in 200..299) {
+            throw OnlineAccountProfileHttpException(
+                statusCode = response.status.value,
+            )
+        }
+
+        return response.body()
     }
 
     private suspend fun executeRankedQueueRequest(

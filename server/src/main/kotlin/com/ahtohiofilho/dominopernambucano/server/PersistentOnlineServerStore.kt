@@ -1,8 +1,11 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
+import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
@@ -71,6 +74,46 @@ class PersistentOnlineServerStore private constructor(
         delegate.findAccountByExternalIdentity(
             provider = provider,
             subject = subject,
+        )
+    }
+
+    override fun getAccountProfile(
+        accountId: String,
+    ): OnlineAccountProfile? = read {
+        delegate.getAccountProfile(
+            accountId = accountId,
+        )
+    }
+
+    override fun updateAccountProfile(
+        accountId: String,
+        publicDisplayName: String,
+        tableName: String?,
+    ): OnlineAccountProfile? = mutate {
+        delegate.updateAccountProfile(
+            accountId = accountId,
+            publicDisplayName = publicDisplayName,
+            tableName = tableName,
+        )
+    }
+
+    override fun getPublicDisplayNames(
+        accountIds: Set<String>,
+    ): Map<String, String> = read {
+        delegate.getPublicDisplayNames(
+            accountIds = accountIds,
+        )
+    }
+
+    override fun getRankedCycleLadder(
+        kind: RankingCycleKind,
+        completedAtEpochMillis: Long,
+        rankingRuleVersion: Int,
+    ): RankedCycleLadder = read {
+        delegate.getRankedCycleLadder(
+            kind = kind,
+            completedAtEpochMillis = completedAtEpochMillis,
+            rankingRuleVersion = rankingRuleVersion,
         )
     }
 

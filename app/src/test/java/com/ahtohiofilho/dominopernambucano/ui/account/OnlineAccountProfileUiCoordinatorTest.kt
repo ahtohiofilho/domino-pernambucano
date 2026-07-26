@@ -1,0 +1,302 @@
+package com.ahtohiofilho.dominopernambucano.ui.account
+
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileClient
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileClientResult
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileFailureKind
+import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileResponseDto
+import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
+import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentityStore
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+private fun profileSuccess(
+    publicDisplayName: String,
+    tableName: String,
+): OnlineAccountProfileClientResult.Success {
+    return OnlineAccountProfileClientResult.Success(
+        profile = OnlineAccountProfileResponseDto(
+            publicDisplayName = publicDisplayName,
+            tableName = tableName,
+            updatedAtEpochMillis = 2_000L,
+        ),
+    )
+}
+
+class OnlineAccountProfileUiCoordinatorTest {
+    @Test
+    fun missing_server_profile_opens_editor_with_local_identity() =
+        runBlocking {
+            val client = FakeProfileClient(
+                fetchResult =
+                    OnlineAccountProfileClientResult.Failure(
+                        kind =
+                            OnlineAccountProfileFailureKind
+                                .NOT_ESTABLISHED,
+                        retryable = false,
+                    ),
+            )
+            val coordinator = OnlineAccountProfileUiCoordinator(
+                client = client,
+                identityStore = FakeIdentityStore(),
+            )
+
+            val outcome = coordinator.load(
+                fallbackIdentity = identity(),
+            )
+            val state =
+                outcome.state as OnlineAccountProfileUiState.Editing
+
+            assertNull(outcome.synchronizedIdentity)
+            assertEquals("Antônio Filho", state.publicDisplayName)
+            assertEquals("AFI", state.tableName)
+            assertFalse(state.established)
+            assertEquals(1, client.fetchCount)
+        }
+
+    @Test
+    fun successful_load_synchronizes_authoritative_profile_locally() =
+        runBlocking {
+            val events = mutableListOf<String>()
+            val client = FakeProfileClient(
+                fetchResult = profileSuccess(
+                    publicDisplayName = "Maria Silva",
+                    tableName = "MS",
+                ),
+                events = events,
+            )
+            val identityStore = FakeIdentityStore(events)
+            val coordinator = OnlineAccountProfileUiCoordinator(
+                client = client,
+                identityStore = identityStore,
+            )
+
+            val outcome = coordinator.load(
+                fallbackIdentity = identity(),
+            )
+            val state =
+                outcome.state as OnlineAccountProfileUiState.Editing
+
+            assertEquals(
+                listOf(
+                    "server-fetch",
+                    "local-display",
+                    "local-table",
+                ),
+                events,
+            )
+            assertEquals("Maria Silva", state.publicDisplayName)
+            assertEquals("MS", state.tableName)
+            assertEquals(
+                "Maria Silva",
+                outcome.synchronizedIdentity?.displayName,
+            )
+            assertEquals(
+                "MS",
+                outcome.synchronizedIdentity?.tableName,
+            )
+        }
+
+    @Test
+    fun successful_save_updates_server_before_local_identity() =
+        runBlocking {
+            val events = mutableListOf<String>()
+            val client = FakeProfileClient(
+                updateResult = profileSuccess(
+                    publicDisplayName = "Antônio Filho",
+                    tableName = "AFI",
+                ),
+                events = events,
+            )
+            val identityStore = FakeIdentityStore(events)
+            val coordinator = OnlineAccountProfileUiCoordinator(
+                client = client,
+                identityStore = identityStore,
+            )
+
+            val outcome = coordinator.save(
+                editor = OnlineAccountProfileUiState.Editing(
+                    publicDisplayName = "Antônio Filho",
+                    tableName = "afi",
+                    established = false,
+                ),
+            )
+
+            assertEquals(
+                listOf(
+                    "server-update",
+                    "local-display",
+                    "local-table",
+                ),
+                events,
+            )
+            assertEquals(
+                "Antônio Filho",
+                outcome.synchronizedIdentity?.displayName,
+            )
+            assertEquals(
+                "AFI",
+                outcome.synchronizedIdentity?.tableName,
+            )
+            assertTrue(outcome.state.established)
+        }
+
+    @Test
+    fun failed_save_preserves_local_identity() =
+        runBlocking {
+            val identityStore = FakeIdentityStore()
+            val client = FakeProfileClient(
+                updateResult =
+                    OnlineAccountProfileClientResult.Failure(
+                        kind =
+                            OnlineAccountProfileFailureKind
+                                .UNAVAILABLE,
+                        retryable = true,
+                    ),
+            )
+            val coordinator = OnlineAccountProfileUiCoordinator(
+                client = client,
+                identityStore = identityStore,
+            )
+
+            val outcome = coordinator.save(
+                editor = OnlineAccountProfileUiState.Editing(
+                    publicDisplayName = "Antônio Filho",
+                    tableName = "AFI",
+                    established = true,
+                ),
+            )
+
+            assertNull(outcome.synchronizedIdentity)
+            assertEquals(0, identityStore.displayUpdateCount)
+            assertEquals(0, identityStore.tableUpdateCount)
+        }
+
+    @Test
+    fun invalid_editor_does_not_call_server_or_local_store() =
+        runBlocking {
+            val client = FakeProfileClient()
+            val identityStore = FakeIdentityStore()
+            val coordinator = OnlineAccountProfileUiCoordinator(
+                client = client,
+                identityStore = identityStore,
+            )
+
+            val outcome = coordinator.save(
+                editor = OnlineAccountProfileUiState.Editing(
+                    publicDisplayName = "Antônio",
+                    tableName = "A F!",
+                    established = false,
+                ),
+            )
+
+            assertEquals(0, client.updateCount)
+            assertEquals(0, identityStore.displayUpdateCount)
+            assertEquals(0, identityStore.tableUpdateCount)
+            assertFalse(outcome.state.saveEnabled)
+        }
+
+    @Test
+    fun editor_enforces_authoritative_input_lengths() {
+        val state = OnlineAccountProfileUiState.Editing(
+            publicDisplayName = "",
+            tableName = "",
+            established = false,
+        )
+            .withPublicDisplayName("A".repeat(80))
+            .withTableName("B".repeat(20))
+
+        assertEquals(60, state.publicDisplayName.length)
+        assertEquals(10, state.tableName.length)
+    }
+
+    private fun identity(): OnlinePlayerIdentity {
+        return OnlinePlayerIdentity(
+            playerId = "player-1",
+            displayName = "Antônio Filho",
+            tableName = "AFI",
+        )
+    }
+
+    private class FakeProfileClient(
+        private val fetchResult: OnlineAccountProfileClientResult =
+            profileSuccess(
+                publicDisplayName = "Antônio Filho",
+                tableName = "AFI",
+            ),
+        private val updateResult: OnlineAccountProfileClientResult =
+            profileSuccess(
+                publicDisplayName = "Antônio Filho",
+                tableName = "AFI",
+            ),
+        private val events: MutableList<String> =
+            mutableListOf(),
+    ) : OnlineAccountProfileClient {
+        var fetchCount = 0
+        var updateCount = 0
+
+        override suspend fun fetch():
+            OnlineAccountProfileClientResult {
+            fetchCount += 1
+            events += "server-fetch"
+            return fetchResult
+        }
+
+        override suspend fun update(
+            publicDisplayName: String,
+            tableName: String?,
+        ): OnlineAccountProfileClientResult {
+            updateCount += 1
+            events += "server-update"
+            return updateResult
+        }
+    }
+
+    private class FakeIdentityStore(
+        private val events: MutableList<String> =
+            mutableListOf(),
+    ) : OnlinePlayerIdentityStore {
+        private var current = OnlinePlayerIdentity(
+            playerId = "player-1",
+            displayName = "Jogador",
+            tableName = "JOGADOR",
+        )
+
+        var displayUpdateCount = 0
+        var tableUpdateCount = 0
+
+        override fun getOrCreate(): OnlinePlayerIdentity {
+            return current
+        }
+
+        override fun updateDisplayName(
+            displayName: String,
+        ): OnlinePlayerIdentity {
+            displayUpdateCount += 1
+            events += "local-display"
+            current = current.copy(
+                displayName = displayName,
+            )
+            return current
+        }
+
+        override fun updateTableName(
+            tableName: String,
+        ): OnlinePlayerIdentity {
+            tableUpdateCount += 1
+            events += "local-table"
+            current = current.copy(
+                tableName = tableName,
+            )
+            return current
+        }
+
+        override fun resetTableNameToGenerated():
+            OnlinePlayerIdentity {
+            return current
+        }
+    }
+}

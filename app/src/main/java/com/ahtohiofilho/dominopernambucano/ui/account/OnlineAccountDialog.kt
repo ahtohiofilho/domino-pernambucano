@@ -1,12 +1,20 @@
 package com.ahtohiofilho.dominopernambucano.ui.account
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
+import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_TABLE_NAME_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 
 internal data class OnlineAccountDialogPalette(
@@ -51,11 +59,22 @@ fun OnlineAccountDialog(
     status: OnlineGoogleAccountStatus,
     actionInProgress: Boolean,
     feedbackMessage: String?,
+    profileState: OnlineAccountProfileUiState,
+    onPublicDisplayNameChange: (String) -> Unit,
+    onTableNameChange: (String) -> Unit,
+    onSaveProfileClick: () -> Unit,
+    onRetryProfileClick: () -> Unit,
     onConnectGoogleClick: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
     val presentation = status.toPresentation()
     val palette = OnlineAccountDialogAccessiblePalette
+    val editor =
+        profileState as? OnlineAccountProfileUiState.Editing
+    val profileActionInProgress =
+        editor?.actionInProgress == true
+    val anyActionInProgress =
+        actionInProgress || profileActionInProgress
     val visibleFeedbackMessage =
         onlineAccountDialogVisibleFeedback(
             status = status,
@@ -64,7 +83,7 @@ fun OnlineAccountDialog(
 
     AlertDialog(
         onDismissRequest = {
-            if (!actionInProgress) {
+            if (!anyActionInProgress) {
                 onDismissRequest()
             }
         },
@@ -72,41 +91,107 @@ fun OnlineAccountDialog(
             Text(text = "Conta")
         },
         text = {
-            Text(
-                text = listOfNotNull(
-                    presentation.message,
-                    visibleFeedbackMessage,
-                ).joinToString(separator = "\n\n"),
-            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(text = presentation.message)
+
+                visibleFeedbackMessage?.let { message ->
+                    Text(text = message)
+                }
+
+                if (
+                    status == OnlineGoogleAccountStatus.CONNECTED
+                ) {
+                    OnlineAccountProfileContent(
+                        state = profileState,
+                        onPublicDisplayNameChange =
+                            onPublicDisplayNameChange,
+                        onTableNameChange = onTableNameChange,
+                    )
+                }
+            }
         },
         confirmButton = {
-            presentation.actionLabel?.let { actionLabel ->
-                Button(
-                    onClick = onConnectGoogleClick,
-                    enabled = !actionInProgress,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = palette.primaryContainer,
-                        contentColor = palette.primaryContent,
-                        disabledContainerColor =
-                            palette.disabledPrimaryContainer,
-                        disabledContentColor =
-                            palette.disabledPrimaryContent,
-                    ),
-                ) {
-                    Text(
-                        text = if (actionInProgress) {
-                            "Conectando..."
-                        } else {
-                            actionLabel
-                        },
-                    )
+            when {
+                status != OnlineGoogleAccountStatus.CONNECTED -> {
+                    presentation.actionLabel?.let { actionLabel ->
+                        Button(
+                            onClick = onConnectGoogleClick,
+                            enabled = !anyActionInProgress,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor =
+                                    palette.primaryContainer,
+                                contentColor =
+                                    palette.primaryContent,
+                                disabledContainerColor =
+                                    palette.disabledPrimaryContainer,
+                                disabledContentColor =
+                                    palette.disabledPrimaryContent,
+                            ),
+                        ) {
+                            Text(
+                                text = if (actionInProgress) {
+                                    "Conectando..."
+                                } else {
+                                    actionLabel
+                                },
+                            )
+                        }
+                    }
+                }
+
+                editor != null -> {
+                    Button(
+                        onClick = onSaveProfileClick,
+                        enabled =
+                            editor.saveEnabled &&
+                                !actionInProgress,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor =
+                                palette.primaryContainer,
+                            contentColor =
+                                palette.primaryContent,
+                            disabledContainerColor =
+                                palette.disabledPrimaryContainer,
+                            disabledContentColor =
+                                palette.disabledPrimaryContent,
+                        ),
+                    ) {
+                        Text(
+                            text = if (
+                                editor.actionInProgress
+                            ) {
+                                "Salvando..."
+                            } else {
+                                "Salvar perfil"
+                            },
+                        )
+                    }
+                }
+
+                profileState is
+                    OnlineAccountProfileUiState.Failure &&
+                    profileState.retryable -> {
+                    Button(
+                        onClick = onRetryProfileClick,
+                        enabled = !anyActionInProgress,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor =
+                                palette.primaryContainer,
+                            contentColor =
+                                palette.primaryContent,
+                        ),
+                    ) {
+                        Text(text = "Tentar novamente")
+                    }
                 }
             }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismissRequest,
-                enabled = !actionInProgress,
+                enabled = !anyActionInProgress,
                 colors = ButtonDefaults.textButtonColors(
                     contentColor = palette.dismissContent,
                     disabledContentColor =
@@ -120,6 +205,88 @@ fun OnlineAccountDialog(
         titleContentColor = palette.titleContent,
         textContentColor = palette.bodyContent,
     )
+}
+
+@Composable
+private fun OnlineAccountProfileContent(
+    state: OnlineAccountProfileUiState,
+    onPublicDisplayNameChange: (String) -> Unit,
+    onTableNameChange: (String) -> Unit,
+) {
+    when (state) {
+        OnlineAccountProfileUiState.NotAvailable -> {
+            Text(
+                text =
+                    "O perfil online não está disponível neste ambiente.",
+            )
+        }
+
+        OnlineAccountProfileUiState.Loading -> {
+            Text(text = "Carregando perfil...")
+        }
+
+        is OnlineAccountProfileUiState.Failure -> {
+            Text(text = state.message)
+        }
+
+        is OnlineAccountProfileUiState.Editing -> {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text =
+                        "O nome público aparece no ranking. " +
+                            "O nome de mesa é a forma curta usada durante a partida.",
+                )
+
+                OutlinedTextField(
+                    value = state.publicDisplayName,
+                    onValueChange = onPublicDisplayNameChange,
+                    enabled = !state.actionInProgress,
+                    singleLine = true,
+                    label = {
+                        Text(text = "Nome público")
+                    },
+                    supportingText = {
+                        Text(
+                            text =
+                                "${state.publicDisplayName.length}/" +
+                                    MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH,
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        capitalization =
+                            KeyboardCapitalization.Words,
+                    ),
+                )
+
+                OutlinedTextField(
+                    value = state.tableName,
+                    onValueChange = onTableNameChange,
+                    enabled = !state.actionInProgress,
+                    singleLine = true,
+                    label = {
+                        Text(text = "Nome de mesa")
+                    },
+                    supportingText = {
+                        Text(
+                            text =
+                                "${state.tableName.length}/" +
+                                    MAX_ONLINE_TABLE_NAME_LENGTH,
+                        )
+                    },
+                )
+
+                state.validationMessage?.let { message ->
+                    Text(text = message)
+                }
+
+                state.feedbackMessage?.let { message ->
+                    Text(text = message)
+                }
+            }
+        }
+    }
 }
 
 private data class OnlineAccountPresentation(

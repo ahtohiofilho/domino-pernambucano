@@ -105,6 +105,9 @@ fun Application.module(
         createDefaultOnlineGoogleIdentityTokenVerifier(),
     rateLimitPolicy: OnlineServerRateLimitPolicy =
         OnlineServerRateLimitPolicy.Default,
+    nowEpochMillis: () -> Long = {
+        System.currentTimeMillis()
+    },
     readiness: OnlineServerReadiness = OnlineServerReadiness(
         store = store,
     ),
@@ -172,6 +175,7 @@ fun Application.module(
             sessionTokenService = sessionTokenService,
             identityResolver = identityResolver,
             googleIdentityTokenVerifier = googleIdentityTokenVerifier,
+            nowEpochMillis = nowEpochMillis,
         )
     }
 }

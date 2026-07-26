@@ -22,6 +22,7 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 fun PlayModeScreen(
     onlineDisplayName: String,
     onlineTableName: String,
+    onlineIdentityManagedByAccount: Boolean,
     onOnlineDisplayNameChange: (String) -> Unit,
     onBackClick: () -> Unit,
     rankedAccountAvailable: Boolean,
@@ -49,6 +50,7 @@ fun PlayModeScreen(
         OnlinePublicIdentityField(
             displayName = onlineDisplayName,
             tableName = onlineTableName,
+            editable = !onlineIdentityManagedByAccount,
             onDisplayNameChange = onOnlineDisplayNameChange,
         )
 
@@ -97,6 +99,7 @@ fun PlayModeScreen(
 private fun OnlinePublicIdentityField(
     displayName: String,
     tableName: String,
+    editable: Boolean,
     onDisplayNameChange: (String) -> Unit,
 ) {
     Column(
@@ -114,6 +117,7 @@ private fun OnlinePublicIdentityField(
             value = displayName,
             onValueChange = onDisplayNameChange,
             modifier = Modifier.fillMaxWidth(),
+            enabled = editable,
             singleLine = true,
             label = {
                 Text(
@@ -152,7 +156,11 @@ private fun OnlinePublicIdentityField(
         )
 
         Text(
-            text = "O nome curto é gerado agora e poderá ser personalizado no perfil.",
+            text = if (editable) {
+                "O nome curto é gerado agora e poderá ser personalizado no perfil."
+            } else {
+                "Edite o nome público e o nome de mesa em Conta."
+            },
             color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.68f),
             style = MaterialTheme.typography.bodySmall,
         )

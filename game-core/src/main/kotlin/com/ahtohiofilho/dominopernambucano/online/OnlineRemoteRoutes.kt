@@ -6,6 +6,8 @@ object OnlineRemoteRoutes {
     const val LINK_GOOGLE_IDENTITY = "accounts/identities/google/link"
     const val RECOVER_GOOGLE_ACCOUNT = "accounts/identities/google/recover"
     const val RANKED_QUEUE = "ranked-queue"
+    const val RANKING = "ranking"
+    const val ACCOUNT_PROFILE = "accounts/profile"
     const val CREATE_ROOM = "rooms"
     const val JOIN_ROOM = "rooms/join"
     const val SUBMIT_ACTION = "matches/actions"

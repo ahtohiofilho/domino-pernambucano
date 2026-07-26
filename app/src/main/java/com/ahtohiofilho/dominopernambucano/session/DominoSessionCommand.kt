@@ -6,6 +6,8 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBinding
 sealed interface DominoSessionCommand {
     data object OpenPlayModeSelection : DominoSessionCommand
 
+    data object OpenPublicRanking : DominoSessionCommand
+
     data object StartLocalMatch : DominoSessionCommand
 
     data class StartOnlineMatch(
