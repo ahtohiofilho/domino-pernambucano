@@ -85,6 +85,16 @@ interface OnlineServerStore : AutoCloseable {
         rankingRuleVersion: Int = CURRENT_RANKING_RULE_VERSION,
     ): RankedCycleLadder
 
+    fun getClosedRankedCycleSnapshot(
+        cycleId: String,
+    ): RankedCycleSnapshot?
+
+    fun listClosedRankedCycleSnapshots(
+        kind: RankingCycleKind,
+        offset: Int,
+        limit: Int,
+    ): RankedCycleSnapshotPage
+
     /**
      * Server-owned competitive admission boundary.
      *

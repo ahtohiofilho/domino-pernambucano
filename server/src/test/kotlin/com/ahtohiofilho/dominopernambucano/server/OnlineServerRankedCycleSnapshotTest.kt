@@ -11,9 +11,16 @@ import java.util.Calendar
 import java.util.GregorianCalendar
 import java.util.Locale
 import java.util.TimeZone
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -63,7 +70,15 @@ class OnlineServerRankedCycleSnapshotTest {
         assertEquals(period, snapshot.period)
         assertEquals(results.size, snapshot.resultCount)
         assertEquals(
+            results.size * 4,
+            snapshot.totalEligiblePlayers,
+        )
+        assertEquals(
             DAILY_CLOSED_RANKING_CAPACITY,
+            snapshot.retainedRankingSize,
+        )
+        assertEquals(
+            snapshot.retainedRankingSize,
             snapshot.standings.size,
         )
         assertEquals(
@@ -79,6 +94,23 @@ class OnlineServerRankedCycleSnapshotTest {
         )
 
         assertEquals(snapshot.toRankedCycleLadder(), historical)
+        assertEquals(
+            snapshot,
+            store.getClosedRankedCycleSnapshot(
+                cycleId = period.cycleId,
+            ),
+        )
+        assertEquals(
+            RankedCycleSnapshotPage(
+                totalSnapshots = 1,
+                snapshots = listOf(snapshot),
+            ),
+            store.listClosedRankedCycleSnapshots(
+                kind = RankingCycleKind.DAILY,
+                offset = 0,
+                limit = 10,
+            ),
+        )
         assertFalse(store.advanceAuthoritativeTime())
         assertEquals(
             1,
@@ -163,6 +195,79 @@ class OnlineServerRankedCycleSnapshotTest {
         } finally {
             root.deleteRecursively()
         }
+    }
+
+    @Test
+    fun schema_eight_is_upgraded_without_losing_snapshot_metadata() {
+        val day = epochMillis(
+            year = 2026,
+            month = 7,
+            day = 25,
+            hour = 12,
+        )
+        val period = resolveRankingCycle(
+            kind = RankingCycleKind.DAILY,
+            completedAtEpochMillis = day,
+        )
+        var now = day
+        val source = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+
+        source.restorePersistentState(
+            OnlineServerStoreState(
+                rankedResults = listOf(
+                    result(
+                        matchIndex = 1,
+                        completedAtEpochMillis = day,
+                    ),
+                ),
+            ),
+        )
+        now = period.endsAtEpochMillis
+        assertTrue(source.advanceAuthoritativeTime())
+
+        val json = Json {
+            encodeDefaults = true
+        }
+        val encodedState = json.encodeToJsonElement(
+            source.snapshotPersistentState(),
+        ).jsonObject
+        val legacyRoot = encodedState.toMutableMap().apply {
+            this["schemaVersion"] = JsonPrimitive(8)
+            this["rankedCycleSnapshots"] = JsonArray(
+                getValue("rankedCycleSnapshots")
+                    .jsonArray
+                    .map { snapshotElement ->
+                        JsonObject(
+                            snapshotElement.jsonObject
+                                .toMutableMap()
+                                .apply {
+                                    remove("totalEligiblePlayers")
+                                    remove("retainedRankingSize")
+                                },
+                        )
+                    },
+            )
+        }
+        val legacyState =
+            json.decodeFromJsonElement<OnlineServerStoreState>(
+                JsonObject(legacyRoot),
+            )
+        val restored = InMemoryOnlineServerStore()
+
+        restored.restorePersistentState(legacyState)
+
+        val normalized = restored.snapshotPersistentState()
+        val snapshot = normalized.rankedCycleSnapshots.single()
+
+        assertEquals(
+            ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+            normalized.schemaVersion,
+        )
+        assertEquals(4, snapshot.totalEligiblePlayers)
+        assertEquals(4, snapshot.retainedRankingSize)
+        assertEquals(4, snapshot.standings.size)
     }
 
     @Test

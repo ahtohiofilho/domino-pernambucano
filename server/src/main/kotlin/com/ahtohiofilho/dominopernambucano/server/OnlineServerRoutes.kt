@@ -351,6 +351,17 @@ fun Route.onlineServerRoutes(
                 return@get
             }
 
+            val rawCycleId = call.request.queryParameters["cycleId"]
+            val cycleId = rawCycleId?.trim()
+
+            if (
+                rawCycleId != null &&
+                cycleId.isNullOrBlank()
+            ) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
             val rawOffset = call.request.queryParameters["offset"]
             val parsedOffset = rawOffset?.toIntOrNull()
             val rawLimit = call.request.queryParameters["limit"]
@@ -376,10 +387,32 @@ fun Route.onlineServerRoutes(
                 return@get
             }
 
-            val ladder = store.getRankedCycleLadder(
-                kind = cycle.toRankingCycleKind(),
-                completedAtEpochMillis = nowEpochMillis(),
-            )
+            val historicalSnapshot = cycleId?.let { requestedCycleId ->
+                store.getClosedRankedCycleSnapshot(
+                    cycleId = requestedCycleId,
+                )
+            }
+
+            if (cycleId != null && historicalSnapshot == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+
+            if (
+                historicalSnapshot != null &&
+                historicalSnapshot.period.kind !=
+                cycle.toRankingCycleKind()
+            ) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            val ladder = historicalSnapshot
+                ?.toRankedCycleLadder()
+                ?: store.getRankedCycleLadder(
+                    kind = cycle.toRankingCycleKind(),
+                    completedAtEpochMillis = nowEpochMillis(),
+                )
             val pageAccountIds = ladder.standings
                 .drop(offset)
                 .take(limit)
@@ -400,6 +433,68 @@ fun Route.onlineServerRoutes(
                     store.getPublicDisplayNames(
                         accountIds = pageAccountIds,
                     ),
+                totalEligiblePlayers =
+                    historicalSnapshot
+                        ?.totalEligiblePlayers
+                        ?: ladder.standings.size,
+                retainedRankingSize =
+                    historicalSnapshot
+                        ?.retainedRankingSize
+                        ?: ladder.standings.size,
+                closedAtEpochMillis =
+                    historicalSnapshot
+                        ?.closedAtEpochMillis,
+                offset = offset,
+                limit = limit,
+            )
+        }
+
+        get("/${OnlineRemoteRoutes.RANKING_CYCLES}") {
+            call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@get
+
+            val cycle = parsePublicRankingCycle(
+                value = call.request.queryParameters["cycle"],
+            )
+
+            if (cycle == null) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            val rawOffset = call.request.queryParameters["offset"]
+            val parsedOffset = rawOffset?.toIntOrNull()
+            val rawLimit = call.request.queryParameters["limit"]
+            val parsedLimit = rawLimit?.toIntOrNull()
+
+            if (
+                (rawOffset != null && parsedOffset == null) ||
+                (rawLimit != null && parsedLimit == null)
+            ) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            val offset = parsedOffset ?: 0
+            val limit =
+                parsedLimit ?: DEFAULT_PUBLIC_RANKING_PAGE_SIZE
+
+            if (
+                offset < 0 ||
+                limit !in 1..MAXIMUM_PUBLIC_RANKING_PAGE_SIZE
+            ) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            call.respondPublicRankingCycles(
+                cycle = cycle,
+                page = store.listClosedRankedCycleSnapshots(
+                    kind = cycle.toRankingCycleKind(),
+                    offset = offset,
+                    limit = limit,
+                ),
                 offset = offset,
                 limit = limit,
             )

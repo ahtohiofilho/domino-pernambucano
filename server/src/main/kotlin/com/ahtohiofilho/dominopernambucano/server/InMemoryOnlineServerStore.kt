@@ -175,6 +175,52 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    override fun getClosedRankedCycleSnapshot(
+        cycleId: String,
+    ): RankedCycleSnapshot? {
+        val normalizedCycleId = cycleId.trim()
+
+        if (normalizedCycleId.isBlank()) {
+            return null
+        }
+
+        return synchronized(lock) {
+            rankedCycleSnapshotsById[normalizedCycleId]
+        }
+    }
+
+    override fun listClosedRankedCycleSnapshots(
+        kind: RankingCycleKind,
+        offset: Int,
+        limit: Int,
+    ): RankedCycleSnapshotPage {
+        require(offset >= 0)
+        require(limit > 0)
+
+        return synchronized(lock) {
+            val matchingSnapshots = rankedCycleSnapshotsById.values
+                .asSequence()
+                .filter { snapshot ->
+                    snapshot.period.kind == kind
+                }
+                .sortedWith(
+                    compareByDescending<RankedCycleSnapshot> { snapshot ->
+                        snapshot.period.endsAtEpochMillis
+                    }.thenByDescending { snapshot ->
+                        snapshot.period.cycleId
+                    },
+                )
+                .toList()
+
+            RankedCycleSnapshotPage(
+                totalSnapshots = matchingSnapshots.size,
+                snapshots = matchingSnapshots
+                    .drop(offset)
+                    .take(limit),
+            )
+        }
+    }
+
     private fun buildLiveRankedCycleLadder(
         period: RankedCyclePeriod,
     ): RankedCycleLadder {
@@ -1746,8 +1792,28 @@ class InMemoryOnlineServerStore(
     private fun normalizePersistentState(
         state: OnlineServerStoreState,
     ): OnlineServerStoreState {
-        if (state.schemaVersion >= 8) {
+        if (state.schemaVersion >=
+            ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION
+        ) {
             return state
+        }
+
+        if (state.schemaVersion == 8) {
+            return state.copy(
+                schemaVersion =
+                    ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+                rankedCycleSnapshots =
+                    state.rankedCycleSnapshots.map { snapshot ->
+                        snapshot.copy(
+                            totalEligiblePlayers = maxOf(
+                                snapshot.totalEligiblePlayers,
+                                snapshot.standings.size,
+                            ),
+                            retainedRankingSize =
+                                snapshot.standings.size,
+                        )
+                    },
+            )
         }
 
         if (state.schemaVersion == 7) {
@@ -2108,6 +2174,10 @@ class InMemoryOnlineServerStore(
                 snapshot.period.cycleId.isNotBlank() &&
                     snapshot.closedAtEpochMillis >=
                     snapshot.period.endsAtEpochMillis &&
+                    snapshot.retainedRankingSize ==
+                    snapshot.standings.size &&
+                    snapshot.totalEligiblePlayers >=
+                    snapshot.retainedRankingSize &&
                     snapshot.standings.size <=
                     snapshot.period.kind.closedRankingCapacity()
             },

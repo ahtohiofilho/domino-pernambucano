@@ -4,6 +4,8 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleStanding
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingCyclesResponseDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import io.ktor.http.HttpStatusCode
@@ -41,6 +43,9 @@ internal suspend fun ApplicationCall.respondPublicRanking(
     ladder: RankedCycleLadder,
     viewerAccountId: String?,
     publicDisplayNames: Map<String, String> = emptyMap(),
+    totalEligiblePlayers: Int = ladder.standings.size,
+    retainedRankingSize: Int = ladder.standings.size,
+    closedAtEpochMillis: Long? = null,
     offset: Int,
     limit: Int,
 ) {
@@ -58,7 +63,9 @@ internal suspend fun ApplicationCall.respondPublicRanking(
                     publicDisplayNames[standing.accountId],
             )
         }
-    val totalEligiblePlayers = ladder.standings.size
+    require(totalEligiblePlayers >= retainedRankingSize)
+    require(retainedRankingSize == ladder.standings.size)
+
     val consumed = offset.toLong() + entries.size.toLong()
     val viewer = viewerAccountId
         ?.trim()
@@ -86,9 +93,12 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             endsAtEpochMillis = ladder.period.endsAtEpochMillis,
             resultCount = ladder.resultCount,
             totalEligiblePlayers = totalEligiblePlayers,
+            retainedRankingSize = retainedRankingSize,
+            isClosed = closedAtEpochMillis != null,
+            closedAtEpochMillis = closedAtEpochMillis,
             offset = offset,
             limit = limit,
-            hasMore = consumed < totalEligiblePlayers.toLong(),
+            hasMore = consumed < retainedRankingSize.toLong(),
             entries = entries,
             viewer = viewer,
         ),
@@ -122,4 +132,49 @@ private fun createPublicCompetitorId(accountId: String): String {
     }
 
     return "competitor-$prefix"
+}
+
+internal suspend fun ApplicationCall.respondPublicRankingCycles(
+    cycle: PublicRankingCycleDto,
+    page: RankedCycleSnapshotPage,
+    offset: Int,
+    limit: Int,
+) {
+    if (offset < 0 || limit !in 1..MAXIMUM_PUBLIC_RANKING_PAGE_SIZE) {
+        respond(HttpStatusCode.BadRequest)
+        return
+    }
+
+    val consumed = offset.toLong() + page.snapshots.size.toLong()
+
+    respond(
+        HttpStatusCode.OK,
+        PublicRankingCyclesResponseDto(
+            cycle = cycle,
+            totalClosedCycles = page.totalSnapshots,
+            offset = offset,
+            limit = limit,
+            hasMore = consumed < page.totalSnapshots.toLong(),
+            cycles = page.snapshots.map { snapshot ->
+                PublicRankingCycleSummaryDto(
+                    cycle = cycle,
+                    cycleId = snapshot.period.cycleId,
+                    rankingRuleVersion =
+                        snapshot.period.rankingRuleVersion,
+                    timeZoneId = snapshot.period.timeZoneId,
+                    startsAtEpochMillis =
+                        snapshot.period.startsAtEpochMillis,
+                    endsAtEpochMillis =
+                        snapshot.period.endsAtEpochMillis,
+                    closedAtEpochMillis =
+                        snapshot.closedAtEpochMillis,
+                    resultCount = snapshot.resultCount,
+                    totalEligiblePlayers =
+                        snapshot.totalEligiblePlayers,
+                    retainedRankingSize =
+                        snapshot.retainedRankingSize,
+                )
+            },
+        ),
+    )
 }

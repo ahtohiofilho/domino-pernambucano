@@ -117,6 +117,26 @@ class PersistentOnlineServerStore private constructor(
         )
     }
 
+    override fun getClosedRankedCycleSnapshot(
+        cycleId: String,
+    ): RankedCycleSnapshot? = read {
+        delegate.getClosedRankedCycleSnapshot(
+            cycleId = cycleId,
+        )
+    }
+
+    override fun listClosedRankedCycleSnapshots(
+        kind: RankingCycleKind,
+        offset: Int,
+        limit: Int,
+    ): RankedCycleSnapshotPage = read {
+        delegate.listClosedRankedCycleSnapshots(
+            kind = kind,
+            offset = offset,
+            limit = limit,
+        )
+    }
+
     override fun enqueuePublicRanked(
         request: CreateOnlineRoomRequestDto,
         identity: OnlineRequestIdentity,

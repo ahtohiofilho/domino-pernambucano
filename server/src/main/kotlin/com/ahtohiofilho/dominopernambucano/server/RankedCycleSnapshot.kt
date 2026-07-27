@@ -73,10 +73,15 @@ data class RankedCycleSnapshot(
     val resultCount: Int,
     val closedAtEpochMillis: Long,
     val standings: List<RankedCycleStandingSnapshot>,
+    val totalEligiblePlayers: Int = standings.size,
+    val retainedRankingSize: Int = standings.size,
 ) {
     init {
         require(resultCount >= 0)
         require(closedAtEpochMillis >= period.endsAtEpochMillis)
+        require(totalEligiblePlayers >= 0)
+        require(retainedRankingSize == standings.size)
+        require(totalEligiblePlayers >= retainedRankingSize)
         require(
             standings.map { standing -> standing.rank } ==
                 (1..standings.size).toList(),
@@ -105,16 +110,30 @@ internal fun RankedCycleLadder.toClosedSnapshot(
 ): RankedCycleSnapshot {
     require(closedAtEpochMillis >= period.endsAtEpochMillis)
 
+    val retainedStandings = standings
+        .take(period.kind.closedRankingCapacity())
+        .map { standing ->
+            RankedCycleStandingSnapshot.from(standing)
+        }
+
     return RankedCycleSnapshot(
         period = period,
         resultCount = resultCount,
         closedAtEpochMillis = closedAtEpochMillis,
-        standings = standings
-            .take(period.kind.closedRankingCapacity())
-            .map { standing ->
-                RankedCycleStandingSnapshot.from(standing)
-            },
+        standings = retainedStandings,
+        totalEligiblePlayers = standings.size,
+        retainedRankingSize = retainedStandings.size,
     )
+}
+
+
+data class RankedCycleSnapshotPage(
+    val totalSnapshots: Int,
+    val snapshots: List<RankedCycleSnapshot>,
+) {
+    init {
+        require(totalSnapshots >= snapshots.size)
+    }
 }
 
 internal fun RankingCycleKind.closedRankingCapacity(): Int {
