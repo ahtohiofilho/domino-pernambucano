@@ -10,7 +10,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
-const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 7
+const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 8
 const val MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
 
 @Serializable
@@ -22,6 +22,7 @@ data class OnlineServerStoreState(
     val matches: List<OnlineServerStoredMatch> = emptyList(),
     val actionResults: List<OnlineServerStoredActionResult> = emptyList(),
     val rankedResults: List<RankedMatchResult> = emptyList(),
+    val rankedCycleSnapshots: List<RankedCycleSnapshot> = emptyList(),
     val accounts: List<OnlineServerAccount> = emptyList(),
     val externalIdentities: List<OnlineServerExternalIdentity> = emptyList(),
     val publicRankedFormationHistory:

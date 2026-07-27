@@ -1,10 +1,12 @@
 package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
+import com.ahtohiofilho.dominopernambucano.competitive.RankedCyclePeriod
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.competitive.buildRankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.resolveRankingCycle
+import com.ahtohiofilho.dominopernambucano.competitive.resolveRankingCycles
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerIdentity
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
@@ -139,6 +141,8 @@ class InMemoryOnlineServerStore(
         mutableMapOf<ActionResultCacheKey, OnlineActionResultDto>()
     private val rankedResultsById =
         mutableMapOf<String, RankedMatchResult>()
+    private val rankedCycleSnapshotsById =
+        mutableMapOf<String, RankedCycleSnapshot>()
     private val accountsByPlayerId =
         mutableMapOf<String, OnlineServerAccount>()
     private val externalIdentitiesByKey =
@@ -159,15 +163,69 @@ class InMemoryOnlineServerStore(
         rankingRuleVersion: Int,
     ): RankedCycleLadder {
         return synchronized(lock) {
-            buildRankedCycleLadder(
-                period = resolveRankingCycle(
-                    kind = kind,
-                    completedAtEpochMillis = completedAtEpochMillis,
-                    rankingRuleVersion = rankingRuleVersion,
-                ),
-                results = rankedResultsById.values.toList(),
+            val period = resolveRankingCycle(
+                kind = kind,
+                completedAtEpochMillis = completedAtEpochMillis,
+                rankingRuleVersion = rankingRuleVersion,
             )
+
+            rankedCycleSnapshotsById[period.cycleId]
+                ?.toRankedCycleLadder()
+                ?: buildLiveRankedCycleLadder(period)
         }
+    }
+
+    private fun buildLiveRankedCycleLadder(
+        period: RankedCyclePeriod,
+    ): RankedCycleLadder {
+        return buildRankedCycleLadder(
+            period = period,
+            results = rankedResultsById.values.toList(),
+        )
+    }
+
+    private fun materializeClosedRankedCycleSnapshots(
+        referenceEpochMillis: Long,
+    ): Int {
+        require(referenceEpochMillis >= 0L)
+
+        val closedPeriods = rankedResultsById.values
+            .asSequence()
+            .flatMap { result ->
+                resolveRankingCycles(
+                    completedAtEpochMillis =
+                        result.completedAtEpochMillis,
+                    rankingRuleVersion = result.rankingRuleVersion,
+                ).asSequence()
+            }
+            .filter { period ->
+                period.endsAtEpochMillis <= referenceEpochMillis
+            }
+            .distinctBy { period -> period.cycleId }
+            .sortedWith(
+                compareBy<RankedCyclePeriod>(
+                    { period -> period.endsAtEpochMillis },
+                    { period -> period.kind.ordinal },
+                    { period -> period.cycleId },
+                ),
+            )
+            .toList()
+
+        var materializedCount = 0
+
+        closedPeriods.forEach { period ->
+            if (period.cycleId !in rankedCycleSnapshotsById) {
+                rankedCycleSnapshotsById[period.cycleId] =
+                    buildLiveRankedCycleLadder(period)
+                        .toClosedSnapshot(
+                            closedAtEpochMillis =
+                                referenceEpochMillis,
+                        )
+                materializedCount += 1
+            }
+        }
+
+        return materializedCount
     }
 
     override fun promoteAccount(
@@ -1332,6 +1390,14 @@ class InMemoryOnlineServerStore(
                 }
             }
 
+            if (
+                materializeClosedRankedCycleSnapshots(
+                    referenceEpochMillis = now,
+                ) > 0
+            ) {
+                stateChanged = true
+            }
+
             stateChanged
         }
     }
@@ -1543,6 +1609,10 @@ class InMemoryOnlineServerStore(
                     },
                 rankedResults = rankedResultsById.values
                     .sortedBy { result -> result.resultId },
+                rankedCycleSnapshots = rankedCycleSnapshotsById.values
+                    .sortedBy { snapshot ->
+                        snapshot.period.cycleId
+                    },
                 accounts = accountsByPlayerId.values
                     .sortedBy { account -> account.accountId },
                 externalIdentities = externalIdentitiesByKey.values
@@ -1570,6 +1640,7 @@ class InMemoryOnlineServerStore(
             matchesById.clear()
             actionResultsByKey.clear()
             rankedResultsById.clear()
+            rankedCycleSnapshotsById.clear()
             accountsByPlayerId.clear()
             externalIdentitiesByKey.clear()
             publicRankedQueueByAccountId.clear()
@@ -1648,6 +1719,11 @@ class InMemoryOnlineServerStore(
                     rankedResult
             }
 
+            normalizedState.rankedCycleSnapshots.forEach { snapshot ->
+                rankedCycleSnapshotsById[snapshot.period.cycleId] =
+                    snapshot
+            }
+
             normalizedState.externalIdentities.forEach { identity ->
                 externalIdentitiesByKey[
                     ExternalIdentityKey(
@@ -1670,14 +1746,23 @@ class InMemoryOnlineServerStore(
     private fun normalizePersistentState(
         state: OnlineServerStoreState,
     ): OnlineServerStoreState {
-        if (state.schemaVersion >= 7) {
+        if (state.schemaVersion >= 8) {
             return state
+        }
+
+        if (state.schemaVersion == 7) {
+            return state.copy(
+                schemaVersion =
+                    ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+                rankedCycleSnapshots = emptyList(),
+            )
         }
 
         if (state.schemaVersion == 6) {
             return state.copy(
                 schemaVersion =
                     ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+                rankedCycleSnapshots = emptyList(),
             )
         }
 
@@ -1686,6 +1771,7 @@ class InMemoryOnlineServerStore(
                 schemaVersion =
                     ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
                 publicRankedFormationHistory = emptyList(),
+                rankedCycleSnapshots = emptyList(),
             )
         }
 
@@ -1705,6 +1791,7 @@ class InMemoryOnlineServerStore(
                 )
             },
             rankedResults = emptyList(),
+            rankedCycleSnapshots = emptyList(),
         )
     }
 
@@ -2004,6 +2091,29 @@ class InMemoryOnlineServerStore(
                         createRankedMatchResultId(result.matchId)
             },
         )
+
+        val rankedCycleSnapshotIds =
+            state.rankedCycleSnapshots.map { snapshot ->
+                snapshot.period.cycleId
+            }
+
+        require(
+            rankedCycleSnapshotIds.distinct().size ==
+                rankedCycleSnapshotIds.size,
+        ) {
+            "O estado persistido contém ciclos encerrados duplicados."
+        }
+        require(
+            state.rankedCycleSnapshots.all { snapshot ->
+                snapshot.period.cycleId.isNotBlank() &&
+                    snapshot.closedAtEpochMillis >=
+                    snapshot.period.endsAtEpochMillis &&
+                    snapshot.standings.size <=
+                    snapshot.period.kind.closedRankingCapacity()
+            },
+        ) {
+            "O estado persistido contém snapshot de ranking inválido."
+        }
 
         val rankedResultsByMatchId = state.rankedResults.associateBy {
             result -> result.matchId
@@ -3397,6 +3507,25 @@ class InMemoryOnlineServerStore(
                     existingResult == candidate,
         ) {
             "Resultado ranqueado conflitante para a mesma partida."
+        }
+
+        if (existingResult == null) {
+            val immutableCycleId = rankedCycleSnapshotsById.values
+                .asSequence()
+                .map { snapshot -> snapshot.period }
+                .firstOrNull { period ->
+                    period.rankingRuleVersion ==
+                        candidate.rankingRuleVersion &&
+                        period.contains(
+                            candidate.completedAtEpochMillis,
+                        )
+                }
+                ?.cycleId
+
+            check(immutableCycleId == null) {
+                "Resultado ranqueado tardio para ciclo encerrado: " +
+                    immutableCycleId
+            }
         }
 
         rankedResultsById[resultId] = candidate
