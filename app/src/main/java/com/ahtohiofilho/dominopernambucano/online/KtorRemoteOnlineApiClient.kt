@@ -193,12 +193,89 @@ class KtorRemoteOnlineApiClient(
         offset: Int,
         limit: Int,
     ): PublicRankingResponseDto {
+        return fetchPublicRankingResponse(
+            cycle = cycle,
+            cycleId = null,
+            offset = offset,
+            limit = limit,
+        )
+    }
+
+    override suspend fun fetchHistoricalPublicRanking(
+        cycle: PublicRankingCycleDto,
+        cycleId: String,
+        offset: Int,
+        limit: Int,
+    ): PublicRankingResponseDto {
+        require(cycleId.isNotBlank())
+
+        return fetchPublicRankingResponse(
+            cycle = cycle,
+            cycleId = cycleId,
+            offset = offset,
+            limit = limit,
+        )
+    }
+
+    private suspend fun fetchPublicRankingResponse(
+        cycle: PublicRankingCycleDto,
+        cycleId: String?,
+        offset: Int,
+        limit: Int,
+    ): PublicRankingResponseDto {
         require(offset >= 0)
         require(limit in 1..100)
 
         val response = httpClient.get(
             urlString = endpoint(
                 OnlineRemoteRoutes.RANKING,
+            ),
+        ) {
+            expectSuccess = false
+            parameter(
+                key = "cycle",
+                value = cycle.name,
+            )
+            parameter(
+                key = "offset",
+                value = offset,
+            )
+            parameter(
+                key = "limit",
+                value = limit,
+            )
+            cycleId?.let { requestedCycleId ->
+                parameter(
+                    key = "cycleId",
+                    value = requestedCycleId,
+                )
+            }
+            accept(ContentType.Application.Json)
+            applyProtectedAuthentication(
+                developmentPlayerId = developmentPlayerId,
+            )
+        }
+
+        if (response.status.value !in 200..299) {
+            throw OnlinePublicRankingHttpException(
+                statusCode = response.status.value,
+            )
+        }
+
+        return response.body()
+    }
+
+    override suspend fun fetchPublicRankingCycles(
+        cycle: PublicRankingCycleDto,
+        offset: Int,
+        limit: Int,
+    ): PublicRankingCyclesResponseDto {
+        require(offset >= 0)
+        require(limit in 1..100)
+
+        val response = httpClient.get(
+            urlString = endpoint(
+                OnlineRemoteRoutes.RANKING_CYCLES,
             ),
         ) {
             expectSuccess = false

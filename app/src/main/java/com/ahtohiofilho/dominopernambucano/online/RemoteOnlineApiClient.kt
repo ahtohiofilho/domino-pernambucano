@@ -84,6 +84,27 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun fetchHistoricalPublicRanking(
+        cycle: PublicRankingCycleDto,
+        cycleId: String,
+        offset: Int = 0,
+        limit: Int = 50,
+    ): PublicRankingResponseDto {
+        throw UnsupportedOperationException(
+            "Consulta do ranking hist├│rico n├úo configurada para este cliente remoto.",
+        )
+    }
+
+    suspend fun fetchPublicRankingCycles(
+        cycle: PublicRankingCycleDto,
+        offset: Int = 0,
+        limit: Int = 50,
+    ): PublicRankingCyclesResponseDto {
+        throw UnsupportedOperationException(
+            "Consulta dos ciclos encerrados n├úo configurada para este cliente remoto.",
+        )
+    }
+
     suspend fun fetchAccountProfile():
         OnlineAccountProfileResponseDto {
         throw UnsupportedOperationException(

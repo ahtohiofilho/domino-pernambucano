@@ -29,12 +29,44 @@ sealed interface OnlinePublicRankingClientResult {
     ) : OnlinePublicRankingClientResult
 }
 
+sealed interface OnlinePublicRankingCyclesClientResult {
+    data class Success(
+        val response: PublicRankingCyclesResponseDto,
+    ) : OnlinePublicRankingCyclesClientResult
+
+    data class Failure(
+        val kind: OnlinePublicRankingFailureKind,
+        val retryable: Boolean,
+    ) : OnlinePublicRankingCyclesClientResult
+}
+
 interface OnlinePublicRankingClient {
     suspend fun fetch(
         cycle: PublicRankingCycleDto,
         offset: Int = 0,
         limit: Int = 50,
     ): OnlinePublicRankingClientResult
+
+    suspend fun fetchHistorical(
+        cycle: PublicRankingCycleDto,
+        cycleId: String,
+        offset: Int = 0,
+        limit: Int = 50,
+    ): OnlinePublicRankingClientResult {
+        throw UnsupportedOperationException(
+            "Historical ranking is not configured for this client.",
+        )
+    }
+
+    suspend fun fetchClosedCycles(
+        cycle: PublicRankingCycleDto,
+        offset: Int = 0,
+        limit: Int = 50,
+    ): OnlinePublicRankingCyclesClientResult {
+        throw UnsupportedOperationException(
+            "Closed ranking cycles are not configured for this client.",
+        )
+    }
 }
 
 class OnlinePublicRankingRemoteClient(
@@ -47,31 +79,121 @@ class OnlinePublicRankingRemoteClient(
         offset: Int,
         limit: Int,
     ): OnlinePublicRankingClientResult {
+        return fetchRanking(
+            cycle = cycle,
+            cycleId = null,
+            offset = offset,
+            limit = limit,
+        )
+    }
+
+    override suspend fun fetchHistorical(
+        cycle: PublicRankingCycleDto,
+        cycleId: String,
+        offset: Int,
+        limit: Int,
+    ): OnlinePublicRankingClientResult {
+        return fetchRanking(
+            cycle = cycle,
+            cycleId = cycleId,
+            offset = offset,
+            limit = limit,
+        )
+    }
+
+    private suspend fun fetchRanking(
+        cycle: PublicRankingCycleDto,
+        cycleId: String?,
+        offset: Int,
+        limit: Int,
+    ): OnlinePublicRankingClientResult {
+        val normalizedCycleId = cycleId?.trim()
+
         if (
             offset < 0 ||
-            limit !in 1..100
+            limit !in 1..100 ||
+            (cycleId != null && normalizedCycleId.isNullOrBlank())
         ) {
-            return protocolFailure()
+            return protocolRankingFailure()
         }
 
-        val credential =
-            sessionCredentialRepository.getValidCredentialOrNull()
-                ?: return OnlinePublicRankingClientResult.Failure(
-                    kind =
-                        OnlinePublicRankingFailureKind
-                            .AUTHENTICATION_REQUIRED,
-                    retryable = false,
-                )
+        val credential = validCredentialOrNull()
+            ?: return OnlinePublicRankingClientResult.Failure(
+                kind =
+                    OnlinePublicRankingFailureKind
+                        .AUTHENTICATION_REQUIRED,
+                retryable = false,
+            )
 
-        remoteApiClient.setDevelopmentPlayerId(
-            playerId = credential.playerId,
-        )
-        remoteApiClient.setBearerAccessToken(
-            accessToken = credential.accessToken,
-        )
+        applyCredential(credential)
 
         return try {
-            val response = remoteApiClient.fetchPublicRanking(
+            val response = if (normalizedCycleId == null) {
+                remoteApiClient.fetchPublicRanking(
+                    cycle = cycle,
+                    offset = offset,
+                    limit = limit,
+                )
+            } else {
+                remoteApiClient.fetchHistoricalPublicRanking(
+                    cycle = cycle,
+                    cycleId = normalizedCycleId,
+                    offset = offset,
+                    limit = limit,
+                )
+            }
+
+            response.requireValidFor(
+                requestedCycle = cycle,
+                requestedOffset = offset,
+                requestedLimit = limit,
+                requestedCycleId = normalizedCycleId,
+            )
+
+            OnlinePublicRankingClientResult.Success(
+                response = response,
+            )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: OnlinePublicRankingHttpException) {
+            error.toRankingClientFailure()
+        } catch (_: HttpRequestTimeoutException) {
+            unavailableRankingFailure()
+        } catch (_: IOException) {
+            unavailableRankingFailure()
+        } catch (_: IllegalArgumentException) {
+            protocolRankingFailure()
+        } catch (_: IllegalStateException) {
+            protocolRankingFailure()
+        } catch (_: Throwable) {
+            OnlinePublicRankingClientResult.Failure(
+                kind = OnlinePublicRankingFailureKind.UNKNOWN,
+                retryable = false,
+            )
+        }
+    }
+
+    override suspend fun fetchClosedCycles(
+        cycle: PublicRankingCycleDto,
+        offset: Int,
+        limit: Int,
+    ): OnlinePublicRankingCyclesClientResult {
+        if (offset < 0 || limit !in 1..100) {
+            return protocolCyclesFailure()
+        }
+
+        val credential = validCredentialOrNull()
+            ?: return OnlinePublicRankingCyclesClientResult.Failure(
+                kind =
+                    OnlinePublicRankingFailureKind
+                        .AUTHENTICATION_REQUIRED,
+                retryable = false,
+            )
+
+        applyCredential(credential)
+
+        return try {
+            val response = remoteApiClient.fetchPublicRankingCycles(
                 cycle = cycle,
                 offset = offset,
                 limit = limit,
@@ -83,27 +205,42 @@ class OnlinePublicRankingRemoteClient(
                 requestedLimit = limit,
             )
 
-            OnlinePublicRankingClientResult.Success(
+            OnlinePublicRankingCyclesClientResult.Success(
                 response = response,
             )
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: OnlinePublicRankingHttpException) {
-            error.toClientFailure()
+            error.toCyclesClientFailure()
         } catch (_: HttpRequestTimeoutException) {
-            unavailableFailure()
+            unavailableCyclesFailure()
         } catch (_: IOException) {
-            unavailableFailure()
+            unavailableCyclesFailure()
         } catch (_: IllegalArgumentException) {
-            protocolFailure()
+            protocolCyclesFailure()
         } catch (_: IllegalStateException) {
-            protocolFailure()
+            protocolCyclesFailure()
         } catch (_: Throwable) {
-            OnlinePublicRankingClientResult.Failure(
+            OnlinePublicRankingCyclesClientResult.Failure(
                 kind = OnlinePublicRankingFailureKind.UNKNOWN,
                 retryable = false,
             )
         }
+    }
+
+    private fun validCredentialOrNull(): OnlineSessionCredential? {
+        return sessionCredentialRepository.getValidCredentialOrNull()
+    }
+
+    private fun applyCredential(
+        credential: OnlineSessionCredential,
+    ) {
+        remoteApiClient.setDevelopmentPlayerId(
+            playerId = credential.playerId,
+        )
+        remoteApiClient.setBearerAccessToken(
+            accessToken = credential.accessToken,
+        )
     }
 }
 
@@ -111,18 +248,30 @@ private fun PublicRankingResponseDto.requireValidFor(
     requestedCycle: PublicRankingCycleDto,
     requestedOffset: Int,
     requestedLimit: Int,
+    requestedCycleId: String?,
 ) {
     require(cycle == requestedCycle)
     require(offset == requestedOffset)
     require(limit == requestedLimit)
     require(cycleId.isNotBlank())
+    require(requestedCycleId == null || cycleId == requestedCycleId)
     require(rankingRuleVersion > 0)
     require(timeZoneId == "America/Recife")
     require(startsAtEpochMillis >= 0L)
     require(endsAtEpochMillis > startsAtEpochMillis)
     require(resultCount >= 0)
     require(totalEligiblePlayers >= 0)
+    require(retainedRankingSize in 0..totalEligiblePlayers)
     require(entries.size <= limit)
+
+    if (requestedCycleId == null) {
+        require(!isClosed)
+        require(closedAtEpochMillis == null)
+    } else {
+        require(isClosed)
+        val closedAt = requireNotNull(closedAtEpochMillis)
+        require(closedAt >= endsAtEpochMillis)
+    }
 
     val consumed = Math.addExact(
         offset.toLong(),
@@ -130,14 +279,16 @@ private fun PublicRankingResponseDto.requireValidFor(
     )
 
     if (hasMore) {
-        require(consumed < totalEligiblePlayers.toLong())
+        require(consumed < retainedRankingSize.toLong())
     } else {
-        require(consumed >= totalEligiblePlayers.toLong())
+        require(consumed >= retainedRankingSize.toLong())
     }
 
+    val expectedRanks = (
+        (offset + 1) until (offset + entries.size + 1)
+    ).toList()
     val pageRanks = entries.map { entry -> entry.rank }
-    require(pageRanks.distinct().size == pageRanks.size)
-    require(pageRanks == pageRanks.sorted())
+    require(pageRanks == expectedRanks)
 
     val pageCompetitors = entries.map { entry ->
         entry.competitorId
@@ -149,7 +300,66 @@ private fun PublicRankingResponseDto.requireValidFor(
     entries.forEach { entry ->
         entry.requireValid()
     }
-    viewer?.requireValid()
+    viewer?.let { entry ->
+        entry.requireValid()
+        require(entry.rank <= retainedRankingSize)
+    }
+}
+
+private fun PublicRankingCyclesResponseDto.requireValidFor(
+    requestedCycle: PublicRankingCycleDto,
+    requestedOffset: Int,
+    requestedLimit: Int,
+) {
+    require(cycle == requestedCycle)
+    require(offset == requestedOffset)
+    require(limit == requestedLimit)
+    require(totalClosedCycles >= 0)
+    require(cycles.size <= limit)
+
+    val consumed = Math.addExact(
+        offset.toLong(),
+        cycles.size.toLong(),
+    )
+
+    if (hasMore) {
+        require(consumed < totalClosedCycles.toLong())
+    } else {
+        require(consumed >= totalClosedCycles.toLong())
+    }
+
+    val cycleIds = cycles.map { summary -> summary.cycleId }
+    require(cycleIds.distinct().size == cycleIds.size)
+
+    cycles.forEach { summary ->
+        summary.requireValidFor(requestedCycle)
+    }
+
+    require(
+        cycles.zipWithNext().all { (first, second) ->
+            first.endsAtEpochMillis > second.endsAtEpochMillis ||
+                (
+                    first.endsAtEpochMillis ==
+                        second.endsAtEpochMillis &&
+                        first.cycleId >= second.cycleId
+                )
+        },
+    )
+}
+
+private fun PublicRankingCycleSummaryDto.requireValidFor(
+    requestedCycle: PublicRankingCycleDto,
+) {
+    require(cycle == requestedCycle)
+    require(cycleId.isNotBlank())
+    require(rankingRuleVersion > 0)
+    require(timeZoneId == "America/Recife")
+    require(startsAtEpochMillis >= 0L)
+    require(endsAtEpochMillis > startsAtEpochMillis)
+    require(closedAtEpochMillis >= endsAtEpochMillis)
+    require(resultCount >= 0)
+    require(totalEligiblePlayers >= 0)
+    require(retainedRankingSize in 0..totalEligiblePlayers)
 }
 
 private fun PublicRankingEntryDto.requireValid() {
@@ -175,7 +385,7 @@ private fun PublicRankingEntryDto.requireValid() {
     require(automaticRounds >= 0L)
 }
 
-private fun OnlinePublicRankingHttpException.toClientFailure():
+private fun OnlinePublicRankingHttpException.toRankingClientFailure():
     OnlinePublicRankingClientResult.Failure {
     return when (statusCode) {
         401 -> OnlinePublicRankingClientResult.Failure(
@@ -190,13 +400,34 @@ private fun OnlinePublicRankingHttpException.toClientFailure():
             retryable = true,
         )
 
-        in 500..599 -> unavailableFailure()
+        in 500..599 -> unavailableRankingFailure()
 
-        else -> protocolFailure()
+        else -> protocolRankingFailure()
     }
 }
 
-private fun unavailableFailure():
+private fun OnlinePublicRankingHttpException.toCyclesClientFailure():
+    OnlinePublicRankingCyclesClientResult.Failure {
+    return when (statusCode) {
+        401 -> OnlinePublicRankingCyclesClientResult.Failure(
+            kind =
+                OnlinePublicRankingFailureKind
+                    .AUTHENTICATION_REQUIRED,
+            retryable = false,
+        )
+
+        429 -> OnlinePublicRankingCyclesClientResult.Failure(
+            kind = OnlinePublicRankingFailureKind.RATE_LIMITED,
+            retryable = true,
+        )
+
+        in 500..599 -> unavailableCyclesFailure()
+
+        else -> protocolCyclesFailure()
+    }
+}
+
+private fun unavailableRankingFailure():
     OnlinePublicRankingClientResult.Failure {
     return OnlinePublicRankingClientResult.Failure(
         kind = OnlinePublicRankingFailureKind.UNAVAILABLE,
@@ -204,9 +435,25 @@ private fun unavailableFailure():
     )
 }
 
-private fun protocolFailure():
+private fun unavailableCyclesFailure():
+    OnlinePublicRankingCyclesClientResult.Failure {
+    return OnlinePublicRankingCyclesClientResult.Failure(
+        kind = OnlinePublicRankingFailureKind.UNAVAILABLE,
+        retryable = true,
+    )
+}
+
+private fun protocolRankingFailure():
     OnlinePublicRankingClientResult.Failure {
     return OnlinePublicRankingClientResult.Failure(
+        kind = OnlinePublicRankingFailureKind.PROTOCOL_ERROR,
+        retryable = false,
+    )
+}
+
+private fun protocolCyclesFailure():
+    OnlinePublicRankingCyclesClientResult.Failure {
+    return OnlinePublicRankingCyclesClientResult.Failure(
         kind = OnlinePublicRankingFailureKind.PROTOCOL_ERROR,
         retryable = false,
     )
