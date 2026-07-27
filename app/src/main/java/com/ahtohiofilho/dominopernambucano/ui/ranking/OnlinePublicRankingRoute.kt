@@ -544,6 +544,7 @@ private fun RankingCycleSelector(
                 label = {
                     Text(
                         text = cycle.publicLabel(),
+                        color = DominoSemanticColors.primaryTextOnDark,
                     )
                 },
             )
@@ -573,6 +574,7 @@ private fun RankingScopeSelector(
                 label = {
                     Text(
                         text = scope.publicLabel(),
+                        color = DominoSemanticColors.primaryTextOnDark,
                     )
                 },
             )
@@ -664,6 +666,8 @@ private fun ClosedRankingCycleSelector(
                                 Text(
                                     text =
                                         summary.publicPeriodLabel(),
+                                    color =
+                                        DominoSemanticColors.primaryTextOnDark,
                                 )
                             },
                         )
