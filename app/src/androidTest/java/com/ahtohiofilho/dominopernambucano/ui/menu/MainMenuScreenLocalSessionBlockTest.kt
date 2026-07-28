@@ -37,6 +37,7 @@ class MainMenuScreenLocalSessionBlockTest {
                         .NotRequested,
                 pendingOnlineMatchResumeInProgress = false,
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onResumePendingOnlineMatchClick = {},
             )

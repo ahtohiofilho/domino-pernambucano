@@ -37,6 +37,7 @@ class MainMenuScreenTest {
                     OnlinePendingParticipationInspectionState.NotRequested,
                 pendingOnlineMatchResumeInProgress = false,
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onResumePendingOnlineMatchClick = {},
             )
@@ -60,6 +61,7 @@ class MainMenuScreenTest {
                     recoverableInspection(),
                 pendingOnlineMatchResumeInProgress = false,
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onResumePendingOnlineMatchClick = {},
             )
@@ -83,6 +85,7 @@ class MainMenuScreenTest {
                     recoverableWaitingInspection(),
                 pendingOnlineMatchResumeInProgress = false,
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onResumePendingOnlineMatchClick = {},
             )
@@ -127,6 +130,7 @@ class MainMenuScreenTest {
                     "N\u00e3o foi poss\u00edvel retomar a partida: " +
                             "a sess\u00e3o online deste dispositivo foi rejeitada.",
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onDiscardRejectedPendingOnlineParticipationClick = {
                     discardClickCount += 1
@@ -176,6 +180,7 @@ class MainMenuScreenTest {
                     ),
                 pendingOnlineMatchResumeInProgress = false,
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onResumePendingOnlineMatchClick = {},
             )
@@ -225,6 +230,7 @@ class MainMenuScreenTest {
                         ),
                 pendingOnlineMatchResumeInProgress = false,
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onDiscardRejectedPendingOnlineParticipationClick = {},
                 onResumePendingOnlineMatchClick = {},
@@ -266,6 +272,7 @@ class MainMenuScreenTest {
                     ),
                 pendingOnlineMatchResumeInProgress = false,
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onResumePendingOnlineMatchClick = {},
             )
@@ -291,6 +298,7 @@ class MainMenuScreenTest {
                     recoverableInspection(),
                 pendingOnlineMatchResumeInProgress = false,
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onResumePendingOnlineMatchClick = {
                     resumeClickCount += 1
@@ -326,6 +334,7 @@ class MainMenuScreenTest {
                     recoverableInspection(),
                 pendingOnlineMatchResumeInProgress = true,
                 onPlayClick = {},
+                onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
                 onResumePendingOnlineMatchClick = {},
             )
