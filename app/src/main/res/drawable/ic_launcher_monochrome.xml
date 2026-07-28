@@ -5,14 +5,24 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:scaleX="0.0701357466"
-        android:scaleY="0.0701357466"
-        android:translateX="18.0904977376"
-        android:translateY="17.9502262443">
-        <clip-path android:pathData="M160 177 Q512 72 864 177 V466 C864 696 730 866 512 956 C294 866 160 696 160 466 Z" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:fillType="evenOdd"
-            android:pathData="M160 177 Q512 72 864 177 V466 C864 696 730 866 512 956 C294 866 160 696 160 466 Z M100 720 L820 96 L888 174 L168 798 Z M 289 286 A 43 43 0 1 0 375 286 A 43 43 0 1 0 289 286 Z M 233 386 A 43 43 0 1 0 319 386 A 43 43 0 1 0 233 386 Z M 177 486 A 43 43 0 1 0 263 486 A 43 43 0 1 0 177 486 Z M 673 626 A 43 43 0 1 0 759 626 A 43 43 0 1 0 673 626 Z M 617 726 A 43 43 0 1 0 703 726 A 43 43 0 1 0 617 726 Z M 561 826 A 43 43 0 1 0 647 826 A 43 43 0 1 0 561 826 Z" />
+        android:scaleX="0.0708225680"
+        android:scaleY="0.0708225680"
+        android:translateX="17.7388451724"
+        android:translateY="17.7388451724">
+        <group android:pivotX="512" android:pivotY="512" android:rotation="4">
+            <path
+                android:fillColor="#FFFFFF"
+                android:fillType="evenOdd"
+                android:pathData="M344 90 H680 A72 72 0 0 1 752 162 V862 A72 72 0 0 1 680 934 H344 A72 72 0 0 1 272 862 V162 A72 72 0 0 1 344 90 Z M344 108 H680 A54 54 0 0 1 734 162 V862 A54 54 0 0 1 680 916 H344 A54 54 0 0 1 290 862 V162 A54 54 0 0 1 344 108 Z" />
+            <group>
+                <clip-path android:pathData="M344 108 H680 A54 54 0 0 1 734 162 V862 A54 54 0 0 1 680 916 H344 A54 54 0 0 1 290 862 V162 A54 54 0 0 1 344 108 Z" />
+                <path
+                    android:fillColor="#FFFFFF"
+                    android:fillType="evenOdd"
+                    android:pathData="M290,108h444v448h-444z M372,206m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0 M652,206m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0 M512,341m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0 M372,476m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0 M652,476m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0" />
+                <path android:fillColor="#FFFFFF" android:pathData="M372,657m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0" />
+                <path android:fillColor="#FFFFFF" android:pathData="M652,823m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0" />
+            </group>
+        </group>
     </group>
 </vector>
