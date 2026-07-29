@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -103,5 +104,49 @@ class DominoButtonsTest {
         composeRule
             .onNodeWithTag("text")
             .assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun primary_and_text_actions_accept_light_surface_semantic_colors() {
+        composeRule.setContent {
+            DominoPernambucanoTheme {
+                Column {
+                    DominoPrimaryButton(
+                        modifier = Modifier.testTag("light-primary"),
+                        text = "Salvar perfil",
+                        onClick = {},
+                        containerColor =
+                            DominoSemanticColors.dialogAction,
+                        contentColor =
+                            DominoSemanticColors.dialogActionContent,
+                        disabledContainerColor =
+                            DominoSemanticColors.dialogDisabledAction,
+                        disabledContentColor =
+                            DominoSemanticColors
+                                .dialogDisabledActionContent,
+                    )
+                    DominoTextAction(
+                        modifier = Modifier.testTag("light-text"),
+                        text = "Fechar",
+                        onClick = {},
+                        contentColor =
+                            DominoSemanticColors.dialogDismissAction,
+                        disabledContentColor =
+                            DominoSemanticColors
+                                .dialogDisabledDismissAction,
+                    )
+                }
+            }
+        }
+
+        composeRule
+            .onNodeWithTag("light-primary")
+            .assertHeightIsAtLeast(48.dp)
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithTag("light-text")
+            .assertHeightIsAtLeast(48.dp)
+            .assertIsEnabled()
     }
 }

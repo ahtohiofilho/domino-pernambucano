@@ -5,12 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
@@ -32,6 +33,7 @@ import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationIns
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
+import com.ahtohiofilho.dominopernambucano.ui.components.DominoTextAction
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
@@ -39,6 +41,8 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 internal const val MainMenuContentGroupTag = "main_menu_content_group"
 internal const val MainMenuTitleTag = "main_menu_title"
 internal const val MainMenuActionsGroupTag = "main_menu_actions_group"
+internal const val MainMenuRankingActionTag = "main_menu_ranking_action"
+internal const val MainMenuAccountActionTag = "main_menu_account_action"
 
 @Composable
 fun MainMenuScreen(
@@ -221,39 +225,39 @@ fun MainMenuScreen(
                 }
 
                 PrimaryMenuButton(
-                    text = "Jogar",
+                    text = stringResource(R.string.main_menu_play),
                     onClick = onPlayClick,
                     enabled = !menuActionInProgress,
                 )
 
-                TextButton(
+                DominoTextAction(
+                    modifier = Modifier.testTag(
+                        MainMenuRankingActionTag,
+                    ),
+                    text = stringResource(R.string.main_menu_ranking),
                     onClick = onRankingClick,
                     enabled = !menuActionInProgress,
-                ) {
-                    Text(
-                        text = "Ranking",
-                        color = DominoSemanticColors.primaryTextOnDark
-                            .copy(alpha = 0.82f),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
+                    contentColor =
+                        DominoSemanticColors.primaryTextOnDark.copy(
+                            alpha = 0.82f,
+                        ),
+                )
 
-                TextButton(
+                DominoTextAction(
+                    modifier = Modifier.testTag(
+                        MainMenuAccountActionTag,
+                    ),
+                    text = stringResource(R.string.main_menu_account),
                     onClick = {
                         accountDialogVisible = true
                         onAccountDialogOpened()
                     },
                     enabled = !menuActionInProgress,
-                ) {
-                    Text(
-                        text = "Conta",
-                        color = DominoSemanticColors.primaryTextOnDark
-                            .copy(alpha = 0.82f),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
+                    contentColor =
+                        DominoSemanticColors.primaryTextOnDark.copy(
+                            alpha = 0.82f,
+                        ),
+                )
             }
         }
     }

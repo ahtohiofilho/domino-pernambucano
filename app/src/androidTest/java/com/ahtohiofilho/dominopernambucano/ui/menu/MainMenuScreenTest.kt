@@ -392,7 +392,17 @@ class MainMenuScreenTest {
             .assertIsEnabled()
 
         composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
             .onNodeWithText("Conta")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithTag(MainMenuAccountActionTag)
             .assertIsDisplayed()
             .assertIsEnabled()
 

@@ -30,9 +30,20 @@ object DominoSemanticColors {
     val scoreHighlight = DominoColorTokens.AccentYellow
     val warningImpact = DominoColorTokens.AccentRed
 
-    val dialogSurface = DominoColorTokens.SurfaceWhite
-    val dialogTitle = DominoColorTokens.InkBlue
-    val dialogBody = DominoColorTokens.InkBlue
+    /*
+     * Accessible light-dialog mapping approved before the Design System.
+     * Keeping it here preserves the proven contrast while removing the
+     * feature-local palette from OnlineAccountDialog.
+     */
+    val dialogSurface = Color(0xFFF7F8FC)
+    val dialogTitle = Color(0xFF0B2D63)
+    val dialogBody = Color(0xFF16365C)
+    val dialogAction = Color(0xFF0B3B7A)
+    val dialogActionContent = DominoColorTokens.PureWhite
+    val dialogDisabledAction = Color(0xFF466A98)
+    val dialogDisabledActionContent = DominoColorTokens.PureWhite
+    val dialogDismissAction = Color(0xFF0B3B7A)
+    val dialogDisabledDismissAction = Color(0xFF59697D)
 
     val disabledAction =
         DominoColorTokens.PernambucoBlue.copy(alpha = 0.38f)

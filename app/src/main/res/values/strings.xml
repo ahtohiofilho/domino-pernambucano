@@ -1,3 +1,41 @@
 <resources>
     <string name="app_name">Dominó PE</string>
+
+    <string name="main_menu_play">Jogar</string>
+    <string name="main_menu_ranking">Ranking</string>
+    <string name="main_menu_account">Conta</string>
+
+    <string name="play_mode_title">Modo de jogo</string>
+    <string name="play_mode_description">Escolha o fluxo da partida.</string>
+    <string name="play_mode_public_identity">Identidade pública</string>
+    <string name="play_mode_public_name">Nome público</string>
+    <string name="play_mode_ranked">Jogar rankeado</string>
+    <string name="play_mode_ranked_account_required">Conecte ou recupere sua conta para participar do ranking.</string>
+    <string name="play_mode_local">Partida local</string>
+    <string name="play_mode_create_room">Criar sala online</string>
+    <string name="play_mode_join_room">Entrar em sala online</string>
+    <string name="common_back">Voltar</string>
+    <string name="play_mode_lists_and_rankings">Listas e rankings: %1$s</string>
+    <string name="play_mode_table_name">Na mesa: %1$s</string>
+    <string name="play_mode_editable_identity_hint">O nome curto é gerado agora e poderá ser personalizado no perfil.</string>
+    <string name="play_mode_managed_identity_hint">Edite o nome público e o nome de mesa em Conta.</string>
+
+    <string name="account_title">Conta</string>
+    <string name="account_connecting">Conectando...</string>
+    <string name="account_saving">Salvando...</string>
+    <string name="account_save_profile">Salvar perfil</string>
+    <string name="account_retry">Tentar novamente</string>
+    <string name="common_close">Fechar</string>
+    <string name="account_profile_unavailable">O perfil online não está disponível neste ambiente.</string>
+    <string name="account_profile_loading">Carregando perfil...</string>
+    <string name="account_profile_names_explanation">O nome público aparece no ranking. O nome de mesa é a forma curta usada durante a partida.</string>
+    <string name="account_public_name">Nome público</string>
+    <string name="account_table_name">Nome de mesa</string>
+    <string name="account_character_count">%1$d/%2$d</string>
+    <string name="account_state_unavailable">Conta indisponível</string>
+    <string name="account_state_disconnected">Conta não conectada</string>
+    <string name="account_state_visitor">Conta de visitante</string>
+    <string name="account_state_connected">Conta conectada</string>
+    <string name="account_state_recovery_required">Recuperação de conta necessária</string>
+    <string name="account_state_action_in_progress">Ação de conta em andamento</string>
 </resources>

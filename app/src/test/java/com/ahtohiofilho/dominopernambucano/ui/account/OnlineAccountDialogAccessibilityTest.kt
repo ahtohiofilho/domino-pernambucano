@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.account
 
 import androidx.compose.ui.graphics.Color
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -11,41 +12,41 @@ import org.junit.Test
 class OnlineAccountDialogAccessibilityTest {
     @Test
     fun account_dialog_text_pairs_meet_wcag_aa_normal_text() {
-        val palette = OnlineAccountDialogAccessiblePalette
-
         assertContrastAtLeast(
-            foreground = palette.titleContent,
-            background = palette.container,
+            foreground = DominoSemanticColors.dialogTitle,
+            background = DominoSemanticColors.dialogSurface,
             expectedMinimum = WCAG_AA_NORMAL_TEXT_MINIMUM,
             label = "title",
         )
         assertContrastAtLeast(
-            foreground = palette.bodyContent,
-            background = palette.container,
+            foreground = DominoSemanticColors.dialogBody,
+            background = DominoSemanticColors.dialogSurface,
             expectedMinimum = WCAG_AA_NORMAL_TEXT_MINIMUM,
             label = "body",
         )
         assertContrastAtLeast(
-            foreground = palette.primaryContent,
-            background = palette.primaryContainer,
+            foreground = DominoSemanticColors.dialogActionContent,
+            background = DominoSemanticColors.dialogAction,
             expectedMinimum = WCAG_AA_NORMAL_TEXT_MINIMUM,
             label = "primary action",
         )
         assertContrastAtLeast(
-            foreground = palette.disabledPrimaryContent,
-            background = palette.disabledPrimaryContainer,
+            foreground =
+                DominoSemanticColors.dialogDisabledActionContent,
+            background = DominoSemanticColors.dialogDisabledAction,
             expectedMinimum = WCAG_AA_NORMAL_TEXT_MINIMUM,
             label = "disabled primary action",
         )
         assertContrastAtLeast(
-            foreground = palette.dismissContent,
-            background = palette.container,
+            foreground = DominoSemanticColors.dialogDismissAction,
+            background = DominoSemanticColors.dialogSurface,
             expectedMinimum = WCAG_AA_NORMAL_TEXT_MINIMUM,
             label = "dismiss action",
         )
         assertContrastAtLeast(
-            foreground = palette.disabledDismissContent,
-            background = palette.container,
+            foreground =
+                DominoSemanticColors.dialogDisabledDismissAction,
+            background = DominoSemanticColors.dialogSurface,
             expectedMinimum = WCAG_AA_NORMAL_TEXT_MINIMUM,
             label = "disabled dismiss action",
         )
@@ -53,23 +54,23 @@ class OnlineAccountDialogAccessibilityTest {
 
     @Test
     fun account_dialog_uses_an_opaque_light_surface() {
-        val palette = OnlineAccountDialogAccessiblePalette
-
         assertTrue(
             "The dialog container must remain visibly light.",
-            relativeLuminance(palette.container) >= 0.90,
+            relativeLuminance(
+                DominoSemanticColors.dialogSurface,
+            ) >= 0.90,
         )
 
         listOf(
-            palette.container,
-            palette.titleContent,
-            palette.bodyContent,
-            palette.primaryContainer,
-            palette.primaryContent,
-            palette.disabledPrimaryContainer,
-            palette.disabledPrimaryContent,
-            palette.dismissContent,
-            palette.disabledDismissContent,
+            DominoSemanticColors.dialogSurface,
+            DominoSemanticColors.dialogTitle,
+            DominoSemanticColors.dialogBody,
+            DominoSemanticColors.dialogAction,
+            DominoSemanticColors.dialogActionContent,
+            DominoSemanticColors.dialogDisabledAction,
+            DominoSemanticColors.dialogDisabledActionContent,
+            DominoSemanticColors.dialogDismissAction,
+            DominoSemanticColors.dialogDisabledDismissAction,
         ).forEach { color ->
             assertEquals(1f, color.alpha, 0f)
         }
@@ -77,25 +78,41 @@ class OnlineAccountDialogAccessibilityTest {
 
     @Test
     fun account_dialog_palette_remains_brand_consistent_and_stable() {
-        val palette = OnlineAccountDialogAccessiblePalette
-
-        assertEquals(Color(0xFFF7F8FC), palette.container)
-        assertEquals(Color(0xFF0B2D63), palette.titleContent)
-        assertEquals(Color(0xFF16365C), palette.bodyContent)
-        assertEquals(Color(0xFF0B3B7A), palette.primaryContainer)
-        assertEquals(Color.White, palette.primaryContent)
         assertEquals(
-            Color(0xFF466A98),
-            palette.disabledPrimaryContainer,
+            Color(0xFFF7F8FC),
+            DominoSemanticColors.dialogSurface,
+        )
+        assertEquals(
+            Color(0xFF0B2D63),
+            DominoSemanticColors.dialogTitle,
+        )
+        assertEquals(
+            Color(0xFF16365C),
+            DominoSemanticColors.dialogBody,
+        )
+        assertEquals(
+            Color(0xFF0B3B7A),
+            DominoSemanticColors.dialogAction,
         )
         assertEquals(
             Color.White,
-            palette.disabledPrimaryContent,
+            DominoSemanticColors.dialogActionContent,
         )
-        assertEquals(Color(0xFF0B3B7A), palette.dismissContent)
+        assertEquals(
+            Color(0xFF466A98),
+            DominoSemanticColors.dialogDisabledAction,
+        )
+        assertEquals(
+            Color.White,
+            DominoSemanticColors.dialogDisabledActionContent,
+        )
+        assertEquals(
+            Color(0xFF0B3B7A),
+            DominoSemanticColors.dialogDismissAction,
+        )
         assertEquals(
             Color(0xFF59697D),
-            palette.disabledDismissContent,
+            DominoSemanticColors.dialogDisabledDismissAction,
         )
     }
 

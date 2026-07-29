@@ -19,6 +19,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -46,6 +47,11 @@ internal fun DominoPrimaryButton(
     onClick: () -> Unit,
     enabled: Boolean = true,
     loading: Boolean = false,
+    containerColor: Color = DominoSemanticColors.primarySurface,
+    contentColor: Color = DominoSemanticColors.primaryTextOnLight,
+    disabledContainerColor: Color = DominoSemanticColors.disabledAction,
+    disabledContentColor: Color =
+        DominoSemanticColors.disabledContentOnDark,
 ) {
     Button(
         onClick = onClick,
@@ -56,8 +62,10 @@ internal fun DominoPrimaryButton(
         shape = MaterialTheme.shapes.large,
         contentPadding = PrimaryContentPadding,
         colors = ButtonDefaults.buttonColors(
-            containerColor = DominoSemanticColors.primarySurface,
-            contentColor = DominoSemanticColors.primaryTextOnLight,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            disabledContainerColor = disabledContainerColor,
+            disabledContentColor = disabledContentColor,
         ),
     ) {
         DominoActionContent(
@@ -107,6 +115,9 @@ internal fun DominoTextAction(
     onClick: () -> Unit,
     enabled: Boolean = true,
     loading: Boolean = false,
+    contentColor: Color = DominoSemanticColors.primaryTextOnDark,
+    disabledContentColor: Color =
+        DominoSemanticColors.disabledContentOnDark,
 ) {
     TextButton(
         onClick = onClick,
@@ -115,7 +126,8 @@ internal fun DominoTextAction(
             .heightIn(min = 48.dp)
             .loadingSemantics(loading),
         colors = ButtonDefaults.textButtonColors(
-            contentColor = DominoSemanticColors.primaryTextOnDark,
+            contentColor = contentColor,
+            disabledContentColor = disabledContentColor,
         ),
     ) {
         DominoActionContent(

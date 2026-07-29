@@ -4,43 +4,36 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_TABLE_NAME_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
+import com.ahtohiofilho.dominopernambucano.ui.components.DominoOutlinedTextField
+import com.ahtohiofilho.dominopernambucano.ui.components.DominoPrimaryButton
+import com.ahtohiofilho.dominopernambucano.ui.components.DominoTextAction
+import com.ahtohiofilho.dominopernambucano.ui.components.DominoTextFieldTone
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
-internal data class OnlineAccountDialogPalette(
-    val container: Color,
-    val titleContent: Color,
-    val bodyContent: Color,
-    val primaryContainer: Color,
-    val primaryContent: Color,
-    val disabledPrimaryContainer: Color,
-    val disabledPrimaryContent: Color,
-    val dismissContent: Color,
-    val disabledDismissContent: Color,
-)
-
-internal val OnlineAccountDialogAccessiblePalette =
-    OnlineAccountDialogPalette(
-        container = Color(0xFFF7F8FC),
-        titleContent = Color(0xFF0B2D63),
-        bodyContent = Color(0xFF16365C),
-        primaryContainer = Color(0xFF0B3B7A),
-        primaryContent = Color.White,
-        disabledPrimaryContainer = Color(0xFF466A98),
-        disabledPrimaryContent = Color.White,
-        dismissContent = Color(0xFF0B3B7A),
-        disabledDismissContent = Color(0xFF59697D),
-    )
+internal const val OnlineAccountDialogTag = "online_account_dialog"
+internal const val OnlineAccountPrimaryActionTag =
+    "online_account_primary_action"
+internal const val OnlineAccountDismissActionTag =
+    "online_account_dismiss_action"
+internal const val OnlineAccountPublicNameFieldTag =
+    "online_account_public_name_field"
+internal const val OnlineAccountTableNameFieldTag =
+    "online_account_table_name_field"
 
 internal const val ONLINE_ACCOUNT_CONNECTED_MESSAGE =
     "Seu perfil e seu histórico online foram preservados."
@@ -68,7 +61,6 @@ fun OnlineAccountDialog(
     onDismissRequest: () -> Unit,
 ) {
     val presentation = status.toPresentation()
-    val palette = OnlineAccountDialogAccessiblePalette
     val editor =
         profileState as? OnlineAccountProfileUiState.Editing
     val profileActionInProgress =
@@ -80,15 +72,40 @@ fun OnlineAccountDialog(
             status = status,
             feedbackMessage = feedbackMessage,
         )
+    val accountStateDescription = if (anyActionInProgress) {
+        stringResource(R.string.account_state_action_in_progress)
+    } else {
+        when (status) {
+            OnlineGoogleAccountStatus.UNAVAILABLE ->
+                stringResource(R.string.account_state_unavailable)
+
+            OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL ->
+                stringResource(R.string.account_state_disconnected)
+
+            OnlineGoogleAccountStatus.VISITOR ->
+                stringResource(R.string.account_state_visitor)
+
+            OnlineGoogleAccountStatus.CONNECTED ->
+                stringResource(R.string.account_state_connected)
+
+            OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
+                stringResource(R.string.account_state_recovery_required)
+        }
+    }
 
     AlertDialog(
+        modifier = Modifier
+            .testTag(OnlineAccountDialogTag)
+            .semantics {
+                stateDescription = accountStateDescription
+            },
         onDismissRequest = {
             if (!anyActionInProgress) {
                 onDismissRequest()
             }
         },
         title = {
-            Text(text = "Conta")
+            Text(text = stringResource(R.string.account_title))
         },
         text = {
             Column(
@@ -116,94 +133,100 @@ fun OnlineAccountDialog(
             when {
                 status != OnlineGoogleAccountStatus.CONNECTED -> {
                     presentation.actionLabel?.let { actionLabel ->
-                        Button(
+                        DominoPrimaryButton(
+                            modifier = Modifier.testTag(
+                                OnlineAccountPrimaryActionTag,
+                            ),
+                            text = if (actionInProgress) {
+                                stringResource(
+                                    R.string.account_connecting,
+                                )
+                            } else {
+                                actionLabel
+                            },
                             onClick = onConnectGoogleClick,
                             enabled = !anyActionInProgress,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor =
-                                    palette.primaryContainer,
-                                contentColor =
-                                    palette.primaryContent,
-                                disabledContainerColor =
-                                    palette.disabledPrimaryContainer,
-                                disabledContentColor =
-                                    palette.disabledPrimaryContent,
-                            ),
-                        ) {
-                            Text(
-                                text = if (actionInProgress) {
-                                    "Conectando..."
-                                } else {
-                                    actionLabel
-                                },
-                            )
-                        }
+                            containerColor =
+                                DominoSemanticColors.dialogAction,
+                            contentColor =
+                                DominoSemanticColors.dialogActionContent,
+                            disabledContainerColor =
+                                DominoSemanticColors.dialogDisabledAction,
+                            disabledContentColor =
+                                DominoSemanticColors
+                                    .dialogDisabledActionContent,
+                        )
                     }
                 }
 
                 editor != null -> {
-                    Button(
+                    DominoPrimaryButton(
+                        modifier = Modifier.testTag(
+                            OnlineAccountPrimaryActionTag,
+                        ),
+                        text = if (editor.actionInProgress) {
+                            stringResource(R.string.account_saving)
+                        } else {
+                            stringResource(
+                                R.string.account_save_profile,
+                            )
+                        },
                         onClick = onSaveProfileClick,
                         enabled =
                             editor.saveEnabled &&
                                 !actionInProgress,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor =
-                                palette.primaryContainer,
-                            contentColor =
-                                palette.primaryContent,
-                            disabledContainerColor =
-                                palette.disabledPrimaryContainer,
-                            disabledContentColor =
-                                palette.disabledPrimaryContent,
-                        ),
-                    ) {
-                        Text(
-                            text = if (
-                                editor.actionInProgress
-                            ) {
-                                "Salvando..."
-                            } else {
-                                "Salvar perfil"
-                            },
-                        )
-                    }
+                        containerColor =
+                            DominoSemanticColors.dialogAction,
+                        contentColor =
+                            DominoSemanticColors.dialogActionContent,
+                        disabledContainerColor =
+                            DominoSemanticColors.dialogDisabledAction,
+                        disabledContentColor =
+                            DominoSemanticColors
+                                .dialogDisabledActionContent,
+                    )
                 }
 
                 profileState is
                     OnlineAccountProfileUiState.Failure &&
                     profileState.retryable -> {
-                    Button(
+                    DominoPrimaryButton(
+                        modifier = Modifier.testTag(
+                            OnlineAccountPrimaryActionTag,
+                        ),
+                        text = stringResource(R.string.account_retry),
                         onClick = onRetryProfileClick,
                         enabled = !anyActionInProgress,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor =
-                                palette.primaryContainer,
-                            contentColor =
-                                palette.primaryContent,
-                        ),
-                    ) {
-                        Text(text = "Tentar novamente")
-                    }
+                        containerColor =
+                            DominoSemanticColors.dialogAction,
+                        contentColor =
+                            DominoSemanticColors.dialogActionContent,
+                        disabledContainerColor =
+                            DominoSemanticColors.dialogDisabledAction,
+                        disabledContentColor =
+                            DominoSemanticColors
+                                .dialogDisabledActionContent,
+                    )
                 }
             }
         },
         dismissButton = {
-            TextButton(
+            DominoTextAction(
+                modifier = Modifier.testTag(
+                    OnlineAccountDismissActionTag,
+                ),
+                text = stringResource(R.string.common_close),
                 onClick = onDismissRequest,
                 enabled = !anyActionInProgress,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = palette.dismissContent,
-                    disabledContentColor =
-                        palette.disabledDismissContent,
-                ),
-            ) {
-                Text(text = "Fechar")
-            }
+                contentColor =
+                    DominoSemanticColors.dialogDismissAction,
+                disabledContentColor =
+                    DominoSemanticColors.dialogDisabledDismissAction,
+            )
         },
-        containerColor = palette.container,
-        titleContentColor = palette.titleContent,
-        textContentColor = palette.bodyContent,
+        containerColor = DominoSemanticColors.dialogSurface,
+        titleContentColor = DominoSemanticColors.dialogTitle,
+        textContentColor = DominoSemanticColors.dialogBody,
     )
 }
 
@@ -216,13 +239,18 @@ private fun OnlineAccountProfileContent(
     when (state) {
         OnlineAccountProfileUiState.NotAvailable -> {
             Text(
-                text =
-                    "O perfil online não está disponível neste ambiente.",
+                text = stringResource(
+                    R.string.account_profile_unavailable,
+                ),
             )
         }
 
         OnlineAccountProfileUiState.Loading -> {
-            Text(text = "Carregando perfil...")
+            Text(
+                text = stringResource(
+                    R.string.account_profile_loading,
+                ),
+            )
         }
 
         is OnlineAccountProfileUiState.Failure -> {
@@ -234,47 +262,49 @@ private fun OnlineAccountProfileContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text =
-                        "O nome público aparece no ranking. " +
-                            "O nome de mesa é a forma curta usada durante a partida.",
+                    text = stringResource(
+                        R.string.account_profile_names_explanation,
+                    ),
                 )
 
-                OutlinedTextField(
+                DominoOutlinedTextField(
                     value = state.publicDisplayName,
                     onValueChange = onPublicDisplayNameChange,
+                    modifier = Modifier.testTag(
+                        OnlineAccountPublicNameFieldTag,
+                    ),
                     enabled = !state.actionInProgress,
-                    singleLine = true,
-                    label = {
-                        Text(text = "Nome público")
-                    },
-                    supportingText = {
-                        Text(
-                            text =
-                                "${state.publicDisplayName.length}/" +
-                                    MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH,
-                        )
-                    },
+                    label = stringResource(
+                        R.string.account_public_name,
+                    ),
+                    supportingText = stringResource(
+                        R.string.account_character_count,
+                        state.publicDisplayName.length,
+                        MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH,
+                    ),
                     keyboardOptions = KeyboardOptions(
                         capitalization =
                             KeyboardCapitalization.Words,
                     ),
+                    tone = DominoTextFieldTone.OnLight,
                 )
 
-                OutlinedTextField(
+                DominoOutlinedTextField(
                     value = state.tableName,
                     onValueChange = onTableNameChange,
+                    modifier = Modifier.testTag(
+                        OnlineAccountTableNameFieldTag,
+                    ),
                     enabled = !state.actionInProgress,
-                    singleLine = true,
-                    label = {
-                        Text(text = "Nome de mesa")
-                    },
-                    supportingText = {
-                        Text(
-                            text =
-                                "${state.tableName.length}/" +
-                                    MAX_ONLINE_TABLE_NAME_LENGTH,
-                        )
-                    },
+                    label = stringResource(
+                        R.string.account_table_name,
+                    ),
+                    supportingText = stringResource(
+                        R.string.account_character_count,
+                        state.tableName.length,
+                        MAX_ONLINE_TABLE_NAME_LENGTH,
+                    ),
+                    tone = DominoTextFieldTone.OnLight,
                 )
 
                 state.validationMessage?.let { message ->
@@ -286,6 +316,52 @@ private fun OnlineAccountProfileContent(
                 }
             }
         }
+    }
+}
+
+@Preview(
+    name = "Conta desconectada",
+    showBackground = true,
+    backgroundColor = 0xFF08275C,
+)
+@Composable
+private fun OnlineAccountDialogDisconnectedPreview() {
+    DominoPernambucanoTheme {
+        OnlineAccountDialog(
+            status = OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL,
+            actionInProgress = false,
+            feedbackMessage = null,
+            profileState = OnlineAccountProfileUiState.NotAvailable,
+            onPublicDisplayNameChange = {},
+            onTableNameChange = {},
+            onSaveProfileClick = {},
+            onRetryProfileClick = {},
+            onConnectGoogleClick = {},
+            onDismissRequest = {},
+        )
+    }
+}
+
+@Preview(
+    name = "Conta conectada carregando",
+    showBackground = true,
+    backgroundColor = 0xFF08275C,
+)
+@Composable
+private fun OnlineAccountDialogLoadingPreview() {
+    DominoPernambucanoTheme {
+        OnlineAccountDialog(
+            status = OnlineGoogleAccountStatus.CONNECTED,
+            actionInProgress = false,
+            feedbackMessage = null,
+            profileState = OnlineAccountProfileUiState.Loading,
+            onPublicDisplayNameChange = {},
+            onTableNameChange = {},
+            onSaveProfileClick = {},
+            onRetryProfileClick = {},
+            onConnectGoogleClick = {},
+            onDismissRequest = {},
+        )
     }
 }
 
