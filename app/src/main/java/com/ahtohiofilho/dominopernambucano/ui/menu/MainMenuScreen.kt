@@ -1,5 +1,8 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -8,8 +11,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
@@ -19,7 +32,13 @@ import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationIns
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
+
+internal const val MainMenuContentGroupTag = "main_menu_content_group"
+internal const val MainMenuTitleTag = "main_menu_title"
+internal const val MainMenuActionsGroupTag = "main_menu_actions_group"
 
 @Composable
 fun MainMenuScreen(
@@ -104,129 +123,138 @@ fun MainMenuScreen(
     }
 
     MenuScaffold {
-        Text(
-            text = "MESA, PARCERIA E ESTRATÉGIA",
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.74f),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.14.sp,
-            textAlign = TextAlign.Center,
-        )
-
-        Text(
-            text = "Dominó PE",
-            color = DominoSemanticColors.primaryTextOnDark,
-            fontSize = 42.sp,
-            lineHeight = 40.sp,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-        )
-
-        Text(
-            text = "Um jogo de parceria, leitura de mesa e tomada de decisão.",
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.82f),
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-        )
-
-        menuMessage?.let { message ->
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(MainMenuContentGroupTag),
+            verticalArrangement = Arrangement.spacedBy(
+                MaterialTheme.dominoSpacing.xxl,
+            ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text(
-                text = message,
-                color = DominoSemanticColors.primaryTextOnDark
-                    .copy(alpha = 0.82f),
-                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(MainMenuTitleTag)
+                    .semantics {
+                        heading()
+                    },
+                text = dominoPeBrandNameOnBlue(),
+                fontSize = 42.sp,
+                lineHeight = 40.sp,
+                fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
             )
-        }
 
-        if (
-            pendingOnlineParticipation is
-                    OnlinePendingParticipationLocalResolution
-                    .ReadyForRemoteReconciliation &&
-            !resumePendingOnlineMatchAvailable
-        ) {
-            SecondaryMenuButton(
-                text = if (inspectionInProgress) {
-                    "Verificando..."
-                } else {
-                    "Verificar participação online"
-                },
-                onClick = onInspectPendingOnlineParticipationClick,
-                enabled = !menuActionInProgress,
-            )
-        }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(MainMenuActionsGroupTag),
+                verticalArrangement = Arrangement.spacedBy(
+                    MaterialTheme.dominoSpacing.md,
+                ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                menuMessage?.let { message ->
+                    Text(
+                        text = message,
+                        color = DominoSemanticColors.primaryTextOnDark
+                            .copy(alpha = 0.82f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                    )
+                }
 
-        if (resumePendingOnlineMatchAvailable) {
-            SecondaryMenuButton(
-                text = if (pendingOnlineMatchResumeInProgress) {
-                    "Retomando..."
-                } else {
-                    when (
-                        recoverablePendingOnlineParticipation
-                            ?.roomSnapshot
-                            ?.status
-                    ) {
-                        OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
-                            "Retomar sala online"
-                        }
+                if (
+                    pendingOnlineParticipation is
+                            OnlinePendingParticipationLocalResolution
+                            .ReadyForRemoteReconciliation &&
+                    !resumePendingOnlineMatchAvailable
+                ) {
+                    SecondaryMenuButton(
+                        text = if (inspectionInProgress) {
+                            "Verificando..."
+                        } else {
+                            "Verificar participação online"
+                        },
+                        onClick = onInspectPendingOnlineParticipationClick,
+                        enabled = !menuActionInProgress,
+                    )
+                }
 
-                        OnlineRoomStatusDto.IN_MATCH -> {
-                            "Retomar partida online"
-                        }
+                if (resumePendingOnlineMatchAvailable) {
+                    SecondaryMenuButton(
+                        text = if (pendingOnlineMatchResumeInProgress) {
+                            "Retomando..."
+                        } else {
+                            when (
+                                recoverablePendingOnlineParticipation
+                                    ?.roomSnapshot
+                                    ?.status
+                            ) {
+                                OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
+                                    "Retomar sala online"
+                                }
 
-                        else -> {
-                            "Retomar participação online"
-                        }
-                    }
-                },
-                onClick = onResumePendingOnlineMatchClick,
-                enabled = !menuActionInProgress,
-            )
-        }
+                                OnlineRoomStatusDto.IN_MATCH -> {
+                                    "Retomar partida online"
+                                }
 
-        if (discardRejectedPendingOnlineParticipationAvailable) {
-            SecondaryMenuButton(
-                text =
-                    "Remover participa\u00e7\u00e3o online rejeitada",
-                onClick =
-                    onDiscardRejectedPendingOnlineParticipationClick,
-                enabled = !menuActionInProgress,
-            )
-        }
+                                else -> {
+                                    "Retomar participação online"
+                                }
+                            }
+                        },
+                        onClick = onResumePendingOnlineMatchClick,
+                        enabled = !menuActionInProgress,
+                    )
+                }
 
-        PrimaryMenuButton(
-            text = "Jogar",
-            onClick = onPlayClick,
-            enabled = !menuActionInProgress,
-        )
+                if (discardRejectedPendingOnlineParticipationAvailable) {
+                    SecondaryMenuButton(
+                        text =
+                            "Remover participa\u00e7\u00e3o online rejeitada",
+                        onClick =
+                            onDiscardRejectedPendingOnlineParticipationClick,
+                        enabled = !menuActionInProgress,
+                    )
+                }
 
-        TextButton(
-            onClick = onRankingClick,
-            enabled = !menuActionInProgress,
-        ) {
-            Text(
-                text = "Ranking",
-                color = DominoSemanticColors.primaryTextOnDark
-                    .copy(alpha = 0.82f),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+                PrimaryMenuButton(
+                    text = "Jogar",
+                    onClick = onPlayClick,
+                    enabled = !menuActionInProgress,
+                )
 
-        TextButton(
-            onClick = {
-                accountDialogVisible = true
-                onAccountDialogOpened()
-            },
-            enabled = !menuActionInProgress,
-        ) {
-            Text(
-                text = "Conta",
-                color = DominoSemanticColors.primaryTextOnDark
-                    .copy(alpha = 0.82f),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-            )
+                TextButton(
+                    onClick = onRankingClick,
+                    enabled = !menuActionInProgress,
+                ) {
+                    Text(
+                        text = "Ranking",
+                        color = DominoSemanticColors.primaryTextOnDark
+                            .copy(alpha = 0.82f),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                TextButton(
+                    onClick = {
+                        accountDialogVisible = true
+                        onAccountDialogOpened()
+                    },
+                    enabled = !menuActionInProgress,
+                ) {
+                    Text(
+                        text = "Conta",
+                        color = DominoSemanticColors.primaryTextOnDark
+                            .copy(alpha = 0.82f),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
         }
     }
 
@@ -249,6 +277,31 @@ fun MainMenuScreen(
                 accountDialogVisible = false
             },
         )
+    }
+}
+
+internal fun dominoPeBrandNameOnBlue(): AnnotatedString {
+    return buildAnnotatedString {
+        appendBrandGlyph("D", DominoColorTokens.AccentYellow)
+        appendBrandGlyph("o", DominoColorTokens.AccentRed)
+        appendBrandGlyph("m", DominoColorTokens.AccentYellow)
+        appendBrandGlyph("i", DominoColorTokens.AccentGreen)
+        appendBrandGlyph("n", DominoColorTokens.AccentYellow)
+        appendBrandGlyph("ó", DominoColorTokens.PureWhite)
+        append(" ")
+        appendBrandGlyph("P", DominoColorTokens.AccentRed)
+        appendBrandGlyph("E", DominoColorTokens.PureWhite)
+    }
+}
+
+private fun AnnotatedString.Builder.appendBrandGlyph(
+    glyph: String,
+    color: Color,
+) {
+    withStyle(
+        style = SpanStyle(color = color),
+    ) {
+        append(glyph)
     }
 }
 

@@ -1,13 +1,21 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBinding
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
@@ -18,7 +26,9 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -348,6 +358,192 @@ class MainMenuScreenTest {
         composeRule
             .onNodeWithText("Jogar")
             .assertIsNotEnabled()
+    }
+
+    @Test
+    fun menu_omits_generic_copy_and_preserves_product_name_and_core_actions() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.NotRequested,
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText("Dominó PE")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithText("Ranking")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithText("Conta")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
+            .onAllNodesWithText("MESA, PARCERIA E ESTRATÉGIA")
+            .assertCountEquals(0)
+
+        composeRule
+            .onAllNodesWithText(
+                "Um jogo de parceria, leitura de mesa e tomada de decisão.",
+            )
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun product_name_is_non_clickable_heading_in_centered_compact_group() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.NotRequested,
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        val titleNode = composeRule.onNodeWithText("Dominó PE")
+
+        titleNode
+            .assertIsDisplayed()
+            .assert(isHeading())
+            .assertHasNoClickAction()
+
+        val rootBounds = composeRule
+            .onRoot()
+            .getUnclippedBoundsInRoot()
+        val contentGroupBounds = composeRule
+            .onNodeWithTag(MainMenuContentGroupTag)
+            .getUnclippedBoundsInRoot()
+        val titleBounds = composeRule
+            .onNodeWithTag(MainMenuTitleTag)
+            .getUnclippedBoundsInRoot()
+        val actionsGroupBounds = composeRule
+            .onNodeWithTag(MainMenuActionsGroupTag)
+            .getUnclippedBoundsInRoot()
+        val playBounds = composeRule
+            .onNodeWithText("Jogar")
+            .getUnclippedBoundsInRoot()
+        val rankingBounds = composeRule
+            .onNodeWithText("Ranking")
+            .getUnclippedBoundsInRoot()
+        val accountBounds = composeRule
+            .onNodeWithText("Conta")
+            .getUnclippedBoundsInRoot()
+
+        with(composeRule.density) {
+            val rootCenterPx =
+                (rootBounds.top.toPx() + rootBounds.bottom.toPx()) / 2f
+            val contentCenterPx =
+                (
+                    contentGroupBounds.top.toPx() +
+                        contentGroupBounds.bottom.toPx()
+                    ) / 2f
+            val centerTolerancePx =
+                32.dp.toPx()
+            val expectedTitleActionGapPx =
+                40.dp.toPx()
+            val actionBalanceTolerancePx =
+                8.dp.toPx()
+            val actualTitleActionGapPx =
+                actionsGroupBounds.top.toPx() - titleBounds.bottom.toPx()
+            val playCenterPx =
+                (playBounds.top.toPx() + playBounds.bottom.toPx()) / 2f
+            val rankingCenterPx =
+                (
+                    rankingBounds.top.toPx() +
+                        rankingBounds.bottom.toPx()
+                    ) / 2f
+            val accountCenterPx =
+                (
+                    accountBounds.top.toPx() +
+                        accountBounds.bottom.toPx()
+                    ) / 2f
+            val titleCenterPx =
+                (titleBounds.top.toPx() + titleBounds.bottom.toPx()) / 2f
+            val playRankingStepPx = rankingCenterPx - playCenterPx
+            val rankingAccountStepPx = accountCenterPx - rankingCenterPx
+            val averageActionStepPx =
+                (playRankingStepPx + rankingAccountStepPx) / 2f
+            val titleActionRatio =
+                (playCenterPx - titleCenterPx) / averageActionStepPx
+
+            assertEquals(
+                rootCenterPx,
+                contentCenterPx,
+                centerTolerancePx,
+            )
+            assertEquals(
+                expectedTitleActionGapPx,
+                actualTitleActionGapPx,
+                2.0f,
+            )
+            assertTrue(
+                contentGroupBounds.height.toPx() <=
+                    rootBounds.height.toPx() * 0.55f,
+            )
+            assertTrue(titleBounds.bottom <= actionsGroupBounds.top)
+            assertTrue(playCenterPx < rankingCenterPx)
+            assertTrue(rankingCenterPx < accountCenterPx)
+            assertEquals(
+                playRankingStepPx,
+                rankingAccountStepPx,
+                actionBalanceTolerancePx,
+            )
+            assertTrue(titleActionRatio >= 1.2f)
+            assertTrue(titleActionRatio <= 1.6f)
+        }
+    }
+
+    @Test
+    fun product_name_uses_official_multicolor_sequence_on_blue() {
+        val brandName = dominoPeBrandNameOnBlue()
+
+        assertEquals(
+            "Dominó PE",
+            brandName.text,
+        )
+        assertEquals(
+            listOf(
+                Triple(0, 1, DominoColorTokens.AccentYellow),
+                Triple(1, 2, DominoColorTokens.AccentRed),
+                Triple(2, 3, DominoColorTokens.AccentYellow),
+                Triple(3, 4, DominoColorTokens.AccentGreen),
+                Triple(4, 5, DominoColorTokens.AccentYellow),
+                Triple(5, 6, DominoColorTokens.PureWhite),
+                Triple(7, 8, DominoColorTokens.AccentRed),
+                Triple(8, 9, DominoColorTokens.PureWhite),
+            ),
+            brandName.spanStyles.map { range ->
+                Triple(
+                    range.start,
+                    range.end,
+                    range.item.color,
+                )
+            },
+        )
     }
 
     private fun readyParticipation():

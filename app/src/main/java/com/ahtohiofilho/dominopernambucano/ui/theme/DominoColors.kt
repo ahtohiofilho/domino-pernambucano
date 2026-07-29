@@ -29,4 +29,20 @@ object DominoSemanticColors {
     val playableMove = DominoColorTokens.AccentGreen
     val scoreHighlight = DominoColorTokens.AccentYellow
     val warningImpact = DominoColorTokens.AccentRed
+
+    val dialogSurface = DominoColorTokens.SurfaceWhite
+    val dialogTitle = DominoColorTokens.InkBlue
+    val dialogBody = DominoColorTokens.InkBlue
+
+    val disabledAction =
+        DominoColorTokens.PernambucoBlue.copy(alpha = 0.38f)
+    val disabledContentOnDark =
+        DominoColorTokens.SurfaceWhite.copy(alpha = 0.60f)
+    val disabledContentOnLight =
+        DominoColorTokens.InkBlue.copy(alpha = 0.60f)
+
+    val highContrastBorder =
+        DominoColorTokens.PureWhite.copy(alpha = 0.72f)
+    val lowContrastBorder =
+        DominoColorTokens.PureWhite.copy(alpha = 0.36f)
 }

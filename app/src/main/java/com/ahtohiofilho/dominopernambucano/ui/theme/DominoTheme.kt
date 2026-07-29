@@ -1,11 +1,9 @@
 package com.ahtohiofilho.dominopernambucano.ui.theme
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Shapes
-import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.CompositionLocalProvider
 
 private val DominoColorScheme = darkColorScheme(
     primary = DominoColorTokens.PernambucoBlue,
@@ -27,17 +25,21 @@ private val DominoColorScheme = darkColorScheme(
     onSurfaceVariant = DominoSemanticColors.primaryTextOnLight,
 
     error = DominoColorTokens.AccentRed,
-    onError = Color.White,
+    onError = DominoColorTokens.PureWhite,
 )
 
 @Composable
 fun DominoPernambucanoTheme(
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = DominoColorScheme,
-        typography = Typography(),
-        shapes = Shapes(),
-        content = content,
-    )
+    CompositionLocalProvider(
+        LocalDominoSpacing provides DominoSpacing(),
+    ) {
+        MaterialTheme(
+            colorScheme = DominoColorScheme,
+            typography = DominoTypography,
+            shapes = DominoShapes,
+            content = content,
+        )
+    }
 }
