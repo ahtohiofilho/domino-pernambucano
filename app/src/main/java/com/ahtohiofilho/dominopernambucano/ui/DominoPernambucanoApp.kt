@@ -7,8 +7,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.AndroidGoogleIdTokenProvider
 import com.ahtohiofilho.dominopernambucano.online.GoogleSignInConfig
 import com.ahtohiofilho.dominopernambucano.online.GoogleSignInEnvironment
@@ -54,6 +57,8 @@ import com.ahtohiofilho.dominopernambucano.ui.online.OnlineCreateRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineRankedQueueRoute
 import com.ahtohiofilho.dominopernambucano.ui.ranking.OnlinePublicRankingRoute
+import com.ahtohiofilho.dominopernambucano.ui.settings.AndroidAppLanguageManager
+import com.ahtohiofilho.dominopernambucano.ui.settings.SettingsScreen
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.launch
@@ -65,6 +70,10 @@ fun DominoPernambucanoApp(
         GoogleSignInEnvironment.Current,
 ) {
     val context = LocalContext.current
+
+    var settingsVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     val onlineTraceClientSessionId = remember {
         "android-${UUID.randomUUID()}"
@@ -359,6 +368,26 @@ fun DominoPernambucanoApp(
         }
     }
 
+    if (settingsVisible) {
+        SettingsScreen(
+            currentSelection =
+                AndroidAppLanguageManager.currentSelection(
+                    context = context,
+                ),
+            onSelectionChange = { selection ->
+                AndroidAppLanguageManager.applySelection(
+                    context = context,
+                    selection = selection,
+                )
+            },
+            onBackClick = {
+                settingsVisible = false
+            },
+        )
+
+        return
+    }
+
     when (val state = sessionState) {
         is DominoSessionState.MainMenu -> {
             MainMenuScreen(
@@ -462,6 +491,9 @@ fun DominoPernambucanoApp(
                             DominoSessionCommand.OpenPublicRanking,
                         )
                     }
+                },
+                onSettingsClick = {
+                    settingsVisible = true
                 },
                 onInspectPendingOnlineParticipationClick = {
                     if (!pendingOnlineMatchResumeInProgress) {
@@ -739,9 +771,12 @@ fun DominoPernambucanoApp(
 
             if (rankingClient == null) {
                 MenuPlaceholderScreen(
-                    title = "Ranking",
-                    description =
-                        "O ranking não está disponível neste ambiente.",
+                    title = stringResource(
+                        R.string.ranking_title,
+                    ),
+                    description = stringResource(
+                        R.string.ranking_unavailable_environment,
+                    ),
                     onBackClick = {
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.BackToMainMenu,

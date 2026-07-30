@@ -4,16 +4,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_TABLE_NAME_LENGTH
@@ -24,6 +28,7 @@ import com.ahtohiofilho.dominopernambucano.ui.components.DominoTextAction
 import com.ahtohiofilho.dominopernambucano.ui.components.DominoTextFieldTone
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 
 internal const val OnlineAccountDialogTag = "online_account_dialog"
 internal const val OnlineAccountPrimaryActionTag =
@@ -34,6 +39,8 @@ internal const val OnlineAccountPublicNameFieldTag =
     "online_account_public_name_field"
 internal const val OnlineAccountTableNameFieldTag =
     "online_account_table_name_field"
+internal const val OnlineAccountProfileStatusTag =
+    "online_account_profile_status"
 
 internal const val ONLINE_ACCOUNT_CONNECTED_MESSAGE =
     "Seu perfil e seu histórico online foram preservados."
@@ -109,12 +116,19 @@ fun OnlineAccountDialog(
         },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(
+                    MaterialTheme.dominoSpacing.sm,
+                ),
             ) {
                 Text(text = presentation.message)
 
                 visibleFeedbackMessage?.let { message ->
-                    Text(text = message)
+                    Text(
+                        modifier = Modifier.semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                        text = message,
+                    )
                 }
 
                 if (
@@ -146,6 +160,7 @@ fun OnlineAccountDialog(
                             },
                             onClick = onConnectGoogleClick,
                             enabled = !anyActionInProgress,
+                            loading = actionInProgress,
                             containerColor =
                                 DominoSemanticColors.dialogAction,
                             contentColor =
@@ -175,6 +190,7 @@ fun OnlineAccountDialog(
                         enabled =
                             editor.saveEnabled &&
                                 !actionInProgress,
+                        loading = editor.actionInProgress,
                         containerColor =
                             DominoSemanticColors.dialogAction,
                         contentColor =
@@ -247,6 +263,12 @@ private fun OnlineAccountProfileContent(
 
         OnlineAccountProfileUiState.Loading -> {
             Text(
+                modifier = Modifier
+                    .testTag(OnlineAccountProfileStatusTag)
+                    .semantics {
+                        progressBarRangeInfo =
+                            ProgressBarRangeInfo.Indeterminate
+                    },
                 text = stringResource(
                     R.string.account_profile_loading,
                 ),
@@ -254,12 +276,21 @@ private fun OnlineAccountProfileContent(
         }
 
         is OnlineAccountProfileUiState.Failure -> {
-            Text(text = state.message)
+            Text(
+                modifier = Modifier
+                    .testTag(OnlineAccountProfileStatusTag)
+                    .semantics {
+                        liveRegion = LiveRegionMode.Assertive
+                    },
+                text = state.message,
+            )
         }
 
         is OnlineAccountProfileUiState.Editing -> {
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(
+                    MaterialTheme.dominoSpacing.xs,
+                ),
             ) {
                 Text(
                     text = stringResource(
@@ -308,11 +339,21 @@ private fun OnlineAccountProfileContent(
                 )
 
                 state.validationMessage?.let { message ->
-                    Text(text = message)
+                    Text(
+                        modifier = Modifier.semantics {
+                            liveRegion = LiveRegionMode.Assertive
+                        },
+                        text = message,
+                    )
                 }
 
                 state.feedbackMessage?.let { message ->
-                    Text(text = message)
+                    Text(
+                        modifier = Modifier.semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                        text = message,
+                    )
                 }
             }
         }

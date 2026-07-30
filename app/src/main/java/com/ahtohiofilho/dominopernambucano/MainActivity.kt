@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,9 +9,20 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.ahtohiofilho.dominopernambucano.ui.DominoPernambucanoApp
+import com.ahtohiofilho.dominopernambucano.ui.settings.AndroidAppLanguageManager
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(
+        newBase: Context,
+    ) {
+        super.attachBaseContext(
+            AndroidAppLanguageManager.localizedContext(
+                baseContext = newBase,
+            ),
+        )
+    }
+
     override fun onCreate(
         savedInstanceState: Bundle?,
     ) {

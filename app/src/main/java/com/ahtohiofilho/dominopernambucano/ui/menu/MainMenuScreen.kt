@@ -1,8 +1,13 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -10,31 +15,40 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
-import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
+import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
-import com.ahtohiofilho.dominopernambucano.ui.components.DominoTextAction
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandHeader
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandScaffold
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPrimaryActionCard
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSecondaryActionCard
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 
@@ -43,6 +57,8 @@ internal const val MainMenuTitleTag = "main_menu_title"
 internal const val MainMenuActionsGroupTag = "main_menu_actions_group"
 internal const val MainMenuRankingActionTag = "main_menu_ranking_action"
 internal const val MainMenuAccountActionTag = "main_menu_account_action"
+internal const val MainMenuStatusTag = "main_menu_status"
+internal const val MainMenuSettingsActionTag = "main_menu_settings_action"
 
 @Composable
 fun MainMenuScreen(
@@ -73,6 +89,7 @@ fun MainMenuScreen(
     onDiscardRejectedPendingOnlineParticipationClick: () -> Unit = {},
     onResumePendingOnlineMatchClick: () -> Unit,
     onConnectGoogleAccountClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
 ) {
     var accountDialogVisible by remember {
         mutableStateOf(false)
@@ -110,44 +127,131 @@ fun MainMenuScreen(
     val menuActionInProgress =
         inspectionInProgress || pendingOnlineMatchResumeInProgress
 
-    val menuMessage = pendingOnlineMatchResumeFeedbackMessage ?: when (
-        val inspection = pendingOnlineParticipationInspection
-    ) {
-        OnlinePendingParticipationInspectionState.NotRequested -> {
-            pendingOnlineParticipation.initialInspectionMessageOrNull()
+    val menuMessage =
+        pendingOnlineMatchResumeFeedbackMessage ?: when (
+            val inspection = pendingOnlineParticipationInspection
+        ) {
+            OnlinePendingParticipationInspectionState.NotRequested -> {
+                when (pendingOnlineParticipation) {
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
+                    is OnlinePendingParticipationLocalResolution
+                        .ReadyForRemoteReconciliation -> null
+
+                    is OnlinePendingParticipationLocalResolution
+                        .BlockedByMissingValidAnonymousSession,
+                    is OnlinePendingParticipationLocalResolution
+                        .BlockedByAnonymousSessionIdentityMismatch -> {
+                        stringResource(
+                            R.string
+                                .main_menu_previous_participation_unverifiable,
+                        )
+                    }
+                }
+            }
+
+            OnlinePendingParticipationInspectionState.InProgress -> {
+                stringResource(
+                    R.string.main_menu_checking_participation,
+                )
+            }
+
+            is OnlinePendingParticipationInspectionState.Completed -> {
+                when (val result = inspection.result) {
+                    is OnlinePendingParticipationRemoteInspection
+                        .Recoverable -> {
+                        when (result.roomSnapshot.status) {
+                            OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
+                                stringResource(
+                                    R.string
+                                        .main_menu_participation_confirmed_waiting,
+                                )
+                            }
+
+                            else -> {
+                                stringResource(
+                                    R.string.main_menu_participation_confirmed,
+                                )
+                            }
+                        }
+                    }
+
+                    is OnlinePendingParticipationRemoteInspection
+                        .NoLongerRecoverable -> {
+                        stringResource(
+                            R.string.main_menu_participation_unavailable,
+                        )
+                    }
+
+                    OnlinePendingParticipationRemoteInspection
+                        .RemoteSessionRejected -> {
+                        stringResource(
+                            R.string.main_menu_session_rejected,
+                        )
+                    }
+
+                    is OnlinePendingParticipationRemoteInspection
+                        .NotAttempted -> {
+                        stringResource(
+                            R.string.main_menu_inspection_unavailable,
+                        )
+                    }
+
+                    is OnlinePendingParticipationRemoteInspection
+                        .TemporarilyUnavailable -> {
+                        stringResource(
+                            R.string.main_menu_try_again,
+                        )
+                    }
+                }
+            }
         }
 
-        OnlinePendingParticipationInspectionState.InProgress -> {
-            "Verificando sua participação online..."
-        }
+    DominoBrandScaffold {
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            val settingsDescription = stringResource(
+                R.string.main_menu_settings_content_description,
+            )
 
-        is OnlinePendingParticipationInspectionState.Completed -> {
-            inspection.result.toInspectionMessage()
-        }
-    }
+            IconButton(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .testTag(MainMenuSettingsActionTag)
+                    .semantics {
+                        contentDescription = settingsDescription
+                    },
+                onClick = onSettingsClick,
+            ) {
+                Text(
+                    text = "⚙",
+                    color = DominoSemanticColors.brandText,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
 
-    MenuScaffold {
-        Column(
-            modifier = Modifier
+            Column(
+                modifier = Modifier
                 .fillMaxWidth()
+                .padding(
+                    top = 124.dp,
+                    bottom = 24.dp,
+                )
                 .testTag(MainMenuContentGroupTag),
             verticalArrangement = Arrangement.spacedBy(
                 MaterialTheme.dominoSpacing.xxl,
             ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
+            DominoBrandHeader(
+                subtitle = stringResource(R.string.brand_subtitle),
                 modifier = Modifier
-                    .fillMaxWidth()
                     .testTag(MainMenuTitleTag)
                     .semantics {
                         heading()
                     },
-                text = dominoPeBrandNameOnBlue(),
-                fontSize = 42.sp,
-                lineHeight = 40.sp,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
             )
 
             Column(
@@ -161,9 +265,16 @@ fun MainMenuScreen(
             ) {
                 menuMessage?.let { message ->
                     Text(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(MainMenuStatusTag)
+                            .semantics {
+                                liveRegion = LiveRegionMode.Polite
+                            },
                         text = message,
-                        color = DominoSemanticColors.primaryTextOnDark
-                            .copy(alpha = 0.82f),
+                        color = DominoSemanticColors.brandText.copy(
+                            alpha = 0.86f,
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                     )
@@ -175,21 +286,33 @@ fun MainMenuScreen(
                             .ReadyForRemoteReconciliation &&
                     !resumePendingOnlineMatchAvailable
                 ) {
-                    SecondaryMenuButton(
-                        text = if (inspectionInProgress) {
-                            "Verificando..."
+                    DominoSecondaryActionCard(
+                        title = if (inspectionInProgress) {
+                            stringResource(
+                                R.string.main_menu_checking_participation,
+                            )
                         } else {
-                            "Verificar participação online"
+                            stringResource(
+                                R.string.main_menu_check_participation,
+                            )
                         },
-                        onClick = onInspectPendingOnlineParticipationClick,
+                        supportingText = null,
+                        accent = DominoBrandAccent.Blue,
+                        onClick =
+                            onInspectPendingOnlineParticipationClick,
                         enabled = !menuActionInProgress,
+                        leadingContent = {
+                            BrandGlyph("?")
+                        },
                     )
                 }
 
                 if (resumePendingOnlineMatchAvailable) {
-                    SecondaryMenuButton(
-                        text = if (pendingOnlineMatchResumeInProgress) {
-                            "Retomando..."
+                    val resumeTitle =
+                        if (pendingOnlineMatchResumeInProgress) {
+                            stringResource(
+                                R.string.main_menu_resuming,
+                            )
                         } else {
                             when (
                                 recoverablePendingOnlineParticipation
@@ -197,69 +320,108 @@ fun MainMenuScreen(
                                     ?.status
                             ) {
                                 OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
-                                    "Retomar sala online"
+                                    stringResource(
+                                        R.string.main_menu_resume_room,
+                                    )
                                 }
 
                                 OnlineRoomStatusDto.IN_MATCH -> {
-                                    "Retomar partida online"
+                                    stringResource(
+                                        R.string.main_menu_resume_match,
+                                    )
                                 }
 
                                 else -> {
-                                    "Retomar participação online"
+                                    stringResource(
+                                        R.string
+                                            .main_menu_resume_participation,
+                                    )
                                 }
                             }
-                        },
+                        }
+
+                    DominoSecondaryActionCard(
+                        title = resumeTitle,
+                        supportingText = null,
+                        accent = DominoBrandAccent.Green,
                         onClick = onResumePendingOnlineMatchClick,
                         enabled = !menuActionInProgress,
+                        leadingContent = {
+                            BrandGlyph("↻")
+                        },
                     )
                 }
 
                 if (discardRejectedPendingOnlineParticipationAvailable) {
-                    SecondaryMenuButton(
-                        text =
-                            "Remover participa\u00e7\u00e3o online rejeitada",
+                    DominoSecondaryActionCard(
+                        title = stringResource(
+                            R.string
+                                .main_menu_remove_rejected_participation,
+                        ),
+                        supportingText = null,
+                        accent = DominoBrandAccent.Red,
                         onClick =
                             onDiscardRejectedPendingOnlineParticipationClick,
                         enabled = !menuActionInProgress,
+                        leadingContent = {
+                            BrandGlyph("×")
+                        },
                     )
                 }
 
-                PrimaryMenuButton(
-                    text = stringResource(R.string.main_menu_play),
+                DominoPrimaryActionCard(
+                    title = stringResource(R.string.main_menu_play),
+                    supportingText = stringResource(
+                        R.string.main_menu_play_support,
+                    ),
                     onClick = onPlayClick,
                     enabled = !menuActionInProgress,
+                    leadingContent = {
+                        BrandGlyph("▶")
+                    },
                 )
 
-                DominoTextAction(
+                DominoSecondaryActionCard(
                     modifier = Modifier.testTag(
                         MainMenuRankingActionTag,
                     ),
-                    text = stringResource(R.string.main_menu_ranking),
+                    title = stringResource(
+                        R.string.main_menu_ranking,
+                    ),
+                    supportingText = stringResource(
+                        R.string.main_menu_ranking_support,
+                    ),
+                    accent = DominoBrandAccent.Red,
                     onClick = onRankingClick,
                     enabled = !menuActionInProgress,
-                    contentColor =
-                        DominoSemanticColors.primaryTextOnDark.copy(
-                            alpha = 0.82f,
-                        ),
+                    leadingContent = {
+                        BrandGlyph("★")
+                    },
                 )
 
-                DominoTextAction(
+                DominoSecondaryActionCard(
                     modifier = Modifier.testTag(
                         MainMenuAccountActionTag,
                     ),
-                    text = stringResource(R.string.main_menu_account),
+                    title = stringResource(
+                        R.string.main_menu_account,
+                    ),
+                    supportingText = stringResource(
+                        R.string.main_menu_account_support,
+                    ),
+                    accent = DominoBrandAccent.Green,
                     onClick = {
                         accountDialogVisible = true
                         onAccountDialogOpened()
                     },
                     enabled = !menuActionInProgress,
-                    contentColor =
-                        DominoSemanticColors.primaryTextOnDark.copy(
-                            alpha = 0.82f,
-                        ),
+                    leadingContent = {
+                        AccountSilhouetteGlyph()
+                    },
                 )
             }
         }
+    }
     }
 
     if (accountDialogVisible) {
@@ -283,6 +445,7 @@ fun MainMenuScreen(
         )
     }
 }
+
 
 internal fun dominoPeBrandNameOnBlue(): AnnotatedString {
     return buildAnnotatedString {
@@ -309,57 +472,63 @@ private fun AnnotatedString.Builder.appendBrandGlyph(
     }
 }
 
-private fun OnlinePendingParticipationLocalResolution
-        .initialInspectionMessageOrNull(): String? {
-    return when (this) {
-        OnlinePendingParticipationLocalResolution.NoPendingParticipation,
-        is OnlinePendingParticipationLocalResolution
-        .ReadyForRemoteReconciliation -> null
+@Composable
+private fun AccountSilhouetteGlyph() {
+    Canvas(
+        modifier = Modifier.size(24.dp),
+    ) {
+        val color = DominoSemanticColors.brandText
+        val dimension = minOf(size.width, size.height)
 
-        is OnlinePendingParticipationLocalResolution
-        .BlockedByMissingValidAnonymousSession,
-        is OnlinePendingParticipationLocalResolution
-        .BlockedByAnonymousSessionIdentityMismatch -> {
-            "A participação online anterior não pode ser verificada neste dispositivo."
+        drawCircle(
+            color = color,
+            radius = dimension * 0.18f,
+            center = Offset(
+                x = size.width * 0.50f,
+                y = size.height * 0.30f,
+            ),
+        )
+
+        val bust = Path().apply {
+            moveTo(
+                x = size.width * 0.16f,
+                y = size.height * 0.88f,
+            )
+            cubicTo(
+                x1 = size.width * 0.20f,
+                y1 = size.height * 0.64f,
+                x2 = size.width * 0.34f,
+                y2 = size.height * 0.54f,
+                x3 = size.width * 0.50f,
+                y3 = size.height * 0.54f,
+            )
+            cubicTo(
+                x1 = size.width * 0.66f,
+                y1 = size.height * 0.54f,
+                x2 = size.width * 0.80f,
+                y2 = size.height * 0.64f,
+                x3 = size.width * 0.84f,
+                y3 = size.height * 0.88f,
+            )
+            close()
         }
+
+        drawPath(
+            path = bust,
+            color = color,
+        )
     }
 }
 
-private fun OnlinePendingParticipationRemoteInspection
-        .toInspectionMessage(): String {
-    return when (this) {
-        is OnlinePendingParticipationRemoteInspection.Recoverable -> {
-            when (roomSnapshot.status) {
-                OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
-                    "Participação online confirmada. " +
-                            "A sala ainda está aguardando jogadores."
-                }
-
-                OnlineRoomStatusDto.IN_MATCH -> {
-                    "Participação online confirmada."
-                }
-
-                else -> {
-                    "Participação online confirmada."
-                }
-            }
-        }
-
-        is OnlinePendingParticipationRemoteInspection.NoLongerRecoverable -> {
-            "A participação online anterior não está mais disponível."
-        }
-
-        OnlinePendingParticipationRemoteInspection.RemoteSessionRejected -> {
-            "N\u00e3o foi poss\u00edvel verificar a participa\u00e7\u00e3o: " +
-                    "a sess\u00e3o online deste dispositivo foi rejeitada."
-        }
-
-        is OnlinePendingParticipationRemoteInspection.NotAttempted -> {
-            "Não foi possível verificar sua participação neste dispositivo."
-        }
-
-        is OnlinePendingParticipationRemoteInspection.TemporarilyUnavailable -> {
-            "Não foi possível verificar agora. Tente novamente."
-        }
-    }
+@Composable
+private fun BrandGlyph(
+    glyph: String,
+) {
+    Text(
+        text = glyph,
+        color = DominoSemanticColors.brandText,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Black,
+        textAlign = TextAlign.Center,
+    )
 }

@@ -4,179 +4,190 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingFailureKind
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
-import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OnlinePublicRankingPresentationTest {
     @Test
-    fun cycle_labels_are_direct_and_complete() {
+    fun cycle_resource_ids_are_complete_and_unique() {
+        val resourceIds = PublicRankingCycleDto.values().map { cycle ->
+            cycle.publicLabelRes()
+        }
+
         assertEquals(
-            listOf(
-                "Diário",
-                "Semanal",
-                "Mensal",
-                "Anual",
-            ),
-            PublicRankingCycleDto.values().map { cycle ->
-                cycle.publicLabel()
+            PublicRankingCycleDto.values().size,
+            resourceIds.toSet().size,
+        )
+        assertTrue(
+            resourceIds.all { resourceId ->
+                resourceId != 0
             },
         )
     }
 
     @Test
-    fun ranking_scope_labels_distinguish_current_and_closed() {
+    fun scope_resource_ids_are_complete_and_unique() {
+        val resourceIds = PublicRankingScope.values().map { scope ->
+            scope.publicLabelRes()
+        }
+
         assertEquals(
-            listOf(
-                "Atual",
-                "Encerrados",
-            ),
-            PublicRankingScope.values().map { scope ->
-                scope.publicLabel()
+            PublicRankingScope.values().size,
+            resourceIds.toSet().size,
+        )
+        assertTrue(
+            resourceIds.all { resourceId ->
+                resourceId != 0
             },
         )
     }
 
     @Test
-    fun closed_period_labels_follow_recife_calendar() {
+    fun failure_resource_ids_are_complete_and_unique() {
+        val resourceIds =
+            OnlinePublicRankingFailureKind.values().map { failure ->
+                failure.publicMessageRes()
+            }
+
         assertEquals(
-            "27/07/2026",
-            cycleSummary(
-                cycle = PublicRankingCycleDto.DAILY,
-                startsAtEpochMillis = recifeMillis(
-                    year = 2026,
-                    month = Calendar.JULY,
-                    day = 27,
-                ),
-                endsAtEpochMillis = recifeMillis(
-                    year = 2026,
-                    month = Calendar.JULY,
-                    day = 28,
-                ),
-            ).publicPeriodLabel(),
+            OnlinePublicRankingFailureKind.values().size,
+            resourceIds.toSet().size,
         )
-        assertEquals(
-            "20/07 a 26/07/2026",
-            cycleSummary(
-                cycle = PublicRankingCycleDto.WEEKLY,
-                startsAtEpochMillis = recifeMillis(
-                    year = 2026,
-                    month = Calendar.JULY,
-                    day = 20,
-                ),
-                endsAtEpochMillis = recifeMillis(
-                    year = 2026,
-                    month = Calendar.JULY,
-                    day = 27,
-                ),
-            ).publicPeriodLabel(),
-        )
-        assertEquals(
-            "Julho de 2026",
-            cycleSummary(
-                cycle = PublicRankingCycleDto.MONTHLY,
-                startsAtEpochMillis = recifeMillis(
-                    year = 2026,
-                    month = Calendar.JULY,
-                    day = 1,
-                ),
-                endsAtEpochMillis = recifeMillis(
-                    year = 2026,
-                    month = Calendar.AUGUST,
-                    day = 1,
-                ),
-            ).publicPeriodLabel(),
-        )
-        assertEquals(
-            "2026",
-            cycleSummary(
-                cycle = PublicRankingCycleDto.ANNUAL,
-                startsAtEpochMillis = recifeMillis(
-                    year = 2026,
-                    month = Calendar.JANUARY,
-                    day = 1,
-                ),
-                endsAtEpochMillis = recifeMillis(
-                    year = 2027,
-                    month = Calendar.JANUARY,
-                    day = 1,
-                ),
-            ).publicPeriodLabel(),
+        assertTrue(
+            resourceIds.all { resourceId ->
+                resourceId != 0
+            },
         )
     }
 
     @Test
-    fun current_and_historical_contexts_are_explicit() {
-        val current = response(
-            isClosed = false,
-            closedAtEpochMillis = null,
-        )
-        val historical = response(
-            isClosed = true,
-            closedAtEpochMillis = recifeMillis(
+    fun monthly_period_uses_the_requested_locale() {
+        val summary = cycleSummary(
+            cycle = PublicRankingCycleDto.MONTHLY,
+            cycleId = "monthly",
+            startsAtEpochMillis = recifeMillis(
                 year = 2026,
                 month = Calendar.JULY,
-                day = 28,
+                day = 1,
+            ),
+            endsAtEpochMillis = recifeMillis(
+                year = 2026,
+                month = Calendar.AUGUST,
+                day = 1,
             ),
         )
 
+        val english =
+            summary.publicPeriodLabel(Locale.US)
+        val spanish =
+            summary.publicPeriodLabel(
+                Locale("es", "ES"),
+            )
+        val portuguese =
+            summary.publicPeriodLabel(
+                Locale("pt", "BR"),
+            )
+
+        assertTrue(english.contains("July"))
+        assertTrue(spanish.lowercase().contains("julio"))
+        assertTrue(portuguese.lowercase().contains("julho"))
+        assertTrue(english.endsWith("2026"))
+        assertTrue(spanish.endsWith("2026"))
+        assertTrue(portuguese.endsWith("2026"))
+    }
+
+    @Test
+    fun weekly_period_preserves_the_recife_boundary() {
+        val label = cycleSummary(
+            cycle = PublicRankingCycleDto.WEEKLY,
+            cycleId = "weekly",
+            startsAtEpochMillis = recifeMillis(
+                year = 2026,
+                month = Calendar.JULY,
+                day = 20,
+            ),
+            endsAtEpochMillis = recifeMillis(
+                year = 2026,
+                month = Calendar.JULY,
+                day = 27,
+            ),
+        ).publicPeriodLabel(Locale.US)
+
+        assertTrue(label.contains("2026"))
+        assertTrue(label.contains("–"))
+        assertTrue(label.contains("26"))
+        assertFalse(label.contains("Jul 27"))
+    }
+
+    @Test
+    fun rank_label_is_familiar_in_english_and_localized_elsewhere() {
+        val entry = entry(
+            rank = 7,
+            competitorId = "competitor-secret",
+            displayName = null,
+        )
+
         assertEquals(
-            "Ranking atual · 27/07/2026",
-            current.publicContextLabel(),
+            "#7",
+            entry.publicRankLabel(Locale.US),
         )
         assertEquals(
-            "Ranking encerrado · 27/07/2026",
-            historical.publicContextLabel(),
+            "7º",
+            entry.publicRankLabel(
+                Locale("pt", "BR"),
+            ),
+        )
+        assertEquals(
+            "7º",
+            entry.publicRankLabel(
+                Locale("es", "ES"),
+            ),
         )
     }
 
     @Test
-    fun historical_retention_is_explained_without_inferring_viewer_status() {
-        val historical = response(
-            isClosed = true,
-            closedAtEpochMillis = recifeMillis(
-                year = 2026,
-                month = Calendar.JULY,
-                day = 28,
-            ),
-            totalEligiblePlayers = 400,
-            retainedRankingSize = 100,
+    fun entry_display_name_never_falls_back_to_competitor_id() {
+        val entry = entry(
+            rank = 7,
+            competitorId = "competitor-secret",
+            displayName = null,
         )
 
         assertEquals(
-            "400 jogadores elegíveis · 120 partidas · Top 100 preservado",
-            historical.publicSummaryLabel(),
+            "Player 7",
+            entry.publicDisplayName(
+                fallback = "Player 7",
+            ),
         )
-        assertEquals(
-            "Este histórico preserva somente o Top 100 do período.",
-            historical.publicRetentionNotice(),
+        assertFalse(
+            entry.publicDisplayName(
+                fallback = "Player 7",
+            ).contains(entry.competitorId),
         )
     }
 
     @Test
-    fun retention_notice_is_omitted_when_full_ranking_is_preserved() {
-        val historical = response(
-            isClosed = true,
-            closedAtEpochMillis = recifeMillis(
-                year = 2026,
-                month = Calendar.JULY,
-                day = 28,
-            ),
-            totalEligiblePlayers = 40,
-            retainedRankingSize = 40,
+    fun public_name_and_exact_score_fraction_are_preserved() {
+        val entry = entry(
+            rank = 1,
+            competitorId = "competitor-opaque",
+            displayName = "  Antônio Filho  ",
         )
 
         assertEquals(
-            "40 jogadores elegíveis · 120 partidas",
-            historical.publicSummaryLabel(),
+            "Antônio Filho",
+            entry.publicDisplayName(
+                fallback = "Player 1",
+            ),
         )
-        assertNull(
-            historical.publicRetentionNotice(),
+        assertEquals(
+            "2/3",
+            entry.publicScoreText(),
         )
     }
 
@@ -218,101 +229,9 @@ class OnlinePublicRankingPresentationTest {
         )
     }
 
-    @Test
-    fun entry_title_never_renders_technical_competitor_id() {
-        val entry = entry(
-            rank = 7,
-            competitorId = "competitor-secret",
-            displayName = null,
-        )
-
-        assertEquals(
-            "7º · Jogador 7",
-            entry.publicTitle(),
-        )
-        assertFalse(
-            entry.publicTitle().contains(
-                entry.competitorId,
-            ),
-        )
-    }
-
-    @Test
-    fun public_name_and_exact_score_fraction_are_preserved() {
-        val entry = entry(
-            rank = 1,
-            competitorId = "competitor-opaque",
-            displayName = "Antônio Filho",
-        )
-
-        assertEquals(
-            "1º · Antônio Filho",
-            entry.publicTitle(),
-        )
-        assertEquals(
-            "2/3",
-            entry.publicScoreText(),
-        )
-    }
-
-    @Test
-    fun failure_messages_do_not_promise_ranked_participation() {
-        val messages = OnlinePublicRankingFailureKind.values().map {
-                failure ->
-            failure.publicMessage()
-        }
-
-        assertTrue(
-            messages.all { message ->
-                message.isNotBlank()
-            },
-        )
-        assertFalse(
-            messages.any { message ->
-                message.contains(
-                    "partida",
-                    ignoreCase = true,
-                )
-            },
-        )
-    }
-
-    private fun response(
-        isClosed: Boolean,
-        closedAtEpochMillis: Long?,
-        totalEligiblePlayers: Int = 40,
-        retainedRankingSize: Int = totalEligiblePlayers,
-    ): PublicRankingResponseDto {
-        return PublicRankingResponseDto(
-            cycle = PublicRankingCycleDto.DAILY,
-            cycleId = "ranking-v1:daily:2026-07-27",
-            rankingRuleVersion = 1,
-            timeZoneId = "America/Recife",
-            startsAtEpochMillis = recifeMillis(
-                year = 2026,
-                month = Calendar.JULY,
-                day = 27,
-            ),
-            endsAtEpochMillis = recifeMillis(
-                year = 2026,
-                month = Calendar.JULY,
-                day = 28,
-            ),
-            resultCount = 120,
-            totalEligiblePlayers = totalEligiblePlayers,
-            offset = 0,
-            limit = 50,
-            hasMore = false,
-            entries = emptyList(),
-            retainedRankingSize = retainedRankingSize,
-            isClosed = isClosed,
-            closedAtEpochMillis = closedAtEpochMillis,
-        )
-    }
-
     private fun cycleSummary(
         cycle: PublicRankingCycleDto,
-        cycleId: String = "cycle-id",
+        cycleId: String,
         startsAtEpochMillis: Long,
         endsAtEpochMillis: Long,
     ): PublicRankingCycleSummaryDto {

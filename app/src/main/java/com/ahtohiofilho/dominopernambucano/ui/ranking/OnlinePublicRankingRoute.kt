@@ -1,25 +1,34 @@
 package com.ahtohiofilho.dominopernambucano.ui.ranking
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,11 +41,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingClient
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingClientResult
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingCyclesClientResult
@@ -46,7 +61,15 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCyclesResponseDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandShapes
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPatternBackground
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+
+internal const val RankingScreenTag = "ranking_screen"
+internal const val RankingTitleTag = "ranking_title"
+internal const val RankingCycleSelectorTag = "ranking_cycle_selector"
+internal const val RankingScopeSelectorTag = "ranking_scope_selector"
 
 @Composable
 fun OnlinePublicRankingRoute(
@@ -308,7 +331,7 @@ fun OnlinePublicRankingRoute(
 }
 
 @Composable
-private fun OnlinePublicRankingScreen(
+internal fun OnlinePublicRankingScreen(
     selectedCycle: PublicRankingCycleDto,
     selectedScope: PublicRankingScope,
     closedCycles: List<PublicRankingCycleSummaryDto>,
@@ -329,6 +352,7 @@ private fun OnlinePublicRankingScreen(
     onRetry: () -> Unit,
     onBackClick: () -> Unit,
 ) {
+    val locale = LocalConfiguration.current.locales[0]
     val hasRankingSelection =
         selectedScope == PublicRankingScope.CURRENT ||
             selectedClosedCycleId != null
@@ -336,19 +360,22 @@ private fun OnlinePublicRankingScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        DominoSemanticColors.appBackground,
-                        DominoSemanticColors.primaryAction,
-                    ),
-                ),
-            )
-            .padding(20.dp),
+            .background(DominoSemanticColors.brandBackground)
+            .testTag(RankingScreenTag),
     ) {
+        DominoPatternBackground(
+            modifier = Modifier.matchParentSize(),
+        )
+
         Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(
+                    horizontal = 16.dp,
+                    vertical = 12.dp,
+                ),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             RankingHeader(
                 onBackClick = onBackClick,
@@ -359,20 +386,12 @@ private fun OnlinePublicRankingScreen(
                 onCycleSelected = onCycleSelected,
             )
 
-            Spacer(
-                modifier = Modifier.height(8.dp),
-            )
-
             RankingScopeSelector(
                 selectedScope = selectedScope,
                 onScopeSelected = onScopeSelected,
             )
 
             if (selectedScope == PublicRankingScope.CLOSED) {
-                Spacer(
-                    modifier = Modifier.height(8.dp),
-                )
-
                 ClosedRankingCycleSelector(
                     cycles = closedCycles,
                     latestResponse = latestCyclesResponse,
@@ -385,60 +404,23 @@ private fun OnlinePublicRankingScreen(
                 )
             }
 
-            Spacer(
-                modifier = Modifier.height(12.dp),
-            )
-
             latestResponse?.let { response ->
-                Text(
-                    text = response.publicContextLabel(),
-                    color = DominoSemanticColors.primaryTextOnDark,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
+                RankingOverviewCard(
+                    response = response,
+                    locale = locale,
                 )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp),
-                )
-
-                Text(
-                    text = response.publicSummaryLabel(),
-                    color = DominoSemanticColors.primaryTextOnDark
-                        .copy(alpha = 0.82f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-
-                response.publicRetentionNotice()?.let { notice ->
-                    Spacer(
-                        modifier = Modifier.height(4.dp),
-                    )
-
-                    Text(
-                        text = notice,
-                        color = DominoSemanticColors.primaryTextOnDark
-                            .copy(alpha = 0.76f),
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                    )
-                }
 
                 response.viewer?.let { viewer ->
-                    Spacer(
-                        modifier = Modifier.height(8.dp),
-                    )
-
                     RankingEntryCard(
                         entry = viewer,
-                        heading = "Sua posição",
+                        locale = locale,
+                        heading = stringResource(
+                            R.string.ranking_your_position,
+                        ),
+                        highlighted = true,
                     )
                 }
             }
-
-            Spacer(
-                modifier = Modifier.height(12.dp),
-            )
 
             when {
                 !hasRankingSelection -> {
@@ -449,28 +431,22 @@ private fun OnlinePublicRankingScreen(
 
                 failure != null && entries.isEmpty() -> {
                     RankingFailureContent(
+                        modifier = Modifier.weight(1f),
                         failure = failure,
                         onRetry = onRetry,
                     )
                 }
 
                 loading && entries.isEmpty() -> {
-                    CircularProgressIndicator()
+                    RankingLoadingContent(
+                        modifier = Modifier.weight(1f),
+                    )
                 }
 
                 !loading && entries.isEmpty() -> {
-                    Text(
-                        text = if (
-                            selectedScope ==
-                            PublicRankingScope.CLOSED
-                        ) {
-                            "Nenhum jogador foi preservado neste período."
-                        } else {
-                            "Nenhum jogador elegível neste ciclo."
-                        },
-                        color = DominoSemanticColors.primaryTextOnDark,
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
+                    RankingEmptyContent(
+                        modifier = Modifier.weight(1f),
+                        selectedScope = selectedScope,
                     )
                 }
 
@@ -478,6 +454,7 @@ private fun OnlinePublicRankingScreen(
                     RankingEntries(
                         modifier = Modifier.weight(1f),
                         entries = entries,
+                        locale = locale,
                         latestResponse = latestResponse,
                         failure = failure,
                         loading = loading,
@@ -494,30 +471,32 @@ private fun OnlinePublicRankingScreen(
 private fun RankingHeader(
     onBackClick: () -> Unit,
 ) {
-    Row(
+    Box(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
         TextButton(
+            modifier = Modifier.align(Alignment.CenterStart),
             onClick = onBackClick,
         ) {
             Text(
-                text = "Voltar",
-                color = DominoSemanticColors.primaryTextOnDark,
+                text = stringResource(R.string.common_back),
+                color = DominoSemanticColors.brandText,
+                style = MaterialTheme.typography.labelLarge,
             )
         }
 
         Text(
-            text = "Ranking",
-            modifier = Modifier.weight(1f),
-            color = DominoSemanticColors.primaryTextOnDark,
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Black,
+            text = stringResource(R.string.ranking_title),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .semantics {
+                    heading()
+                }
+                .testTag(RankingTitleTag),
+            color = DominoSemanticColors.brandText,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center,
-        )
-
-        Spacer(
-            modifier = Modifier.weight(0.22f),
         )
     }
 }
@@ -530,22 +509,16 @@ private fun RankingCycleSelector(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(
-                rememberScrollState(),
-            ),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .testTag(RankingCycleSelectorTag),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         PublicRankingCycleDto.values().forEach { cycle ->
-            FilterChip(
+            RankingFilterChip(
+                modifier = Modifier.weight(1f),
                 selected = cycle == selectedCycle,
+                label = stringResource(cycle.publicLabelRes()),
                 onClick = {
                     onCycleSelected(cycle)
-                },
-                label = {
-                    Text(
-                        text = cycle.publicLabel(),
-                        color = DominoSemanticColors.primaryTextOnDark,
-                    )
                 },
             )
         }
@@ -560,26 +533,50 @@ private fun RankingScopeSelector(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(
-                rememberScrollState(),
-            ),
+            .testTag(RankingScopeSelectorTag),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         PublicRankingScope.values().forEach { scope ->
-            FilterChip(
+            RankingFilterChip(
+                modifier = Modifier.weight(1f),
                 selected = scope == selectedScope,
+                label = stringResource(scope.publicLabelRes()),
                 onClick = {
                     onScopeSelected(scope)
-                },
-                label = {
-                    Text(
-                        text = scope.publicLabel(),
-                        color = DominoSemanticColors.primaryTextOnDark,
-                    )
                 },
             )
         }
     }
+}
+
+@Composable
+private fun RankingFilterChip(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        modifier = modifier,
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Text(
+                modifier = Modifier.fillMaxWidth(),
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+        },
+        shape = DominoBrandShapes.control,
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = DominoSemanticColors.brandSurface,
+            labelColor = DominoSemanticColors.brandText,
+            selectedContainerColor = DominoSemanticColors.brandEnergy,
+            selectedLabelColor = DominoSemanticColors.brandText,
+        ),
+    )
 }
 
 @Composable
@@ -593,122 +590,162 @@ private fun ClosedRankingCycleSelector(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
 ) {
-    when {
-        loading && cycles.isEmpty() -> {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(26.dp),
-                )
+    val locale = LocalConfiguration.current.locales[0]
 
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = DominoBrandShapes.card,
+        colors = CardDefaults.cardColors(
+            containerColor =
+                DominoSemanticColors.brandSurface.copy(alpha = 0.88f),
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = DominoSemanticColors.brandBorder,
+        ),
+    ) {
+        when {
+            loading && cycles.isEmpty() -> {
+                RankingInlineLoading(
+                    text = stringResource(
+                        R.string.ranking_closed_loading,
+                    ),
+                )
+            }
+
+            failure != null && cycles.isEmpty() -> {
+                RankingFailureContent(
+                    modifier = Modifier.padding(14.dp),
+                    failure = failure,
+                    onRetry = onRetry,
+                )
+            }
+
+            !loading && cycles.isEmpty() -> {
                 Text(
-                    text = "Carregando períodos encerrados...",
-                    color = DominoSemanticColors.primaryTextOnDark,
+                    modifier = Modifier.padding(16.dp),
+                    text = stringResource(
+                        R.string.ranking_closed_empty,
+                    ),
+                    color = DominoSemanticColors.brandText,
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                 )
             }
-        }
 
-        failure != null && cycles.isEmpty() -> {
-            RankingFailureContent(
-                failure = failure,
-                onRetry = onRetry,
-            )
-        }
-
-        !loading && cycles.isEmpty() -> {
-            Text(
-                text = "Nenhum período encerrado está disponível.",
-                color = DominoSemanticColors.primaryTextOnDark,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-            )
-        }
-
-        else -> {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text =
-                        "${latestResponse?.totalClosedCycles ?: cycles.size} " +
-                            "períodos encerrados",
-                    color = DominoSemanticColors.primaryTextOnDark
-                        .copy(alpha = 0.82f),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(
-                            rememberScrollState(),
-                        ),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            else -> {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    cycles.forEach { summary ->
-                        FilterChip(
-                            selected =
-                                summary.cycleId ==
-                                    selectedCycleId,
-                            onClick = {
-                                onCycleSelected(
-                                    summary.cycleId,
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text =
-                                        summary.publicPeriodLabel(),
-                                    color =
-                                        DominoSemanticColors.primaryTextOnDark,
-                                )
-                            },
-                        )
-                    }
+                    Text(
+                        text = stringResource(
+                            R.string.ranking_closed_count,
+                            latestResponse?.totalClosedCycles
+                                ?: cycles.size,
+                        ),
+                        color =
+                            DominoSemanticColors.brandSupportingText,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
 
-                    if (latestResponse?.hasMore == true) {
-                        TextButton(
-                            onClick = onLoadMore,
-                            enabled = !loading,
-                        ) {
-                            Text(
-                                text = "Mais períodos",
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(
+                                rememberScrollState(),
+                            ),
+                        horizontalArrangement =
+                            Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        cycles.forEach { summary ->
+                            FilterChip(
+                                selected =
+                                    summary.cycleId ==
+                                        selectedCycleId,
+                                onClick = {
+                                    onCycleSelected(
+                                        summary.cycleId,
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text =
+                                            summary.publicPeriodLabel(
+                                                locale = locale,
+                                            ),
+                                        maxLines = 1,
+                                    )
+                                },
+                                shape = DominoBrandShapes.control,
+                                colors =
+                                    FilterChipDefaults.filterChipColors(
+                                        containerColor =
+                                            DominoSemanticColors
+                                                .brandSurfaceElevated,
+                                        labelColor =
+                                            DominoSemanticColors.brandText,
+                                        selectedContainerColor =
+                                            DominoSemanticColors.brandEnergy,
+                                        selectedLabelColor =
+                                            DominoSemanticColors.brandText,
+                                    ),
+                            )
+                        }
+
+                        if (latestResponse?.hasMore == true) {
+                            TextButton(
+                                onClick = onLoadMore,
+                                enabled = !loading,
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.ranking_more_periods,
+                                    ),
+                                    color =
+                                        DominoSemanticColors.brandText,
+                                )
+                            }
+                        }
+
+                        if (loading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color =
+                                    DominoSemanticColors.brandText,
+                                strokeWidth = 2.dp,
                             )
                         }
                     }
 
-                    if (loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-
-                failure?.let { currentFailure ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = currentFailure.publicMessage(),
-                            modifier = Modifier.weight(1f),
-                            color = DominoSemanticColors.primaryTextOnDark,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-
-                        TextButton(
-                            onClick = onRetry,
+                    failure?.let { currentFailure ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "Tentar novamente",
+                                text = stringResource(
+                                    currentFailure.publicMessageRes(),
+                                ),
+                                modifier = Modifier.weight(1f),
+                                color =
+                                    DominoSemanticColors.brandText,
+                                style =
+                                    MaterialTheme.typography.bodySmall,
                             )
+
+                            TextButton(
+                                onClick = onRetry,
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.ranking_retry,
+                                    ),
+                                    color =
+                                        DominoSemanticColors.brandText,
+                                )
+                            }
                         }
                     }
                 }
@@ -718,9 +755,99 @@ private fun ClosedRankingCycleSelector(
 }
 
 @Composable
+private fun RankingOverviewCard(
+    response: PublicRankingResponseDto,
+    locale: java.util.Locale,
+) {
+    val period = response.publicPeriodLabel(
+        locale = locale,
+    )
+    val contextText = stringResource(
+        if (response.isClosed) {
+            R.string.ranking_context_closed
+        } else {
+            R.string.ranking_context_current
+        },
+        period,
+    )
+    val baseSummary = stringResource(
+        R.string.ranking_summary,
+        response.totalEligiblePlayers,
+        response.resultCount,
+    )
+    val summaryText = if (
+        response.isClosed &&
+        response.retainedRankingSize <
+        response.totalEligiblePlayers
+    ) {
+        stringResource(
+            R.string.ranking_summary_retained,
+            baseSummary,
+            response.retainedRankingSize,
+        )
+    } else {
+        baseSummary
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = DominoBrandShapes.card,
+        colors = CardDefaults.cardColors(
+            containerColor =
+                DominoSemanticColors.brandSurfaceElevated.copy(
+                    alpha = 0.96f,
+                ),
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = DominoSemanticColors.brandEnergy.copy(
+                alpha = 0.72f,
+            ),
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = contextText,
+                color = DominoSemanticColors.brandText,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+
+            Text(
+                text = summaryText,
+                color = DominoSemanticColors.brandSupportingText,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            if (
+                response.isClosed &&
+                response.retainedRankingSize <
+                response.totalEligiblePlayers
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.ranking_retention_notice,
+                        response.retainedRankingSize,
+                    ),
+                    color =
+                        DominoSemanticColors.brandSupportingText.copy(
+                            alpha = 0.88f,
+                        ),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun RankingEntries(
     modifier: Modifier,
     entries: List<PublicRankingEntryDto>,
+    locale: java.util.Locale,
     latestResponse: PublicRankingResponseDto?,
     failure: OnlinePublicRankingFailureKind?,
     loading: Boolean,
@@ -729,7 +856,7 @@ private fun RankingEntries(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(
             items = entries,
@@ -739,6 +866,7 @@ private fun RankingEntries(
         ) { entry ->
             RankingEntryCard(
                 entry = entry,
+                locale = locale,
             )
         }
 
@@ -748,12 +876,24 @@ private fun RankingEntries(
                     onClick = onLoadMore,
                     enabled = !loading,
                     modifier = Modifier.fillMaxWidth(),
+                    shape = DominoBrandShapes.control,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor =
+                            DominoSemanticColors.brandPrimaryAction,
+                        contentColor =
+                            DominoSemanticColors
+                                .brandPrimaryActionContent,
+                    ),
                 ) {
                     Text(
                         text = if (loading) {
-                            "Carregando..."
+                            stringResource(
+                                R.string.ranking_loading,
+                            )
                         } else {
-                            "Carregar mais"
+                            stringResource(
+                                R.string.ranking_load_more,
+                            )
                         },
                     )
                 }
@@ -774,49 +914,129 @@ private fun RankingEntries(
 @Composable
 private fun RankingEntryCard(
     entry: PublicRankingEntryDto,
+    locale: java.util.Locale,
     heading: String? = null,
+    highlighted: Boolean = false,
 ) {
+    val normalizedName = entry.publicDisplayName(
+        fallback = stringResource(
+            R.string.ranking_player_fallback,
+            entry.rank,
+        ),
+    )
+    val containerColor = if (highlighted) {
+        DominoSemanticColors.brandPositive.copy(alpha = 0.34f)
+    } else {
+        DominoSemanticColors.brandSurface.copy(alpha = 0.96f)
+    }
+    val borderColor = if (highlighted) {
+        DominoSemanticColors.brandPositive
+    } else {
+        DominoSemanticColors.brandBorder
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = DominoBrandShapes.card,
         colors = CardDefaults.cardColors(
-            containerColor =
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            containerColor = containerColor,
+        ),
+        border = BorderStroke(
+            width = if (highlighted) 2.dp else 1.dp,
+            color = borderColor,
         ),
     ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            heading?.let { text ->
+            RankingPositionBadge(
+                rank = entry.rank,
+                label = entry.publicRankLabel(locale),
+            )
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                heading?.let { text ->
+                    Text(
+                        text = text,
+                        color = DominoSemanticColors.brandText,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
                 Text(
-                    text = text,
-                    style = MaterialTheme.typography.labelLarge,
+                    text = normalizedName,
+                    color = DominoSemanticColors.brandText,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
+
+                Text(
+                    text = stringResource(
+                        R.string.ranking_score_summary,
+                        entry.publicScoreText(),
+                        entry.victories,
+                        entry.games,
+                    ),
+                    color =
+                        DominoSemanticColors.brandSupportingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                Text(
+                    text = stringResource(
+                        R.string.ranking_metrics_summary,
+                        entry.teamBalance,
+                        entry.individualPoints,
+                        entry.touchesGiven,
+                        entry.automaticRounds,
+                    ),
+                    color =
+                        DominoSemanticColors.brandSupportingText.copy(
+                            alpha = 0.88f,
+                        ),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
-
-            Text(
-                text = entry.publicTitle(),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-
-            Text(
-                text =
-                    "Pontuação ${entry.publicScoreText()} · " +
-                        "${entry.victories} vitórias em ${entry.games} jogos",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-
-            Text(
-                text =
-                    "Saldo ${entry.teamBalance} · " +
-                        "Pontos ${entry.individualPoints} · " +
-                        "Toques ${entry.touchesGiven} · " +
-                        "Automáticas ${entry.automaticRounds}",
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
+    }
+}
+
+@Composable
+private fun RankingPositionBadge(
+    rank: Int,
+    label: String,
+) {
+    val backgroundColor = when (rank) {
+        1 -> DominoColorTokens.AccentYellow
+        2 -> DominoColorTokens.PureWhite.copy(alpha = 0.24f)
+        3 -> DominoColorTokens.AccentRed.copy(alpha = 0.92f)
+        else -> DominoSemanticColors.brandSurfaceElevated
+    }
+    val contentColor = if (rank == 1) {
+        DominoColorTokens.InkBlue
+    } else {
+        DominoSemanticColors.brandText
+    }
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(backgroundColor),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = contentColor,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold,
+        )
     }
 }
 
@@ -824,73 +1044,172 @@ private fun RankingEntryCard(
 private fun RankingFailureContent(
     failure: OnlinePublicRankingFailureKind,
     onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    RankingStateCard(
+        modifier = modifier,
     ) {
         Text(
-            text = failure.publicMessage(),
-            color = DominoSemanticColors.primaryTextOnDark,
+            text = stringResource(
+                failure.publicMessageRes(),
+            ),
+            color = DominoSemanticColors.brandText,
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
 
         Button(
             onClick = onRetry,
+            shape = DominoBrandShapes.control,
+            colors = ButtonDefaults.buttonColors(
+                containerColor =
+                    DominoSemanticColors.brandPrimaryAction,
+                contentColor =
+                    DominoSemanticColors
+                        .brandPrimaryActionContent,
+            ),
         ) {
             Text(
-                text = "Tentar novamente",
+                text = stringResource(
+                    R.string.ranking_retry,
+                ),
             )
         }
     }
 }
 
-internal fun PublicRankingCycleDto.publicLabel(): String {
-    return when (this) {
-        PublicRankingCycleDto.DAILY -> "Diário"
-        PublicRankingCycleDto.WEEKLY -> "Semanal"
-        PublicRankingCycleDto.MONTHLY -> "Mensal"
-        PublicRankingCycleDto.ANNUAL -> "Anual"
+@Composable
+private fun RankingLoadingContent(
+    modifier: Modifier = Modifier,
+) {
+    RankingStateCard(
+        modifier = modifier,
+    ) {
+        CircularProgressIndicator(
+            color = DominoSemanticColors.brandText,
+        )
+
+        Text(
+            text = stringResource(
+                R.string.ranking_loading,
+            ),
+            color = DominoSemanticColors.brandText,
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }
 
-internal fun PublicRankingEntryDto.publicTitle(): String {
-    val normalizedName = displayName
-        ?.trim()
-        ?.takeIf { value ->
-            value.isNotBlank()
-        }
+@Composable
+private fun RankingInlineLoading(
+    text: String,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(26.dp),
+            color = DominoSemanticColors.brandText,
+            strokeWidth = 2.dp,
+        )
 
-    return "${rank}º · ${normalizedName ?: "Jogador $rank"}"
+        Text(
+            text = text,
+            color = DominoSemanticColors.brandText,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
-internal fun PublicRankingEntryDto.publicScoreText(): String {
-    return "$scoreNumerator/$scoreDenominator"
+@Composable
+private fun RankingEmptyContent(
+    selectedScope: PublicRankingScope,
+    modifier: Modifier = Modifier,
+) {
+    RankingStateCard(
+        modifier = modifier,
+    ) {
+        Text(
+            text = stringResource(
+                if (selectedScope == PublicRankingScope.CLOSED) {
+                    R.string.ranking_empty_closed
+                } else {
+                    R.string.ranking_empty_current
+                },
+            ),
+            color = DominoSemanticColors.brandText,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
-internal fun OnlinePublicRankingFailureKind.publicMessage(): String {
+@Composable
+private fun RankingStateCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = DominoBrandShapes.card,
+        colors = CardDefaults.cardColors(
+            containerColor =
+                DominoSemanticColors.brandSurface.copy(alpha = 0.92f),
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = DominoSemanticColors.brandBorder,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
+    }
+}
+
+internal fun PublicRankingCycleDto.publicLabelRes(): Int {
     return when (this) {
-        OnlinePublicRankingFailureKind.AUTHENTICATION_REQUIRED -> {
-            "Não há uma sessão online válida para consultar o ranking."
-        }
+        PublicRankingCycleDto.DAILY ->
+            R.string.ranking_cycle_daily
+        PublicRankingCycleDto.WEEKLY ->
+            R.string.ranking_cycle_weekly
+        PublicRankingCycleDto.MONTHLY ->
+            R.string.ranking_cycle_monthly
+        PublicRankingCycleDto.ANNUAL ->
+            R.string.ranking_cycle_annual
+    }
+}
 
-        OnlinePublicRankingFailureKind.RATE_LIMITED -> {
-            "Muitas consultas foram feitas. Aguarde e tente novamente."
-        }
+internal fun PublicRankingScope.publicLabelRes(): Int {
+    return when (this) {
+        PublicRankingScope.CURRENT ->
+            R.string.ranking_scope_current
+        PublicRankingScope.CLOSED ->
+            R.string.ranking_scope_closed
+    }
+}
 
-        OnlinePublicRankingFailureKind.UNAVAILABLE -> {
-            "O ranking está indisponível agora."
-        }
-
-        OnlinePublicRankingFailureKind.PROTOCOL_ERROR -> {
-            "A resposta do ranking não pôde ser validada."
-        }
-
-        OnlinePublicRankingFailureKind.UNKNOWN -> {
-            "Não foi possível carregar o ranking."
-        }
+internal fun OnlinePublicRankingFailureKind.publicMessageRes(): Int {
+    return when (this) {
+        OnlinePublicRankingFailureKind.AUTHENTICATION_REQUIRED ->
+            R.string.ranking_failure_authentication_required
+        OnlinePublicRankingFailureKind.RATE_LIMITED ->
+            R.string.ranking_failure_rate_limited
+        OnlinePublicRankingFailureKind.UNAVAILABLE ->
+            R.string.ranking_failure_unavailable
+        OnlinePublicRankingFailureKind.PROTOCOL_ERROR ->
+            R.string.ranking_failure_protocol_error
+        OnlinePublicRankingFailureKind.UNKNOWN ->
+            R.string.ranking_failure_unknown
     }
 }
 

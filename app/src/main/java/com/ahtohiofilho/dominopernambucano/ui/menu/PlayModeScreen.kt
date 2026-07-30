@@ -1,13 +1,18 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -18,11 +23,20 @@ import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.ui.components.DominoOutlinedTextField
 import com.ahtohiofilho.dominopernambucano.ui.components.DominoTextFieldTone
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandScaffold
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandShapes
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPrimaryActionCard
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenTitle
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSecondaryActionCard
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 
 internal const val PlayModePublicIdentityFieldTag =
     "play_mode_public_identity_field"
+internal const val PlayModeTitleTag = "play_mode_title"
+internal const val PlayModeContentGroupTag = "play_mode_content_group"
 
 @Composable
 fun PlayModeScreen(
@@ -37,69 +51,113 @@ fun PlayModeScreen(
     onCreateOnlineRoomClick: () -> Unit,
     onJoinOnlineRoomClick: () -> Unit,
 ) {
-    MenuScaffold {
-        Text(
-            text = stringResource(R.string.play_mode_title),
-            color = DominoSemanticColors.primaryTextOnDark,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-        )
+    DominoBrandScaffold {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(PlayModeContentGroupTag),
+            verticalArrangement = Arrangement.spacedBy(
+                MaterialTheme.dominoSpacing.sm,
+            ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            DominoScreenTitle(
+                text = stringResource(R.string.play_mode_title),
+                modifier = Modifier.testTag(PlayModeTitleTag),
+            )
 
-        Text(
-            text = stringResource(R.string.play_mode_description),
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.78f),
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-        )
-
-        OnlinePublicIdentityField(
-            displayName = onlineDisplayName,
-            tableName = onlineTableName,
-            editable = !onlineIdentityManagedByAccount,
-            onDisplayNameChange = onOnlineDisplayNameChange,
-        )
-
-        PrimaryMenuButton(
-            text = stringResource(R.string.play_mode_ranked),
-            onClick = onRankedGameClick,
-            enabled = rankedAccountAvailable,
-        )
-
-        if (!rankedAccountAvailable) {
             Text(
-                text =
-                    stringResource(
-                        R.string.play_mode_ranked_account_required,
-                    ),
-                color =
-                    DominoSemanticColors.primaryTextOnDark.copy(
-                        alpha = 0.72f,
-                    ),
-                style = MaterialTheme.typography.bodySmall,
+                text = stringResource(R.string.play_mode_description),
+                color = DominoSemanticColors.brandText.copy(
+                    alpha = 0.80f,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
             )
+
+            OnlinePublicIdentityField(
+                displayName = onlineDisplayName,
+                tableName = onlineTableName,
+                editable = !onlineIdentityManagedByAccount,
+                onDisplayNameChange = onOnlineDisplayNameChange,
+            )
+
+            DominoPrimaryActionCard(
+                title = stringResource(R.string.play_mode_ranked),
+                supportingText = stringResource(
+                    R.string.play_mode_ranked_support,
+                ),
+                onClick = onRankedGameClick,
+                enabled = rankedAccountAvailable,
+                leadingContent = {
+                    BrandGlyph("▶")
+                },
+            )
+
+            if (!rankedAccountAvailable) {
+                Text(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(
+                        R.string.play_mode_ranked_account_required,
+                    ),
+                    color = DominoSemanticColors.brandText.copy(
+                        alpha = 0.76f,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            DominoSecondaryActionCard(
+                title = stringResource(R.string.play_mode_local),
+                supportingText = stringResource(
+                    R.string.play_mode_local_support,
+                ),
+                accent = DominoBrandAccent.Blue,
+                onClick = onLocalGameClick,
+                leadingContent = {
+                    BrandGlyph("◆")
+                },
+            )
+
+            DominoSecondaryActionCard(
+                title = stringResource(
+                    R.string.play_mode_create_room,
+                ),
+                supportingText = stringResource(
+                    R.string.play_mode_create_room_support,
+                ),
+                accent = DominoBrandAccent.Green,
+                onClick = onCreateOnlineRoomClick,
+                leadingContent = {
+                    BrandGlyph("+")
+                },
+            )
+
+            DominoSecondaryActionCard(
+                title = stringResource(
+                    R.string.play_mode_join_room,
+                ),
+                supportingText = stringResource(
+                    R.string.play_mode_join_room_support,
+                ),
+                accent = DominoBrandAccent.Red,
+                onClick = onJoinOnlineRoomClick,
+                leadingContent = {
+                    BrandGlyph("#")
+                },
+            )
+
+            DominoSecondaryActionCard(
+                title = stringResource(R.string.common_back),
+                supportingText = null,
+                accent = DominoBrandAccent.Blue,
+                onClick = onBackClick,
+                leadingContent = {
+                    BrandGlyph("←")
+                },
+            )
         }
-
-        SecondaryMenuButton(
-            text = stringResource(R.string.play_mode_local),
-            onClick = onLocalGameClick,
-        )
-
-        SecondaryMenuButton(
-            text = stringResource(R.string.play_mode_create_room),
-            onClick = onCreateOnlineRoomClick,
-        )
-
-        SecondaryMenuButton(
-            text = stringResource(R.string.play_mode_join_room),
-            onClick = onJoinOnlineRoomClick,
-        )
-
-        SecondaryMenuButton(
-            text = stringResource(R.string.common_back),
-            onClick = onBackClick,
-        )
     }
 }
 
@@ -110,13 +168,30 @@ private fun OnlinePublicIdentityField(
     editable: Boolean,
     onDisplayNameChange: (String) -> Unit,
 ) {
+    val shape = DominoBrandShapes.card
+
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(
+                DominoSemanticColors.brandSurfaceElevated,
+            )
+            .border(
+                width = 1.dp,
+                color = DominoSemanticColors.brandBorder,
+                shape = shape,
+            )
+            .padding(MaterialTheme.dominoSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(
+            MaterialTheme.dominoSpacing.xs,
+        ),
     ) {
         Text(
-            text = stringResource(R.string.play_mode_public_identity),
-            color = DominoSemanticColors.primaryTextOnDark,
+            text = stringResource(
+                R.string.play_mode_public_identity,
+            ),
+            color = DominoSemanticColors.brandText,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
         )
@@ -128,7 +203,9 @@ private fun OnlinePublicIdentityField(
                 PlayModePublicIdentityFieldTag,
             ),
             enabled = editable,
-            label = stringResource(R.string.play_mode_public_name),
+            label = stringResource(
+                R.string.play_mode_public_name,
+            ),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Words,
             ),
@@ -140,7 +217,7 @@ private fun OnlinePublicIdentityField(
                 R.string.play_mode_lists_and_rankings,
                 displayName,
             ),
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f),
+            color = DominoSemanticColors.brandSupportingText,
             style = MaterialTheme.typography.bodySmall,
         )
 
@@ -149,7 +226,7 @@ private fun OnlinePublicIdentityField(
                 R.string.play_mode_table_name,
                 tableName,
             ),
-            color = DominoSemanticColors.primaryTextOnDark,
+            color = DominoSemanticColors.brandText,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
         )
@@ -164,10 +241,23 @@ private fun OnlinePublicIdentityField(
                     R.string.play_mode_managed_identity_hint,
                 )
             },
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.68f),
+            color = DominoSemanticColors.brandSupportingText,
             style = MaterialTheme.typography.bodySmall,
         )
     }
+}
+
+@Composable
+private fun BrandGlyph(
+    glyph: String,
+) {
+    Text(
+        text = glyph,
+        color = DominoSemanticColors.brandText,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Black,
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Preview(

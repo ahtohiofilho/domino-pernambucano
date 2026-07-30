@@ -6,6 +6,8 @@ object DominoColorTokens {
     val PernambucoBlue = Color(0xFF123F8C)
     val PernambucoBlueDark = Color(0xFF08275C)
     val PernambucoBlueSoft = Color(0xFFEAF1FF)
+    val PernambucoBlueElevated = Color(0xFF164C9C)
+    val PernambucoBlueMuted = Color(0xFF9FB6DC)
 
     val SurfaceWhite = Color(0xFFF8FAFF)
     val PureWhite = Color(0xFFFFFFFF)
@@ -29,6 +31,20 @@ object DominoSemanticColors {
     val playableMove = DominoColorTokens.AccentGreen
     val scoreHighlight = DominoColorTokens.AccentYellow
     val warningImpact = DominoColorTokens.AccentRed
+
+    val brandBackground = DominoColorTokens.PernambucoBlueDark
+    val brandSurface = DominoColorTokens.PernambucoBlue
+    val brandSurfaceElevated = DominoColorTokens.PernambucoBlueElevated
+    val brandPrimaryAction = DominoColorTokens.AccentYellow
+    val brandPrimaryActionContent = DominoColorTokens.InkBlue
+    val brandEnergy = DominoColorTokens.AccentRed
+    val brandPositive = DominoColorTokens.AccentGreen
+    val brandText = DominoColorTokens.PureWhite
+    val brandSupportingText = DominoColorTokens.PernambucoBlueMuted
+    val brandPattern =
+        DominoColorTokens.PureWhite.copy(alpha = 0.08f)
+    val brandBorder =
+        DominoColorTokens.PureWhite.copy(alpha = 0.18f)
 
     /*
      * Accessible light-dialog mapping approved before the Design System.

@@ -2,7 +2,9 @@ package com.ahtohiofilho.dominopernambucano.ui.ranking
 
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
+import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -13,62 +15,51 @@ internal enum class PublicRankingScope {
     CLOSED,
 }
 
-internal fun PublicRankingScope.publicLabel(): String {
-    return when (this) {
-        PublicRankingScope.CURRENT -> "Atual"
-        PublicRankingScope.CLOSED -> "Encerrados"
-    }
-}
-
-internal fun PublicRankingCycleSummaryDto.publicPeriodLabel(): String {
+internal fun PublicRankingCycleSummaryDto.publicPeriodLabel(
+    locale: Locale,
+): String {
     return publicRankingPeriodLabel(
         cycle = cycle,
         startsAtEpochMillis = startsAtEpochMillis,
         endsAtEpochMillis = endsAtEpochMillis,
+        locale = locale,
     )
 }
 
-internal fun PublicRankingResponseDto.publicContextLabel(): String {
-    val context = if (isClosed) {
-        "Ranking encerrado"
-    } else {
-        "Ranking atual"
-    }
-
-    return "$context · ${
-        publicRankingPeriodLabel(
-            cycle = cycle,
-            startsAtEpochMillis = startsAtEpochMillis,
-            endsAtEpochMillis = endsAtEpochMillis,
-        )
-    }"
+internal fun PublicRankingResponseDto.publicPeriodLabel(
+    locale: Locale,
+): String {
+    return publicRankingPeriodLabel(
+        cycle = cycle,
+        startsAtEpochMillis = startsAtEpochMillis,
+        endsAtEpochMillis = endsAtEpochMillis,
+        locale = locale,
+    )
 }
 
-internal fun PublicRankingResponseDto.publicSummaryLabel(): String {
-    val base =
-        "$totalEligiblePlayers jogadores elegíveis · " +
-            "$resultCount partidas"
-
-    return if (
-        isClosed &&
-        retainedRankingSize < totalEligiblePlayers
-    ) {
-        "$base · Top $retainedRankingSize preservado"
+internal fun PublicRankingEntryDto.publicRankLabel(
+    locale: Locale,
+): String {
+    return if (locale.language.equals("en", ignoreCase = true)) {
+        "#$rank"
     } else {
-        base
+        "${rank}º"
     }
 }
 
-internal fun PublicRankingResponseDto.publicRetentionNotice(): String? {
-    return if (
-        isClosed &&
-        retainedRankingSize < totalEligiblePlayers
-    ) {
-        "Este histórico preserva somente o Top " +
-            "$retainedRankingSize do período."
-    } else {
-        null
-    }
+internal fun PublicRankingEntryDto.publicScoreText(): String {
+    return "$scoreNumerator/$scoreDenominator"
+}
+
+internal fun PublicRankingEntryDto.publicDisplayName(
+    fallback: String,
+): String {
+    return displayName
+        ?.trim()
+        ?.takeIf { value ->
+            value.isNotBlank()
+        }
+        ?: fallback
 }
 
 internal fun mergeClosedRankingCycles(
@@ -92,6 +83,7 @@ private fun publicRankingPeriodLabel(
     cycle: PublicRankingCycleDto,
     startsAtEpochMillis: Long,
     endsAtEpochMillis: Long,
+    locale: Locale,
 ): String {
     val inclusiveEnd = (
         endsAtEpochMillis - 1L
@@ -101,35 +93,46 @@ private fun publicRankingPeriodLabel(
         PublicRankingCycleDto.DAILY -> {
             formatRankingDate(
                 epochMillis = startsAtEpochMillis,
-                pattern = "dd/MM/yyyy",
+                locale = locale,
+                style = DateFormat.MEDIUM,
             )
         }
 
         PublicRankingCycleDto.WEEKLY -> {
             val start = formatRankingDate(
                 epochMillis = startsAtEpochMillis,
-                pattern = "dd/MM",
+                locale = locale,
+                style = DateFormat.SHORT,
             )
             val end = formatRankingDate(
                 epochMillis = inclusiveEnd,
-                pattern = "dd/MM/yyyy",
+                locale = locale,
+                style = DateFormat.MEDIUM,
             )
-            "$start a $end"
+            "$start – $end"
         }
 
         PublicRankingCycleDto.MONTHLY -> {
-            formatRankingDate(
-                epochMillis = startsAtEpochMillis,
-                pattern = "MMMM 'de' yyyy",
+            SimpleDateFormat(
+                "MMMM yyyy",
+                locale,
+            ).apply {
+                timeZone = RANKING_TIME_ZONE
+            }.format(
+                Date(startsAtEpochMillis),
             ).replaceFirstChar { character ->
                 character.uppercaseChar()
             }
         }
 
         PublicRankingCycleDto.ANNUAL -> {
-            formatRankingDate(
-                epochMillis = startsAtEpochMillis,
-                pattern = "yyyy",
+            SimpleDateFormat(
+                "yyyy",
+                locale,
+            ).apply {
+                timeZone = RANKING_TIME_ZONE
+            }.format(
+                Date(startsAtEpochMillis),
             )
         }
     }
@@ -137,11 +140,12 @@ private fun publicRankingPeriodLabel(
 
 private fun formatRankingDate(
     epochMillis: Long,
-    pattern: String,
+    locale: Locale,
+    style: Int,
 ): String {
-    return SimpleDateFormat(
-        pattern,
-        Locale("pt", "BR"),
+    return DateFormat.getDateInstance(
+        style,
+        locale,
     ).apply {
         timeZone = RANKING_TIME_ZONE
     }.format(
