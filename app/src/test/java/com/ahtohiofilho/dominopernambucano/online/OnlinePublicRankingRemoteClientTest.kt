@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.online
+package com.ahtohiofilho.dominopernambucano.online
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -404,6 +404,44 @@ class OnlinePublicRankingRemoteClientTest {
             httpClient.close()
         }
 
+    @Test
+    fun provisional_award_in_open_cycle_is_a_protocol_failure() =
+        runBlocking {
+            val httpClient = HttpClient(
+                MockEngine {
+                    respond(
+                        content = validResponseJson().replace(
+                            "\"awardedRankingSize\": 0",
+                            "\"awardedRankingSize\": 1",
+                        ),
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                },
+            ) {
+                expectSuccess = true
+                install(ContentNegotiation) {
+                    json(createOnlineJson())
+                }
+            }
+
+            val result = client(
+                httpClient = httpClient,
+                credential = anonymousCredential(),
+            ).fetch(
+                cycle = PublicRankingCycleDto.DAILY,
+                limit = 2,
+            ) as OnlinePublicRankingClientResult.Failure
+
+            assertEquals(
+                OnlinePublicRankingFailureKind.PROTOCOL_ERROR,
+                result.kind,
+            )
+            assertFalse(result.retryable)
+
+            httpClient.close()
+        }
+
     private fun client(
         httpClient: HttpClient,
         credential: OnlineSessionCredential?,
@@ -451,6 +489,24 @@ class OnlinePublicRankingRemoteClientTest {
         closedAtEpochMillis: Long? = null,
     ): String {
         val closedAtJson = closedAtEpochMillis?.toString() ?: "null"
+        val awardedRankingSize =
+            if (isClosed) {
+                minOf(50, retainedRankingSize)
+            } else {
+                0
+            }
+        val firstAwardTier =
+            if (awardedRankingSize >= 1) {
+                "\"DIAMOND\""
+            } else {
+                "null"
+            }
+        val secondAwardTier =
+            if (awardedRankingSize >= 2) {
+                "\"GOLD\""
+            } else {
+                "null"
+            }
 
         return """
             {
@@ -466,6 +522,8 @@ class OnlinePublicRankingRemoteClientTest {
               "publicationStatus": "PUBLISHED",
               "eligiblePlayersRemaining": 0,
               "awardsEligible": true,
+              "awardRuleVersion": 1,
+              "awardedRankingSize": $awardedRankingSize,
               "retainedRankingSize": $retainedRankingSize,
               "isClosed": $isClosed,
               "closedAtEpochMillis": $closedAtJson,
@@ -483,7 +541,8 @@ class OnlinePublicRankingRemoteClientTest {
                   "teamBalance": 6,
                   "individualPoints": 4,
                   "touchesGiven": 2,
-                  "automaticRounds": 0
+                  "automaticRounds": 0,
+                  "awardTier": $firstAwardTier
                 },
                 {
                   "rank": 2,
@@ -495,7 +554,8 @@ class OnlinePublicRankingRemoteClientTest {
                   "teamBalance": 6,
                   "individualPoints": 1,
                   "touchesGiven": 1,
-                  "automaticRounds": 0
+                  "automaticRounds": 0,
+                  "awardTier": $secondAwardTier
                 }
               ],
               "viewer": null
@@ -529,6 +589,8 @@ class OnlinePublicRankingRemoteClientTest {
                   "publicationStatus": "PUBLISHED",
                   "eligiblePlayersRemaining": 0,
                   "awardsEligible": true,
+                  "awardRuleVersion": 1,
+                  "awardedRankingSize": ${minOf(50, retainedRankingSize)},
                   "retainedRankingSize": $retainedRankingSize
                 }
               ]

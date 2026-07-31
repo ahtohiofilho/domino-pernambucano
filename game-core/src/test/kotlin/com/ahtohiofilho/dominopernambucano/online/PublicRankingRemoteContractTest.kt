@@ -33,6 +33,15 @@ class PublicRankingRemoteContractTest {
             ),
             PublicRankingPublicationStatusDto.values().toList(),
         )
+        assertEquals(
+            listOf(
+                PublicRankingAwardTierDto.DIAMOND,
+                PublicRankingAwardTierDto.GOLD,
+                PublicRankingAwardTierDto.SILVER,
+                PublicRankingAwardTierDto.BRONZE,
+            ),
+            PublicRankingAwardTierDto.values().toList(),
+        )
     }
 
     @Test
@@ -84,6 +93,12 @@ class PublicRankingRemoteContractTest {
         )
         assertEquals(99, decoded.eligiblePlayersRemaining)
         assertFalse(decoded.awardsEligible)
+        assertEquals(1, decoded.awardRuleVersion)
+        assertEquals(0, decoded.awardedRankingSize)
         assertNull(decoded.entries.single().displayName)
+        assertNull(decoded.entries.single().awardTier)
+        assertTrue(encoded.contains("awardRuleVersion"))
+        assertTrue(encoded.contains("awardedRankingSize"))
+        assertTrue(encoded.contains("awardTier"))
     }
 }

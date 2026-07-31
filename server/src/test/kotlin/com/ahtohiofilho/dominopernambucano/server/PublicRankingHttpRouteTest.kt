@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.CURRENT_RANKING_RULE_VERSION
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerResult
@@ -74,6 +74,8 @@ class PublicRankingHttpRouteTest {
         )
         assertEquals(96, response.eligiblePlayersRemaining)
         assertFalse(response.awardsEligible)
+        assertEquals(1, response.awardRuleVersion)
+        assertEquals(0, response.awardedRankingSize)
         assertTrue(response.entries.isEmpty())
         assertFalse(response.hasMore)
         assertNull(response.viewer)
@@ -124,6 +126,14 @@ class PublicRankingHttpRouteTest {
         )
         assertEquals(0, ranking.eligiblePlayersRemaining)
         assertTrue(ranking.awardsEligible)
+        assertEquals(1, ranking.awardRuleVersion)
+        assertEquals(0, ranking.awardedRankingSize)
+        assertNull(viewer.awardTier)
+        assertTrue(
+            ranking.entries.all { entry ->
+                entry.awardTier == null
+            },
+        )
         assertEquals(2, ranking.entries.size)
         assertTrue(ranking.hasMore)
         assertFalse(body.contains("account-a"))
@@ -169,6 +179,13 @@ class PublicRankingHttpRouteTest {
         )
         assertEquals(0, ranking.eligiblePlayersRemaining)
         assertTrue(ranking.awardsEligible)
+        assertEquals(1, ranking.awardRuleVersion)
+        assertEquals(0, ranking.awardedRankingSize)
+        assertTrue(
+            ranking.entries.all { entry ->
+                entry.awardTier == null
+            },
+        )
         assertEquals(2, ranking.entries.size)
         assertTrue(ranking.hasMore)
         assertNull(ranking.viewer)

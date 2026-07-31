@@ -125,17 +125,9 @@ class FakeOnlineClientDrivenProgressionTest {
             val previousRuntimeState = runtimeState
             val previousRevision = snapshot.revision
 
-            val expectedMove = requireNotNull(
-                findBasicBotMove(
-                    state = previousRuntimeState.gameState,
-                ),
+            val expectedMove = findBasicBotMove(
+                state = previousRuntimeState.gameState,
             )
-
-            val expectedGameState =
-                playMoveForCurrentPlayer(
-                    state = previousRuntimeState.gameState,
-                    playableMove = expectedMove,
-                )
 
             val result = repository.submitAction(
                 createOnlineSnapshotRequestAction(
@@ -167,10 +159,35 @@ class FakeOnlineClientDrivenProgressionTest {
                 updatedSnapshot.revision,
             )
 
-            assertEquals(
-                expectedGameState,
-                updatedRuntimeState.gameState,
-            )
+            if (expectedMove != null) {
+                val expectedGameState =
+                    playMoveForCurrentPlayer(
+                        state = previousRuntimeState.gameState,
+                        playableMove = expectedMove,
+                    )
+
+                assertEquals(
+                    expectedGameState,
+                    updatedRuntimeState.gameState,
+                )
+            } else {
+                assertEquals(
+                    getNextCounterClockwisePlayerIndex(
+                        currentPlayerIndex =
+                            previousRuntimeState
+                                .gameState
+                                .currentPlayerIndex,
+                        playerCount =
+                            previousRuntimeState
+                                .gameState
+                                .players
+                                .size,
+                    ),
+                    updatedRuntimeState
+                        .gameState
+                        .currentPlayerIndex,
+                )
+            }
 
             assertTrue(
                 updatedSnapshot

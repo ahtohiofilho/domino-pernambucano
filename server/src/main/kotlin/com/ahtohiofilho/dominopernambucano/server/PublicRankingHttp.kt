@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.server
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleStanding
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingAwardTierDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCyclesResponseDto
@@ -57,9 +58,18 @@ internal suspend fun ApplicationCall.respondPublicRanking(
         return
     }
 
+    require(totalEligiblePlayers >= retainedRankingSize)
+    require(retainedRankingSize == ladder.standings.size)
+
     val publicationDecision = publicationPolicy.evaluate(
         kind = cycle.toRankingCycleKind(),
         totalEligiblePlayers = totalEligiblePlayers,
+    )
+    val isClosed = closedAtEpochMillis != null
+    val awardDecision = RankingAwardPolicy.evaluate(
+        isClosed = isClosed,
+        publicationDecision = publicationDecision,
+        retainedRankingSize = retainedRankingSize,
     )
     val publishedStandings =
         if (publicationDecision.isPublished) {
@@ -74,10 +84,10 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             standing.toPublicRankingEntry(
                 displayName =
                     publicDisplayNames[standing.accountId],
+                awardTier =
+                    awardDecision.tierFor(standing.rank),
             )
         }
-    require(totalEligiblePlayers >= retainedRankingSize)
-    require(retainedRankingSize == ladder.standings.size)
 
     val consumed = offset.toLong() + entries.size.toLong()
     val viewer = if (publicationDecision.isPublished) {
@@ -93,6 +103,8 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             standing.toPublicRankingEntry(
                 displayName =
                     publicDisplayNames[standing.accountId],
+                awardTier =
+                    awardDecision.tierFor(standing.rank),
             )
         }
     } else {
@@ -118,6 +130,8 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             eligiblePlayersRemaining =
                 publicationDecision.eligiblePlayersRemaining,
             awardsEligible = publicationDecision.isPublished,
+            awardRuleVersion = awardDecision.awardRuleVersion,
+            awardedRankingSize = awardDecision.awardedRankingSize,
             retainedRankingSize = retainedRankingSize,
             isClosed = closedAtEpochMillis != null,
             closedAtEpochMillis = closedAtEpochMillis,
@@ -148,6 +162,7 @@ private fun RankingPublicationStatus
 
 private fun RankedCycleStanding.toPublicRankingEntry(
     displayName: String?,
+    awardTier: PublicRankingAwardTierDto?,
 ): PublicRankingEntryDto {
     return PublicRankingEntryDto(
         rank = rank,
@@ -161,6 +176,7 @@ private fun RankedCycleStanding.toPublicRankingEntry(
         individualPoints = stats.individualPoints,
         touchesGiven = stats.touchesGiven,
         automaticRounds = stats.automaticRounds,
+        awardTier = awardTier,
     )
 }
 
@@ -204,6 +220,12 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
                     totalEligiblePlayers =
                         snapshot.totalEligiblePlayers,
                 )
+                val awardDecision = RankingAwardPolicy.evaluate(
+                    isClosed = true,
+                    publicationDecision = publicationDecision,
+                    retainedRankingSize =
+                        snapshot.retainedRankingSize,
+                )
 
                 PublicRankingCycleSummaryDto(
                     cycle = cycle,
@@ -231,6 +253,10 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
                         publicationDecision.eligiblePlayersRemaining,
                     awardsEligible =
                         publicationDecision.isPublished,
+                    awardRuleVersion =
+                        awardDecision.awardRuleVersion,
+                    awardedRankingSize =
+                        awardDecision.awardedRankingSize,
                     isLegacyTruncated =
                         snapshot.isLegacyTruncated,
                 )

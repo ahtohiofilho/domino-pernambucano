@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.online
+package com.ahtohiofilho.dominopernambucano.online
 
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import java.io.IOException
@@ -244,6 +244,9 @@ class OnlinePublicRankingRemoteClient(
     }
 }
 
+private const val SUPPORTED_RANKING_AWARD_RULE_VERSION = 1
+private const val MAXIMUM_AWARDED_RANKING_SIZE = 50
+
 private fun PublicRankingResponseDto.requireValidFor(
     requestedCycle: PublicRankingCycleDto,
     requestedOffset: Int,
@@ -292,6 +295,25 @@ private fun PublicRankingResponseDto.requireValidFor(
         }
     }
 
+    require(
+        awardRuleVersion ==
+            SUPPORTED_RANKING_AWARD_RULE_VERSION,
+    )
+    val expectedAwardedRankingSize =
+        if (
+            requestedCycleId != null &&
+            publicationStatus ==
+                PublicRankingPublicationStatusDto.PUBLISHED
+        ) {
+            minOf(
+                retainedRankingSize,
+                MAXIMUM_AWARDED_RANKING_SIZE,
+            )
+        } else {
+            0
+        }
+    require(awardedRankingSize == expectedAwardedRankingSize)
+
     require(entries.size <= limit)
 
     if (requestedCycleId == null) {
@@ -328,10 +350,14 @@ private fun PublicRankingResponseDto.requireValidFor(
     )
 
     entries.forEach { entry ->
-        entry.requireValid()
+        entry.requireValid(
+            awardedRankingSize = awardedRankingSize,
+        )
     }
     viewer?.let { entry ->
-        entry.requireValid()
+        entry.requireValid(
+            awardedRankingSize = awardedRankingSize,
+        )
         require(entry.rank <= retainedRankingSize)
     }
 }
@@ -416,9 +442,29 @@ private fun PublicRankingCycleSummaryDto.requireValidFor(
             require(awardsEligible)
         }
     }
+
+    require(
+        awardRuleVersion ==
+            SUPPORTED_RANKING_AWARD_RULE_VERSION,
+    )
+    val expectedAwardedRankingSize =
+        if (
+            publicationStatus ==
+                PublicRankingPublicationStatusDto.PUBLISHED
+        ) {
+            minOf(
+                retainedRankingSize,
+                MAXIMUM_AWARDED_RANKING_SIZE,
+            )
+        } else {
+            0
+        }
+    require(awardedRankingSize == expectedAwardedRankingSize)
 }
 
-private fun PublicRankingEntryDto.requireValid() {
+private fun PublicRankingEntryDto.requireValid(
+    awardedRankingSize: Int,
+) {
     require(rank > 0)
     require(competitorId.isNotBlank())
     require(victories >= 0L)
@@ -439,6 +485,37 @@ private fun PublicRankingEntryDto.requireValid() {
     require(individualPoints >= 0L)
     require(touchesGiven >= 0L)
     require(automaticRounds >= 0L)
+    require(
+        awardTier ==
+            expectedAwardTier(
+                rank = rank,
+                awardedRankingSize = awardedRankingSize,
+            ),
+    )
+}
+
+private fun expectedAwardTier(
+    rank: Int,
+    awardedRankingSize: Int,
+): PublicRankingAwardTierDto? {
+    require(rank > 0)
+    require(awardedRankingSize >= 0)
+    require(
+        awardedRankingSize <=
+            MAXIMUM_AWARDED_RANKING_SIZE,
+    )
+
+    if (rank > awardedRankingSize) {
+        return null
+    }
+
+    return when (rank) {
+        1 -> PublicRankingAwardTierDto.DIAMOND
+        in 2..5 -> PublicRankingAwardTierDto.GOLD
+        in 6..10 -> PublicRankingAwardTierDto.SILVER
+        in 11..50 -> PublicRankingAwardTierDto.BRONZE
+        else -> null
+    }
 }
 
 private fun OnlinePublicRankingHttpException.toRankingClientFailure():

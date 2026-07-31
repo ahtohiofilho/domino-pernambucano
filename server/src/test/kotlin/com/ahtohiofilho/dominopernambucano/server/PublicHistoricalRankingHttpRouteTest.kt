@@ -7,6 +7,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.competitive.createRankedMatchResultId
 import com.ahtohiofilho.dominopernambucano.competitive.resolveRankingCycle
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingAwardTierDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCyclesResponseDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
@@ -87,6 +88,8 @@ class PublicHistoricalRankingHttpRouteTest {
             )
             assertEquals(0, summary.eligiblePlayersRemaining)
             assertTrue(summary.awardsEligible)
+            assertEquals(1, summary.awardRuleVersion)
+            assertEquals(50, summary.awardedRankingSize)
             assertFalse(summary.isLegacyTruncated)
             assertEquals(
                 prepared.period.endsAtEpochMillis,
@@ -121,11 +124,22 @@ class PublicHistoricalRankingHttpRouteTest {
             )
             assertEquals(0, ranking.eligiblePlayersRemaining)
             assertTrue(ranking.awardsEligible)
+            assertEquals(1, ranking.awardRuleVersion)
+            assertEquals(50, ranking.awardedRankingSize)
             assertFalse(ranking.isLegacyTruncated)
             assertEquals(5, ranking.entries.size)
+            assertTrue(
+                ranking.entries.all { entry ->
+                    entry.awardTier == null
+                },
+            )
             assertTrue(ranking.hasMore)
             assertNotNull(ranking.viewer)
             assertEquals(1, requireNotNull(ranking.viewer).rank)
+            assertEquals(
+                PublicRankingAwardTierDto.DIAMOND,
+                requireNotNull(ranking.viewer).awardTier,
+            )
             assertFalse(body.contains("snapshot-account"))
             assertFalse(body.contains("accountId"))
             assertFalse(body.contains("playerId"))
@@ -177,6 +191,8 @@ class PublicHistoricalRankingHttpRouteTest {
             )
             assertEquals(96, summary.eligiblePlayersRemaining)
             assertFalse(summary.awardsEligible)
+            assertEquals(1, summary.awardRuleVersion)
+            assertEquals(0, summary.awardedRankingSize)
 
             val rankingResponse = client.get(
                 "/${OnlineRemoteRoutes.RANKING}" +
@@ -199,6 +215,8 @@ class PublicHistoricalRankingHttpRouteTest {
             )
             assertEquals(96, ranking.eligiblePlayersRemaining)
             assertFalse(ranking.awardsEligible)
+            assertEquals(1, ranking.awardRuleVersion)
+            assertEquals(0, ranking.awardedRankingSize)
             assertTrue(ranking.entries.isEmpty())
             assertFalse(ranking.hasMore)
             assertNull(ranking.viewer)
