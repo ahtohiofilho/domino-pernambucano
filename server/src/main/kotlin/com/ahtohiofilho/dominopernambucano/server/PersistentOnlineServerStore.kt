@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
@@ -441,6 +441,16 @@ internal fun createDefaultOnlineServerStore(
     )
         ?.trim()
         ?.takeIf { value -> value.isNotBlank() }
+
+    if (
+        serverEnvironment == OnlineServerEnvironment.HOMOLOGATION &&
+        configuredStateFile != null
+    ) {
+        throw IllegalStateException(
+            "$ONLINE_SERVER_STATE_FILE_ENVIRONMENT_VARIABLE deve permanecer " +
+                "ausente na homologacao isolada.",
+        )
+    }
 
     if (configuredStateFile == null) {
         check(serverEnvironment != OnlineServerEnvironment.PRODUCTION) {

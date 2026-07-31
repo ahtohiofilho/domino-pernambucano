@@ -1,8 +1,9 @@
-package com.ahtohiofilho.dominopernambucano.ui.ranking
+﻿package com.ahtohiofilho.dominopernambucano.ui.ranking
 
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import java.text.DateFormat
 import java.text.SimpleDateFormat
@@ -60,6 +61,16 @@ internal fun PublicRankingEntryDto.publicDisplayName(
             value.isNotBlank()
         }
         ?: fallback
+}
+
+internal fun PublicRankingResponseDto.isOfficialRankingPending(): Boolean {
+    return publicationStatus ==
+        PublicRankingPublicationStatusDto.BELOW_THRESHOLD
+}
+
+internal fun PublicRankingResponseDto.isOfficialRankingPublished(): Boolean {
+    return publicationStatus ==
+        PublicRankingPublicationStatusDto.PUBLISHED
 }
 
 internal fun mergeClosedRankingCycles(

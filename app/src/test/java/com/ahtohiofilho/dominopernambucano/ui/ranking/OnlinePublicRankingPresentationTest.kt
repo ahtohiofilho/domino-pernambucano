@@ -1,9 +1,11 @@
-package com.ahtohiofilho.dominopernambucano.ui.ranking
+﻿package com.ahtohiofilho.dominopernambucano.ui.ranking
 
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingFailureKind
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -192,6 +194,36 @@ class OnlinePublicRankingPresentationTest {
     }
 
     @Test
+    fun below_threshold_response_maps_to_pending_publication() {
+        val response = rankingResponse(
+            publicationStatus =
+                PublicRankingPublicationStatusDto.BELOW_THRESHOLD,
+            totalEligiblePlayers = 42,
+            publicationThreshold = 100,
+            eligiblePlayersRemaining = 58,
+            awardsEligible = false,
+        )
+
+        assertTrue(response.isOfficialRankingPending())
+        assertFalse(response.isOfficialRankingPublished())
+    }
+
+    @Test
+    fun published_response_maps_to_official_ranking() {
+        val response = rankingResponse(
+            publicationStatus =
+                PublicRankingPublicationStatusDto.PUBLISHED,
+            totalEligiblePlayers = 100,
+            publicationThreshold = 100,
+            eligiblePlayersRemaining = 0,
+            awardsEligible = true,
+        )
+
+        assertFalse(response.isOfficialRankingPending())
+        assertTrue(response.isOfficialRankingPublished())
+    }
+
+    @Test
     fun closed_cycle_pages_are_merged_deduplicated_and_sorted() {
         val older = cycleSummary(
             cycle = PublicRankingCycleDto.DAILY,
@@ -229,6 +261,34 @@ class OnlinePublicRankingPresentationTest {
         )
     }
 
+    private fun rankingResponse(
+        publicationStatus: PublicRankingPublicationStatusDto,
+        totalEligiblePlayers: Int,
+        publicationThreshold: Int,
+        eligiblePlayersRemaining: Int,
+        awardsEligible: Boolean,
+    ): PublicRankingResponseDto {
+        return PublicRankingResponseDto(
+            cycle = PublicRankingCycleDto.DAILY,
+            cycleId = "daily-current",
+            rankingRuleVersion = 1,
+            timeZoneId = "America/Recife",
+            startsAtEpochMillis = 1_700_000_000_000L,
+            endsAtEpochMillis = 1_700_086_400_000L,
+            resultCount = 10,
+            totalEligiblePlayers = totalEligiblePlayers,
+            publicationThreshold = publicationThreshold,
+            publicationStatus = publicationStatus,
+            eligiblePlayersRemaining = eligiblePlayersRemaining,
+            awardsEligible = awardsEligible,
+            offset = 0,
+            limit = 100,
+            hasMore = false,
+            entries = emptyList(),
+            viewer = null,
+        )
+    }
+
     private fun cycleSummary(
         cycle: PublicRankingCycleDto,
         cycleId: String,
@@ -246,6 +306,11 @@ class OnlinePublicRankingPresentationTest {
             resultCount = 10,
             totalEligiblePlayers = 8,
             retainedRankingSize = 8,
+            publicationThreshold = 1,
+            publicationStatus =
+                PublicRankingPublicationStatusDto.PUBLISHED,
+            eligiblePlayersRemaining = 0,
+            awardsEligible = true,
         )
     }
 

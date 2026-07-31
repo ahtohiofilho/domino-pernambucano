@@ -11,6 +11,12 @@ enum class PublicRankingCycleDto {
 }
 
 @Serializable
+enum class PublicRankingPublicationStatusDto {
+    BELOW_THRESHOLD,
+    PUBLISHED,
+}
+
+@Serializable
 data class PublicRankingEntryDto(
     val rank: Int,
     val competitorId: String,
@@ -35,6 +41,10 @@ data class PublicRankingResponseDto(
     val endsAtEpochMillis: Long,
     val resultCount: Int,
     val totalEligiblePlayers: Int,
+    val publicationThreshold: Int,
+    val publicationStatus: PublicRankingPublicationStatusDto,
+    val eligiblePlayersRemaining: Int,
+    val awardsEligible: Boolean,
     val offset: Int,
     val limit: Int,
     val hasMore: Boolean,
@@ -43,6 +53,7 @@ data class PublicRankingResponseDto(
     val retainedRankingSize: Int = totalEligiblePlayers,
     val isClosed: Boolean = false,
     val closedAtEpochMillis: Long? = null,
+    val isLegacyTruncated: Boolean = false,
 )
 
 @Serializable
@@ -57,6 +68,11 @@ data class PublicRankingCycleSummaryDto(
     val resultCount: Int,
     val totalEligiblePlayers: Int,
     val retainedRankingSize: Int,
+    val publicationThreshold: Int,
+    val publicationStatus: PublicRankingPublicationStatusDto,
+    val eligiblePlayersRemaining: Int,
+    val awardsEligible: Boolean,
+    val isLegacyTruncated: Boolean = false,
 )
 
 @Serializable

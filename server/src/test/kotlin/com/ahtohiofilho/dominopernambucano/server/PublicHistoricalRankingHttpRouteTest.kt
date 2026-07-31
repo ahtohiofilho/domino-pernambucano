@@ -8,6 +8,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.createRankedMatchResultId
 import com.ahtohiofilho.dominopernambucano.competitive.resolveRankingCycle
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCyclesResponseDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -24,6 +25,7 @@ import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -77,7 +79,15 @@ class PublicHistoricalRankingHttpRouteTest {
             val summary = cycles.cycles.single()
             assertEquals(prepared.period.cycleId, summary.cycleId)
             assertEquals(104, summary.totalEligiblePlayers)
-            assertEquals(100, summary.retainedRankingSize)
+            assertEquals(104, summary.retainedRankingSize)
+            assertEquals(100, summary.publicationThreshold)
+            assertEquals(
+                PublicRankingPublicationStatusDto.PUBLISHED,
+                summary.publicationStatus,
+            )
+            assertEquals(0, summary.eligiblePlayersRemaining)
+            assertTrue(summary.awardsEligible)
+            assertFalse(summary.isLegacyTruncated)
             assertEquals(
                 prepared.period.endsAtEpochMillis,
                 summary.closedAtEpochMillis,
@@ -103,14 +113,95 @@ class PublicHistoricalRankingHttpRouteTest {
                 ranking.closedAtEpochMillis,
             )
             assertEquals(104, ranking.totalEligiblePlayers)
-            assertEquals(100, ranking.retainedRankingSize)
-            assertEquals(2, ranking.entries.size)
-            assertFalse(ranking.hasMore)
+            assertEquals(104, ranking.retainedRankingSize)
+            assertEquals(100, ranking.publicationThreshold)
+            assertEquals(
+                PublicRankingPublicationStatusDto.PUBLISHED,
+                ranking.publicationStatus,
+            )
+            assertEquals(0, ranking.eligiblePlayersRemaining)
+            assertTrue(ranking.awardsEligible)
+            assertFalse(ranking.isLegacyTruncated)
+            assertEquals(5, ranking.entries.size)
+            assertTrue(ranking.hasMore)
             assertNotNull(ranking.viewer)
             assertEquals(1, requireNotNull(ranking.viewer).rank)
             assertFalse(body.contains("snapshot-account"))
             assertFalse(body.contains("accountId"))
             assertFalse(body.contains("playerId"))
+        }
+
+    @Test
+    fun closed_cycle_below_threshold_is_not_published_or_awarded() =
+        testApplication {
+            val prepared = preparedClosedDailyRanking(
+                matchCount = 1,
+            )
+            val resolver = headerResolver(
+                "viewer" to OnlineRequestIdentity(
+                    playerId = "player-viewer",
+                    principalId = "principal-viewer",
+                    sessionId = "session-viewer",
+                    kind = OnlinePrincipalKind.ACCOUNT,
+                    accountId = "snapshot-account-0-0",
+                ),
+            )
+
+            application {
+                module(
+                    store = prepared.store,
+                    serverEnvironment = OnlineServerEnvironment.TEST,
+                    identityResolver = resolver,
+                    nowEpochMillis = {
+                        prepared.period.endsAtEpochMillis
+                    },
+                )
+            }
+
+            val cyclesResponse = client.get(
+                "/${OnlineRemoteRoutes.RANKING_CYCLES}" +
+                    "?cycle=DAILY&offset=0&limit=10",
+            ) {
+                header(TEST_IDENTITY_HEADER, "viewer")
+            }
+            val cycles = json.decodeFromString<
+                PublicRankingCyclesResponseDto
+            >(cyclesResponse.bodyAsText())
+            val summary = cycles.cycles.single()
+
+            assertEquals(4, summary.totalEligiblePlayers)
+            assertEquals(100, summary.publicationThreshold)
+            assertEquals(
+                PublicRankingPublicationStatusDto.BELOW_THRESHOLD,
+                summary.publicationStatus,
+            )
+            assertEquals(96, summary.eligiblePlayersRemaining)
+            assertFalse(summary.awardsEligible)
+
+            val rankingResponse = client.get(
+                "/${OnlineRemoteRoutes.RANKING}" +
+                    "?cycle=DAILY" +
+                    "&cycleId=${prepared.period.cycleId}" +
+                    "&offset=0&limit=10",
+            ) {
+                header(TEST_IDENTITY_HEADER, "viewer")
+            }
+            val ranking = json.decodeFromString<
+                PublicRankingResponseDto
+            >(rankingResponse.bodyAsText())
+
+            assertEquals(HttpStatusCode.OK, rankingResponse.status)
+            assertEquals(4, ranking.totalEligiblePlayers)
+            assertEquals(100, ranking.publicationThreshold)
+            assertEquals(
+                PublicRankingPublicationStatusDto.BELOW_THRESHOLD,
+                ranking.publicationStatus,
+            )
+            assertEquals(96, ranking.eligiblePlayersRemaining)
+            assertFalse(ranking.awardsEligible)
+            assertTrue(ranking.entries.isEmpty())
+            assertFalse(ranking.hasMore)
+            assertNull(ranking.viewer)
         }
 
     @Test
@@ -175,7 +266,9 @@ class PublicHistoricalRankingHttpRouteTest {
             )
         }
 
-    private fun preparedClosedDailyRanking(): PreparedRanking {
+    private fun preparedClosedDailyRanking(
+        matchCount: Int = 26,
+    ): PreparedRanking {
         val day = epochMillis(
             year = 2026,
             month = 7,
@@ -193,7 +286,7 @@ class PublicHistoricalRankingHttpRouteTest {
 
         store.restorePersistentState(
             OnlineServerStoreState(
-                rankedResults = (0 until 26).map { matchIndex ->
+                rankedResults = (0 until matchCount).map { matchIndex ->
                     result(
                         matchIndex = matchIndex,
                         completedAtEpochMillis = day + matchIndex,

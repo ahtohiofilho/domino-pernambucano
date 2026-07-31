@@ -5,6 +5,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerResult
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
 import com.ahtohiofilho.dominopernambucano.competitive.createRankedMatchResultId
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -61,12 +62,20 @@ class PublicRankingProfileProjectionHttpTest {
                             tableName = null,
                         ),
                     ),
-                    rankedResults = listOf(
-                        result(
-                            matchId = "ranked-1",
-                            completedAtEpochMillis = day,
-                        ),
-                    ),
+                    rankedResults =
+                        listOf(
+                            result(
+                                matchId = "ranked-1",
+                                completedAtEpochMillis = day,
+                            ),
+                        ) +
+                            (1 until 25).map { matchIndex ->
+                                extraResult(
+                                    matchIndex = matchIndex,
+                                    completedAtEpochMillis =
+                                        day + matchIndex,
+                                )
+                            },
                 ),
             )
             val resolver = headerResolver(
@@ -99,6 +108,13 @@ class PublicRankingProfileProjectionHttpTest {
                 json.decodeFromString<PublicRankingResponseDto>(body)
 
             assertEquals(HttpStatusCode.OK, httpResponse.status)
+            assertEquals(100, ranking.totalEligiblePlayers)
+            assertEquals(100, ranking.publicationThreshold)
+            assertEquals(
+                PublicRankingPublicationStatusDto.PUBLISHED,
+                ranking.publicationStatus,
+            )
+            assertEquals(0, ranking.eligiblePlayersRemaining)
             assertEquals(
                 "Antônio Filho",
                 ranking.entries
@@ -162,6 +178,42 @@ class PublicRankingProfileProjectionHttpTest {
                 player(2, "account-c", true, 6, 1, 0, 0),
                 player(3, "account-d", false, -3, 0, 1, 1),
             ),
+        )
+    }
+
+    private fun extraResult(
+        matchIndex: Int,
+        completedAtEpochMillis: Long,
+    ): RankedMatchResult {
+        val matchId = "ranked-extra-$matchIndex"
+
+        return RankedMatchResult(
+            resultId = createRankedMatchResultId(matchId),
+            matchId = matchId,
+            rankingRuleVersion = CURRENT_RANKING_RULE_VERSION,
+            completedAtEpochMillis = completedAtEpochMillis,
+            finalTeamScores = listOf(1, 0),
+            collectiveCountPointsByTeam = listOf(1, 1),
+            completedRounds = 1,
+            players = (0 until 4).map { seatIndex ->
+                val won = seatIndex % 2 == 0
+
+                RankedMatchPlayerResult(
+                    playerId =
+                        "extra-player-$matchIndex-$seatIndex",
+                    accountId =
+                        "extra-account-$matchIndex-$seatIndex",
+                    seatIndex = seatIndex,
+                    teamIndex = seatIndex % 2,
+                    won = won,
+                    victoriesDelta = if (won) 1 else 0,
+                    gamesDelta = 1,
+                    teamBalanceDelta = if (won) 1 else -1,
+                    individualPointsScored = 0,
+                    touchesGiven = 0,
+                    automaticRounds = 0,
+                )
+            },
         )
     }
 

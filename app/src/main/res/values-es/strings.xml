@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dominó PE</string>
     <string name="brand_subtitle">App dedicada a la modalidad pernambucana</string>
@@ -81,11 +81,15 @@
     <string name="ranking_context_current">Clasificación actual · %1$s</string>
     <string name="ranking_context_closed">Clasificación cerrada · %1$s</string>
     <string name="ranking_summary">%1$d jugadores elegibles · %2$d partidas</string>
-    <string name="ranking_summary_retained">%1$s · Top %2$d conservado</string>
-    <string name="ranking_retention_notice">Este historial conserva solo el Top %1$d del período.</string>
+    <string name="ranking_publication_pending_current_title">Clasificación aún no publicada</string>
+    <string name="ranking_publication_pending_closed_title">Clasificación no publicada</string>
+    <string name="ranking_publication_pending_current_progress">%1$d de %2$d jugadores elegibles. Faltan %3$d para la publicación oficial.</string>
+    <string name="ranking_publication_pending_closed_progress">Este ciclo terminó con %1$d de %2$d jugadores elegibles. Faltaron %3$d.</string>
+    <string name="ranking_publication_pending_current_notice">La clasificación y los premios se publicarán cuando se alcance el mínimo.</string>
+    <string name="ranking_publication_pending_closed_notice">La clasificación y los premios no se publicaron porque no se alcanzó el mínimo.</string>
     <string name="ranking_your_position">Tu posición</string>
     <string name="ranking_empty_current">No hay jugadores elegibles en este ciclo.</string>
-    <string name="ranking_empty_closed">No se conservó ningún jugador en este período.</string>
+    <string name="ranking_empty_closed">No hay posiciones disponibles para este período.</string>
     <string name="ranking_closed_loading">Cargando períodos cerrados...</string>
     <string name="ranking_closed_empty">No hay períodos cerrados disponibles.</string>
     <string name="ranking_closed_count">%1$d períodos cerrados</string>

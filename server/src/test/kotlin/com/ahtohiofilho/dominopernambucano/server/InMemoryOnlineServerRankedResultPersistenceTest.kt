@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
@@ -77,7 +77,7 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
 
     @Test
     fun ranked_result_is_idempotent_persistent_and_not_pruned() {
-        var now = 1_000L
+        var now = 1_700_000_000_000L
         val resourcePolicy = OnlineServerStoreResourcePolicy(
             waitingRoomRetentionMillis = 1L,
             finalizedRoomRetentionMillis = 1L,

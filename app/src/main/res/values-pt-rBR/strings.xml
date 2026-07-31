@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dominó PE</string>
     <string name="brand_subtitle">App dedicado à modalidade pernambucana</string>
@@ -81,11 +81,15 @@
     <string name="ranking_context_current">Ranking atual · %1$s</string>
     <string name="ranking_context_closed">Ranking encerrado · %1$s</string>
     <string name="ranking_summary">%1$d jogadores elegíveis · %2$d partidas</string>
-    <string name="ranking_summary_retained">%1$s · Top %2$d preservado</string>
-    <string name="ranking_retention_notice">Este histórico preserva somente o Top %1$d do período.</string>
+    <string name="ranking_publication_pending_current_title">Ranking ainda não publicado</string>
+    <string name="ranking_publication_pending_closed_title">Ranking não publicado</string>
+    <string name="ranking_publication_pending_current_progress">%1$d de %2$d jogadores elegíveis. Faltam %3$d para a publicação oficial.</string>
+    <string name="ranking_publication_pending_closed_progress">Este ciclo encerrou com %1$d de %2$d jogadores elegíveis. Faltaram %3$d.</string>
+    <string name="ranking_publication_pending_current_notice">A classificação e as premiações serão liberadas quando o mínimo for alcançado.</string>
+    <string name="ranking_publication_pending_closed_notice">A classificação e as premiações não foram publicadas porque o mínimo não foi alcançado.</string>
     <string name="ranking_your_position">Sua posição</string>
     <string name="ranking_empty_current">Nenhum jogador elegível neste ciclo.</string>
-    <string name="ranking_empty_closed">Nenhum jogador foi preservado neste período.</string>
+    <string name="ranking_empty_closed">Não há posições disponíveis neste período.</string>
     <string name="ranking_closed_loading">Carregando períodos encerrados...</string>
     <string name="ranking_closed_empty">Nenhum período encerrado está disponível.</string>
     <string name="ranking_closed_count">%1$d períodos encerrados</string>

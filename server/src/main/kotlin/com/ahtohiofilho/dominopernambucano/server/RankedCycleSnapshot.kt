@@ -1,16 +1,11 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCyclePeriod
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleStanding
 import com.ahtohiofilho.dominopernambucano.competitive.RankedLadderStats
-import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import kotlinx.serialization.Serializable
 
-internal const val DAILY_CLOSED_RANKING_CAPACITY = 100
-internal const val WEEKLY_CLOSED_RANKING_CAPACITY = 500
-internal const val MONTHLY_CLOSED_RANKING_CAPACITY = 1_000
-internal const val ANNUAL_CLOSED_RANKING_CAPACITY = 5_000
 
 @Serializable
 data class RankedCycleStandingSnapshot(
@@ -91,8 +86,13 @@ data class RankedCycleSnapshot(
                 .distinct()
                 .size == standings.size,
         )
-        require(standings.size <= period.kind.closedRankingCapacity())
     }
+
+    val hasCompleteStandings: Boolean
+        get() = totalEligiblePlayers == retainedRankingSize
+
+    val isLegacyTruncated: Boolean
+        get() = !hasCompleteStandings
 
     internal fun toRankedCycleLadder(): RankedCycleLadder {
         return RankedCycleLadder(
@@ -110,11 +110,9 @@ internal fun RankedCycleLadder.toClosedSnapshot(
 ): RankedCycleSnapshot {
     require(closedAtEpochMillis >= period.endsAtEpochMillis)
 
-    val retainedStandings = standings
-        .take(period.kind.closedRankingCapacity())
-        .map { standing ->
-            RankedCycleStandingSnapshot.from(standing)
-        }
+    val retainedStandings = standings.map { standing ->
+        RankedCycleStandingSnapshot.from(standing)
+    }
 
     return RankedCycleSnapshot(
         period = period,
@@ -133,14 +131,5 @@ data class RankedCycleSnapshotPage(
 ) {
     init {
         require(totalSnapshots >= snapshots.size)
-    }
-}
-
-internal fun RankingCycleKind.closedRankingCapacity(): Int {
-    return when (this) {
-        RankingCycleKind.DAILY -> DAILY_CLOSED_RANKING_CAPACITY
-        RankingCycleKind.WEEKLY -> WEEKLY_CLOSED_RANKING_CAPACITY
-        RankingCycleKind.MONTHLY -> MONTHLY_CLOSED_RANKING_CAPACITY
-        RankingCycleKind.ANNUAL -> ANNUAL_CLOSED_RANKING_CAPACITY
     }
 }

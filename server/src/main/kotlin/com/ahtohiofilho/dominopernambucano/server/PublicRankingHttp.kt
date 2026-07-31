@@ -7,6 +7,7 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCyclesResponseDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -48,13 +49,25 @@ internal suspend fun ApplicationCall.respondPublicRanking(
     closedAtEpochMillis: Long? = null,
     offset: Int,
     limit: Int,
+    publicationPolicy: RankingPublicationPolicy =
+        DEFAULT_RANKING_PUBLICATION_POLICY,
 ) {
     if (offset < 0 || limit !in 1..MAXIMUM_PUBLIC_RANKING_PAGE_SIZE) {
         respond(HttpStatusCode.BadRequest)
         return
     }
 
-    val entries = ladder.standings
+    val publicationDecision = publicationPolicy.evaluate(
+        kind = cycle.toRankingCycleKind(),
+        totalEligiblePlayers = totalEligiblePlayers,
+    )
+    val publishedStandings =
+        if (publicationDecision.isPublished) {
+            ladder.standings
+        } else {
+            emptyList()
+        }
+    val entries = publishedStandings
         .drop(offset)
         .take(limit)
         .map { standing ->
@@ -67,7 +80,8 @@ internal suspend fun ApplicationCall.respondPublicRanking(
     require(retainedRankingSize == ladder.standings.size)
 
     val consumed = offset.toLong() + entries.size.toLong()
-    val viewer = viewerAccountId
+    val viewer = if (publicationDecision.isPublished) {
+        viewerAccountId
         ?.trim()
         ?.takeIf { accountId -> accountId.isNotBlank() }
         ?.let { accountId ->
@@ -81,6 +95,9 @@ internal suspend fun ApplicationCall.respondPublicRanking(
                     publicDisplayNames[standing.accountId],
             )
         }
+    } else {
+        null
+    }
 
     respond(
         HttpStatusCode.OK,
@@ -93,16 +110,40 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             endsAtEpochMillis = ladder.period.endsAtEpochMillis,
             resultCount = ladder.resultCount,
             totalEligiblePlayers = totalEligiblePlayers,
+            publicationThreshold =
+                publicationDecision.publicationThreshold,
+            publicationStatus =
+                publicationDecision.status
+                    .toPublicRankingPublicationStatusDto(),
+            eligiblePlayersRemaining =
+                publicationDecision.eligiblePlayersRemaining,
+            awardsEligible = publicationDecision.isPublished,
             retainedRankingSize = retainedRankingSize,
             isClosed = closedAtEpochMillis != null,
             closedAtEpochMillis = closedAtEpochMillis,
+            isLegacyTruncated =
+                closedAtEpochMillis != null &&
+                    totalEligiblePlayers > retainedRankingSize,
             offset = offset,
             limit = limit,
-            hasMore = consumed < retainedRankingSize.toLong(),
+            hasMore =
+                publicationDecision.isPublished &&
+                    consumed < retainedRankingSize.toLong(),
             entries = entries,
             viewer = viewer,
         ),
     )
+}
+
+private fun RankingPublicationStatus
+    .toPublicRankingPublicationStatusDto():
+        PublicRankingPublicationStatusDto {
+    return when (this) {
+        RankingPublicationStatus.BELOW_THRESHOLD ->
+            PublicRankingPublicationStatusDto.BELOW_THRESHOLD
+        RankingPublicationStatus.PUBLISHED ->
+            PublicRankingPublicationStatusDto.PUBLISHED
+    }
 }
 
 private fun RankedCycleStanding.toPublicRankingEntry(
@@ -139,6 +180,8 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
     page: RankedCycleSnapshotPage,
     offset: Int,
     limit: Int,
+    publicationPolicy: RankingPublicationPolicy =
+        DEFAULT_RANKING_PUBLICATION_POLICY,
 ) {
     if (offset < 0 || limit !in 1..MAXIMUM_PUBLIC_RANKING_PAGE_SIZE) {
         respond(HttpStatusCode.BadRequest)
@@ -156,6 +199,12 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
             limit = limit,
             hasMore = consumed < page.totalSnapshots.toLong(),
             cycles = page.snapshots.map { snapshot ->
+                val publicationDecision = publicationPolicy.evaluate(
+                    kind = snapshot.period.kind,
+                    totalEligiblePlayers =
+                        snapshot.totalEligiblePlayers,
+                )
+
                 PublicRankingCycleSummaryDto(
                     cycle = cycle,
                     cycleId = snapshot.period.cycleId,
@@ -173,6 +222,17 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
                         snapshot.totalEligiblePlayers,
                     retainedRankingSize =
                         snapshot.retainedRankingSize,
+                    publicationThreshold =
+                        publicationDecision.publicationThreshold,
+                    publicationStatus =
+                        publicationDecision.status
+                            .toPublicRankingPublicationStatusDto(),
+                    eligiblePlayersRemaining =
+                        publicationDecision.eligiblePlayersRemaining,
+                    awardsEligible =
+                        publicationDecision.isPublished,
+                    isLegacyTruncated =
+                        snapshot.isLegacyTruncated,
                 )
             },
         ),

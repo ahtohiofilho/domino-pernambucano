@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCyclePeriod
@@ -2177,9 +2177,7 @@ class InMemoryOnlineServerStore(
                     snapshot.retainedRankingSize ==
                     snapshot.standings.size &&
                     snapshot.totalEligiblePlayers >=
-                    snapshot.retainedRankingSize &&
-                    snapshot.standings.size <=
-                    snapshot.period.kind.closedRankingCapacity()
+                    snapshot.retainedRankingSize
             },
         ) {
             "O estado persistido contém snapshot de ranking inválido."

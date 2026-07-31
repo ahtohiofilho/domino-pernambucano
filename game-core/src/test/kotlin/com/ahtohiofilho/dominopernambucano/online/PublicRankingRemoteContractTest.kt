@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PublicRankingRemoteContractTest {
@@ -25,6 +26,13 @@ class PublicRankingRemoteContractTest {
             ),
             PublicRankingCycleDto.values().toList(),
         )
+        assertEquals(
+            listOf(
+                PublicRankingPublicationStatusDto.BELOW_THRESHOLD,
+                PublicRankingPublicationStatusDto.PUBLISHED,
+            ),
+            PublicRankingPublicationStatusDto.values().toList(),
+        )
     }
 
     @Test
@@ -38,6 +46,11 @@ class PublicRankingRemoteContractTest {
             endsAtEpochMillis = 200L,
             resultCount = 1,
             totalEligiblePlayers = 1,
+            publicationThreshold = 100,
+            publicationStatus =
+                PublicRankingPublicationStatusDto.BELOW_THRESHOLD,
+            eligiblePlayersRemaining = 99,
+            awardsEligible = false,
             offset = 0,
             limit = 50,
             hasMore = false,
@@ -63,6 +76,14 @@ class PublicRankingRemoteContractTest {
         assertEquals(response, decoded)
         assertFalse(encoded.contains("accountId"))
         assertFalse(encoded.contains("playerId"))
+        assertTrue(encoded.contains("publicationThreshold"))
+        assertTrue(encoded.contains("eligiblePlayersRemaining"))
+        assertEquals(
+            PublicRankingPublicationStatusDto.BELOW_THRESHOLD,
+            decoded.publicationStatus,
+        )
+        assertEquals(99, decoded.eligiblePlayersRemaining)
+        assertFalse(decoded.awardsEligible)
         assertNull(decoded.entries.single().displayName)
     }
 }

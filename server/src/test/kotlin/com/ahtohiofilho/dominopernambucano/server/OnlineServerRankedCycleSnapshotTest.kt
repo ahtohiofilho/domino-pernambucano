@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.CURRENT_RANKING_RULE_VERSION
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerResult
@@ -28,7 +28,7 @@ import org.junit.Test
 
 class OnlineServerRankedCycleSnapshotTest {
     @Test
-    fun closed_daily_cycle_is_materialized_once_and_capped() {
+    fun closed_daily_cycle_is_materialized_once_without_truncation() {
         val day = epochMillis(
             year = 2026,
             month = 7,
@@ -74,7 +74,7 @@ class OnlineServerRankedCycleSnapshotTest {
             snapshot.totalEligiblePlayers,
         )
         assertEquals(
-            DAILY_CLOSED_RANKING_CAPACITY,
+            results.size * 4,
             snapshot.retainedRankingSize,
         )
         assertEquals(
@@ -82,11 +82,13 @@ class OnlineServerRankedCycleSnapshotTest {
             snapshot.standings.size,
         )
         assertEquals(
-            (1..DAILY_CLOSED_RANKING_CAPACITY).toList(),
+            (1..(results.size * 4)).toList(),
             snapshot.standings.map { standing ->
                 standing.rank
             },
         )
+        assertTrue(snapshot.hasCompleteStandings)
+        assertFalse(snapshot.isLegacyTruncated)
 
         val historical = store.getRankedCycleLadder(
             kind = RankingCycleKind.DAILY,
@@ -117,6 +119,83 @@ class OnlineServerRankedCycleSnapshotTest {
             store.snapshotPersistentState()
                 .rankedCycleSnapshots
                 .size,
+        )
+    }
+
+    @Test
+    fun legacy_truncated_snapshot_remains_readable_and_is_marked() {
+        val day = epochMillis(
+            year = 2026,
+            month = 7,
+            day = 25,
+            hour = 12,
+        )
+        val period = resolveRankingCycle(
+            kind = RankingCycleKind.DAILY,
+            completedAtEpochMillis = day,
+        )
+        var now = day
+        val source = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+        val results = (0 until 26).map { matchIndex ->
+            result(
+                matchIndex = matchIndex,
+                completedAtEpochMillis = day + matchIndex,
+            )
+        }
+
+        source.restorePersistentState(
+            OnlineServerStoreState(
+                rankedResults = results,
+            ),
+        )
+        now = period.endsAtEpochMillis
+        assertTrue(source.advanceAuthoritativeTime())
+
+        val completeSnapshot = source.snapshotPersistentState()
+            .rankedCycleSnapshots
+            .single()
+        val legacyRetainedSize = 100
+        val legacySnapshot = completeSnapshot.copy(
+            standings = completeSnapshot.standings
+                .take(legacyRetainedSize),
+            retainedRankingSize = legacyRetainedSize,
+        )
+        val restored = InMemoryOnlineServerStore()
+
+        restored.restorePersistentState(
+            OnlineServerStoreState(
+                rankedCycleSnapshots = listOf(legacySnapshot),
+            ),
+        )
+
+        val normalized = restored.snapshotPersistentState()
+            .rankedCycleSnapshots
+            .single()
+
+        assertEquals(
+            results.size * 4,
+            normalized.totalEligiblePlayers,
+        )
+        assertEquals(
+            legacyRetainedSize,
+            normalized.retainedRankingSize,
+        )
+        assertEquals(
+            legacyRetainedSize,
+            normalized.standings.size,
+        )
+        assertFalse(normalized.hasCompleteStandings)
+        assertTrue(normalized.isLegacyTruncated)
+        assertEquals(
+            legacyRetainedSize,
+            requireNotNull(
+                restored.getRankedCycleLadder(
+                    kind = RankingCycleKind.DAILY,
+                    completedAtEpochMillis = day,
+                ),
+            ).standings.size,
         )
     }
 

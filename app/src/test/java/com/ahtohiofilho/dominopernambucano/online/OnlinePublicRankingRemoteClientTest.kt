@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.online
+﻿package com.ahtohiofilho.dominopernambucano.online
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -462,6 +462,10 @@ class OnlinePublicRankingRemoteClientTest {
               "endsAtEpochMillis": 200,
               "resultCount": 1,
               "totalEligiblePlayers": $totalEligiblePlayers,
+              "publicationThreshold": 1,
+              "publicationStatus": "PUBLISHED",
+              "eligiblePlayersRemaining": 0,
+              "awardsEligible": true,
               "retainedRankingSize": $retainedRankingSize,
               "isClosed": $isClosed,
               "closedAtEpochMillis": $closedAtJson,
@@ -521,6 +525,10 @@ class OnlinePublicRankingRemoteClientTest {
                   "closedAtEpochMillis": 200,
                   "resultCount": 26,
                   "totalEligiblePlayers": $totalEligiblePlayers,
+                  "publicationThreshold": 1,
+                  "publicationStatus": "PUBLISHED",
+                  "eligiblePlayersRemaining": 0,
+                  "awardsEligible": true,
                   "retainedRankingSize": $retainedRankingSize
                 }
               ]

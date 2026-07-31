@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.ui.ranking
+﻿package com.ahtohiofilho.dominopernambucano.ui.ranking
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -70,6 +70,7 @@ internal const val RankingScreenTag = "ranking_screen"
 internal const val RankingTitleTag = "ranking_title"
 internal const val RankingCycleSelectorTag = "ranking_cycle_selector"
 internal const val RankingScopeSelectorTag = "ranking_scope_selector"
+internal const val RankingPublicationPendingTag = "ranking_publication_pending"
 
 @Composable
 fun OnlinePublicRankingRoute(
@@ -356,6 +357,10 @@ internal fun OnlinePublicRankingScreen(
     val hasRankingSelection =
         selectedScope == PublicRankingScope.CURRENT ||
             selectedClosedCycleId != null
+    val pendingResponse = latestResponse
+        ?.takeIf { response ->
+            response.isOfficialRankingPending()
+        }
 
     Box(
         modifier = Modifier
@@ -410,15 +415,17 @@ internal fun OnlinePublicRankingScreen(
                     locale = locale,
                 )
 
-                response.viewer?.let { viewer ->
-                    RankingEntryCard(
-                        entry = viewer,
-                        locale = locale,
-                        heading = stringResource(
-                            R.string.ranking_your_position,
-                        ),
-                        highlighted = true,
-                    )
+                if (response.isOfficialRankingPublished()) {
+                    response.viewer?.let { viewer ->
+                        RankingEntryCard(
+                            entry = viewer,
+                            locale = locale,
+                            heading = stringResource(
+                                R.string.ranking_your_position,
+                            ),
+                            highlighted = true,
+                        )
+                    }
                 }
             }
 
@@ -440,6 +447,13 @@ internal fun OnlinePublicRankingScreen(
                 loading && entries.isEmpty() -> {
                     RankingLoadingContent(
                         modifier = Modifier.weight(1f),
+                    )
+                }
+
+                pendingResponse != null -> {
+                    RankingPublicationPendingContent(
+                        modifier = Modifier.weight(1f),
+                        response = pendingResponse,
                     )
                 }
 
@@ -770,24 +784,11 @@ private fun RankingOverviewCard(
         },
         period,
     )
-    val baseSummary = stringResource(
+    val summaryText = stringResource(
         R.string.ranking_summary,
         response.totalEligiblePlayers,
         response.resultCount,
     )
-    val summaryText = if (
-        response.isClosed &&
-        response.retainedRankingSize <
-        response.totalEligiblePlayers
-    ) {
-        stringResource(
-            R.string.ranking_summary_retained,
-            baseSummary,
-            response.retainedRankingSize,
-        )
-    } else {
-        baseSummary
-    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -822,24 +823,66 @@ private fun RankingOverviewCard(
                 style = MaterialTheme.typography.bodyMedium,
             )
 
-            if (
-                response.isClosed &&
-                response.retainedRankingSize <
-                response.totalEligiblePlayers
-            ) {
-                Text(
-                    text = stringResource(
-                        R.string.ranking_retention_notice,
-                        response.retainedRankingSize,
-                    ),
-                    color =
-                        DominoSemanticColors.brandSupportingText.copy(
-                            alpha = 0.88f,
-                        ),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
         }
+    }
+}
+
+@Composable
+private fun RankingPublicationPendingContent(
+    response: PublicRankingResponseDto,
+    modifier: Modifier = Modifier,
+) {
+    val title = stringResource(
+        if (response.isClosed) {
+            R.string.ranking_publication_pending_closed_title
+        } else {
+            R.string.ranking_publication_pending_current_title
+        },
+    )
+    val progress = stringResource(
+        if (response.isClosed) {
+            R.string.ranking_publication_pending_closed_progress
+        } else {
+            R.string.ranking_publication_pending_current_progress
+        },
+        response.totalEligiblePlayers,
+        response.publicationThreshold,
+        response.eligiblePlayersRemaining,
+    )
+    val notice = stringResource(
+        if (response.isClosed) {
+            R.string.ranking_publication_pending_closed_notice
+        } else {
+            R.string.ranking_publication_pending_current_notice
+        },
+    )
+
+    RankingStateCard(
+        modifier = modifier.testTag(
+            RankingPublicationPendingTag,
+        ),
+    ) {
+        Text(
+            text = title,
+            color = DominoSemanticColors.brandText,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+
+        Text(
+            text = progress,
+            color = DominoSemanticColors.brandText,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+        )
+
+        Text(
+            text = notice,
+            color = DominoSemanticColors.brandSupportingText,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

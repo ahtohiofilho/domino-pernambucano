@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.CURRENT_RANKING_RULE_VERSION
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerResult
@@ -6,6 +6,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
 import com.ahtohiofilho.dominopernambucano.competitive.createRankedMatchResultId
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -66,8 +67,15 @@ class PublicRankingHttpRouteTest {
         )
         assertEquals(PublicRankingCycleDto.DAILY, response.cycle)
         assertEquals(4, response.totalEligiblePlayers)
-        assertEquals(2, response.entries.size)
-        assertTrue(response.hasMore)
+        assertEquals(100, response.publicationThreshold)
+        assertEquals(
+            PublicRankingPublicationStatusDto.BELOW_THRESHOLD,
+            response.publicationStatus,
+        )
+        assertEquals(96, response.eligiblePlayersRemaining)
+        assertFalse(response.awardsEligible)
+        assertTrue(response.entries.isEmpty())
+        assertFalse(response.hasMore)
         assertNull(response.viewer)
     }
 
@@ -80,13 +88,16 @@ class PublicRankingHttpRouteTest {
                 principalId = "principal-a",
                 sessionId = "session-a",
                 kind = OnlinePrincipalKind.ACCOUNT,
-                accountId = "account-a",
+                accountId = "account-0000-0",
             ),
         )
 
         application {
             module(
-                store = storeWithRanking(day),
+                store = storeWithRanking(
+                    completedAtEpochMillis = day,
+                    matchCount = 25,
+                ),
                 serverEnvironment = OnlineServerEnvironment.TEST,
                 identityResolver = resolver,
                 nowEpochMillis = { day },
@@ -105,11 +116,62 @@ class PublicRankingHttpRouteTest {
         assertEquals(1, viewer.rank)
         assertTrue(viewer.competitorId.startsWith("competitor-"))
         assertFalse(viewer.competitorId.contains("account-a"))
+        assertEquals(100, ranking.totalEligiblePlayers)
+        assertEquals(100, ranking.publicationThreshold)
+        assertEquals(
+            PublicRankingPublicationStatusDto.PUBLISHED,
+            ranking.publicationStatus,
+        )
+        assertEquals(0, ranking.eligiblePlayersRemaining)
+        assertTrue(ranking.awardsEligible)
         assertEquals(2, ranking.entries.size)
-        assertFalse(ranking.hasMore)
+        assertTrue(ranking.hasMore)
         assertFalse(body.contains("account-a"))
         assertFalse(body.contains("accountId"))
         assertFalse(body.contains("playerId"))
+    }
+
+    @Test
+    fun homologation_publishes_four_eligible_players() = testApplication {
+        val day = rankingInstant()
+        val resolver = headerResolver(
+            "visitor" to OnlineRequestIdentity(
+                playerId = "visitor-player",
+                principalId = "visitor-principal",
+                sessionId = "visitor-session",
+                kind = OnlinePrincipalKind.ANONYMOUS,
+                accountId = null,
+            ),
+        )
+
+        application {
+            module(
+                store = storeWithRanking(day),
+                serverEnvironment = OnlineServerEnvironment.HOMOLOGATION,
+                identityResolver = resolver,
+                nowEpochMillis = { day },
+            )
+        }
+
+        val httpResponse = client.get(rankingUrl()) {
+            header(TEST_IDENTITY_HEADER, "visitor")
+        }
+        val ranking = json.decodeFromString<PublicRankingResponseDto>(
+            httpResponse.bodyAsText(),
+        )
+
+        assertEquals(HttpStatusCode.OK, httpResponse.status)
+        assertEquals(4, ranking.totalEligiblePlayers)
+        assertEquals(4, ranking.publicationThreshold)
+        assertEquals(
+            PublicRankingPublicationStatusDto.PUBLISHED,
+            ranking.publicationStatus,
+        )
+        assertEquals(0, ranking.eligiblePlayersRemaining)
+        assertTrue(ranking.awardsEligible)
+        assertEquals(2, ranking.entries.size)
+        assertTrue(ranking.hasMore)
+        assertNull(ranking.viewer)
     }
 
     @Test
@@ -167,19 +229,35 @@ class PublicRankingHttpRouteTest {
             "?cycle=DAILY&offset=$offset&limit=$limit"
     }
 
-    private fun storeWithRanking(completedAtEpochMillis: Long): InMemoryOnlineServerStore {
+    private fun storeWithRanking(
+        completedAtEpochMillis: Long,
+        matchCount: Int = 1,
+    ): InMemoryOnlineServerStore {
         return InMemoryOnlineServerStore().also { store ->
             store.restorePersistentState(
                 OnlineServerStoreState(
-                    rankedResults = listOf(
-                        result("ranked-1", completedAtEpochMillis),
-                    ),
+                    rankedResults = (0 until matchCount).map {
+                        matchIndex ->
+                        result(
+                            matchIndex = matchIndex,
+                            completedAtEpochMillis =
+                                completedAtEpochMillis +
+                                    matchIndex,
+                        )
+                    },
                 ),
             )
         }
     }
 
-    private fun result(matchId: String, completedAtEpochMillis: Long): RankedMatchResult {
+    private fun result(
+        matchIndex: Int,
+        completedAtEpochMillis: Long,
+    ): RankedMatchResult {
+        val matchId = "ranked-$matchIndex"
+        val accountPrefix =
+            matchIndex.toString().padStart(4, '0')
+
         return RankedMatchResult(
             resultId = createRankedMatchResultId(matchId),
             matchId = matchId,
@@ -189,10 +267,42 @@ class PublicRankingHttpRouteTest {
             collectiveCountPointsByTeam = listOf(1, 1),
             completedRounds = 1,
             players = listOf(
-                player(0, "account-a", true, 6, 4, 2, 0),
-                player(1, "account-b", false, -3, 3, 1, 0),
-                player(2, "account-c", true, 6, 1, 0, 0),
-                player(3, "account-d", false, -3, 0, 1, 1),
+                player(
+                    0,
+                    "account-$accountPrefix-0",
+                    true,
+                    6,
+                    4,
+                    2,
+                    0,
+                ),
+                player(
+                    1,
+                    "account-$accountPrefix-1",
+                    false,
+                    -3,
+                    3,
+                    1,
+                    0,
+                ),
+                player(
+                    2,
+                    "account-$accountPrefix-2",
+                    true,
+                    6,
+                    1,
+                    0,
+                    0,
+                ),
+                player(
+                    3,
+                    "account-$accountPrefix-3",
+                    false,
+                    -3,
+                    0,
+                    1,
+                    1,
+                ),
             ),
         )
     }

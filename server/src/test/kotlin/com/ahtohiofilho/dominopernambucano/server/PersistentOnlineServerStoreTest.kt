@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
@@ -224,6 +224,40 @@ class PersistentOnlineServerStoreTest {
             )
         } finally {
             root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun homologation_uses_memory_and_rejects_a_configured_state_file() {
+        val memoryStore = createDefaultOnlineServerStore(
+            serverEnvironment = OnlineServerEnvironment.HOMOLOGATION,
+            autoFillDevelopmentBotsAfterTwoHumanPlayers = false,
+            traceLogger = OnlineTraceLogger(),
+            readEnvironmentVariable = { null },
+        )
+
+        try {
+            assertTrue(memoryStore is InMemoryOnlineServerStore)
+        } finally {
+            memoryStore.close()
+        }
+
+        assertThrows(IllegalStateException::class.java) {
+            createDefaultOnlineServerStore(
+                serverEnvironment = OnlineServerEnvironment.HOMOLOGATION,
+                autoFillDevelopmentBotsAfterTwoHumanPlayers = false,
+                traceLogger = OnlineTraceLogger(),
+                readEnvironmentVariable = { variableName ->
+                    if (
+                        variableName ==
+                        ONLINE_SERVER_STATE_FILE_ENVIRONMENT_VARIABLE
+                    ) {
+                        "shared-production-state.json"
+                    } else {
+                        null
+                    }
+                },
+            )
         }
     }
 

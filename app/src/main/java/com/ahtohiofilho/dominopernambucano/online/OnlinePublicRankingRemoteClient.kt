@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.online
+﻿package com.ahtohiofilho.dominopernambucano.online
 
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import java.io.IOException
@@ -262,6 +262,36 @@ private fun PublicRankingResponseDto.requireValidFor(
     require(resultCount >= 0)
     require(totalEligiblePlayers >= 0)
     require(retainedRankingSize in 0..totalEligiblePlayers)
+    require(publicationThreshold > 0)
+
+    val expectedRemaining = (
+        publicationThreshold.toLong() -
+            totalEligiblePlayers.toLong()
+    ).coerceAtLeast(0L)
+
+    require(expectedRemaining <= Int.MAX_VALUE.toLong())
+    require(
+        eligiblePlayersRemaining ==
+            expectedRemaining.toInt(),
+    )
+
+    when (publicationStatus) {
+        PublicRankingPublicationStatusDto.BELOW_THRESHOLD -> {
+            require(totalEligiblePlayers < publicationThreshold)
+            require(eligiblePlayersRemaining > 0)
+            require(!awardsEligible)
+            require(entries.isEmpty())
+            require(viewer == null)
+            require(!hasMore)
+        }
+
+        PublicRankingPublicationStatusDto.PUBLISHED -> {
+            require(totalEligiblePlayers >= publicationThreshold)
+            require(eligiblePlayersRemaining == 0)
+            require(awardsEligible)
+        }
+    }
+
     require(entries.size <= limit)
 
     if (requestedCycleId == null) {
@@ -360,6 +390,32 @@ private fun PublicRankingCycleSummaryDto.requireValidFor(
     require(resultCount >= 0)
     require(totalEligiblePlayers >= 0)
     require(retainedRankingSize in 0..totalEligiblePlayers)
+    require(publicationThreshold > 0)
+
+    val expectedRemaining = (
+        publicationThreshold.toLong() -
+            totalEligiblePlayers.toLong()
+    ).coerceAtLeast(0L)
+
+    require(expectedRemaining <= Int.MAX_VALUE.toLong())
+    require(
+        eligiblePlayersRemaining ==
+            expectedRemaining.toInt(),
+    )
+
+    when (publicationStatus) {
+        PublicRankingPublicationStatusDto.BELOW_THRESHOLD -> {
+            require(totalEligiblePlayers < publicationThreshold)
+            require(eligiblePlayersRemaining > 0)
+            require(!awardsEligible)
+        }
+
+        PublicRankingPublicationStatusDto.PUBLISHED -> {
+            require(totalEligiblePlayers >= publicationThreshold)
+            require(eligiblePlayersRemaining == 0)
+            require(awardsEligible)
+        }
+    }
 }
 
 private fun PublicRankingEntryDto.requireValid() {

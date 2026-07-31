@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import io.ktor.http.HttpStatusCode
@@ -38,18 +38,34 @@ private const val AUTO_FILL_BOTS_ENVIRONMENT_VARIABLE =
 private const val AUTHORITATIVE_TICK_INTERVAL_MILLIS = 700L
 
 fun main() {
+    val serverEnvironment = resolveOnlineServerEnvironment()
+    val serverPort = resolveOnlineServerPort(
+        serverEnvironment = serverEnvironment,
+    )
+
     embeddedServer(
         factory = Netty,
         host = "0.0.0.0",
-        port = 8080,
-        module = Application::module,
+        port = serverPort,
+        module = {
+            module(
+                serverEnvironment = serverEnvironment,
+            )
+        },
     ).start(
         wait = true,
     )
 }
 
 fun Application.module() {
-    val serverEnvironment = resolveOnlineServerEnvironment()
+    module(
+        serverEnvironment = resolveOnlineServerEnvironment(),
+    )
+}
+
+private fun Application.module(
+    serverEnvironment: OnlineServerEnvironment,
+) {
     val traceIngestionPolicy = OnlineTraceIngestionPolicy.Default
     val traceArchive = OnlineTraceArchive(
         ingestionPolicy = traceIngestionPolicy,
@@ -73,6 +89,8 @@ fun Application.module() {
         module(
             store = store,
             serverEnvironment = serverEnvironment,
+            rankingPublicationPolicy =
+                serverEnvironment.rankingPublicationPolicy,
             traceIngestionPolicy = traceIngestionPolicy,
             traceArchive = traceArchive,
             serverTraceSink = serverTraceSink,
@@ -83,7 +101,7 @@ fun Application.module() {
     }
 }
 
-fun Application.module(
+internal fun Application.module(
     store: OnlineServerStore,
     serverEnvironment: OnlineServerEnvironment,
     traceIngestionPolicy: OnlineTraceIngestionPolicy =
@@ -103,6 +121,8 @@ fun Application.module(
         ),
     googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier =
         createDefaultOnlineGoogleIdentityTokenVerifier(),
+    rankingPublicationPolicy: RankingPublicationPolicy =
+        serverEnvironment.rankingPublicationPolicy,
     rateLimitPolicy: OnlineServerRateLimitPolicy =
         OnlineServerRateLimitPolicy.Default,
     nowEpochMillis: () -> Long = {
@@ -175,6 +195,7 @@ fun Application.module(
             sessionTokenService = sessionTokenService,
             identityResolver = identityResolver,
             googleIdentityTokenVerifier = googleIdentityTokenVerifier,
+            rankingPublicationPolicy = rankingPublicationPolicy,
             nowEpochMillis = nowEpochMillis,
         )
     }

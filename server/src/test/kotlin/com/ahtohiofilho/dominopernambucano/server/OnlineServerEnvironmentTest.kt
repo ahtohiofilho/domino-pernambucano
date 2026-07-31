@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -58,6 +58,70 @@ class OnlineServerEnvironmentTest {
             OnlineServerEnvironment.PRODUCTION
                 .allowsDevelopmentBots,
         )
+    }
+
+    @Test
+    fun homologation_environment_is_explicit_and_does_not_enable_bots() {
+        val environment = resolveOnlineServerEnvironment(
+            readEnvironmentVariable = { "  HoMoLoGaTiOn  " },
+        )
+
+        assertEquals(
+            OnlineServerEnvironment.HOMOLOGATION,
+            environment,
+        )
+        assertTrue(environment.allowsDevelopmentIdentityHeader)
+        assertFalse(environment.allowsDevelopmentBots)
+    }
+
+    @Test
+    fun homologation_uses_an_isolated_default_port() {
+        assertEquals(
+            DEFAULT_ONLINE_SERVER_PORT,
+            resolveOnlineServerPort(
+                serverEnvironment = OnlineServerEnvironment.PRODUCTION,
+                readEnvironmentVariable = { null },
+            ),
+        )
+        assertEquals(
+            HOMOLOGATION_ONLINE_SERVER_PORT,
+            resolveOnlineServerPort(
+                serverEnvironment = OnlineServerEnvironment.HOMOLOGATION,
+                readEnvironmentVariable = { null },
+            ),
+        )
+    }
+
+    @Test
+    fun homologation_rejects_the_production_port_and_invalid_values() {
+        assertThrows(
+            IllegalArgumentException::class.java,
+        ) {
+            resolveOnlineServerPort(
+                serverEnvironment = OnlineServerEnvironment.HOMOLOGATION,
+                readEnvironmentVariable = {
+                    DEFAULT_ONLINE_SERVER_PORT.toString()
+                },
+            )
+        }
+
+        assertThrows(
+            IllegalArgumentException::class.java,
+        ) {
+            resolveOnlineServerPort(
+                serverEnvironment = OnlineServerEnvironment.HOMOLOGATION,
+                readEnvironmentVariable = { "not-a-port" },
+            )
+        }
+
+        assertThrows(
+            IllegalArgumentException::class.java,
+        ) {
+            resolveOnlineServerPort(
+                serverEnvironment = OnlineServerEnvironment.PRODUCTION,
+                readEnvironmentVariable = { "70000" },
+            )
+        }
     }
 
     @Test

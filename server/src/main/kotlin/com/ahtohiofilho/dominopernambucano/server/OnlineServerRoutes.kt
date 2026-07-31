@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
@@ -20,12 +20,14 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 
-fun Route.onlineServerRoutes(
+internal fun Route.onlineServerRoutes(
     store: OnlineServerStore,
     traceArchive: OnlineTraceArchive,
     sessionTokenService: OnlineSessionTokenService,
     identityResolver: OnlineRequestIdentityResolver,
     googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier,
+    rankingPublicationPolicy: RankingPublicationPolicy =
+        DEFAULT_RANKING_PUBLICATION_POLICY,
     nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
@@ -446,6 +448,7 @@ fun Route.onlineServerRoutes(
                         ?.closedAtEpochMillis,
                 offset = offset,
                 limit = limit,
+                publicationPolicy = rankingPublicationPolicy,
             )
         }
 
@@ -497,6 +500,7 @@ fun Route.onlineServerRoutes(
                 ),
                 offset = offset,
                 limit = limit,
+                publicationPolicy = rankingPublicationPolicy,
             )
         }
 
