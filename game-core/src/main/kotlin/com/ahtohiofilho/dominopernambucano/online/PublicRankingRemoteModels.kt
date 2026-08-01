@@ -63,6 +63,8 @@ data class PublicRankingResponseDto(
     val isClosed: Boolean = false,
     val closedAtEpochMillis: Long? = null,
     val isLegacyTruncated: Boolean = false,
+    val retentionPolicyVersion: Int = 0,
+    val isRetentionLimited: Boolean = false,
     val awardRuleVersion: Int = 1,
     val awardedRankingSize: Int = 0,
 )
@@ -84,6 +86,8 @@ data class PublicRankingCycleSummaryDto(
     val eligiblePlayersRemaining: Int,
     val awardsEligible: Boolean,
     val isLegacyTruncated: Boolean = false,
+    val retentionPolicyVersion: Int = 0,
+    val isRetentionLimited: Boolean = false,
     val awardRuleVersion: Int = 1,
     val awardedRankingSize: Int = 0,
 )

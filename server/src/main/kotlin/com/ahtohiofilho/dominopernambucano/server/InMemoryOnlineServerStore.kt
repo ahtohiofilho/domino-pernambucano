@@ -1798,6 +1798,20 @@ class InMemoryOnlineServerStore(
             return state
         }
 
+        if (state.schemaVersion == 9) {
+            return state.copy(
+                schemaVersion =
+                    ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+                rankedCycleSnapshots =
+                    state.rankedCycleSnapshots.map { snapshot ->
+                        snapshot.copy(
+                            retentionPolicyVersion =
+                                LEGACY_RANKING_RETENTION_POLICY_VERSION,
+                        )
+                    },
+            )
+        }
+
         if (state.schemaVersion == 8) {
             return state.copy(
                 schemaVersion =
@@ -1811,6 +1825,8 @@ class InMemoryOnlineServerStore(
                             ),
                             retainedRankingSize =
                                 snapshot.standings.size,
+                            retentionPolicyVersion =
+                                LEGACY_RANKING_RETENTION_POLICY_VERSION,
                         )
                     },
             )
@@ -2177,7 +2193,18 @@ class InMemoryOnlineServerStore(
                     snapshot.retainedRankingSize ==
                     snapshot.standings.size &&
                     snapshot.totalEligiblePlayers >=
-                    snapshot.retainedRankingSize
+                    snapshot.retainedRankingSize &&
+                    snapshot.retentionPolicyVersion in
+                    LEGACY_RANKING_RETENTION_POLICY_VERSION..
+                    CURRENT_RANKING_RETENTION_POLICY_VERSION &&
+                    (
+                        snapshot.retentionPolicyVersion ==
+                            LEGACY_RANKING_RETENTION_POLICY_VERSION ||
+                            snapshot.retainedRankingSize <=
+                            DEFAULT_RANKING_RETENTION_POLICY.limitFor(
+                                snapshot.period.kind,
+                            )
+                    )
             },
         ) {
             "O estado persistido contém snapshot de ranking inválido."

@@ -70,6 +70,8 @@ data class RankedCycleSnapshot(
     val standings: List<RankedCycleStandingSnapshot>,
     val totalEligiblePlayers: Int = standings.size,
     val retainedRankingSize: Int = standings.size,
+    val retentionPolicyVersion: Int =
+        LEGACY_RANKING_RETENTION_POLICY_VERSION,
 ) {
     init {
         require(resultCount >= 0)
@@ -77,6 +79,7 @@ data class RankedCycleSnapshot(
         require(totalEligiblePlayers >= 0)
         require(retainedRankingSize == standings.size)
         require(totalEligiblePlayers >= retainedRankingSize)
+        require(retentionPolicyVersion >= 0)
         require(
             standings.map { standing -> standing.rank } ==
                 (1..standings.size).toList(),
@@ -92,7 +95,16 @@ data class RankedCycleSnapshot(
         get() = totalEligiblePlayers == retainedRankingSize
 
     val isLegacyTruncated: Boolean
-        get() = !hasCompleteStandings
+        get() =
+            retentionPolicyVersion ==
+                LEGACY_RANKING_RETENTION_POLICY_VERSION &&
+                !hasCompleteStandings
+
+    val isRetentionLimited: Boolean
+        get() =
+            retentionPolicyVersion >
+                LEGACY_RANKING_RETENTION_POLICY_VERSION &&
+                !hasCompleteStandings
 
     internal fun toRankedCycleLadder(): RankedCycleLadder {
         return RankedCycleLadder(
@@ -107,12 +119,16 @@ data class RankedCycleSnapshot(
 
 internal fun RankedCycleLadder.toClosedSnapshot(
     closedAtEpochMillis: Long,
+    retentionPolicy: RankingRetentionPolicy =
+        DEFAULT_RANKING_RETENTION_POLICY,
 ): RankedCycleSnapshot {
     require(closedAtEpochMillis >= period.endsAtEpochMillis)
 
-    val retainedStandings = standings.map { standing ->
-        RankedCycleStandingSnapshot.from(standing)
-    }
+    val retainedStandings = standings
+        .take(retentionPolicy.limitFor(period.kind))
+        .map { standing ->
+            RankedCycleStandingSnapshot.from(standing)
+        }
 
     return RankedCycleSnapshot(
         period = period,
@@ -121,6 +137,7 @@ internal fun RankedCycleLadder.toClosedSnapshot(
         standings = retainedStandings,
         totalEligiblePlayers = standings.size,
         retainedRankingSize = retainedStandings.size,
+        retentionPolicyVersion = retentionPolicy.version,
     )
 }
 

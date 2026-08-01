@@ -28,7 +28,7 @@ import org.junit.Test
 
 class OnlineServerRankedCycleSnapshotTest {
     @Test
-    fun closed_daily_cycle_is_materialized_once_without_truncation() {
+    fun closed_daily_cycle_is_materialized_once_with_versioned_top_n() {
         val day = epochMillis(
             year = 2026,
             month = 7,
@@ -74,7 +74,7 @@ class OnlineServerRankedCycleSnapshotTest {
             snapshot.totalEligiblePlayers,
         )
         assertEquals(
-            results.size * 4,
+            100,
             snapshot.retainedRankingSize,
         )
         assertEquals(
@@ -82,13 +82,18 @@ class OnlineServerRankedCycleSnapshotTest {
             snapshot.standings.size,
         )
         assertEquals(
-            (1..(results.size * 4)).toList(),
+            (1..100).toList(),
             snapshot.standings.map { standing ->
                 standing.rank
             },
         )
-        assertTrue(snapshot.hasCompleteStandings)
+        assertFalse(snapshot.hasCompleteStandings)
         assertFalse(snapshot.isLegacyTruncated)
+        assertTrue(snapshot.isRetentionLimited)
+        assertEquals(
+            CURRENT_RANKING_RETENTION_POLICY_VERSION,
+            snapshot.retentionPolicyVersion,
+        )
 
         val historical = store.getRankedCycleLadder(
             kind = RankingCycleKind.DAILY,
@@ -161,6 +166,8 @@ class OnlineServerRankedCycleSnapshotTest {
             standings = completeSnapshot.standings
                 .take(legacyRetainedSize),
             retainedRankingSize = legacyRetainedSize,
+            retentionPolicyVersion =
+                LEGACY_RANKING_RETENTION_POLICY_VERSION,
         )
         val restored = InMemoryOnlineServerStore()
 
@@ -347,6 +354,64 @@ class OnlineServerRankedCycleSnapshotTest {
         assertEquals(4, snapshot.totalEligiblePlayers)
         assertEquals(4, snapshot.retainedRankingSize)
         assertEquals(4, snapshot.standings.size)
+        assertEquals(
+            LEGACY_RANKING_RETENTION_POLICY_VERSION,
+            snapshot.retentionPolicyVersion,
+        )
+    }
+
+    @Test
+    fun schema_nine_snapshot_is_preserved_without_retroactive_cut() {
+        val day = epochMillis(
+            year = 2026,
+            month = 7,
+            day = 25,
+            hour = 12,
+        )
+        val period = resolveRankingCycle(
+            kind = RankingCycleKind.DAILY,
+            completedAtEpochMillis = day,
+        )
+        val standings = (1..104).map { rank ->
+            RankedCycleStandingSnapshot(
+                rank = rank,
+                accountId = "legacy-account-$rank",
+                victories = 1,
+                games = 1,
+                teamBalance = 1,
+                individualPoints = 1,
+                touchesGiven = 0,
+                automaticRounds = 0,
+            )
+        }
+        val store = InMemoryOnlineServerStore()
+
+        store.restorePersistentState(
+            OnlineServerStoreState(
+                schemaVersion = 9,
+                rankedCycleSnapshots = listOf(
+                    RankedCycleSnapshot(
+                        period = period,
+                        resultCount = 26,
+                        closedAtEpochMillis = period.endsAtEpochMillis,
+                        standings = standings,
+                    ),
+                ),
+            ),
+        )
+
+        val snapshot = store.snapshotPersistentState()
+            .rankedCycleSnapshots.single()
+
+        assertEquals(104, snapshot.retainedRankingSize)
+        assertEquals(104, snapshot.standings.size)
+        assertEquals(
+            LEGACY_RANKING_RETENTION_POLICY_VERSION,
+            snapshot.retentionPolicyVersion,
+        )
+        assertTrue(snapshot.hasCompleteStandings)
+        assertFalse(snapshot.isLegacyTruncated)
+        assertFalse(snapshot.isRetentionLimited)
     }
 
     @Test

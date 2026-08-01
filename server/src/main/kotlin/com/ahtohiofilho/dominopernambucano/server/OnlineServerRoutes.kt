@@ -446,6 +446,14 @@ internal fun Route.onlineServerRoutes(
                 closedAtEpochMillis =
                     historicalSnapshot
                         ?.closedAtEpochMillis,
+                retentionPolicyVersion =
+                    historicalSnapshot
+                        ?.retentionPolicyVersion
+                        ?: LEGACY_RANKING_RETENTION_POLICY_VERSION,
+                isLegacyTruncated =
+                    historicalSnapshot
+                        ?.isLegacyTruncated
+                        ?: false,
                 offset = offset,
                 limit = limit,
                 publicationPolicy = rankingPublicationPolicy,

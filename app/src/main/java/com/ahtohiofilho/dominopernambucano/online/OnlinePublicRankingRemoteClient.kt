@@ -265,6 +265,8 @@ private fun PublicRankingResponseDto.requireValidFor(
     require(resultCount >= 0)
     require(totalEligiblePlayers >= 0)
     require(retainedRankingSize in 0..totalEligiblePlayers)
+    require(retentionPolicyVersion >= 0)
+    require(!(isLegacyTruncated && isRetentionLimited))
     require(publicationThreshold > 0)
 
     val expectedRemaining = (
@@ -319,10 +321,27 @@ private fun PublicRankingResponseDto.requireValidFor(
     if (requestedCycleId == null) {
         require(!isClosed)
         require(closedAtEpochMillis == null)
+        require(retentionPolicyVersion == 0)
+        require(!isLegacyTruncated)
+        require(!isRetentionLimited)
     } else {
         require(isClosed)
         val closedAt = requireNotNull(closedAtEpochMillis)
         require(closedAt >= endsAtEpochMillis)
+        require(
+            isLegacyTruncated ==
+                (
+                    retentionPolicyVersion == 0 &&
+                        totalEligiblePlayers > retainedRankingSize
+                ),
+        )
+        require(
+            isRetentionLimited ==
+                (
+                    retentionPolicyVersion > 0 &&
+                        totalEligiblePlayers > retainedRankingSize
+                ),
+        )
     }
 
     val consumed = Math.addExact(
@@ -416,6 +435,22 @@ private fun PublicRankingCycleSummaryDto.requireValidFor(
     require(resultCount >= 0)
     require(totalEligiblePlayers >= 0)
     require(retainedRankingSize in 0..totalEligiblePlayers)
+    require(retentionPolicyVersion >= 0)
+    require(!(isLegacyTruncated && isRetentionLimited))
+    require(
+        isLegacyTruncated ==
+            (
+                retentionPolicyVersion == 0 &&
+                    totalEligiblePlayers > retainedRankingSize
+            ),
+    )
+    require(
+        isRetentionLimited ==
+            (
+                retentionPolicyVersion > 0 &&
+                    totalEligiblePlayers > retainedRankingSize
+            ),
+    )
     require(publicationThreshold > 0)
 
     val expectedRemaining = (

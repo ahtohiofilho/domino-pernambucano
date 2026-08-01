@@ -489,6 +489,9 @@ class OnlinePublicRankingRemoteClientTest {
         closedAtEpochMillis: Long? = null,
     ): String {
         val closedAtJson = closedAtEpochMillis?.toString() ?: "null"
+        val retentionPolicyVersion = if (isClosed) 1 else 0
+        val isRetentionLimited =
+            isClosed && totalEligiblePlayers > retainedRankingSize
         val awardedRankingSize =
             if (isClosed) {
                 minOf(50, retainedRankingSize)
@@ -527,6 +530,8 @@ class OnlinePublicRankingRemoteClientTest {
               "retainedRankingSize": $retainedRankingSize,
               "isClosed": $isClosed,
               "closedAtEpochMillis": $closedAtJson,
+              "retentionPolicyVersion": $retentionPolicyVersion,
+              "isRetentionLimited": $isRetentionLimited,
               "offset": 0,
               "limit": 2,
               "hasMore": true,
@@ -591,7 +596,9 @@ class OnlinePublicRankingRemoteClientTest {
                   "awardsEligible": true,
                   "awardRuleVersion": 1,
                   "awardedRankingSize": ${minOf(50, retainedRankingSize)},
-                  "retainedRankingSize": $retainedRankingSize
+                  "retainedRankingSize": $retainedRankingSize,
+                  "retentionPolicyVersion": 1,
+                  "isRetentionLimited": ${totalEligiblePlayers > retainedRankingSize}
                 }
               ]
             }

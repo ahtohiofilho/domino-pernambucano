@@ -48,6 +48,9 @@ internal suspend fun ApplicationCall.respondPublicRanking(
     totalEligiblePlayers: Int = ladder.standings.size,
     retainedRankingSize: Int = ladder.standings.size,
     closedAtEpochMillis: Long? = null,
+    retentionPolicyVersion: Int =
+        LEGACY_RANKING_RETENTION_POLICY_VERSION,
+    isLegacyTruncated: Boolean = false,
     offset: Int,
     limit: Int,
     publicationPolicy: RankingPublicationPolicy =
@@ -135,8 +138,12 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             retainedRankingSize = retainedRankingSize,
             isClosed = closedAtEpochMillis != null,
             closedAtEpochMillis = closedAtEpochMillis,
-            isLegacyTruncated =
+            isLegacyTruncated = isLegacyTruncated,
+            retentionPolicyVersion = retentionPolicyVersion,
+            isRetentionLimited =
                 closedAtEpochMillis != null &&
+                    retentionPolicyVersion >
+                    LEGACY_RANKING_RETENTION_POLICY_VERSION &&
                     totalEligiblePlayers > retainedRankingSize,
             offset = offset,
             limit = limit,
@@ -259,6 +266,10 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
                         awardDecision.awardedRankingSize,
                     isLegacyTruncated =
                         snapshot.isLegacyTruncated,
+                    retentionPolicyVersion =
+                        snapshot.retentionPolicyVersion,
+                    isRetentionLimited =
+                        snapshot.isRetentionLimited,
                 )
             },
         ),
