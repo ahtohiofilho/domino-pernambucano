@@ -6,6 +6,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
 import org.junit.Rule
@@ -16,6 +18,11 @@ import org.junit.runner.RunWith
 class DominoPlayerSeatParticipantTypeTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    private val applicationParticipantLabel: String
+        get() = InstrumentationRegistry.getInstrumentation()
+            .targetContext
+            .getString(R.string.participant_app_label)
 
     @Test
     fun application_participant_is_identified_on_game_table() {
@@ -39,7 +46,7 @@ class DominoPlayerSeatParticipantTypeTest {
 
         composeRule
             .onNodeWithText(
-                DOMINO_APPLICATION_PARTICIPANT_LABEL,
+                applicationParticipantLabel,
             )
             .assertIsDisplayed()
     }
@@ -66,7 +73,7 @@ class DominoPlayerSeatParticipantTypeTest {
 
         composeRule
             .onAllNodesWithText(
-                DOMINO_APPLICATION_PARTICIPANT_LABEL,
+                applicationParticipantLabel,
             )
             .assertCountEquals(0)
     }

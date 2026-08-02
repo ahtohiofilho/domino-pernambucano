@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
@@ -253,7 +254,7 @@ fun PassTurnKnockAnimationOverlay(
             painter = painterResource(
                 id = getKnockFrameRes(frameIndex),
             ),
-            contentDescription = "Toque",
+            contentDescription = stringResource(R.string.game_pass_content_description),
             modifier = Modifier
                 .offset {
                     placementOffset + directionalOffset

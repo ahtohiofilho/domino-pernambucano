@@ -12,9 +12,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
@@ -53,7 +55,10 @@ fun DominoMatchHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "Rodada ${uiState.roundNumber}",
+                text = stringResource(
+                    R.string.game_round_number,
+                    uiState.roundNumber,
+                ),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = DominoSemanticColors.primaryTextOnLight.copy(alpha = 0.72f),

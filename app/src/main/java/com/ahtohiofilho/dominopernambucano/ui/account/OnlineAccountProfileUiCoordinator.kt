@@ -18,6 +18,7 @@ sealed interface OnlineAccountProfileUiState {
         val publicDisplayName: String,
         val tableName: String,
         val established: Boolean,
+        val validationFallbackMessage: String,
         val actionInProgress: Boolean = false,
         val feedbackMessage: String? = null,
     ) : OnlineAccountProfileUiState {
@@ -25,6 +26,7 @@ sealed interface OnlineAccountProfileUiState {
             get() = validateOnlineAccountProfileInput(
                 publicDisplayName = publicDisplayName,
                 tableName = tableName,
+                fallbackMessage = validationFallbackMessage,
             )
 
         val saveEnabled: Boolean
@@ -70,9 +72,24 @@ data class OnlineAccountProfileSaveOutcome(
     val synchronizedIdentity: OnlinePlayerIdentity?,
 )
 
+data class OnlineAccountProfileStrings(
+    val nameRequired: String,
+    val profileSaved: String,
+    val reviewData: String,
+    val sessionUnavailable: String,
+    val connectToEditProfile: String,
+    val profileMissing: String,
+    val reviewNames: String,
+    val rateLimited: String,
+    val loadFailed: String,
+    val invalidResponse: String,
+    val operationFailed: String,
+)
+
 class OnlineAccountProfileUiCoordinator(
     private val client: OnlineAccountProfileClient,
     private val identityStore: OnlinePlayerIdentityStore,
+    private val strings: OnlineAccountProfileStrings,
 ) {
     suspend fun load(
         fallbackIdentity: OnlinePlayerIdentity,
@@ -91,6 +108,8 @@ class OnlineAccountProfileUiCoordinator(
                             result.profile.publicDisplayName,
                         tableName = result.profile.tableName,
                         established = true,
+                        validationFallbackMessage =
+                            strings.reviewData,
                     ),
                     synchronizedIdentity = synchronizedIdentity,
                 )
@@ -107,15 +126,19 @@ class OnlineAccountProfileUiCoordinator(
                                 fallbackIdentity.displayName,
                             tableName = fallbackIdentity.tableName,
                             established = false,
+                            validationFallbackMessage =
+                                strings.reviewData,
                             feedbackMessage =
-                                "Complete seu nome público para criar o perfil da conta.",
+                                strings.nameRequired,
                         ),
                         synchronizedIdentity = null,
                     )
                 } else {
                     OnlineAccountProfileLoadOutcome(
                         state = OnlineAccountProfileUiState.Failure(
-                            message = result.kind.toVisibleMessage(),
+                            message = result.kind.toVisibleMessage(
+                                strings,
+                            ),
                             retryable = result.retryable,
                         ),
                         synchronizedIdentity = null,
@@ -161,8 +184,10 @@ class OnlineAccountProfileUiCoordinator(
                             result.profile.publicDisplayName,
                         tableName = result.profile.tableName,
                         established = true,
+                        validationFallbackMessage =
+                            strings.reviewData,
                         feedbackMessage =
-                            "Perfil salvo. O ranking e a mesa usarão estes nomes.",
+                            strings.profileSaved,
                     ),
                     synchronizedIdentity = synchronizedIdentity,
                 )
@@ -173,7 +198,7 @@ class OnlineAccountProfileUiCoordinator(
                     state = editor.copy(
                         actionInProgress = false,
                         feedbackMessage =
-                            result.kind.toVisibleMessage(),
+                            result.kind.toVisibleMessage(strings),
                     ),
                     synchronizedIdentity = null,
                 )
@@ -198,6 +223,7 @@ class OnlineAccountProfileUiCoordinator(
 private fun validateOnlineAccountProfileInput(
     publicDisplayName: String,
     tableName: String,
+    fallbackMessage: String,
 ): String? {
     return try {
         createOnlineAccountProfile(
@@ -209,35 +235,37 @@ private fun validateOnlineAccountProfileInput(
         )
         null
     } catch (error: IllegalArgumentException) {
-        error.message ?: "Revise os dados do perfil."
+        error.message ?: fallbackMessage
     }
 }
 
-private fun OnlineAccountProfileFailureKind.toVisibleMessage():
+private fun OnlineAccountProfileFailureKind.toVisibleMessage(
+    strings: OnlineAccountProfileStrings,
+):
     String {
     return when (this) {
         OnlineAccountProfileFailureKind.AUTHENTICATION_REQUIRED ->
-            "Sua sessão online não está disponível. Reconecte a conta."
+            strings.sessionUnavailable
 
         OnlineAccountProfileFailureKind.ACCOUNT_REQUIRED ->
-            "Conecte uma conta para editar o perfil público."
+            strings.connectToEditProfile
 
         OnlineAccountProfileFailureKind.NOT_ESTABLISHED ->
-            "O perfil da conta ainda não foi criado."
+            strings.profileMissing
 
         OnlineAccountProfileFailureKind.INVALID_PROFILE ->
-            "Revise o nome público e o nome de mesa."
+            strings.reviewNames
 
         OnlineAccountProfileFailureKind.RATE_LIMITED ->
-            "Muitas tentativas em pouco tempo. Aguarde e tente novamente."
+            strings.rateLimited
 
         OnlineAccountProfileFailureKind.UNAVAILABLE ->
-            "Não foi possível carregar o perfil agora. Tente novamente."
+            strings.loadFailed
 
         OnlineAccountProfileFailureKind.PROTOCOL_ERROR ->
-            "O servidor retornou uma resposta de perfil inválida."
+            strings.invalidResponse
 
         OnlineAccountProfileFailureKind.UNKNOWN ->
-            "Não foi possível concluir a operação de perfil."
+            strings.operationFailed
     }
 }

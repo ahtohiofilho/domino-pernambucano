@@ -23,10 +23,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
@@ -75,6 +77,20 @@ fun OnlineCreateRoomRoute(
     val localPlayerId = localPlayerIdentity.playerId
     val localPlayerName = localPlayerIdentity.displayName
 
+
+    val resumeLoadFailedMessage =
+        stringResource(R.string.online_room_resume_load_failed)
+    val resumeMismatchMessage =
+        stringResource(R.string.online_room_resume_mismatch)
+    val seatMismatchMessage =
+        stringResource(R.string.online_room_seat_mismatch)
+    val createFailedMessage =
+        stringResource(R.string.online_room_create_failed)
+    val completeFailedMessage =
+        stringResource(R.string.online_room_complete_failed)
+    val fillAppPlayersDisabledMessage =
+        stringResource(R.string.room_fill_app_players_disabled)
+
     var feedbackMessage by remember(
         resumedParticipationBinding,
     ) {
@@ -117,18 +133,18 @@ fun OnlineCreateRoomRoute(
 
             feedbackMessage = when {
                 resumedRoomSnapshot == null -> {
-                    "Não foi possível carregar a sala online retomada."
+                    resumeLoadFailedMessage
                 }
 
                 resumedRoomSnapshot.roomId != resumedBinding.roomId -> {
-                    "A sala online carregada não corresponde à participação salva."
+                    resumeMismatchMessage
                 }
 
                 findLocalSeatIndex(
                     roomSnapshot = resumedRoomSnapshot,
                     localPlayerId = resumedBinding.playerId,
                 ) != resumedBinding.localSeatIndex -> {
-                    "A posição do jogador na sala não corresponde à participação salva."
+                    seatMismatchMessage
                 }
 
                 else -> null
@@ -159,7 +175,7 @@ fun OnlineCreateRoomRoute(
             feedbackMessage = null
         } else {
             feedbackMessage = result.reason
-                ?: "Não foi possível criar a sala."
+                ?: createFailedMessage
         }
     }
 
@@ -216,8 +232,7 @@ fun OnlineCreateRoomRoute(
                 participantCompletion == null
             ) {
                 feedbackMessage =
-                    "Completar a mesa com jogadores controlados pelo aplicativo " +
-                            "está desabilitado neste ambiente."
+                    fillAppPlayersDisabledMessage
                 return@OnlineLobbyScreen
             }
 
@@ -251,7 +266,7 @@ fun OnlineCreateRoomRoute(
 
                     if (!result.accepted) {
                         feedbackMessage = result.reason
-                            ?: "Não foi possível completar a mesa."
+                            ?: completeFailedMessage
                         return@launch
                     }
 
@@ -286,7 +301,7 @@ private fun OnlineLobbyScreen(
 ) {
     MenuScaffold {
         Text(
-            text = "Sala online",
+            text = stringResource(R.string.private_room_title),
             color = DominoSemanticColors.primaryTextOnDark,
             fontSize = 32.sp,
             fontWeight = FontWeight.Black,
@@ -308,8 +323,7 @@ private fun OnlineLobbyScreen(
                 }
 
                 else -> {
-                    "Sala conectada ao backend online remoto. Aguarde os " +
-                            "demais jogadores para iniciar a partida."
+                    stringResource(R.string.online_room_waiting_others)
                 }
             },
             color = DominoSemanticColors.primaryTextOnDark.copy(
@@ -325,7 +339,7 @@ private fun OnlineLobbyScreen(
             )
 
             Text(
-                text = "Criando sala.",
+                text = stringResource(R.string.private_room_creating),
                 color = DominoSemanticColors.primaryTextOnDark.copy(
                     alpha = 0.72f,
                 ),
@@ -354,7 +368,7 @@ private fun OnlineLobbyScreen(
                 allowFakePlayerCompletion
             ) {
                 PrimaryMenuButton(
-                    text = "Completar mesa com jogadores do aplicativo",
+                    text = stringResource(R.string.private_room_complete_table),
                     onClick = onCompleteWithFakePlayersClick,
                 )
             } else if (
@@ -362,7 +376,7 @@ private fun OnlineLobbyScreen(
                 OnlineRoomStatusDto.WAITING_FOR_PLAYERS
             ) {
                 Text(
-                    text = "Aguardando jogadores.",
+                    text = stringResource(R.string.private_room_waiting_players),
                     color = DominoSemanticColors.primaryTextOnDark.copy(
                         alpha = 0.72f,
                     ),
@@ -372,7 +386,7 @@ private fun OnlineLobbyScreen(
                 )
             } else {
                 Text(
-                    text = "Abrindo partida online.",
+                    text = stringResource(R.string.private_room_opening_match),
                     color = DominoSemanticColors.playableMove,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Black,
@@ -382,7 +396,7 @@ private fun OnlineLobbyScreen(
         }
 
         SecondaryMenuButton(
-            text = "Voltar",
+            text = stringResource(R.string.common_back),
             onClick = onBackClick,
         )
     }
@@ -414,7 +428,7 @@ private fun RoomCodeCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = "Código da sala",
+                text = stringResource(R.string.private_room_code_label),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = DominoSemanticColors.primaryTextOnLight.copy(
@@ -470,7 +484,10 @@ private fun PlayerListCard(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = "Jogadores ${players.size}/4",
+                text = stringResource(
+                    R.string.private_room_player_count,
+                    players.size,
+                ),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Black,
                 color = DominoSemanticColors.primaryTextOnDark,
@@ -508,7 +525,10 @@ private fun PlayerSlotRow(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = "Lugar ${seatIndex + 1}",
+                text = stringResource(
+                    R.string.private_room_seat_number,
+                    seatIndex + 1,
+                ),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = DominoSemanticColors.primaryTextOnDark.copy(
@@ -517,7 +537,8 @@ private fun PlayerSlotRow(
             )
 
             Text(
-                text = player?.resolvedDisplayName ?: "Aguardando jogador",
+                text = player?.resolvedDisplayName
+                    ?: stringResource(R.string.online_waiting_player),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (isOccupied) {
                     FontWeight.Black
@@ -544,7 +565,7 @@ private fun PlayerSlotRow(
             text = if (player?.connected == true) {
                 "online"
             } else {
-                "livre"
+                stringResource(R.string.online_seat_available)
             },
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
@@ -598,29 +619,33 @@ private fun resolveNextFakePlayerNumber(
     return candidate
 }
 
+@Composable
 private fun roomStatusLabel(
     status: OnlineRoomStatusDto,
     matchRevision: Long?,
 ): String {
     return when (status) {
         OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
-            "Aguardando jogadores"
+            stringResource(R.string.online_waiting_players)
         }
 
         OnlineRoomStatusDto.IN_MATCH -> {
             val revisionText = matchRevision?.let { revision ->
-                " · snapshot $revision"
+                stringResource(
+                    R.string.online_match_revision_suffix_format,
+                    revision,
+                )
             }.orEmpty()
 
-            "Partida criada$revisionText"
+            stringResource(R.string.online_match_created) + revisionText
         }
 
         OnlineRoomStatusDto.FINISHED -> {
-            "Partida finalizada"
+            stringResource(R.string.online_match_finished)
         }
 
         OnlineRoomStatusDto.CLOSED -> {
-            "Sala encerrada"
+            stringResource(R.string.online_room_closed)
         }
     }
 }

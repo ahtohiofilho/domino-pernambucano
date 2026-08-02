@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -206,9 +207,13 @@ private fun DominoPieceAtlasImage(
         Image(
             painter = painter,
             contentDescription = if (faceUp) {
-                "Peça ${piece.left}-${piece.right}"
+                stringResource(
+                    R.string.game_piece_face_up_description,
+                    piece.left,
+                    piece.right,
+                )
             } else {
-                "Peça virada para baixo"
+                stringResource(R.string.game_piece_face_down_description)
             },
             modifier = Modifier
                 .requiredWidth(width)

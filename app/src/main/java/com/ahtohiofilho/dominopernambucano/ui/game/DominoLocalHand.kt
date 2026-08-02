@@ -33,8 +33,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
@@ -119,7 +121,8 @@ fun DominoLocalHand(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = localPlayer?.name ?: "Você",
+                    text = localPlayer?.name
+                        ?: stringResource(R.string.game_local_player_fallback),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Black,
                     color = DominoSemanticColors.primaryTextOnDark,

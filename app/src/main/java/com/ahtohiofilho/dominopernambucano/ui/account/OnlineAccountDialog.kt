@@ -42,9 +42,6 @@ internal const val OnlineAccountTableNameFieldTag =
 internal const val OnlineAccountProfileStatusTag =
     "online_account_profile_status"
 
-internal const val ONLINE_ACCOUNT_CONNECTED_MESSAGE =
-    "Seu perfil e seu histórico online foram preservados."
-
 internal fun onlineAccountDialogVisibleFeedback(
     status: OnlineGoogleAccountStatus,
     feedbackMessage: String?,
@@ -67,7 +64,34 @@ fun OnlineAccountDialog(
     onConnectGoogleClick: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
-    val presentation = status.toPresentation()
+    val presentation = status.toPresentation(
+        strings = OnlineAccountPresentationStrings(
+            googleUnavailable = stringResource(
+                R.string.account_google_unavailable,
+            ),
+            googleRecoverDescription = stringResource(
+                R.string.account_google_recover_description,
+            ),
+            googleContinue = stringResource(
+                R.string.account_google_continue,
+            ),
+            googleLinkDescription = stringResource(
+                R.string.account_google_link_description,
+            ),
+            googleLink = stringResource(
+                R.string.account_google_link,
+            ),
+            profilePreserved = stringResource(
+                R.string.account_profile_preserved,
+            ),
+            googleReauthenticateDescription = stringResource(
+                R.string.account_google_reauthenticate_description,
+            ),
+            googleRecover = stringResource(
+                R.string.account_google_recover,
+            ),
+        ),
+    )
     val editor =
         profileState as? OnlineAccountProfileUiState.Editing
     val profileActionInProgress =
@@ -411,44 +435,50 @@ private data class OnlineAccountPresentation(
     val actionLabel: String?,
 )
 
-private fun OnlineGoogleAccountStatus.toPresentation():
+private data class OnlineAccountPresentationStrings(
+    val googleUnavailable: String,
+    val googleRecoverDescription: String,
+    val googleContinue: String,
+    val googleLinkDescription: String,
+    val googleLink: String,
+    val profilePreserved: String,
+    val googleReauthenticateDescription: String,
+    val googleRecover: String,
+)
+
+private fun OnlineGoogleAccountStatus.toPresentation(
+    strings: OnlineAccountPresentationStrings,
+):
     OnlineAccountPresentation {
     return when (this) {
         OnlineGoogleAccountStatus.UNAVAILABLE ->
             OnlineAccountPresentation(
-                message =
-                    "O acesso com Google ainda não está disponível neste build.",
+                message = strings.googleUnavailable,
                 actionLabel = null,
             )
 
         OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL ->
             OnlineAccountPresentation(
-                message =
-                    "Use uma conta Google para recuperar seu jogador ou criar " +
-                        "um vínculo seguro neste dispositivo.",
-                actionLabel = "Continuar com Google",
+                message = strings.googleRecoverDescription,
+                actionLabel = strings.googleContinue,
             )
 
         OnlineGoogleAccountStatus.VISITOR ->
             OnlineAccountPresentation(
-                message =
-                    "Você está jogando como visitante. Vincule uma conta Google " +
-                        "sem alterar seu jogador atual.",
-                actionLabel = "Vincular com Google",
+                message = strings.googleLinkDescription,
+                actionLabel = strings.googleLink,
             )
 
         OnlineGoogleAccountStatus.CONNECTED ->
             OnlineAccountPresentation(
-                message = ONLINE_ACCOUNT_CONNECTED_MESSAGE,
+                message = strings.profilePreserved,
                 actionLabel = null,
             )
 
         OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
             OnlineAccountPresentation(
-                message =
-                    "Confirme novamente sua conta Google para continuar usando " +
-                        "o mesmo jogador.",
-                actionLabel = "Recuperar com Google",
+                message = strings.googleReauthenticateDescription,
+                actionLabel = strings.googleRecover,
             )
     }
 }

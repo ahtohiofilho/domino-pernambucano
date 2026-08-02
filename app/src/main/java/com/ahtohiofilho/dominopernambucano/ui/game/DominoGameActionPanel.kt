@@ -10,7 +10,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
@@ -49,7 +51,7 @@ fun DominoGameActionPanel(
             )
 
             SecondaryMenuButton(
-                text = "Voltar ao menu",
+                text = stringResource(R.string.game_return_to_menu),
                 onClick = onBackToMenuClick,
             )
         }
@@ -71,7 +73,11 @@ private fun PhaseActions(
 
             if (firstMove != null) {
                 PrimaryMenuButton(
-                    text = "Jogar ${firstMove.piece.left}-${firstMove.piece.right}",
+                    text = stringResource(
+                        R.string.game_play_piece,
+                        firstMove.piece.left,
+                        firstMove.piece.right,
+                    ),
                     onClick = {
                         onLocalMoveSelected(firstMove)
                     },
@@ -84,14 +90,14 @@ private fun PhaseActions(
 
         DominoMatchPhase.RoundSummary -> {
             PrimaryMenuButton(
-                text = "Próxima rodada",
+                text = stringResource(R.string.game_next_round),
                 onClick = onStartNextRound,
             )
         }
 
         DominoMatchPhase.MatchFinished -> {
             PrimaryMenuButton(
-                text = "Nova partida",
+                text = stringResource(R.string.game_new_match),
                 onClick = onStartNewMatch,
             )
         }

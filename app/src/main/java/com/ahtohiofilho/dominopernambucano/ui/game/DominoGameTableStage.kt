@@ -14,7 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
@@ -180,6 +182,7 @@ fun DominoGameTableStage(
     }
 }
 
+@Composable
 private fun resolveTablePlayerName(
     gameState: DominoGameState,
     playerIndex: Int,
@@ -187,7 +190,10 @@ private fun resolveTablePlayerName(
     val displayName = gameState.players
         .getOrNull(playerIndex)
         ?.name
-        ?: "Jogador ${playerIndex + 1}"
+        ?: stringResource(
+            R.string.game_player_fallback,
+            playerIndex + 1,
+        )
 
     return createDefaultOnlineTableName(
         displayName = displayName,

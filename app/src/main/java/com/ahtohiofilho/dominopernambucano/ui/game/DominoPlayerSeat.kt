@@ -20,16 +20,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
-
-const val DOMINO_APPLICATION_PARTICIPANT_LABEL =
-    "Aplicativo"
 
 enum class DominoPlayerSeatOrientation {
     HORIZONTAL,
@@ -185,7 +184,7 @@ private fun PlayerSeatParticipantTypeLabel(
     }
 
     Text(
-        text = DOMINO_APPLICATION_PARTICIPANT_LABEL,
+        text = stringResource(R.string.participant_app_label),
         color = DominoSemanticColors.primaryTextOnDark.copy(
             alpha = 0.68f,
         ),

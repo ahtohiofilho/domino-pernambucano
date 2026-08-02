@@ -26,11 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoPlayer
 import com.ahtohiofilho.dominopernambucano.domain.getTeamIndexForPlayer
 import com.ahtohiofilho.dominopernambucano.online.createDefaultOnlineTableName
@@ -269,7 +271,10 @@ fun RoundIntroPresentationOverlay(
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = "RODADA $roundNumber",
+                text = stringResource(
+                    R.string.game_round_intro_number,
+                    roundNumber,
+                ),
                 modifier = Modifier.graphicsLayer {
                     alpha = titleAlpha.value
                 },
@@ -349,6 +354,11 @@ private fun RoundIntroPlayerPair(
     val names = team.playerNames.joinToString(
         separator = "   •   ",
     )
+    val resolvedNames = if (names.isBlank()) {
+        stringResource(R.string.game_team_fallback)
+    } else {
+        names
+    }
 
     Row(
         modifier = modifier
@@ -378,7 +388,7 @@ private fun RoundIntroPlayerPair(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = names.ifBlank { "Dupla" },
+            text = resolvedNames,
             color = DominoSemanticColors.primaryTextOnDark,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Black,

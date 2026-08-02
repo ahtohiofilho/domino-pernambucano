@@ -21,9 +21,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.RoundWinKind
@@ -172,10 +174,16 @@ private fun RoundSummaryWinnerLine(
         .getOrNull(winnerPlayerIndex)
         ?.name
         ?.ifBlank { null }
-        ?: "Jogador ${winnerPlayerIndex + 1}"
+        ?: stringResource(
+            R.string.game_player_fallback,
+            winnerPlayerIndex + 1,
+        )
 
     Text(
-        text = "$winnerName VENCEU",
+        text = stringResource(
+            R.string.game_round_winner_format,
+            winnerName,
+        ),
         color = DominoSemanticColors.primaryTextOnDark,
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.Black,
@@ -268,7 +276,7 @@ private fun SleepingPiecesReveal(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
-            text = "DORME",
+            text = stringResource(R.string.game_blocked_label),
             color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.72f),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Black,
@@ -292,20 +300,22 @@ private fun SleepingPiecesReveal(
     }
 }
 
+@Composable
 private fun getRoundSummaryTitle(
     winKind: RoundWinKind?,
 ): String {
     return when (winKind) {
-        RoundWinKind.COMMON -> "BATIDA SIMPLES"
-        RoundWinKind.DOUBLE -> "CARROÇADA"
-        RoundWinKind.LA_E_LO -> "LÁ E LÔ"
-        RoundWinKind.CRUZADA -> "CRUZADA"
-        RoundWinKind.CLOSED -> "CONTAGEM DE PONTOS"
-        RoundWinKind.CLOSED_TIE -> "EMPATE"
-        null -> "RODADA"
+        RoundWinKind.COMMON -> stringResource(R.string.game_round_common)
+        RoundWinKind.DOUBLE -> stringResource(R.string.game_round_double)
+        RoundWinKind.LA_E_LO -> stringResource(R.string.game_round_la_e_lo)
+        RoundWinKind.CRUZADA -> stringResource(R.string.game_round_crossed)
+        RoundWinKind.CLOSED -> stringResource(R.string.game_round_points)
+        RoundWinKind.CLOSED_TIE -> stringResource(R.string.game_round_tie)
+        null -> stringResource(R.string.game_round_label)
     }
 }
 
+@Composable
 private fun getRoundSummaryMicroHint(
     gameState: DominoGameState,
 ): String? {
@@ -317,8 +327,11 @@ private fun getRoundSummaryMicroHint(
     }
 
     return when (gameState.roundWinKind) {
-        RoundWinKind.CLOSED_TIE -> "próxima x${gameState.scoreMultiplier + 1}"
-        RoundWinKind.CLOSED -> "menor mão"
+        RoundWinKind.CLOSED_TIE -> stringResource(
+            R.string.game_next_multiplier_format,
+            gameState.scoreMultiplier + 1,
+        )
+        RoundWinKind.CLOSED -> stringResource(R.string.game_lowest_hand)
         else -> null
     }
 }

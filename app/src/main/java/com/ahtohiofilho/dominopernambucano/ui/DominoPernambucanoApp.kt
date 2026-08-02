@@ -48,6 +48,7 @@ import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiCoordinator
+import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileStrings
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
 import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
@@ -70,6 +71,68 @@ fun DominoPernambucanoApp(
         GoogleSignInEnvironment.Current,
 ) {
     val context = LocalContext.current
+    val accountProfileStrings = OnlineAccountProfileStrings(
+        nameRequired = stringResource(
+            R.string.account_profile_name_required,
+        ),
+        profileSaved = stringResource(
+            R.string.account_profile_saved,
+        ),
+        reviewData = stringResource(
+            R.string.account_profile_review_data,
+        ),
+        sessionUnavailable = stringResource(
+            R.string.account_session_unavailable,
+        ),
+        connectToEditProfile = stringResource(
+            R.string.account_connect_to_edit_profile,
+        ),
+        profileMissing = stringResource(
+            R.string.account_profile_missing,
+        ),
+        reviewNames = stringResource(
+            R.string.account_profile_review_names,
+        ),
+        rateLimited = stringResource(
+            R.string.account_profile_rate_limited,
+        ),
+        loadFailed = stringResource(
+            R.string.account_profile_load_failed,
+        ),
+        invalidResponse = stringResource(
+            R.string.account_profile_invalid_response,
+        ),
+        operationFailed = stringResource(
+            R.string.account_profile_operation_failed,
+        ),
+    )
+    val resumeParticipationSessionRejected = stringResource(
+        R.string.resume_participation_session_rejected,
+    )
+    val resumeParticipationDeviceFailed = stringResource(
+        R.string.resume_participation_device_failed,
+    )
+    val resumeParticipationExpired = stringResource(
+        R.string.resume_participation_expired,
+    )
+    val resumeParticipationRetry = stringResource(
+        R.string.resume_participation_retry,
+    )
+    val reopenRoomDeviceFailed = stringResource(
+        R.string.reopen_room_device_failed,
+    )
+    val reopenRoomRetry = stringResource(
+        R.string.reopen_room_retry,
+    )
+    val resumeMatchDeviceFailed = stringResource(
+        R.string.resume_match_device_failed,
+    )
+    val resumeMatchRetry = stringResource(
+        R.string.resume_match_retry,
+    )
+    val accountConnectedSuccess = stringResource(
+        R.string.account_connected_success,
+    )
 
     var settingsVisible by rememberSaveable {
         mutableStateOf(false)
@@ -289,6 +352,7 @@ fun DominoPernambucanoApp(
         googleIdentityApiClient,
         onlineSessionCredentialRepository,
         onlinePlayerIdentityStore,
+        accountProfileStrings,
     ) {
         googleIdentityApiClient?.let { apiClient ->
             OnlineAccountProfileUiCoordinator(
@@ -298,6 +362,7 @@ fun DominoPernambucanoApp(
                         onlineSessionCredentialRepository,
                 ),
                 identityStore = onlinePlayerIdentityStore,
+                strings = accountProfileStrings,
             )
         }
     }
@@ -561,8 +626,7 @@ fun DominoPernambucanoApp(
                                             )
 
                                         pendingOnlineMatchResumeFeedbackMessage =
-                                            "Não foi possível retomar a participação online: " +
-                                                    "a sessão deste dispositivo foi rejeitada."
+                                            resumeParticipationSessionRejected
                                     }
 
                                     is OnlinePendingParticipationMatchResumePreparation
@@ -574,8 +638,7 @@ fun DominoPernambucanoApp(
                                             )
 
                                         pendingOnlineMatchResumeFeedbackMessage =
-                                            "Não foi possível retomar neste dispositivo. " +
-                                                    "Verifique a participação novamente."
+                                            resumeParticipationDeviceFailed
                                     }
 
                                     is OnlinePendingParticipationMatchResumePreparation
@@ -587,14 +650,13 @@ fun DominoPernambucanoApp(
                                             )
 
                                         pendingOnlineMatchResumeFeedbackMessage =
-                                            "A participação online anterior não está mais " +
-                                                    "disponível. Verifique novamente."
+                                            resumeParticipationExpired
                                     }
 
                                     is OnlinePendingParticipationMatchResumePreparation
                                         .TemporarilyUnavailable -> {
                                         pendingOnlineMatchResumeFeedbackMessage =
-                                            "Não foi possível retomar agora. Tente novamente."
+                                            resumeParticipationRetry
                                     }
 
                                     is OnlinePendingParticipationMatchResumePreparation
@@ -626,16 +688,13 @@ fun DominoPernambucanoApp(
                                                     )
 
                                                 pendingOnlineMatchResumeFeedbackMessage =
-                                                    "Não foi possível reabrir a sala neste " +
-                                                            "dispositivo. Verifique a " +
-                                                            "participação novamente."
+                                                    reopenRoomDeviceFailed
                                             }
 
                                             is OnlinePendingParticipationMatchResumeActivation
                                                 .TemporarilyUnavailable -> {
                                                 pendingOnlineMatchResumeFeedbackMessage =
-                                                    "Não foi possível reabrir a sala agora. " +
-                                                            "Tente novamente."
+                                                    reopenRoomRetry
                                             }
                                         }
                                     }
@@ -687,16 +746,13 @@ fun DominoPernambucanoApp(
                                                     )
 
                                                 pendingOnlineMatchResumeFeedbackMessage =
-                                                    "Não foi possível retomar a partida neste " +
-                                                            "dispositivo. Verifique a " +
-                                                            "participação novamente."
+                                                    resumeMatchDeviceFailed
                                             }
 
                                             is OnlinePendingParticipationMatchResumeActivation
                                                 .TemporarilyUnavailable -> {
                                                 pendingOnlineMatchResumeFeedbackMessage =
-                                                    "Não foi possível retomar a partida agora. " +
-                                                            "Tente novamente."
+                                                    resumeMatchRetry
                                             }
                                         }
                                     }
@@ -722,7 +778,7 @@ fun DominoPernambucanoApp(
                                 ) {
                                     is OnlineGoogleAccountActionResult.Success -> {
                                         onlineGoogleAccountFeedbackMessage =
-                                            "Conta conectada com sucesso."
+                                            accountConnectedSuccess
 
                                         val coordinator =
                                             onlineAccountProfileUiCoordinator
@@ -859,9 +915,12 @@ fun DominoPernambucanoApp(
 
             if (queueClient == null) {
                 MenuPlaceholderScreen(
-                        title = "Partida rankeada",
-                        description =
-                            "A fila rankeada não está disponível neste ambiente.",
+                        title = stringResource(
+                            R.string.ranked_match_title,
+                        ),
+                        description = stringResource(
+                            R.string.ranked_queue_unavailable,
+                        ),
                         onBackClick = {
                             sessionCoordinator.dispatch(
                                 DominoSessionCommand

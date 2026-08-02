@@ -26,11 +26,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineDebugOptions
@@ -101,6 +103,14 @@ fun OnlineJoinRoomRoute(
     var nextFakePlayerNumber by remember {
         mutableIntStateOf(2)
     }
+
+    val roomCodeRequiredMessage =
+        stringResource(R.string.private_room_code_required)
+
+    val joinFailedMessage =
+        stringResource(R.string.online_room_join_failed)
+    val completeFailedMessage =
+        stringResource(R.string.online_room_complete_failed)
 
     LaunchedEffect(roomSnapshot?.roomCode) {
         val currentRoomCode = roomSnapshot?.roomCode
@@ -204,7 +214,7 @@ fun OnlineJoinRoomRoute(
                 val normalizedRoomCode = roomCodeInput.trim()
 
                 if (normalizedRoomCode.isBlank()) {
-                    feedbackMessage = "Informe o código da sala."
+                    feedbackMessage = roomCodeRequiredMessage
                     return@launch
                 }
 
@@ -232,7 +242,7 @@ fun OnlineJoinRoomRoute(
                     feedbackMessage = null
                 } else {
                     feedbackMessage = result.reason
-                        ?: "Não foi possível entrar na sala."
+                        ?: joinFailedMessage
                 }
             }
         },
@@ -279,7 +289,7 @@ fun OnlineJoinRoomRoute(
 
                     if (!result.accepted) {
                         feedbackMessage = result.reason
-                            ?: "Não foi possível completar a mesa."
+                            ?: completeFailedMessage
                         return@launch
                     }
 
@@ -322,9 +332,9 @@ private fun OnlineJoinRoomScreen(
     MenuScaffold {
         Text(
             text = if (hasJoinedRoom) {
-                "Sala online"
+                stringResource(R.string.private_room_title)
             } else {
-                "Entrar em sala"
+                stringResource(R.string.private_room_join_action)
             },
             color = DominoSemanticColors.primaryTextOnDark,
             fontSize = 32.sp,
@@ -338,13 +348,13 @@ private fun OnlineJoinRoomScreen(
                     "Você entrou na sala. Complete a mesa com jogadores controlados " +
                             "pelo aplicativo para validar o fluxo ponta a ponta."
                 } else {
-                    "Você entrou na sala. Aguarde os demais jogadores para iniciar a partida."
+                    stringResource(R.string.online_room_joined_waiting)
                 }
             } else {
                 if (allowDemoRoomCreation) {
                     "Fluxo fake em memória para validar entrada em sala antes do backend real."
                 } else {
-                    "Informe o código da sala para entrar na partida online."
+                    stringResource(R.string.online_room_enter_code_hint)
                 }
             },
             color = DominoSemanticColors.primaryTextOnDark.copy(
@@ -361,7 +371,7 @@ private fun OnlineJoinRoomScreen(
                 )
 
                 Text(
-                    text = "Carregando sala...",
+                    text = stringResource(R.string.private_room_loading),
                     color = DominoSemanticColors.primaryTextOnDark.copy(
                         alpha = 0.72f,
                     ),
@@ -389,7 +399,7 @@ private fun OnlineJoinRoomScreen(
                     allowFakePlayerCompletion
                 ) {
                     PrimaryMenuButton(
-                        text = "Completar mesa com jogadores do aplicativo",
+                        text = stringResource(R.string.private_room_complete_table),
                         onClick = onCompleteWithFakePlayersClick,
                     )
                 } else if (
@@ -397,7 +407,7 @@ private fun OnlineJoinRoomScreen(
                     OnlineRoomStatusDto.WAITING_FOR_PLAYERS
                 ) {
                     Text(
-                        text = "Aguardando jogadores.",
+                        text = stringResource(R.string.private_room_waiting_players),
                         color = DominoSemanticColors.primaryTextOnDark.copy(
                             alpha = 0.72f,
                         ),
@@ -407,7 +417,7 @@ private fun OnlineJoinRoomScreen(
                     )
                 } else {
                     Text(
-                        text = "Abrindo partida online...",
+                        text = stringResource(R.string.private_room_opening_match),
                         color = DominoSemanticColors.playableMove,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
@@ -429,7 +439,7 @@ private fun OnlineJoinRoomScreen(
             }
 
             PrimaryMenuButton(
-                text = "Entrar na sala",
+                text = stringResource(R.string.private_room_join_action),
                 onClick = onJoinClick,
             )
 
@@ -442,7 +452,7 @@ private fun OnlineJoinRoomScreen(
         }
 
         SecondaryMenuButton(
-            text = "Voltar",
+            text = stringResource(R.string.common_back),
             onClick = onBackClick,
         )
     }
@@ -474,7 +484,7 @@ private fun JoinRoomFormCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "Código da sala",
+                text = stringResource(R.string.private_room_code_label),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Black,
                 color = DominoSemanticColors.primaryTextOnLight,
@@ -487,7 +497,7 @@ private fun JoinRoomFormCard(
                 singleLine = true,
                 label = {
                     Text(
-                        text = "Ex.: 0001",
+                        text = stringResource(R.string.private_room_code_example),
                     )
                 },
                 keyboardOptions = KeyboardOptions(
@@ -518,7 +528,7 @@ private fun JoinRoomFormCard(
                             "execução do aplicativo. Use a sala de teste " +
                             "para validar o caminho."
                 } else {
-                    "Use o código compartilhado pelo criador da sala online."
+                    stringResource(R.string.online_room_shared_code_hint)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = DominoSemanticColors.primaryTextOnLight.copy(
@@ -554,7 +564,7 @@ private fun JoinRoomCodeCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = "Código da sala",
+                text = stringResource(R.string.private_room_code_label),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = DominoSemanticColors.primaryTextOnLight.copy(
@@ -609,7 +619,10 @@ private fun JoinPlayerListCard(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = "Jogadores ${players.size}/4",
+                text = stringResource(
+                    R.string.private_room_player_count,
+                    players.size,
+                ),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Black,
                 color = DominoSemanticColors.primaryTextOnDark,
@@ -647,7 +660,10 @@ private fun JoinPlayerSlotRow(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = "Lugar ${seatIndex + 1}",
+                text = stringResource(
+                    R.string.private_room_seat_number,
+                    seatIndex + 1,
+                ),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = DominoSemanticColors.primaryTextOnDark.copy(
@@ -656,7 +672,8 @@ private fun JoinPlayerSlotRow(
             )
 
             Text(
-                text = player?.resolvedDisplayName ?: "Aguardando jogador",
+                text = player?.resolvedDisplayName
+                    ?: stringResource(R.string.online_waiting_player),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (isOccupied) {
                     FontWeight.Black
@@ -683,7 +700,7 @@ private fun JoinPlayerSlotRow(
             text = if (player?.connected == true) {
                 "online"
             } else {
-                "livre"
+                stringResource(R.string.online_seat_available)
             },
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
@@ -737,24 +754,25 @@ private fun resolveNextFakePlayerNumber(
     return candidate
 }
 
+@Composable
 private fun joinRoomStatusLabel(
     status: OnlineRoomStatusDto,
 ): String {
     return when (status) {
         OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
-            "Aguardando jogadores"
+            stringResource(R.string.online_waiting_players)
         }
 
         OnlineRoomStatusDto.IN_MATCH -> {
-            "Partida criada"
+            stringResource(R.string.online_match_created)
         }
 
         OnlineRoomStatusDto.FINISHED -> {
-            "Partida finalizada"
+            stringResource(R.string.online_match_finished)
         }
 
         OnlineRoomStatusDto.CLOSED -> {
-            "Sala encerrada"
+            stringResource(R.string.online_room_closed)
         }
     }
 }

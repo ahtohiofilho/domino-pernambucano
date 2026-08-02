@@ -27,6 +27,26 @@ private fun profileSuccess(
 }
 
 class OnlineAccountProfileUiCoordinatorTest {
+    private val profileStrings = OnlineAccountProfileStrings(
+        nameRequired = "Complete seu nome público para criar o perfil da conta.",
+        profileSaved = "Perfil salvo. O ranking e a mesa usarão estes nomes.",
+        reviewData = "Revise os dados do perfil.",
+        sessionUnavailable =
+            "Sua sessão online não está disponível. Reconecte a conta.",
+        connectToEditProfile =
+            "Conecte uma conta para editar o perfil público.",
+        profileMissing = "O perfil da conta ainda não foi criado.",
+        reviewNames = "Revise o nome público e o nome de mesa.",
+        rateLimited =
+            "Muitas tentativas em pouco tempo. Aguarde e tente novamente.",
+        loadFailed =
+            "Não foi possível carregar o perfil agora. Tente novamente.",
+        invalidResponse =
+            "O servidor retornou uma resposta de perfil inválida.",
+        operationFailed =
+            "Não foi possível concluir a operação de perfil.",
+    )
+
     @Test
     fun missing_server_profile_opens_editor_with_local_identity() =
         runBlocking {
@@ -42,6 +62,7 @@ class OnlineAccountProfileUiCoordinatorTest {
             val coordinator = OnlineAccountProfileUiCoordinator(
                 client = client,
                 identityStore = FakeIdentityStore(),
+                strings = profileStrings,
             )
 
             val outcome = coordinator.load(
@@ -72,6 +93,7 @@ class OnlineAccountProfileUiCoordinatorTest {
             val coordinator = OnlineAccountProfileUiCoordinator(
                 client = client,
                 identityStore = identityStore,
+                strings = profileStrings,
             )
 
             val outcome = coordinator.load(
@@ -115,6 +137,7 @@ class OnlineAccountProfileUiCoordinatorTest {
             val coordinator = OnlineAccountProfileUiCoordinator(
                 client = client,
                 identityStore = identityStore,
+                strings = profileStrings,
             )
 
             val outcome = coordinator.save(
@@ -122,6 +145,8 @@ class OnlineAccountProfileUiCoordinatorTest {
                     publicDisplayName = "Antônio Filho",
                     tableName = "afi",
                     established = false,
+                    validationFallbackMessage =
+                        profileStrings.reviewData,
                 ),
             )
 
@@ -160,6 +185,7 @@ class OnlineAccountProfileUiCoordinatorTest {
             val coordinator = OnlineAccountProfileUiCoordinator(
                 client = client,
                 identityStore = identityStore,
+                strings = profileStrings,
             )
 
             val outcome = coordinator.save(
@@ -167,6 +193,8 @@ class OnlineAccountProfileUiCoordinatorTest {
                     publicDisplayName = "Antônio Filho",
                     tableName = "AFI",
                     established = true,
+                    validationFallbackMessage =
+                        profileStrings.reviewData,
                 ),
             )
 
@@ -183,6 +211,7 @@ class OnlineAccountProfileUiCoordinatorTest {
             val coordinator = OnlineAccountProfileUiCoordinator(
                 client = client,
                 identityStore = identityStore,
+                strings = profileStrings,
             )
 
             val outcome = coordinator.save(
@@ -190,6 +219,8 @@ class OnlineAccountProfileUiCoordinatorTest {
                     publicDisplayName = "Antônio",
                     tableName = "A F!",
                     established = false,
+                    validationFallbackMessage =
+                        profileStrings.reviewData,
                 ),
             )
 
@@ -205,6 +236,7 @@ class OnlineAccountProfileUiCoordinatorTest {
             publicDisplayName = "",
             tableName = "",
             established = false,
+            validationFallbackMessage = profileStrings.reviewData,
         )
             .withPublicDisplayName("A".repeat(80))
             .withTableName("B".repeat(20))

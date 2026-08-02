@@ -14,9 +14,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
@@ -66,9 +68,9 @@ fun MatchFinishedActionOverlay(
         ) {
             Text(
                 text = if (didLocalTeamWin) {
-                    "VITÓRIA"
+                    stringResource(R.string.game_victory_label)
                 } else {
-                    "DERROTA"
+                    stringResource(R.string.game_defeat_label)
                 },
                 color = DominoSemanticColors.scoreHighlight,
                 style = MaterialTheme.typography.headlineMedium,
@@ -85,12 +87,12 @@ fun MatchFinishedActionOverlay(
             )
 
             PrimaryMenuButton(
-                text = "Nova partida",
+                text = stringResource(R.string.game_new_match),
                 onClick = onStartNewMatch,
             )
 
             SecondaryMenuButton(
-                text = "Voltar ao menu",
+                text = stringResource(R.string.game_return_to_menu),
                 onClick = onBackToMenuClick,
             )
         }

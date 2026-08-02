@@ -17,10 +17,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankedMatchActivation
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
@@ -121,7 +123,7 @@ private fun OnlineRankedQueueScreen(
 ) {
     MenuScaffold {
         Text(
-            text = "Partida rankeada",
+            text = stringResource(R.string.ranked_queue_title),
             color = DominoSemanticColors.primaryTextOnDark,
             fontSize = 32.sp,
             fontWeight = FontWeight.Black,
@@ -161,7 +163,7 @@ private fun OnlineRankedQueueScreen(
             uiState.retryable
         ) {
             PrimaryMenuButton(
-                text = "Tentar novamente",
+                text = stringResource(R.string.ranked_queue_retry),
                 onClick = onRetryClick,
             )
         }
@@ -172,7 +174,7 @@ private fun OnlineRankedQueueScreen(
             is OnlineRankedQueueUiState.Waiting,
             OnlineRankedQueueUiState.Cancelling -> {
                 SecondaryMenuButton(
-                    text = "Cancelar busca",
+                    text = stringResource(R.string.ranked_queue_cancel_search),
                     onClick = onCancelClick,
                     enabled =
                         uiState !=
@@ -183,9 +185,9 @@ private fun OnlineRankedQueueScreen(
             is OnlineRankedQueueUiState.Failure -> {
                 SecondaryMenuButton(
                     text = if (uiState.retryable) {
-                        "Cancelar busca"
+                        stringResource(R.string.ranked_queue_cancel_search)
                     } else {
-                        "Voltar"
+                        stringResource(R.string.common_back)
                     },
                     onClick = if (uiState.retryable) {
                         onCancelClick
@@ -197,12 +199,12 @@ private fun OnlineRankedQueueScreen(
 
             OnlineRankedQueueUiState.NotQueued -> {
                 PrimaryMenuButton(
-                    text = "Buscar novamente",
+                    text = stringResource(R.string.ranked_queue_search_again),
                     onClick = onRetryClick,
                 )
 
                 SecondaryMenuButton(
-                    text = "Voltar",
+                    text = stringResource(R.string.common_back),
                     onClick = onBackClick,
                 )
             }
@@ -222,76 +224,79 @@ private fun OnlineRankedQueueUiState.showsProgress(): Boolean {
         this == OnlineRankedQueueUiState.OpeningMatch
 }
 
+@Composable
 private fun OnlineRankedQueueUiState.primaryMessage(): String {
     return when (this) {
         OnlineRankedQueueUiState.Idle,
         OnlineRankedQueueUiState.Resuming ->
-            "Verificando sua fila..."
+            stringResource(R.string.online_queue_checking)
 
         is OnlineRankedQueueUiState.Waiting ->
-            "Você está na posição $queuePosition."
+            stringResource(R.string.online_queue_position_format, queuePosition)
 
         OnlineRankedQueueUiState.Cancelling ->
-            "Cancelando a busca..."
+            stringResource(R.string.online_queue_cancelling)
 
         OnlineRankedQueueUiState.OpeningMatch,
         is OnlineRankedQueueUiState.MatchReady ->
-            "Partida encontrada."
+            stringResource(R.string.online_queue_match_found)
 
         OnlineRankedQueueUiState.Cancelled ->
-            "Busca cancelada."
+            stringResource(R.string.online_queue_cancelled)
 
         OnlineRankedQueueUiState.NotQueued ->
-            "Você não está na fila."
+            stringResource(R.string.online_queue_not_joined)
 
         is OnlineRankedQueueUiState.Failure -> kind.userMessage()
     }
 }
 
+@Composable
 private fun OnlineRankedQueueUiState.secondaryMessage(): String {
     return when (this) {
         is OnlineRankedQueueUiState.Waiting ->
-            "Parceiro, adversários e assentos serão definidos pelo servidor."
+            stringResource(R.string.online_queue_server_assignment)
 
         OnlineRankedQueueUiState.OpeningMatch,
         is OnlineRankedQueueUiState.MatchReady ->
-            "Abrindo a mesa sem utilizar código de sala."
+            stringResource(R.string.online_queue_opening_table)
 
         is OnlineRankedQueueUiState.Failure -> {
             if (retryable) {
-                "A fila pode continuar ativa no servidor. Tente novamente ou cancele explicitamente."
+                stringResource(R.string.online_queue_may_remain_active)
             } else {
-                "Volte ao menu de conta caso seja necessário confirmar seu acesso."
+                stringResource(R.string.online_queue_account_access_hint)
             }
         }
 
         else ->
-            "A fila pública é exclusiva para contas autenticadas e afeta o ranking."
+            stringResource(R.string.online_queue_ranked_policy)
     }
 }
 
+@Composable
 private fun OnlineRankedQueueUiFailureKind.userMessage(): String {
     return when (this) {
         OnlineRankedQueueUiFailureKind.AUTHENTICATION_REQUIRED ->
-            "Confirme novamente sua conta para jogar rankeado."
+            stringResource(R.string.online_queue_authentication_required)
 
         OnlineRankedQueueUiFailureKind.ACCOUNT_REQUIRED ->
-            "Uma conta conectada é obrigatória para jogar rankeado."
+            stringResource(R.string.online_queue_account_required)
 
         OnlineRankedQueueUiFailureKind.RATE_LIMITED ->
-            "Muitas tentativas em pouco tempo. Aguarde e tente novamente."
+            stringResource(R.string.online_queue_rate_limited)
 
         OnlineRankedQueueUiFailureKind.UNAVAILABLE ->
-            "A fila rankeada está temporariamente indisponível."
+            stringResource(R.string.online_queue_unavailable)
 
         OnlineRankedQueueUiFailureKind.PROTOCOL_ERROR,
         OnlineRankedQueueUiFailureKind.INVALID_MATCH ->
-            "A resposta da partida não pôde ser validada com segurança."
+            stringResource(R.string.online_queue_invalid_match)
 
         OnlineRankedQueueUiFailureKind.SESSION_REJECTED ->
-            "Sua sessão foi rejeitada. Confirme novamente a conta."
+            stringResource(R.string.online_queue_session_rejected)
 
         OnlineRankedQueueUiFailureKind.UNKNOWN ->
-            "Não foi possível continuar a busca rankeada."
+            stringResource(R.string.online_queue_continue_failed)
     }
 }
