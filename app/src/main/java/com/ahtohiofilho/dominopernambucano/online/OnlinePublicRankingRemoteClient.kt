@@ -13,6 +13,7 @@ class OnlinePublicRankingHttpException(
 enum class OnlinePublicRankingFailureKind {
     AUTHENTICATION_REQUIRED,
     RATE_LIMITED,
+    PAGINATION_RESTART_REQUIRED,
     UNAVAILABLE,
     PROTOCOL_ERROR,
     UNKNOWN,
@@ -45,6 +46,7 @@ interface OnlinePublicRankingClient {
         cycle: PublicRankingCycleDto,
         offset: Int = 0,
         limit: Int = 50,
+        rankingRevision: String? = null,
     ): OnlinePublicRankingClientResult
 
     suspend fun fetchHistorical(
@@ -78,12 +80,14 @@ class OnlinePublicRankingRemoteClient(
         cycle: PublicRankingCycleDto,
         offset: Int,
         limit: Int,
+        rankingRevision: String?,
     ): OnlinePublicRankingClientResult {
         return fetchRanking(
             cycle = cycle,
             cycleId = null,
             offset = offset,
             limit = limit,
+            rankingRevision = rankingRevision,
         )
     }
 
@@ -98,6 +102,7 @@ class OnlinePublicRankingRemoteClient(
             cycleId = cycleId,
             offset = offset,
             limit = limit,
+            rankingRevision = null,
         )
     }
 
@@ -106,13 +111,17 @@ class OnlinePublicRankingRemoteClient(
         cycleId: String?,
         offset: Int,
         limit: Int,
+        rankingRevision: String?,
     ): OnlinePublicRankingClientResult {
         val normalizedCycleId = cycleId?.trim()
+        val normalizedRevision = rankingRevision?.trim()
 
         if (
             offset < 0 ||
             limit !in 1..100 ||
-            (cycleId != null && normalizedCycleId.isNullOrBlank())
+            (cycleId != null && normalizedCycleId.isNullOrBlank()) ||
+            (rankingRevision != null && normalizedRevision.isNullOrBlank()) ||
+            (normalizedCycleId != null && normalizedRevision != null)
         ) {
             return protocolRankingFailure()
         }
@@ -133,6 +142,7 @@ class OnlinePublicRankingRemoteClient(
                     cycle = cycle,
                     offset = offset,
                     limit = limit,
+                    rankingRevision = normalizedRevision,
                 )
             } else {
                 remoteApiClient.fetchHistoricalPublicRanking(
@@ -148,6 +158,7 @@ class OnlinePublicRankingRemoteClient(
                 requestedOffset = offset,
                 requestedLimit = limit,
                 requestedCycleId = normalizedCycleId,
+                requestedRankingRevision = normalizedRevision,
             )
 
             OnlinePublicRankingClientResult.Success(
@@ -252,12 +263,18 @@ private fun PublicRankingResponseDto.requireValidFor(
     requestedOffset: Int,
     requestedLimit: Int,
     requestedCycleId: String?,
+    requestedRankingRevision: String?,
 ) {
     require(cycle == requestedCycle)
     require(offset == requestedOffset)
     require(limit == requestedLimit)
     require(cycleId.isNotBlank())
+    require(rankingRevision.matches(Regex("[0-9a-f]{64}")))
     require(requestedCycleId == null || cycleId == requestedCycleId)
+    require(
+        requestedRankingRevision == null ||
+            rankingRevision == requestedRankingRevision,
+    )
     require(rankingRuleVersion > 0)
     require(timeZoneId == "America/Recife")
     require(startsAtEpochMillis >= 0L)
@@ -565,6 +582,13 @@ private fun OnlinePublicRankingHttpException.toRankingClientFailure():
 
         429 -> OnlinePublicRankingClientResult.Failure(
             kind = OnlinePublicRankingFailureKind.RATE_LIMITED,
+            retryable = true,
+        )
+
+        409 -> OnlinePublicRankingClientResult.Failure(
+            kind =
+                OnlinePublicRankingFailureKind
+                    .PAGINATION_RESTART_REQUIRED,
             retryable = true,
         )
 

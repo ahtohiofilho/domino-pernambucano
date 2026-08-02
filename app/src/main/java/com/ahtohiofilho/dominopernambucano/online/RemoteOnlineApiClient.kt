@@ -78,6 +78,7 @@ interface RemoteOnlineApiClient {
         cycle: PublicRankingCycleDto,
         offset: Int = 0,
         limit: Int = 50,
+        rankingRevision: String? = null,
     ): PublicRankingResponseDto {
         throw UnsupportedOperationException(
             "Consulta do ranking público não configurada para este cliente remoto.",

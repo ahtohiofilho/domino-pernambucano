@@ -44,6 +44,7 @@ data class PublicRankingEntryDto(
 data class PublicRankingResponseDto(
     val cycle: PublicRankingCycleDto,
     val cycleId: String,
+    val rankingRevision: String,
     val rankingRuleVersion: Int,
     val timeZoneId: String,
     val startsAtEpochMillis: Long,

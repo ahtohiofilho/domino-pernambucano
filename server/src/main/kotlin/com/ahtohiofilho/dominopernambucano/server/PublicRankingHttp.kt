@@ -13,6 +13,7 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.Locale
 
@@ -51,6 +52,7 @@ internal suspend fun ApplicationCall.respondPublicRanking(
     retentionPolicyVersion: Int =
         LEGACY_RANKING_RETENTION_POLICY_VERSION,
     isLegacyTruncated: Boolean = false,
+    expectedRankingRevision: String? = null,
     offset: Int,
     limit: Int,
     publicationPolicy: RankingPublicationPolicy =
@@ -63,6 +65,15 @@ internal suspend fun ApplicationCall.respondPublicRanking(
 
     require(totalEligiblePlayers >= retainedRankingSize)
     require(retainedRankingSize == ladder.standings.size)
+
+    val rankingRevision = ladder.publicRankingRevision()
+    if (
+        expectedRankingRevision != null &&
+        expectedRankingRevision != rankingRevision
+    ) {
+        respond(HttpStatusCode.Conflict)
+        return
+    }
 
     val publicationDecision = publicationPolicy.evaluate(
         kind = cycle.toRankingCycleKind(),
@@ -119,6 +130,7 @@ internal suspend fun ApplicationCall.respondPublicRanking(
         PublicRankingResponseDto(
             cycle = cycle,
             cycleId = ladder.period.cycleId,
+            rankingRevision = rankingRevision,
             rankingRuleVersion = ladder.period.rankingRuleVersion,
             timeZoneId = ladder.period.timeZoneId,
             startsAtEpochMillis = ladder.period.startsAtEpochMillis,
@@ -154,6 +166,43 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             viewer = viewer,
         ),
     )
+}
+
+internal fun RankedCycleLadder.publicRankingRevision(): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+
+    digest.updateCanonical(period.cycleId)
+    digest.updateCanonical(period.rankingRuleVersion)
+    digest.updateCanonical(resultCount)
+    digest.updateCanonical(standings.size)
+    standings.forEach { standing ->
+        digest.updateCanonical(standing.rank)
+        digest.updateCanonical(standing.accountId)
+        digest.updateCanonical(standing.stats.victories)
+        digest.updateCanonical(standing.stats.games)
+        digest.updateCanonical(standing.stats.teamBalance)
+        digest.updateCanonical(standing.stats.individualPoints)
+        digest.updateCanonical(standing.stats.touchesGiven)
+        digest.updateCanonical(standing.stats.automaticRounds)
+    }
+
+    return digest.digest().joinToString(separator = "") { byte ->
+        "%02x".format(Locale.ROOT, byte.toInt() and 0xff)
+    }
+}
+
+private fun MessageDigest.updateCanonical(value: String) {
+    val bytes = value.toByteArray(Charsets.UTF_8)
+    updateCanonical(bytes.size)
+    update(bytes)
+}
+
+private fun MessageDigest.updateCanonical(value: Int) {
+    update(ByteBuffer.allocate(Int.SIZE_BYTES).putInt(value).array())
+}
+
+private fun MessageDigest.updateCanonical(value: Long) {
+    update(ByteBuffer.allocate(Long.SIZE_BYTES).putLong(value).array())
 }
 
 private fun RankingPublicationStatus

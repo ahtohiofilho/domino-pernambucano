@@ -192,12 +192,14 @@ class KtorRemoteOnlineApiClient(
         cycle: PublicRankingCycleDto,
         offset: Int,
         limit: Int,
+        rankingRevision: String?,
     ): PublicRankingResponseDto {
         return fetchPublicRankingResponse(
             cycle = cycle,
             cycleId = null,
             offset = offset,
             limit = limit,
+            rankingRevision = rankingRevision,
         )
     }
 
@@ -214,6 +216,7 @@ class KtorRemoteOnlineApiClient(
             cycleId = cycleId,
             offset = offset,
             limit = limit,
+            rankingRevision = null,
         )
     }
 
@@ -222,9 +225,11 @@ class KtorRemoteOnlineApiClient(
         cycleId: String?,
         offset: Int,
         limit: Int,
+        rankingRevision: String?,
     ): PublicRankingResponseDto {
         require(offset >= 0)
         require(limit in 1..100)
+        require(rankingRevision == null || rankingRevision.isNotBlank())
 
         val response = httpClient.get(
             urlString = endpoint(
@@ -248,6 +253,12 @@ class KtorRemoteOnlineApiClient(
                 parameter(
                     key = "cycleId",
                     value = requestedCycleId,
+                )
+            }
+            rankingRevision?.let { expectedRevision ->
+                parameter(
+                    key = "revision",
+                    value = expectedRevision,
                 )
             }
             accept(ContentType.Application.Json)

@@ -220,6 +220,9 @@ fun OnlinePublicRankingRoute(
                     cycle = selectedCycle,
                     offset = requestedOffset,
                     limit = PUBLIC_RANKING_PAGE_SIZE,
+                    rankingRevision = latestResponse
+                        ?.rankingRevision
+                        ?.takeIf { requestedOffset > 0 },
                 )
             } else {
                 rankingClient.fetchHistorical(
@@ -252,7 +255,21 @@ fun OnlinePublicRankingRoute(
             }
 
             is OnlinePublicRankingClientResult.Failure -> {
-                failure = result.kind
+                if (
+                    shouldRestartRankingPagination(
+                        failure = result.kind,
+                        requestedOffset = requestedOffset,
+                        selectedScope = selectedScope,
+                    )
+                ) {
+                    entries = emptyList()
+                    latestResponse = null
+                    failure = null
+                    requestedOffset = 0
+                    requestNonce += 1
+                } else {
+                    failure = result.kind
+                }
             }
         }
 
@@ -321,7 +338,11 @@ fun OnlinePublicRankingRoute(
             closedCyclesNonce += 1
         },
         onLoadMore = {
-            requestedOffset = entries.size
+            requestedOffset = latestResponse
+                ?.let { response ->
+                    response.offset + response.entries.size
+                }
+                ?: entries.size
             requestNonce += 1
         },
         onRetry = {
@@ -329,6 +350,17 @@ fun OnlinePublicRankingRoute(
         },
         onBackClick = onBackClick,
     )
+}
+
+internal fun shouldRestartRankingPagination(
+    failure: OnlinePublicRankingFailureKind,
+    requestedOffset: Int,
+    selectedScope: PublicRankingScope,
+): Boolean {
+    return selectedScope == PublicRankingScope.CURRENT &&
+        requestedOffset > 0 &&
+        failure ==
+        OnlinePublicRankingFailureKind.PAGINATION_RESTART_REQUIRED
 }
 
 @Composable
@@ -1247,6 +1279,8 @@ internal fun OnlinePublicRankingFailureKind.publicMessageRes(): Int {
             R.string.ranking_failure_authentication_required
         OnlinePublicRankingFailureKind.RATE_LIMITED ->
             R.string.ranking_failure_rate_limited
+        OnlinePublicRankingFailureKind.PAGINATION_RESTART_REQUIRED ->
+            R.string.ranking_failure_protocol_error
         OnlinePublicRankingFailureKind.UNAVAILABLE ->
             R.string.ranking_failure_unavailable
         OnlinePublicRankingFailureKind.PROTOCOL_ERROR ->

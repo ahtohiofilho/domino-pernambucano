@@ -49,6 +49,7 @@ class PublicRankingRemoteContractTest {
         val response = PublicRankingResponseDto(
             cycle = PublicRankingCycleDto.DAILY,
             cycleId = "ranking-v1:daily:2026-07-25",
+            rankingRevision = "a".repeat(64),
             rankingRuleVersion = 1,
             timeZoneId = "America/Recife",
             startsAtEpochMillis = 100L,

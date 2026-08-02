@@ -16,6 +16,37 @@ import org.junit.Test
 
 class OnlinePublicRankingPresentationTest {
     @Test
+    fun stale_current_page_restarts_only_after_the_first_page() {
+        assertTrue(
+            shouldRestartRankingPagination(
+                failure =
+                    OnlinePublicRankingFailureKind
+                        .PAGINATION_RESTART_REQUIRED,
+                requestedOffset = 50,
+                selectedScope = PublicRankingScope.CURRENT,
+            ),
+        )
+        assertFalse(
+            shouldRestartRankingPagination(
+                failure =
+                    OnlinePublicRankingFailureKind
+                        .PAGINATION_RESTART_REQUIRED,
+                requestedOffset = 0,
+                selectedScope = PublicRankingScope.CURRENT,
+            ),
+        )
+        assertFalse(
+            shouldRestartRankingPagination(
+                failure =
+                    OnlinePublicRankingFailureKind
+                        .PAGINATION_RESTART_REQUIRED,
+                requestedOffset = 50,
+                selectedScope = PublicRankingScope.CLOSED,
+            ),
+        )
+    }
+
+    @Test
     fun cycle_resource_ids_are_complete_and_unique() {
         val resourceIds = PublicRankingCycleDto.values().map { cycle ->
             cycle.publicLabelRes()
@@ -50,20 +81,32 @@ class OnlinePublicRankingPresentationTest {
     }
 
     @Test
-    fun failure_resource_ids_are_complete_and_unique() {
+    fun user_visible_failure_resource_ids_are_complete_and_unique() {
+        val userVisibleFailures =
+            OnlinePublicRankingFailureKind.values().filterNot { failure ->
+                failure ==
+                    OnlinePublicRankingFailureKind
+                        .PAGINATION_RESTART_REQUIRED
+            }
         val resourceIds =
-            OnlinePublicRankingFailureKind.values().map { failure ->
+            userVisibleFailures.map { failure ->
                 failure.publicMessageRes()
             }
 
         assertEquals(
-            OnlinePublicRankingFailureKind.values().size,
+            userVisibleFailures.size,
             resourceIds.toSet().size,
         )
         assertTrue(
             resourceIds.all { resourceId ->
                 resourceId != 0
             },
+        )
+        assertEquals(
+            OnlinePublicRankingFailureKind.PROTOCOL_ERROR.publicMessageRes(),
+            OnlinePublicRankingFailureKind
+                .PAGINATION_RESTART_REQUIRED
+                .publicMessageRes(),
         )
     }
 
@@ -271,6 +314,7 @@ class OnlinePublicRankingPresentationTest {
         return PublicRankingResponseDto(
             cycle = PublicRankingCycleDto.DAILY,
             cycleId = "daily-current",
+            rankingRevision = "a".repeat(64),
             rankingRuleVersion = 1,
             timeZoneId = "America/Recife",
             startsAtEpochMillis = 1_700_000_000_000L,

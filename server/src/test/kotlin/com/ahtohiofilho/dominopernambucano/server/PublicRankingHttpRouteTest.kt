@@ -142,6 +142,61 @@ class PublicRankingHttpRouteTest {
     }
 
     @Test
+    fun current_ranking_pages_are_bound_to_one_revision() =
+        testApplication {
+            val day = rankingInstant()
+            val resolver = headerResolver(
+                "visitor" to OnlineRequestIdentity(
+                    playerId = "visitor-player",
+                    principalId = "visitor-principal",
+                    sessionId = "visitor-session",
+                    kind = OnlinePrincipalKind.ANONYMOUS,
+                    accountId = null,
+                ),
+            )
+
+            application {
+                module(
+                    store = storeWithRanking(
+                        completedAtEpochMillis = day,
+                        matchCount = 25,
+                    ),
+                    serverEnvironment = OnlineServerEnvironment.TEST,
+                    identityResolver = resolver,
+                    nowEpochMillis = { day },
+                )
+            }
+
+            val first = client.get(rankingUrl()) {
+                header(TEST_IDENTITY_HEADER, "visitor")
+            }
+            val firstPage = json.decodeFromString<PublicRankingResponseDto>(
+                first.bodyAsText(),
+            )
+            val sameRevision = client.get(
+                rankingUrl(offset = 2, limit = 2) +
+                    "&revision=${firstPage.rankingRevision}",
+            ) {
+                header(TEST_IDENTITY_HEADER, "visitor")
+            }
+            val staleRevision = client.get(
+                rankingUrl(offset = 2, limit = 2) +
+                    "&revision=${"0".repeat(64)}",
+            ) {
+                header(TEST_IDENTITY_HEADER, "visitor")
+            }
+
+            assertEquals(HttpStatusCode.OK, first.status)
+            assertTrue(
+                firstPage.rankingRevision.matches(
+                    Regex("[0-9a-f]{64}"),
+                ),
+            )
+            assertEquals(HttpStatusCode.OK, sameRevision.status)
+            assertEquals(HttpStatusCode.Conflict, staleRevision.status)
+        }
+
+    @Test
     fun homologation_publishes_four_eligible_players() = testApplication {
         val day = rankingInstant()
         val resolver = headerResolver(
@@ -238,6 +293,17 @@ class PublicRankingHttpRouteTest {
         assertEquals(
             HttpStatusCode.BadRequest,
             status("/${OnlineRemoteRoutes.RANKING}?cycle=DAILY&limit=101"),
+        )
+        assertEquals(
+            HttpStatusCode.BadRequest,
+            status("/${OnlineRemoteRoutes.RANKING}?cycle=DAILY&revision=invalid"),
+        )
+        assertEquals(
+            HttpStatusCode.BadRequest,
+            status(
+                "/${OnlineRemoteRoutes.RANKING}" +
+                    "?cycle=DAILY&cycleId=closed&revision=${"0".repeat(64)}",
+            ),
         )
     }
 

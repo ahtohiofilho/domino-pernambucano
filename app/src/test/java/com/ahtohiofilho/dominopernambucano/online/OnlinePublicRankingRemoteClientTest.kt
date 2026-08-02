@@ -295,6 +295,49 @@ class OnlinePublicRankingRemoteClientTest {
         }
 
     @Test
+    fun stale_current_page_requests_a_controlled_restart() =
+        runBlocking {
+            val expectedRevision = "c".repeat(64)
+            var requestedRevision: String? = null
+            val httpClient = HttpClient(
+                MockEngine { request ->
+                    requestedRevision =
+                        request.url.parameters["revision"]
+                    respond(
+                        content = """{"error":"ranking_revision_changed"}""",
+                        status = HttpStatusCode.Conflict,
+                        headers = jsonHeaders(),
+                    )
+                },
+            ) {
+                expectSuccess = true
+                install(ContentNegotiation) {
+                    json(createOnlineJson())
+                }
+            }
+
+            val result = client(
+                httpClient = httpClient,
+                credential = accountCredential(),
+            ).fetch(
+                cycle = PublicRankingCycleDto.DAILY,
+                offset = 50,
+                limit = 50,
+                rankingRevision = expectedRevision,
+            ) as OnlinePublicRankingClientResult.Failure
+
+            assertEquals(expectedRevision, requestedRevision)
+            assertEquals(
+                OnlinePublicRankingFailureKind
+                    .PAGINATION_RESTART_REQUIRED,
+                result.kind,
+            )
+            assertTrue(result.retryable)
+
+            httpClient.close()
+        }
+
+    @Test
     fun historical_not_found_is_non_retryable_protocol_failure() =
         runBlocking {
             val httpClient = HttpClient(
@@ -515,6 +558,7 @@ class OnlinePublicRankingRemoteClientTest {
             {
               "cycle": "$cycle",
               "cycleId": "$cycleId",
+              "rankingRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "rankingRuleVersion": 1,
               "timeZoneId": "America/Recife",
               "startsAtEpochMillis": 100,
@@ -583,6 +627,7 @@ class OnlinePublicRankingRemoteClientTest {
                 {
                   "cycle": "DAILY",
                   "cycleId": "$CLOSED_CYCLE_ID",
+                  "rankingRevision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                   "rankingRuleVersion": 1,
                   "timeZoneId": "America/Recife",
                   "startsAtEpochMillis": 100,

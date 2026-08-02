@@ -368,10 +368,24 @@ internal fun Route.onlineServerRoutes(
             val parsedOffset = rawOffset?.toIntOrNull()
             val rawLimit = call.request.queryParameters["limit"]
             val parsedLimit = rawLimit?.toIntOrNull()
+            val rawRankingRevision =
+                call.request.queryParameters["revision"]
+            val rankingRevision = rawRankingRevision?.trim()
 
             if (
                 (rawOffset != null && parsedOffset == null) ||
-                (rawLimit != null && parsedLimit == null)
+                (rawLimit != null && parsedLimit == null) ||
+                (
+                    rawRankingRevision != null &&
+                        rankingRevision.isNullOrBlank()
+                ) ||
+                (
+                    rankingRevision != null &&
+                        !rankingRevision.matches(
+                            Regex("[0-9a-f]{64}"),
+                        )
+                ) ||
+                (cycleId != null && rankingRevision != null)
             ) {
                 call.respond(HttpStatusCode.BadRequest)
                 return@get
@@ -454,6 +468,7 @@ internal fun Route.onlineServerRoutes(
                     historicalSnapshot
                         ?.isLegacyTruncated
                         ?: false,
+                expectedRankingRevision = rankingRevision,
                 offset = offset,
                 limit = limit,
                 publicationPolicy = rankingPublicationPolicy,
