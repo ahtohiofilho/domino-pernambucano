@@ -4,6 +4,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.CURRENT_RANKING_RULE_VERS
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerResult
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
 import com.ahtohiofilho.dominopernambucano.competitive.createRankedMatchResultId
+import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
@@ -11,6 +12,7 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.testing.testApplication
@@ -92,6 +94,13 @@ class PublicRankingHttpRouteTest {
                 kind = OnlinePrincipalKind.ACCOUNT,
                 accountId = "account-0000-0",
             ),
+            "visitor" to OnlineRequestIdentity(
+                playerId = "visitor-player",
+                principalId = "visitor-principal",
+                sessionId = "visitor-session",
+                kind = OnlinePrincipalKind.ANONYMOUS,
+                accountId = null,
+            ),
         )
 
         application {
@@ -111,6 +120,11 @@ class PublicRankingHttpRouteTest {
         }
         val body = httpResponse.bodyAsText()
         val ranking = json.decodeFromString<PublicRankingResponseDto>(body)
+        val visitorResponse = client.get(
+            rankingUrl(offset = 2, limit = 2),
+        ) {
+            header(TEST_IDENTITY_HEADER, "visitor")
+        }
 
         assertEquals(HttpStatusCode.OK, httpResponse.status)
         assertNotNull(ranking.viewer)
@@ -136,6 +150,10 @@ class PublicRankingHttpRouteTest {
         )
         assertEquals(2, ranking.entries.size)
         assertTrue(ranking.hasMore)
+        assertFalse(
+            httpResponse.headers[HttpHeaders.ETag] ==
+                visitorResponse.headers[HttpHeaders.ETag],
+        )
         assertFalse(body.contains("account-a"))
         assertFalse(body.contains("accountId"))
         assertFalse(body.contains("playerId"))
@@ -173,6 +191,13 @@ class PublicRankingHttpRouteTest {
             val firstPage = json.decodeFromString<PublicRankingResponseDto>(
                 first.bodyAsText(),
             )
+            val entityTag = requireNotNull(
+                first.headers[HttpHeaders.ETag],
+            )
+            val notModified = client.get(rankingUrl()) {
+                header(TEST_IDENTITY_HEADER, "visitor")
+                header(HttpHeaders.IfNoneMatch, entityTag)
+            }
             val sameRevision = client.get(
                 rankingUrl(offset = 2, limit = 2) +
                     "&revision=${firstPage.rankingRevision}",
@@ -187,6 +212,18 @@ class PublicRankingHttpRouteTest {
             }
 
             assertEquals(HttpStatusCode.OK, first.status)
+            assertEquals(
+                "private, max-age=0, must-revalidate",
+                first.headers[HttpHeaders.CacheControl],
+            )
+            assertTrue(entityTag.matches(Regex("\"[0-9a-f]{64}\"")))
+            assertEquals(
+                "Authorization, " +
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                first.headers[HttpHeaders.Vary],
+            )
+            assertEquals(HttpStatusCode.NotModified, notModified.status)
+            assertTrue(notModified.bodyAsText().isEmpty())
             assertTrue(
                 firstPage.rankingRevision.matches(
                     Regex("[0-9a-f]{64}"),

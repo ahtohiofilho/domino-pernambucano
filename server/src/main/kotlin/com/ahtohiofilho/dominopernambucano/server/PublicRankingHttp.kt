@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.server
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleStanding
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
+import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingAwardTierDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
@@ -12,13 +13,24 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatus
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.request.header
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.Locale
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 internal const val DEFAULT_PUBLIC_RANKING_PAGE_SIZE = 50
 internal const val MAXIMUM_PUBLIC_RANKING_PAGE_SIZE = 100
+internal const val CURRENT_RANKING_CACHE_MAX_AGE_SECONDS = 0
+internal const val HISTORICAL_RANKING_CACHE_MAX_AGE_SECONDS = 300
+internal const val CLOSED_CYCLES_CACHE_MAX_AGE_SECONDS = 30
+
+private val publicRankingCacheJson = Json {
+    encodeDefaults = true
+}
 
 internal fun parsePublicRankingCycle(value: String?): PublicRankingCycleDto? {
     val normalized = value
@@ -125,9 +137,7 @@ internal suspend fun ApplicationCall.respondPublicRanking(
         null
     }
 
-    respond(
-        HttpStatusCode.OK,
-        PublicRankingResponseDto(
+    val response = PublicRankingResponseDto(
             cycle = cycle,
             cycleId = ladder.period.cycleId,
             rankingRevision = rankingRevision,
@@ -164,7 +174,17 @@ internal suspend fun ApplicationCall.respondPublicRanking(
                     consumed < retainedRankingSize.toLong(),
             entries = entries,
             viewer = viewer,
-        ),
+        )
+
+    respondPrivateCacheableRanking(
+        payload = response,
+        canonicalJson = publicRankingCacheJson.encodeToString(response),
+        maxAgeSeconds =
+            if (isClosed) {
+                HISTORICAL_RANKING_CACHE_MAX_AGE_SECONDS
+            } else {
+                CURRENT_RANKING_CACHE_MAX_AGE_SECONDS
+            },
     )
 }
 
@@ -262,9 +282,7 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
 
     val consumed = offset.toLong() + page.snapshots.size.toLong()
 
-    respond(
-        HttpStatusCode.OK,
-        PublicRankingCyclesResponseDto(
+    val response = PublicRankingCyclesResponseDto(
             cycle = cycle,
             totalClosedCycles = page.totalSnapshots,
             offset = offset,
@@ -321,6 +339,61 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
                         snapshot.isRetentionLimited,
                 )
             },
-        ),
+        )
+
+    respondPrivateCacheableRanking(
+        payload = response,
+        canonicalJson = publicRankingCacheJson.encodeToString(response),
+        maxAgeSeconds = CLOSED_CYCLES_CACHE_MAX_AGE_SECONDS,
     )
+}
+
+private suspend fun ApplicationCall.respondPrivateCacheableRanking(
+    payload: Any,
+    canonicalJson: String,
+    maxAgeSeconds: Int,
+) {
+    require(maxAgeSeconds >= 0)
+
+    val entityTag = canonicalJson.toPrivateRankingEntityTag()
+    response.header(
+        name = "Cache-Control",
+        value = "private, max-age=$maxAgeSeconds, must-revalidate",
+    )
+    response.header(
+        name = "ETag",
+        value = entityTag,
+    )
+    response.header(
+        name = "Vary",
+        value = "Authorization, ${OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID}",
+    )
+
+    if (request.header("If-None-Match").matchesEntityTag(entityTag)) {
+        respond(HttpStatusCode.NotModified)
+        return
+    }
+
+    respond(HttpStatusCode.OK, payload)
+}
+
+private fun String.toPrivateRankingEntityTag(): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(
+        toByteArray(Charsets.UTF_8),
+    )
+    val fingerprint = digest.joinToString(separator = "") { byte ->
+        "%02x".format(Locale.ROOT, byte.toInt() and 0xff)
+    }
+
+    return "\"$fingerprint\""
+}
+
+private fun String?.matchesEntityTag(expected: String): Boolean {
+    return this
+        ?.split(',')
+        ?.any { candidate ->
+            val normalized = candidate.trim().removePrefix("W/")
+            normalized == "*" || normalized == expected
+        }
+        ?: false
 }

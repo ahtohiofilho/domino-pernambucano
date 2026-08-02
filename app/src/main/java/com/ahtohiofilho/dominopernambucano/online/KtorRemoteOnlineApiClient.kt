@@ -8,6 +8,7 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.android.Android
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.plugins.cache.HttpCache
 import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestBuilder
@@ -568,6 +569,8 @@ private fun createDefaultOnlineHttpClient(
 ): HttpClient {
     return HttpClient(Android) {
         expectSuccess = true
+
+        install(HttpCache)
 
         install(HttpTimeout) {
             connectTimeoutMillis = config.connectTimeoutMillis

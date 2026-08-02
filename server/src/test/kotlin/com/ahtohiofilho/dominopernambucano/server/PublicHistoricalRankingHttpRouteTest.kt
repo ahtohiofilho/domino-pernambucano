@@ -14,6 +14,7 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.testing.testApplication
@@ -73,6 +74,24 @@ class PublicHistoricalRankingHttpRouteTest {
             )
 
             assertEquals(HttpStatusCode.OK, cyclesResponse.status)
+            assertEquals(
+                "private, max-age=30, must-revalidate",
+                cyclesResponse.headers[HttpHeaders.CacheControl],
+            )
+            val cyclesEntityTag = requireNotNull(
+                cyclesResponse.headers[HttpHeaders.ETag],
+            )
+            val cachedCycles = client.get(
+                "/${OnlineRemoteRoutes.RANKING_CYCLES}" +
+                    "?cycle=DAILY&offset=0&limit=10",
+            ) {
+                header(TEST_IDENTITY_HEADER, "viewer")
+                header(HttpHeaders.IfNoneMatch, cyclesEntityTag)
+            }
+            assertEquals(
+                HttpStatusCode.NotModified,
+                cachedCycles.status,
+            )
             assertEquals(1, cycles.totalClosedCycles)
             assertEquals(1, cycles.cycles.size)
             assertFalse(cycles.hasMore)
@@ -112,6 +131,26 @@ class PublicHistoricalRankingHttpRouteTest {
             >(body)
 
             assertEquals(HttpStatusCode.OK, rankingResponse.status)
+            assertEquals(
+                "private, max-age=300, must-revalidate",
+                rankingResponse.headers[HttpHeaders.CacheControl],
+            )
+            val rankingEntityTag = requireNotNull(
+                rankingResponse.headers[HttpHeaders.ETag],
+            )
+            val cachedRanking = client.get(
+                "/${OnlineRemoteRoutes.RANKING}" +
+                    "?cycle=DAILY" +
+                    "&cycleId=${prepared.period.cycleId}" +
+                    "&offset=98&limit=5",
+            ) {
+                header(TEST_IDENTITY_HEADER, "viewer")
+                header(HttpHeaders.IfNoneMatch, rankingEntityTag)
+            }
+            assertEquals(
+                HttpStatusCode.NotModified,
+                cachedRanking.status,
+            )
             assertTrue(ranking.isClosed)
             assertEquals(
                 prepared.period.endsAtEpochMillis,
