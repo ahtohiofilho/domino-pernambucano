@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dominó PE</string>
     <string name="brand_subtitle">App dedicado à modalidade pernambucana</string>
@@ -217,4 +217,5 @@
     <string name="resume_match_retry">Não foi possível retomar a partida agora. Tente novamente.</string>
     <string name="account_connected_success">Conta conectada com sucesso.</string>
     <string name="ranked_queue_unavailable">A fila rankeada não está disponível neste ambiente.</string>
+    <string name="online_join_create_demo_room">Criar sala fake de teste</string>
 </resources>

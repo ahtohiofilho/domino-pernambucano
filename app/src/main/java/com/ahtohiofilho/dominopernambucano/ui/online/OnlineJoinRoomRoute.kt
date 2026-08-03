@@ -445,7 +445,7 @@ private fun OnlineJoinRoomScreen(
 
             if (allowDemoRoomCreation) {
                 SecondaryMenuButton(
-                    text = "Criar sala fake de teste",
+                    text = stringResource(R.string.online_join_create_demo_room),
                     onClick = onCreateDemoRoomClick,
                 )
             }

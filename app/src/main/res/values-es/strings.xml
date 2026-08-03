@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dominó PE</string>
     <string name="brand_subtitle">App dedicada a la modalidad pernambucana</string>
@@ -217,4 +217,5 @@
     <string name="resume_match_retry">No se pudo reanudar la partida ahora. Inténtalo de nuevo.</string>
     <string name="account_connected_success">Cuenta conectada correctamente.</string>
     <string name="ranked_queue_unavailable">La cola clasificatoria no está disponible en este entorno.</string>
+    <string name="online_join_create_demo_room">Crear sala ficticia de prueba</string>
 </resources>
