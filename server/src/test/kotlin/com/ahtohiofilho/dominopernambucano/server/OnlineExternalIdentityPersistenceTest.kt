@@ -65,6 +65,72 @@ class OnlineExternalIdentityPersistenceTest {
     }
 
     @Test
+    fun multiple_identity_providers_survive_restart_on_one_account() {
+        val root = File(
+            System.getProperty("java.io.tmpdir"),
+            "online-multiprovider-identity-${UUID.randomUUID()}",
+        )
+        val stateFile = File(root, "authoritative-state.json")
+
+        try {
+            val firstStore = PersistentOnlineServerStore.open(
+                stateFile = stateFile,
+                nowEpochMillis = { 1_000L },
+                accountIdFactory = { "account-1" },
+            )
+
+            firstStore.linkExternalIdentity(
+                playerId = "player-1",
+                provider = OnlineExternalIdentityProvider.GOOGLE,
+                subject = "google-subject-1",
+            )
+            firstStore.linkExternalIdentity(
+                playerId = "player-1",
+                expectedAccountId = "account-1",
+                provider = OnlineExternalIdentityProvider.PLAY_GAMES,
+                subject = "play-games-player-1",
+            )
+            firstStore.linkExternalIdentity(
+                playerId = "player-1",
+                expectedAccountId = "account-1",
+                provider = OnlineExternalIdentityProvider.EMAIL,
+                subject = "email-identity-1",
+            )
+            firstStore.close()
+
+            val restartedStore = PersistentOnlineServerStore.open(
+                stateFile = stateFile,
+                nowEpochMillis = { 2_000L },
+                accountIdFactory = { "account-must-not-be-created" },
+            )
+
+            val restoredGoogle =
+                restartedStore.findAccountByExternalIdentity(
+                    provider = OnlineExternalIdentityProvider.GOOGLE,
+                    subject = "google-subject-1",
+                )
+            val restoredPlayGames =
+                restartedStore.findAccountByExternalIdentity(
+                    provider =
+                        OnlineExternalIdentityProvider.PLAY_GAMES,
+                    subject = "play-games-player-1",
+                )
+            val restoredEmail =
+                restartedStore.findAccountByExternalIdentity(
+                    provider = OnlineExternalIdentityProvider.EMAIL,
+                    subject = "email-identity-1",
+                )
+
+            assertEquals("account-1", restoredGoogle?.accountId)
+            assertEquals(restoredGoogle, restoredPlayGames)
+            assertEquals(restoredGoogle, restoredEmail)
+            restartedStore.close()
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun persistence_failure_rolls_back_account_and_external_identity_together() {
         val root = File(
             System.getProperty("java.io.tmpdir"),

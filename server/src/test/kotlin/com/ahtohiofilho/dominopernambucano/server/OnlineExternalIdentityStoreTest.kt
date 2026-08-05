@@ -120,6 +120,95 @@ class OnlineExternalIdentityStoreTest {
     }
 
     @Test
+    fun different_providers_link_to_the_same_canonical_account() {
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+            accountIdFactory = { "account-1" },
+        )
+
+        val google = store.linkExternalIdentity(
+            playerId = "player-1",
+            provider = OnlineExternalIdentityProvider.GOOGLE,
+            subject = "google-subject-1",
+        )
+        val playGames = store.linkExternalIdentity(
+            playerId = "player-1",
+            expectedAccountId = "account-1",
+            provider = OnlineExternalIdentityProvider.PLAY_GAMES,
+            subject = "play-games-player-1",
+        )
+        val email = store.linkExternalIdentity(
+            playerId = "player-1",
+            expectedAccountId = "account-1",
+            provider = OnlineExternalIdentityProvider.EMAIL,
+            subject = "email-identity-1",
+        )
+
+        assertTrue(google is OnlineExternalIdentityLinkResult.Linked)
+        assertEquals(google, playGames)
+        assertEquals(google, email)
+        assertEquals(
+            3,
+            store.snapshotPersistentState().externalIdentities.size,
+        )
+        OnlineExternalIdentityProvider.entries.forEach { provider ->
+            val subject = when (provider) {
+                OnlineExternalIdentityProvider.GOOGLE ->
+                    "google-subject-1"
+                OnlineExternalIdentityProvider.PLAY_GAMES ->
+                    "play-games-player-1"
+                OnlineExternalIdentityProvider.EMAIL ->
+                    "email-identity-1"
+            }
+            assertEquals(
+                "account-1",
+                store.findAccountByExternalIdentity(
+                    provider = provider,
+                    subject = subject,
+                )?.accountId,
+            )
+        }
+    }
+
+    @Test
+    fun equal_subject_values_are_scoped_by_provider() {
+        var accountSequence = 0
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+            accountIdFactory = {
+                accountSequence += 1
+                "account-$accountSequence"
+            },
+        )
+
+        store.linkExternalIdentity(
+            playerId = "player-google",
+            provider = OnlineExternalIdentityProvider.GOOGLE,
+            subject = "shared-subject",
+        )
+        store.linkExternalIdentity(
+            playerId = "player-games",
+            provider = OnlineExternalIdentityProvider.PLAY_GAMES,
+            subject = "shared-subject",
+        )
+
+        assertEquals(
+            "account-1",
+            store.findAccountByExternalIdentity(
+                provider = OnlineExternalIdentityProvider.GOOGLE,
+                subject = "shared-subject",
+            )?.accountId,
+        )
+        assertEquals(
+            "account-2",
+            store.findAccountByExternalIdentity(
+                provider = OnlineExternalIdentityProvider.PLAY_GAMES,
+                subject = "shared-subject",
+            )?.accountId,
+        )
+    }
+
+    @Test
     fun restore_rejects_orphan_and_duplicate_external_identities() {
         val account = OnlineServerAccount(
             accountId = "account-1",

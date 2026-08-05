@@ -10,7 +10,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
-const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 10
+const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 11
 const val MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
 
 @Serializable
@@ -61,6 +61,8 @@ internal fun OnlineServerAccount.toOnlineAccountProfileOrNull():
 @Serializable
 enum class OnlineExternalIdentityProvider {
     GOOGLE,
+    PLAY_GAMES,
+    EMAIL,
 }
 
 @Serializable
