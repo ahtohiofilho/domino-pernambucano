@@ -33,6 +33,22 @@ val googleWebClientId = providers
     )
     .orElse("")
     .get()
+val playGamesProjectId = providers
+    .gradleProperty("playGamesProjectId")
+    .orElse(
+        providers.environmentVariable("DOMINO_PLAY_GAMES_PROJECT_ID"),
+    )
+    .orElse("")
+    .get()
+val playGamesWebClientId = providers
+    .gradleProperty("playGamesWebClientId")
+    .orElse(
+        providers.environmentVariable(
+            "DOMINO_PLAY_GAMES_WEB_CLIENT_ID",
+        ),
+    )
+    .orElse("")
+    .get()
 val releaseSigningConfigured = listOf(
     releaseStoreFile,
     releaseStorePassword,
@@ -47,6 +63,14 @@ if (releaseBuildRequested) {
     check(googleWebClientId.isNotBlank()) {
         "Release Google sign-in requires DOMINO_GOOGLE_WEB_CLIENT_ID " +
             "or -PgoogleWebClientId."
+    }
+    check(playGamesProjectId.isNotBlank()) {
+        "Release Play Games requires DOMINO_PLAY_GAMES_PROJECT_ID " +
+            "or -PplayGamesProjectId."
+    }
+    check(playGamesWebClientId.isNotBlank()) {
+        "Release Play Games requires DOMINO_PLAY_GAMES_WEB_CLIENT_ID " +
+            "or -PplayGamesWebClientId."
     }
 }
 
@@ -70,6 +94,21 @@ android {
             type = "String",
             name = "GOOGLE_WEB_CLIENT_ID",
             value = googleWebClientId.toBuildConfigString(),
+        )
+        buildConfigField(
+            type = "String",
+            name = "PLAY_GAMES_PROJECT_ID",
+            value = playGamesProjectId.toBuildConfigString(),
+        )
+        buildConfigField(
+            type = "String",
+            name = "PLAY_GAMES_WEB_CLIENT_ID",
+            value = playGamesWebClientId.toBuildConfigString(),
+        )
+        resValue(
+            "string",
+            "game_services_project_id",
+            playGamesProjectId,
         )
     }
 
@@ -140,6 +179,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
 
     androidResources {
@@ -161,6 +201,7 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.google.id)
+    implementation(libs.google.play.games.v2)
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.ktor.client.core)

@@ -71,10 +71,13 @@ fun MainMenuScreen(
         OnlinePendingParticipationSessionRejection.NotRejected,
     pendingOnlineMatchResumeInProgress: Boolean,
     pendingOnlineMatchResumeFeedbackMessage: String? = null,
-    onlineGoogleAccountStatus: OnlineGoogleAccountStatus =
+    onlineAccountStatus: OnlineGoogleAccountStatus =
         OnlineGoogleAccountStatus.UNAVAILABLE,
-    onlineGoogleAccountActionInProgress: Boolean = false,
-    onlineGoogleAccountFeedbackMessage: String? = null,
+    playGamesAvailable: Boolean = false,
+    googleAvailable: Boolean = false,
+    playGamesAccountActionInProgress: Boolean = false,
+    googleAccountActionInProgress: Boolean = false,
+    onlineAccountFeedbackMessage: String? = null,
     onlineAccountProfileUiState: OnlineAccountProfileUiState =
         OnlineAccountProfileUiState.NotAvailable,
     onAccountDialogOpened: () -> Unit = {},
@@ -88,6 +91,7 @@ fun MainMenuScreen(
     onInspectPendingOnlineParticipationClick: () -> Unit,
     onDiscardRejectedPendingOnlineParticipationClick: () -> Unit = {},
     onResumePendingOnlineMatchClick: () -> Unit,
+    onConnectPlayGamesAccountClick: () -> Unit = {},
     onConnectGoogleAccountClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
 ) {
@@ -424,9 +428,14 @@ fun MainMenuScreen(
 
     if (accountDialogVisible) {
         OnlineAccountDialog(
-            status = onlineGoogleAccountStatus,
-            actionInProgress = onlineGoogleAccountActionInProgress,
-            feedbackMessage = onlineGoogleAccountFeedbackMessage,
+            status = onlineAccountStatus,
+            playGamesAvailable = playGamesAvailable,
+            googleAvailable = googleAvailable,
+            playGamesActionInProgress =
+                playGamesAccountActionInProgress,
+            googleActionInProgress =
+                googleAccountActionInProgress,
+            feedbackMessage = onlineAccountFeedbackMessage,
             profileState = onlineAccountProfileUiState,
             onPublicDisplayNameChange =
                 onAccountProfilePublicDisplayNameChange,
@@ -436,6 +445,8 @@ fun MainMenuScreen(
                 onAccountProfileSaveClick,
             onRetryProfileClick =
                 onAccountProfileRetryClick,
+            onConnectPlayGamesClick =
+                onConnectPlayGamesAccountClick,
             onConnectGoogleClick = onConnectGoogleAccountClick,
             onDismissRequest = {
                 accountDialogVisible = false

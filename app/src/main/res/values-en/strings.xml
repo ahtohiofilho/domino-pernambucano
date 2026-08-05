@@ -218,4 +218,23 @@
     <string name="account_connected_success">Account connected successfully.</string>
     <string name="ranked_queue_unavailable">The ranked queue is not available in this environment.</string>
     <string name="online_join_create_demo_room">Create fake test room</string>
+    <string name="play_mode_account_choice_title">Connect to play online</string>
+    <string name="play_mode_account_choice_description">Choose an account option. After connecting, you will enter the ranked queue.</string>
+    <string name="play_mode_account_choice_unavailable">No account option is available right now.</string>
+    <string name="account_access_unavailable">No account option is available in this build.</string>
+    <string name="account_access_recover_description">Choose how to recover your profile and online history.</string>
+    <string name="account_access_link_description">Choose how to link this player and preserve the history.</string>
+    <string name="account_access_reauthenticate_description">Choose an option to confirm your account again.</string>
+    <string name="account_play_games_continue">Continue with Play Games</string>
+    <string name="account_play_games_link">Link with Play Games</string>
+    <string name="account_play_games_recover">Recover with Play Games</string>
+    <string name="account_play_games_connecting">Connecting to Play Games…</string>
+    <string name="account_google_connecting">Connecting to Google…</string>
+    <string name="account_play_games_not_configured">Play Games is not configured in this build.</string>
+    <string name="account_play_games_sign_in_unavailable">Play Games could not be opened. Try again.</string>
+    <string name="account_play_games_invalid_credential">The Play Games account could not be confirmed. Try again.</string>
+    <string name="account_play_games_account_not_found">This Play Games profile is not linked to your player yet.</string>
+    <string name="account_play_games_identity_conflict">This Play Games profile is already linked to another player.</string>
+    <string name="account_play_games_service_unavailable">Play Games is temporarily unavailable.</string>
+    <string name="account_play_games_unknown_failure">Play Games could not connect right now. Try again.</string>
 </resources>
