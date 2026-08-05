@@ -5,6 +5,10 @@ object OnlineRemoteRoutes {
     const val PROMOTE_ACCOUNT = "accounts/promote"
     const val LINK_GOOGLE_IDENTITY = "accounts/identities/google/link"
     const val RECOVER_GOOGLE_ACCOUNT = "accounts/identities/google/recover"
+    const val LINK_PLAY_GAMES_IDENTITY =
+        "accounts/identities/play-games/link"
+    const val RECOVER_PLAY_GAMES_ACCOUNT =
+        "accounts/identities/play-games/recover"
     const val RANKED_QUEUE = "ranked-queue"
     const val RANKING = "ranking"
     const val RANKING_CYCLES = "ranking/cycles"

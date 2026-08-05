@@ -1,10 +1,11 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileResponseDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileUpdateRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlinePlayGamesIdentityRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
 import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueEnterRequestDto
@@ -26,6 +27,7 @@ internal fun Route.onlineServerRoutes(
     sessionTokenService: OnlineSessionTokenService,
     identityResolver: OnlineRequestIdentityResolver,
     googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier,
+    playGamesIdentityVerifier: OnlinePlayGamesIdentityVerifier,
     rankingPublicationPolicy: RankingPublicationPolicy =
         DEFAULT_RANKING_PUBLICATION_POLICY,
     nowEpochMillis: () -> Long = {
@@ -63,6 +65,45 @@ internal fun Route.onlineServerRoutes(
             val account = store.findAccountByExternalIdentity(
                 provider = OnlineExternalIdentityProvider.GOOGLE,
                 subject = subject,
+            )
+
+            if (account == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@post
+            }
+
+            call.respond(
+                sessionTokenService.issueAccountSession(
+                    playerId = account.playerId,
+                    accountId = account.accountId,
+                ),
+            )
+        }
+
+        post("/${OnlineRemoteRoutes.RECOVER_PLAY_GAMES_ACCOUNT}") {
+            val request =
+                call.receive<OnlinePlayGamesIdentityRequestDto>()
+            val verification = playGamesIdentityVerifier.verify(
+                serverAuthCode = request.serverAuthCode,
+            )
+            val playerId = when (verification) {
+                is OnlinePlayGamesIdentityVerificationResult.Verified -> {
+                    verification.playerId
+                }
+
+                OnlinePlayGamesIdentityVerificationResult.Invalid -> {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@post
+                }
+
+                OnlinePlayGamesIdentityVerificationResult.Unavailable -> {
+                    call.respond(HttpStatusCode.ServiceUnavailable)
+                    return@post
+                }
+            }
+            val account = store.findAccountByExternalIdentity(
+                provider = OnlineExternalIdentityProvider.PLAY_GAMES,
+                subject = playerId,
             )
 
             if (account == null) {
@@ -134,6 +175,55 @@ internal fun Route.onlineServerRoutes(
                     expectedAccountId = identity.accountId,
                     provider = OnlineExternalIdentityProvider.GOOGLE,
                     subject = subject,
+                )
+            ) {
+                is OnlineExternalIdentityLinkResult.Linked -> {
+                    call.respond(
+                        sessionTokenService.issueAccountSession(
+                            playerId = result.account.playerId,
+                            accountId = result.account.accountId,
+                        ),
+                    )
+                }
+
+                OnlineExternalIdentityLinkResult.Conflict -> {
+                    call.respond(HttpStatusCode.Conflict)
+                }
+            }
+        }
+
+        post("/${OnlineRemoteRoutes.LINK_PLAY_GAMES_IDENTITY}") {
+            val identity = call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@post
+            val request =
+                call.receive<OnlinePlayGamesIdentityRequestDto>()
+            val verification = playGamesIdentityVerifier.verify(
+                serverAuthCode = request.serverAuthCode,
+            )
+            val playerId = when (verification) {
+                is OnlinePlayGamesIdentityVerificationResult.Verified -> {
+                    verification.playerId
+                }
+
+                OnlinePlayGamesIdentityVerificationResult.Invalid -> {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@post
+                }
+
+                OnlinePlayGamesIdentityVerificationResult.Unavailable -> {
+                    call.respond(HttpStatusCode.ServiceUnavailable)
+                    return@post
+                }
+            }
+
+            when (
+                val result = store.linkExternalIdentity(
+                    playerId = identity.playerId,
+                    expectedAccountId = identity.accountId,
+                    provider =
+                        OnlineExternalIdentityProvider.PLAY_GAMES,
+                    subject = playerId,
                 )
             ) {
                 is OnlineExternalIdentityLinkResult.Linked -> {
