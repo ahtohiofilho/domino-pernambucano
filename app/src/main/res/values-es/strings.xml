@@ -26,7 +26,7 @@
     <string name="play_mode_description">Elige cómo entrar en la partida.</string>
     <string name="play_mode_public_identity">Identidad pública</string>
     <string name="play_mode_public_name">Nombre público</string>
-    <string name="play_mode_ranked">Partida rápida</string>
+    <string name="play_mode_ranked">Jugar en línea</string>
     <string name="play_mode_ranked_support">Entra en la cola pública clasificatoria.</string>
     <string name="play_mode_ranked_account_required">Conecta o recupera tu cuenta para participar en la clasificación.</string>
     <string name="play_mode_local">Jugar sin conexión</string>
@@ -34,7 +34,7 @@
     <string name="play_mode_private_section">Sala privada</string>
     <string name="play_mode_create_room">Crear sala</string>
     <string name="play_mode_create_room_support">Abre una sala privada sin clasificación.</string>
-    <string name="play_mode_join_room">Entrar con código</string>
+    <string name="play_mode_join_room">Entrar en una sala</string>
     <string name="play_mode_join_room_support">Accede a una sala privada existente.</string>
     <string name="common_back">Volver</string>
     <string name="ranked_queue_title">Partida clasificatoria</string>

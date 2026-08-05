@@ -10,7 +10,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -109,26 +109,30 @@ class EntryIdentityVisualContractTest {
     }
 
     @Test
-    fun visitor_mode_exposes_heading_and_blocks_ranked_action() {
+    fun visitor_mode_exposes_direct_online_action_without_identity_friction() {
         val context =
             InstrumentationRegistry.getInstrumentation().targetContext
         val rankedLabel =
             context.getString(R.string.play_mode_ranked)
+        val description =
+            context.getString(R.string.play_mode_description)
+        val publicIdentity =
+            context.getString(R.string.play_mode_public_identity)
         val accountRequiredMessage =
             context.getString(
                 R.string.play_mode_ranked_account_required,
             )
+        val rankedSupport =
+            context.getString(R.string.play_mode_ranked_support)
+        var rankedClicks = 0
 
         composeRule.setContent {
             DominoPernambucanoTheme {
                 PlayModeScreen(
-                    onlineDisplayName = "Antônio Filho",
-                    onlineTableName = "antonio",
-                    onlineIdentityManagedByAccount = false,
-                    onOnlineDisplayNameChange = {},
                     onBackClick = {},
-                    rankedAccountAvailable = false,
-                    onRankedGameClick = {},
+                    onRankedGameClick = {
+                        rankedClicks += 1
+                    },
                     onLocalGameClick = {},
                     onCreateOnlineRoomClick = {},
                     onJoinOnlineRoomClick = {},
@@ -143,12 +147,25 @@ class EntryIdentityVisualContractTest {
 
         composeRule
             .onNodeWithText(rankedLabel)
-            .assertIsNotEnabled()
+            .assertIsEnabled()
+            .performClick()
 
         composeRule
-            .onNodeWithText(accountRequiredMessage)
-            .performScrollTo()
-            .assertIsDisplayed()
+            .onAllNodesWithText(description)
+            .assertCountEquals(0)
+        composeRule
+            .onAllNodesWithText(publicIdentity)
+            .assertCountEquals(0)
+        composeRule
+            .onAllNodesWithText(accountRequiredMessage)
+            .assertCountEquals(0)
+        composeRule
+            .onAllNodesWithText(rankedSupport)
+            .assertCountEquals(0)
+
+        composeRule.runOnIdle {
+            assertEquals(1, rankedClicks)
+        }
     }
 
     @Test
@@ -171,12 +188,7 @@ class EntryIdentityVisualContractTest {
         composeRule.setContent {
             DominoPernambucanoTheme {
                 PlayModeScreen(
-                    onlineDisplayName = "Antônio Filho",
-                    onlineTableName = "antonio",
-                    onlineIdentityManagedByAccount = true,
-                    onOnlineDisplayNameChange = {},
                     onBackClick = {},
-                    rankedAccountAvailable = true,
                     onRankedGameClick = {},
                     onLocalGameClick = {},
                     onCreateOnlineRoomClick = {},
@@ -259,6 +271,37 @@ class EntryIdentityVisualContractTest {
         )
     }
 
+    @Test
+    fun main_menu_play_action_has_no_redundant_supporting_text() {
+        val context =
+            InstrumentationRegistry.getInstrumentation().targetContext
+        val playSupport =
+            context.getString(R.string.main_menu_play_support)
+
+        composeRule.setContent {
+            DominoPernambucanoTheme {
+                MainMenuScreen(
+                    pendingOnlineParticipation =
+                        com.ahtohiofilho.dominopernambucano.online
+                            .OnlinePendingParticipationLocalResolution
+                            .NoPendingParticipation,
+                    pendingOnlineParticipationInspection =
+                        com.ahtohiofilho.dominopernambucano.session
+                            .OnlinePendingParticipationInspectionState
+                            .NotRequested,
+                    pendingOnlineMatchResumeInProgress = false,
+                    onPlayClick = {},
+                    onRankingClick = {},
+                    onInspectPendingOnlineParticipationClick = {},
+                    onResumePendingOnlineMatchClick = {},
+                )
+            }
+        }
+
+        composeRule
+            .onAllNodesWithText(playSupport)
+            .assertCountEquals(0)
+    }
     @Test
     fun main_menu_content_is_not_concentrated_at_the_top() {
         composeRule.setContent {

@@ -398,10 +398,9 @@ fun DominoPernambucanoApp(
     val onlineGoogleAccountStatus =
         onlineGoogleAccountManager.currentStatus()
 
-    val rankedAccountAvailable =
-        onlineRankedQueueRemoteClient != null &&
-            onlineGoogleAccountStatus ==
-                OnlineGoogleAccountStatus.CONNECTED
+    val onlineAccountConnected =
+        onlineGoogleAccountStatus ==
+            OnlineGoogleAccountStatus.CONNECTED
 
     fun requestOnlineAccountProfile() {
         val coordinator = onlineAccountProfileUiCoordinator
@@ -433,6 +432,65 @@ fun DominoPernambucanoApp(
         }
     }
 
+    fun connectOnlineGoogleAccount(
+        onConnected: () -> Unit = {},
+    ) {
+        if (onlineGoogleAccountActionInProgress) {
+            return
+        }
+
+        onlineGoogleAccountActionInProgress = true
+        onlineGoogleAccountFeedbackMessage = null
+
+        menuCoroutineScope.launch {
+            try {
+                when (
+                    val result =
+                        onlineGoogleAccountManager.connect()
+                ) {
+                    is OnlineGoogleAccountActionResult.Success -> {
+                        onlineGoogleAccountFeedbackMessage =
+                            accountConnectedSuccess
+
+                        val coordinator =
+                            onlineAccountProfileUiCoordinator
+
+                        if (coordinator != null) {
+                            onlineAccountProfileUiState =
+                                OnlineAccountProfileUiState.Loading
+
+                            val outcome = coordinator.load(
+                                fallbackIdentity =
+                                    onlinePlayerIdentity,
+                            )
+
+                            onlineAccountProfileUiState =
+                                outcome.state
+
+                            outcome.synchronizedIdentity?.let {
+                                    synchronizedIdentity ->
+                                onlinePlayerIdentity =
+                                    synchronizedIdentity
+                            }
+                        }
+
+                        onConnected()
+                    }
+
+                    OnlineGoogleAccountActionResult.Cancelled -> {
+                        onlineGoogleAccountFeedbackMessage = null
+                    }
+
+                    is OnlineGoogleAccountActionResult.Failure -> {
+                        onlineGoogleAccountFeedbackMessage =
+                            result.message
+                    }
+                }
+            } finally {
+                onlineGoogleAccountActionInProgress = false
+            }
+        }
+    }
     if (settingsVisible) {
         SettingsScreen(
             currentSelection =
@@ -766,58 +824,7 @@ fun DominoPernambucanoApp(
                     }
                 },
                 onConnectGoogleAccountClick = {
-                    if (!onlineGoogleAccountActionInProgress) {
-                        onlineGoogleAccountActionInProgress = true
-                        onlineGoogleAccountFeedbackMessage = null
-
-                        menuCoroutineScope.launch {
-                            try {
-                                when (
-                                    val result =
-                                        onlineGoogleAccountManager.connect()
-                                ) {
-                                    is OnlineGoogleAccountActionResult.Success -> {
-                                        onlineGoogleAccountFeedbackMessage =
-                                            accountConnectedSuccess
-
-                                        val coordinator =
-                                            onlineAccountProfileUiCoordinator
-
-                                        if (coordinator != null) {
-                                            onlineAccountProfileUiState =
-                                                OnlineAccountProfileUiState
-                                                    .Loading
-                                            val outcome =
-                                                coordinator.load(
-                                                    fallbackIdentity =
-                                                        onlinePlayerIdentity,
-                                                )
-
-                                            onlineAccountProfileUiState =
-                                                outcome.state
-
-                                            outcome.synchronizedIdentity?.let {
-                                                    synchronizedIdentity ->
-                                                onlinePlayerIdentity =
-                                                    synchronizedIdentity
-                                            }
-                                        }
-                                    }
-
-                                    OnlineGoogleAccountActionResult.Cancelled -> {
-                                        onlineGoogleAccountFeedbackMessage = null
-                                    }
-
-                                    is OnlineGoogleAccountActionResult.Failure -> {
-                                        onlineGoogleAccountFeedbackMessage =
-                                            result.message
-                                    }
-                                }
-                            } finally {
-                                onlineGoogleAccountActionInProgress = false
-                            }
-                        }
-                    }
+                    connectOnlineGoogleAccount()
                 },
             )
         }
@@ -853,33 +860,31 @@ fun DominoPernambucanoApp(
 
         DominoSessionState.PlayModeSelection -> {
             PlayModeScreen(
-                onlineDisplayName = onlinePlayerIdentity.displayName,
-                onlineTableName = onlinePlayerIdentity.tableName,
-                onlineIdentityManagedByAccount =
-                    onlineGoogleAccountStatus ==
-                        OnlineGoogleAccountStatus.CONNECTED,
-                onOnlineDisplayNameChange = { displayName ->
-                    if (
-                        onlineGoogleAccountStatus !=
-                        OnlineGoogleAccountStatus.CONNECTED
-                    ) {
-                        onlinePlayerIdentity =
-                            onlinePlayerIdentityStore
-                                .updateDisplayName(
-                                    displayName = displayName,
-                                )
-                    }
-                },
                 onBackClick = {
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.BackToMainMenu,
                     )
                 },
-                rankedAccountAvailable = rankedAccountAvailable,
+                onlineActionInProgress =
+                    onlineGoogleAccountActionInProgress,
+                onlineFeedbackMessage =
+                    onlineGoogleAccountFeedbackMessage,
                 onRankedGameClick = {
-                    sessionCoordinator.dispatch(
-                        DominoSessionCommand.OpenOnlineRankedQueue,
-                    )
+                    if (onlineAccountConnected) {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand
+                                .OpenOnlineRankedQueue,
+                        )
+                    } else {
+                        connectOnlineGoogleAccount(
+                            onConnected = {
+                                sessionCoordinator.dispatch(
+                                    DominoSessionCommand
+                                        .OpenOnlineRankedQueue,
+                                )
+                            },
+                        )
+                    }
                 },
                 onLocalGameClick = {
                     sessionCoordinator.dispatch(

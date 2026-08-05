@@ -371,9 +371,7 @@ fun MainMenuScreen(
 
                 DominoPrimaryActionCard(
                     title = stringResource(R.string.main_menu_play),
-                    supportingText = stringResource(
-                        R.string.main_menu_play_support,
-                    ),
+                    supportingText = null,
                     onClick = onPlayClick,
                     enabled = !menuActionInProgress,
                     leadingContent = {

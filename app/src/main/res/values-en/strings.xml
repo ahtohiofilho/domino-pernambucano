@@ -26,7 +26,7 @@
     <string name="play_mode_description">Choose how to join a match.</string>
     <string name="play_mode_public_identity">Public identity</string>
     <string name="play_mode_public_name">Public name</string>
-    <string name="play_mode_ranked">Quick match</string>
+    <string name="play_mode_ranked">Play online</string>
     <string name="play_mode_ranked_support">Join the public ranked queue.</string>
     <string name="play_mode_ranked_account_required">Connect or recover your account to join the leaderboard.</string>
     <string name="play_mode_local">Play offline</string>
@@ -34,7 +34,7 @@
     <string name="play_mode_private_section">Private room</string>
     <string name="play_mode_create_room">Create room</string>
     <string name="play_mode_create_room_support">Open a private unranked room.</string>
-    <string name="play_mode_join_room">Join with code</string>
+    <string name="play_mode_join_room">Join room</string>
     <string name="play_mode_join_room_support">Enter an existing private room.</string>
     <string name="common_back">Back</string>
     <string name="ranked_queue_title">Ranked match</string>
