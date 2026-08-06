@@ -87,12 +87,6 @@ class OnlineExternalIdentityPersistenceTest {
             firstStore.linkExternalIdentity(
                 playerId = "player-1",
                 expectedAccountId = "account-1",
-                provider = OnlineExternalIdentityProvider.PLAY_GAMES,
-                subject = "play-games-player-1",
-            )
-            firstStore.linkExternalIdentity(
-                playerId = "player-1",
-                expectedAccountId = "account-1",
                 provider = OnlineExternalIdentityProvider.EMAIL,
                 subject = "email-identity-1",
             )
@@ -109,12 +103,6 @@ class OnlineExternalIdentityPersistenceTest {
                     provider = OnlineExternalIdentityProvider.GOOGLE,
                     subject = "google-subject-1",
                 )
-            val restoredPlayGames =
-                restartedStore.findAccountByExternalIdentity(
-                    provider =
-                        OnlineExternalIdentityProvider.PLAY_GAMES,
-                    subject = "play-games-player-1",
-                )
             val restoredEmail =
                 restartedStore.findAccountByExternalIdentity(
                     provider = OnlineExternalIdentityProvider.EMAIL,
@@ -122,7 +110,6 @@ class OnlineExternalIdentityPersistenceTest {
                 )
 
             assertEquals("account-1", restoredGoogle?.accountId)
-            assertEquals(restoredGoogle, restoredPlayGames)
             assertEquals(restoredGoogle, restoredEmail)
             restartedStore.close()
         } finally {

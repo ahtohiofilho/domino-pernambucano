@@ -61,7 +61,6 @@ internal fun OnlineServerAccount.toOnlineAccountProfileOrNull():
 @Serializable
 enum class OnlineExternalIdentityProvider {
     GOOGLE,
-    PLAY_GAMES,
     EMAIL,
 }
 

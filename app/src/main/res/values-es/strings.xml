@@ -218,23 +218,4 @@
     <string name="account_connected_success">Cuenta conectada correctamente.</string>
     <string name="ranked_queue_unavailable">La cola clasificatoria no está disponible en este entorno.</string>
     <string name="online_join_create_demo_room">Crear sala ficticia de prueba</string>
-    <string name="play_mode_account_choice_title">Conectar para jugar en línea</string>
-    <string name="play_mode_account_choice_description">Elige una opción de cuenta. Después de conectarte, entrarás en la cola clasificatoria.</string>
-    <string name="play_mode_account_choice_unavailable">No hay ninguna opción de cuenta disponible ahora.</string>
-    <string name="account_access_unavailable">No hay ninguna opción de cuenta disponible en esta compilación.</string>
-    <string name="account_access_recover_description">Elige cómo recuperar tu perfil y tu historial en línea.</string>
-    <string name="account_access_link_description">Elige cómo vincular este jugador y conservar su historial.</string>
-    <string name="account_access_reauthenticate_description">Elige una opción para confirmar tu cuenta de nuevo.</string>
-    <string name="account_play_games_continue">Continuar con Play Games</string>
-    <string name="account_play_games_link">Vincular con Play Games</string>
-    <string name="account_play_games_recover">Recuperar con Play Games</string>
-    <string name="account_play_games_connecting">Conectando con Play Games…</string>
-    <string name="account_google_connecting">Conectando con Google…</string>
-    <string name="account_play_games_not_configured">Play Games no está configurado en esta compilación.</string>
-    <string name="account_play_games_sign_in_unavailable">No fue posible abrir Play Games. Inténtalo de nuevo.</string>
-    <string name="account_play_games_invalid_credential">No se pudo confirmar la cuenta de Play Games. Inténtalo de nuevo.</string>
-    <string name="account_play_games_account_not_found">Este perfil de Play Games todavía no está vinculado a tu jugador.</string>
-    <string name="account_play_games_identity_conflict">Este perfil de Play Games ya está vinculado a otro jugador.</string>
-    <string name="account_play_games_service_unavailable">Play Games no está disponible temporalmente.</string>
-    <string name="account_play_games_unknown_failure">No fue posible conectarse con Play Games ahora. Inténtalo de nuevo.</string>
 </resources>

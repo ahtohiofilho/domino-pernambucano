@@ -33,10 +33,6 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 internal const val OnlineAccountDialogTag = "online_account_dialog"
 internal const val OnlineAccountPrimaryActionTag =
     "online_account_primary_action"
-internal const val OnlineAccountPlayGamesActionTag =
-    "online_account_play_games_action"
-internal const val OnlineAccountGoogleActionTag =
-    "online_account_google_action"
 internal const val OnlineAccountDismissActionTag =
     "online_account_dismiss_action"
 internal const val OnlineAccountPublicNameFieldTag =
@@ -58,71 +54,50 @@ internal fun onlineAccountDialogVisibleFeedback(
 @Composable
 fun OnlineAccountDialog(
     status: OnlineGoogleAccountStatus,
-    actionInProgress: Boolean = false,
-    playGamesAvailable: Boolean = false,
-    googleAvailable: Boolean = false,
-    playGamesActionInProgress: Boolean = false,
-    googleActionInProgress: Boolean = false,
+    actionInProgress: Boolean,
     feedbackMessage: String?,
     profileState: OnlineAccountProfileUiState,
     onPublicDisplayNameChange: (String) -> Unit,
     onTableNameChange: (String) -> Unit,
     onSaveProfileClick: () -> Unit,
     onRetryProfileClick: () -> Unit,
-    onConnectPlayGamesClick: () -> Unit = {},
     onConnectGoogleClick: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
     val presentation = status.toPresentation(
         strings = OnlineAccountPresentationStrings(
-            accessUnavailable = stringResource(
-                R.string.account_access_unavailable,
+            googleUnavailable = stringResource(
+                R.string.account_google_unavailable,
             ),
-            recoverDescription = stringResource(
-                R.string.account_access_recover_description,
+            googleRecoverDescription = stringResource(
+                R.string.account_google_recover_description,
             ),
-            linkDescription = stringResource(
-                R.string.account_access_link_description,
+            googleContinue = stringResource(
+                R.string.account_google_continue,
+            ),
+            googleLinkDescription = stringResource(
+                R.string.account_google_link_description,
+            ),
+            googleLink = stringResource(
+                R.string.account_google_link,
             ),
             profilePreserved = stringResource(
                 R.string.account_profile_preserved,
             ),
-            reauthenticateDescription = stringResource(
-                R.string.account_access_reauthenticate_description,
+            googleReauthenticateDescription = stringResource(
+                R.string.account_google_reauthenticate_description,
+            ),
+            googleRecover = stringResource(
+                R.string.account_google_recover,
             ),
         ),
-    )
-    val playGamesActionLabel = stringResource(
-        when (status) {
-            OnlineGoogleAccountStatus.VISITOR ->
-                R.string.account_play_games_link
-
-            OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
-                R.string.account_play_games_recover
-
-            else -> R.string.account_play_games_continue
-        },
-    )
-    val googleActionLabel = stringResource(
-        when (status) {
-            OnlineGoogleAccountStatus.VISITOR ->
-                R.string.account_google_link
-
-            OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
-                R.string.account_google_recover
-
-            else -> R.string.account_google_continue
-        },
     )
     val editor =
         profileState as? OnlineAccountProfileUiState.Editing
     val profileActionInProgress =
         editor?.actionInProgress == true
     val anyActionInProgress =
-        actionInProgress ||
-            playGamesActionInProgress ||
-            googleActionInProgress ||
-            profileActionInProgress
+        actionInProgress || profileActionInProgress
     val visibleFeedbackMessage =
         onlineAccountDialogVisibleFeedback(
             status = status,
@@ -195,69 +170,31 @@ fun OnlineAccountDialog(
         confirmButton = {
             when {
                 status != OnlineGoogleAccountStatus.CONNECTED -> {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(
-                            MaterialTheme.dominoSpacing.xs,
-                        ),
-                    ) {
-                        if (playGamesAvailable) {
-                            DominoPrimaryButton(
-                                modifier = Modifier.testTag(
-                                    OnlineAccountPlayGamesActionTag,
-                                ),
-                                text = if (
-                                    playGamesActionInProgress
-                                ) {
-                                    stringResource(
-                                        R.string
-                                            .account_play_games_connecting,
-                                    )
-                                } else {
-                                    playGamesActionLabel
-                                },
-                                onClick = onConnectPlayGamesClick,
-                                enabled = !anyActionInProgress,
-                                loading =
-                                    playGamesActionInProgress,
-                                containerColor =
-                                    DominoSemanticColors.dialogAction,
-                                contentColor =
-                                    DominoSemanticColors
-                                        .dialogActionContent,
-                                disabledContainerColor =
-                                    DominoSemanticColors
-                                        .dialogDisabledAction,
-                                disabledContentColor =
-                                    DominoSemanticColors
-                                        .dialogDisabledActionContent,
-                            )
-                        }
-
-                        if (googleAvailable) {
-                            DominoTextAction(
-                                modifier = Modifier.testTag(
-                                    OnlineAccountGoogleActionTag,
-                                ),
-                                text = if (
-                                    googleActionInProgress
-                                ) {
-                                    stringResource(
-                                        R.string
-                                            .account_google_connecting,
-                                    )
-                                } else {
-                                    googleActionLabel
-                                },
-                                onClick = onConnectGoogleClick,
-                                enabled = !anyActionInProgress,
-                                contentColor =
-                                    DominoSemanticColors
-                                        .dialogDismissAction,
-                                disabledContentColor =
-                                    DominoSemanticColors
-                                        .dialogDisabledDismissAction,
-                            )
-                        }
+                    presentation.actionLabel?.let { actionLabel ->
+                        DominoPrimaryButton(
+                            modifier = Modifier.testTag(
+                                OnlineAccountPrimaryActionTag,
+                            ),
+                            text = if (actionInProgress) {
+                                stringResource(
+                                    R.string.account_connecting,
+                                )
+                            } else {
+                                actionLabel
+                            },
+                            onClick = onConnectGoogleClick,
+                            enabled = !anyActionInProgress,
+                            loading = actionInProgress,
+                            containerColor =
+                                DominoSemanticColors.dialogAction,
+                            contentColor =
+                                DominoSemanticColors.dialogActionContent,
+                            disabledContainerColor =
+                                DominoSemanticColors.dialogDisabledAction,
+                            disabledContentColor =
+                                DominoSemanticColors
+                                    .dialogDisabledActionContent,
+                        )
                     }
                 }
 
@@ -495,14 +432,18 @@ private fun OnlineAccountDialogLoadingPreview() {
 
 private data class OnlineAccountPresentation(
     val message: String,
+    val actionLabel: String?,
 )
 
 private data class OnlineAccountPresentationStrings(
-    val accessUnavailable: String,
-    val recoverDescription: String,
-    val linkDescription: String,
+    val googleUnavailable: String,
+    val googleRecoverDescription: String,
+    val googleContinue: String,
+    val googleLinkDescription: String,
+    val googleLink: String,
     val profilePreserved: String,
-    val reauthenticateDescription: String,
+    val googleReauthenticateDescription: String,
+    val googleRecover: String,
 )
 
 private fun OnlineGoogleAccountStatus.toPresentation(
@@ -512,27 +453,32 @@ private fun OnlineGoogleAccountStatus.toPresentation(
     return when (this) {
         OnlineGoogleAccountStatus.UNAVAILABLE ->
             OnlineAccountPresentation(
-                message = strings.accessUnavailable,
+                message = strings.googleUnavailable,
+                actionLabel = null,
             )
 
         OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL ->
             OnlineAccountPresentation(
-                message = strings.recoverDescription,
+                message = strings.googleRecoverDescription,
+                actionLabel = strings.googleContinue,
             )
 
         OnlineGoogleAccountStatus.VISITOR ->
             OnlineAccountPresentation(
-                message = strings.linkDescription,
+                message = strings.googleLinkDescription,
+                actionLabel = strings.googleLink,
             )
 
         OnlineGoogleAccountStatus.CONNECTED ->
             OnlineAccountPresentation(
                 message = strings.profilePreserved,
+                actionLabel = null,
             )
 
         OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
             OnlineAccountPresentation(
-                message = strings.reauthenticateDescription,
+                message = strings.googleReauthenticateDescription,
+                actionLabel = strings.googleRecover,
             )
     }
 }

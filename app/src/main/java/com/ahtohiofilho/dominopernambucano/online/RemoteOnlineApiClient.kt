@@ -52,23 +52,6 @@ interface RemoteOnlineApiClient {
         )
     }
 
-    suspend fun linkPlayGamesIdentity(
-        request: OnlinePlayGamesIdentityRequestDto,
-        accessToken: String,
-    ): OnlineAccountSessionDto {
-        throw UnsupportedOperationException(
-            "Vinculação Play Games não configurada para este cliente remoto.",
-        )
-    }
-
-    suspend fun recoverPlayGamesAccount(
-        request: OnlinePlayGamesIdentityRequestDto,
-    ): OnlineAccountSessionDto {
-        throw UnsupportedOperationException(
-            "Recuperação Play Games não configurada para este cliente remoto.",
-        )
-    }
-
     suspend fun enqueuePublicRankedQueue(
         request: PublicRankedQueueEnterRequestDto,
     ): PublicRankedQueueHttpResponseDto {

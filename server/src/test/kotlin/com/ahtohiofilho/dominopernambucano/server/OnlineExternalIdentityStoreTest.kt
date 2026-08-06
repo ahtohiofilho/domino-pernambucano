@@ -131,12 +131,6 @@ class OnlineExternalIdentityStoreTest {
             provider = OnlineExternalIdentityProvider.GOOGLE,
             subject = "google-subject-1",
         )
-        val playGames = store.linkExternalIdentity(
-            playerId = "player-1",
-            expectedAccountId = "account-1",
-            provider = OnlineExternalIdentityProvider.PLAY_GAMES,
-            subject = "play-games-player-1",
-        )
         val email = store.linkExternalIdentity(
             playerId = "player-1",
             expectedAccountId = "account-1",
@@ -145,18 +139,15 @@ class OnlineExternalIdentityStoreTest {
         )
 
         assertTrue(google is OnlineExternalIdentityLinkResult.Linked)
-        assertEquals(google, playGames)
         assertEquals(google, email)
         assertEquals(
-            3,
+            2,
             store.snapshotPersistentState().externalIdentities.size,
         )
         OnlineExternalIdentityProvider.entries.forEach { provider ->
             val subject = when (provider) {
                 OnlineExternalIdentityProvider.GOOGLE ->
                     "google-subject-1"
-                OnlineExternalIdentityProvider.PLAY_GAMES ->
-                    "play-games-player-1"
                 OnlineExternalIdentityProvider.EMAIL ->
                     "email-identity-1"
             }
@@ -187,8 +178,8 @@ class OnlineExternalIdentityStoreTest {
             subject = "shared-subject",
         )
         store.linkExternalIdentity(
-            playerId = "player-games",
-            provider = OnlineExternalIdentityProvider.PLAY_GAMES,
+            playerId = "player-email",
+            provider = OnlineExternalIdentityProvider.EMAIL,
             subject = "shared-subject",
         )
 
@@ -202,7 +193,7 @@ class OnlineExternalIdentityStoreTest {
         assertEquals(
             "account-2",
             store.findAccountByExternalIdentity(
-                provider = OnlineExternalIdentityProvider.PLAY_GAMES,
+                provider = OnlineExternalIdentityProvider.EMAIL,
                 subject = "shared-subject",
             )?.accountId,
         )

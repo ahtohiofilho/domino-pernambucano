@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import io.ktor.http.HttpStatusCode
@@ -121,8 +121,6 @@ internal fun Application.module(
         ),
     googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier =
         createDefaultOnlineGoogleIdentityTokenVerifier(),
-    playGamesIdentityVerifier: OnlinePlayGamesIdentityVerifier =
-        createDefaultOnlinePlayGamesIdentityVerifier(),
     rankingPublicationPolicy: RankingPublicationPolicy =
         serverEnvironment.rankingPublicationPolicy,
     rateLimitPolicy: OnlineServerRateLimitPolicy =
@@ -197,7 +195,6 @@ internal fun Application.module(
             sessionTokenService = sessionTokenService,
             identityResolver = identityResolver,
             googleIdentityTokenVerifier = googleIdentityTokenVerifier,
-            playGamesIdentityVerifier = playGamesIdentityVerifier,
             rankingPublicationPolicy = rankingPublicationPolicy,
             nowEpochMillis = nowEpochMillis,
         )

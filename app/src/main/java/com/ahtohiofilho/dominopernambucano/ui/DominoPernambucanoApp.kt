@@ -1,8 +1,5 @@
 package com.ahtohiofilho.dominopernambucano.ui
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -16,7 +13,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.AndroidGoogleIdTokenProvider
-import com.ahtohiofilho.dominopernambucano.online.AndroidPlayGamesServerAuthCodeProvider
 import com.ahtohiofilho.dominopernambucano.online.GoogleSignInConfig
 import com.ahtohiofilho.dominopernambucano.online.GoogleSignInEnvironment
 import com.ahtohiofilho.dominopernambucano.online.KtorRemoteOnlineApiClient
@@ -29,10 +25,6 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountActionResul
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountManager
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRepository
-import com.ahtohiofilho.dominopernambucano.online.OnlinePlayGamesAccountActionResult
-import com.ahtohiofilho.dominopernambucano.online.OnlinePlayGamesAccountFailureReason
-import com.ahtohiofilho.dominopernambucano.online.OnlinePlayGamesAccountManager
-import com.ahtohiofilho.dominopernambucano.online.OnlinePlayGamesIdentityRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueRemoteClient
@@ -42,12 +34,9 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatc
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
 import com.ahtohiofilho.dominopernambucano.online.OnlineSessionCredentialRepository
-import com.ahtohiofilho.dominopernambucano.online.PlayGamesSignInConfig
-import com.ahtohiofilho.dominopernambucano.online.PlayGamesSignInEnvironment
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineSessionCredentialStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineParticipationBindingStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
-import com.ahtohiofilho.dominopernambucano.online.mergeOnlineAccountStatuses
 import com.ahtohiofilho.dominopernambucano.online.observability.AndroidLogcatOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.CompositeOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchUploader
@@ -80,8 +69,6 @@ fun DominoPernambucanoApp(
     onlineAppConfig: OnlineAppConfig = OnlineAppEnvironment.Current,
     googleSignInConfig: GoogleSignInConfig =
         GoogleSignInEnvironment.Current,
-    playGamesSignInConfig: PlayGamesSignInConfig =
-        PlayGamesSignInEnvironment.Current,
 ) {
     val context = LocalContext.current
     val accountProfileStrings = OnlineAccountProfileStrings(
@@ -145,27 +132,6 @@ fun DominoPernambucanoApp(
     )
     val accountConnectedSuccess = stringResource(
         R.string.account_connected_success,
-    )
-    val playGamesNotConfigured = stringResource(
-        R.string.account_play_games_not_configured,
-    )
-    val playGamesSignInUnavailable = stringResource(
-        R.string.account_play_games_sign_in_unavailable,
-    )
-    val playGamesInvalidCredential = stringResource(
-        R.string.account_play_games_invalid_credential,
-    )
-    val playGamesAccountNotFound = stringResource(
-        R.string.account_play_games_account_not_found,
-    )
-    val playGamesIdentityConflict = stringResource(
-        R.string.account_play_games_identity_conflict,
-    )
-    val playGamesServiceUnavailable = stringResource(
-        R.string.account_play_games_service_unavailable,
-    )
-    val playGamesUnknownFailure = stringResource(
-        R.string.account_play_games_unknown_failure,
     )
 
     var settingsVisible by rememberSaveable {
@@ -264,55 +230,6 @@ fun DominoPernambucanoApp(
                     googleIdentityRepository != null,
             googleIdTokenProvider = tokenProvider,
             googleIdentityRepository = googleIdentityRepository,
-            sessionCredentialRepository =
-                onlineSessionCredentialRepository,
-        )
-    }
-
-    val playGamesActivity = remember(context) {
-        context.findActivity()
-    }
-    val playGamesAvailable =
-        playGamesSignInConfig.isConfigured &&
-            googleIdentityApiClient != null &&
-            playGamesActivity != null
-
-    val onlinePlayGamesAccountManager = remember(
-        playGamesActivity,
-        playGamesSignInConfig,
-        googleIdentityApiClient,
-        onlineSessionCredentialRepository,
-    ) {
-        val playGamesIdentityRepository =
-            googleIdentityApiClient?.let { apiClient ->
-                OnlinePlayGamesIdentityRepository(
-                    apiClient = apiClient,
-                    sessionCredentialRepository =
-                        onlineSessionCredentialRepository,
-                )
-            }
-
-        val codeProvider = if (
-            playGamesSignInConfig.isConfigured &&
-            playGamesIdentityRepository != null &&
-            playGamesActivity != null
-        ) {
-            AndroidPlayGamesServerAuthCodeProvider(
-                activity = playGamesActivity,
-                config = playGamesSignInConfig,
-            )
-        } else {
-            null
-        }
-
-        OnlinePlayGamesAccountManager(
-            available =
-                playGamesSignInConfig.isConfigured &&
-                    playGamesIdentityRepository != null &&
-                    codeProvider != null,
-            serverAuthCodeProvider = codeProvider,
-            playGamesIdentityRepository =
-                playGamesIdentityRepository,
             sessionCredentialRepository =
                 onlineSessionCredentialRepository,
         )
@@ -472,14 +389,6 @@ fun DominoPernambucanoApp(
         mutableStateOf<String?>(null)
     }
 
-    var onlinePlayGamesAccountActionInProgress by remember {
-        mutableStateOf(false)
-    }
-
-    var onlinePlayGamesAccountFeedbackMessage by remember {
-        mutableStateOf<String?>(null)
-    }
-
     var onlineAccountProfileUiState by remember {
         mutableStateOf<OnlineAccountProfileUiState>(
             OnlineAccountProfileUiState.NotAvailable,
@@ -488,30 +397,16 @@ fun DominoPernambucanoApp(
 
     val onlineGoogleAccountStatus =
         onlineGoogleAccountManager.currentStatus()
-    val onlinePlayGamesAccountStatus =
-        onlinePlayGamesAccountManager.currentStatus()
-    val onlineAccountStatus = mergeOnlineAccountStatuses(
-        onlineGoogleAccountStatus,
-        onlinePlayGamesAccountStatus,
-    )
+
     val onlineAccountConnected =
-        onlineAccountStatus ==
+        onlineGoogleAccountStatus ==
             OnlineGoogleAccountStatus.CONNECTED
-    val googleAvailable =
-        googleSignInConfig.isConfigured &&
-            googleIdentityApiClient != null
-    val onlineIdentityActionInProgress =
-        onlineGoogleAccountActionInProgress ||
-            onlinePlayGamesAccountActionInProgress
-    val onlineAccountFeedbackMessage =
-        onlinePlayGamesAccountFeedbackMessage
-            ?: onlineGoogleAccountFeedbackMessage
 
     fun requestOnlineAccountProfile() {
         val coordinator = onlineAccountProfileUiCoordinator
 
         if (
-            onlineAccountStatus !=
+            onlineGoogleAccountStatus !=
                 OnlineGoogleAccountStatus.CONNECTED ||
             coordinator == null
         ) {
@@ -540,13 +435,12 @@ fun DominoPernambucanoApp(
     fun connectOnlineGoogleAccount(
         onConnected: () -> Unit = {},
     ) {
-        if (onlineIdentityActionInProgress) {
+        if (onlineGoogleAccountActionInProgress) {
             return
         }
 
         onlineGoogleAccountActionInProgress = true
         onlineGoogleAccountFeedbackMessage = null
-        onlinePlayGamesAccountFeedbackMessage = null
 
         menuCoroutineScope.launch {
             try {
@@ -597,95 +491,6 @@ fun DominoPernambucanoApp(
             }
         }
     }
-    fun playGamesFailureMessage(
-        reason: OnlinePlayGamesAccountFailureReason,
-    ): String {
-        return when (reason) {
-            OnlinePlayGamesAccountFailureReason.NOT_CONFIGURED ->
-                playGamesNotConfigured
-
-            OnlinePlayGamesAccountFailureReason.SIGN_IN_UNAVAILABLE ->
-                playGamesSignInUnavailable
-
-            OnlinePlayGamesAccountFailureReason
-                .INVALID_PLAY_GAMES_CREDENTIAL ->
-                playGamesInvalidCredential
-
-            OnlinePlayGamesAccountFailureReason.ACCOUNT_NOT_FOUND ->
-                playGamesAccountNotFound
-
-            OnlinePlayGamesAccountFailureReason.IDENTITY_CONFLICT ->
-                playGamesIdentityConflict
-
-            OnlinePlayGamesAccountFailureReason.SERVICE_UNAVAILABLE ->
-                playGamesServiceUnavailable
-
-            OnlinePlayGamesAccountFailureReason.UNKNOWN ->
-                playGamesUnknownFailure
-        }
-    }
-
-    fun connectOnlinePlayGamesAccount(
-        onConnected: () -> Unit = {},
-    ) {
-        if (onlineIdentityActionInProgress) {
-            return
-        }
-
-        onlinePlayGamesAccountActionInProgress = true
-        onlinePlayGamesAccountFeedbackMessage = null
-        onlineGoogleAccountFeedbackMessage = null
-
-        menuCoroutineScope.launch {
-            try {
-                when (
-                    val result =
-                        onlinePlayGamesAccountManager.connect()
-                ) {
-                    is OnlinePlayGamesAccountActionResult.Success -> {
-                        onlinePlayGamesAccountFeedbackMessage =
-                            accountConnectedSuccess
-
-                        val coordinator =
-                            onlineAccountProfileUiCoordinator
-
-                        if (coordinator != null) {
-                            onlineAccountProfileUiState =
-                                OnlineAccountProfileUiState.Loading
-
-                            val outcome = coordinator.load(
-                                fallbackIdentity =
-                                    onlinePlayerIdentity,
-                            )
-
-                            onlineAccountProfileUiState =
-                                outcome.state
-
-                            outcome.synchronizedIdentity?.let {
-                                    synchronizedIdentity ->
-                                onlinePlayerIdentity =
-                                    synchronizedIdentity
-                            }
-                        }
-
-                        onConnected()
-                    }
-
-                    OnlinePlayGamesAccountActionResult.Cancelled -> {
-                        onlinePlayGamesAccountFeedbackMessage = null
-                    }
-
-                    is OnlinePlayGamesAccountActionResult.Failure -> {
-                        onlinePlayGamesAccountFeedbackMessage =
-                            playGamesFailureMessage(result.reason)
-                    }
-                }
-            } finally {
-                onlinePlayGamesAccountActionInProgress = false
-            }
-        }
-    }
-
     if (settingsVisible) {
         SettingsScreen(
             currentSelection =
@@ -719,15 +524,12 @@ fun DominoPernambucanoApp(
                     pendingOnlineMatchResumeInProgress,
                 pendingOnlineMatchResumeFeedbackMessage =
                     pendingOnlineMatchResumeFeedbackMessage,
-                onlineAccountStatus = onlineAccountStatus,
-                playGamesAvailable = playGamesAvailable,
-                googleAvailable = googleAvailable,
-                playGamesAccountActionInProgress =
-                    onlinePlayGamesAccountActionInProgress,
-                googleAccountActionInProgress =
+                onlineGoogleAccountStatus =
+                    onlineGoogleAccountStatus,
+                onlineGoogleAccountActionInProgress =
                     onlineGoogleAccountActionInProgress,
-                onlineAccountFeedbackMessage =
-                    onlineAccountFeedbackMessage,
+                onlineGoogleAccountFeedbackMessage =
+                    onlineGoogleAccountFeedbackMessage,
                 onlineAccountProfileUiState =
                     onlineAccountProfileUiState,
                 onAccountDialogOpened = {
@@ -1021,9 +823,6 @@ fun DominoPernambucanoApp(
                         }
                     }
                 },
-                onConnectPlayGamesAccountClick = {
-                    connectOnlinePlayGamesAccount()
-                },
                 onConnectGoogleAccountClick = {
                     connectOnlineGoogleAccount()
                 },
@@ -1066,40 +865,26 @@ fun DominoPernambucanoApp(
                         DominoSessionCommand.BackToMainMenu,
                     )
                 },
-                onlineAccountStatus = onlineAccountStatus,
-                playGamesAvailable = playGamesAvailable,
-                googleAvailable = googleAvailable,
-                playGamesActionInProgress =
-                    onlinePlayGamesAccountActionInProgress,
-                googleActionInProgress =
+                onlineActionInProgress =
                     onlineGoogleAccountActionInProgress,
                 onlineFeedbackMessage =
-                    onlineAccountFeedbackMessage,
-                onConnectPlayGamesClick = {
-                    connectOnlinePlayGamesAccount(
-                        onConnected = {
-                            sessionCoordinator.dispatch(
-                                DominoSessionCommand
-                                    .OpenOnlineRankedQueue,
-                            )
-                        },
-                    )
-                },
-                onConnectGoogleClick = {
-                    connectOnlineGoogleAccount(
-                        onConnected = {
-                            sessionCoordinator.dispatch(
-                                DominoSessionCommand
-                                    .OpenOnlineRankedQueue,
-                            )
-                        },
-                    )
-                },
+                    onlineGoogleAccountFeedbackMessage,
                 onRankedGameClick = {
-                    sessionCoordinator.dispatch(
-                        DominoSessionCommand
-                            .OpenOnlineRankedQueue,
-                    )
+                    if (onlineAccountConnected) {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand
+                                .OpenOnlineRankedQueue,
+                        )
+                    } else {
+                        connectOnlineGoogleAccount(
+                            onConnected = {
+                                sessionCoordinator.dispatch(
+                                    DominoSessionCommand
+                                        .OpenOnlineRankedQueue,
+                                )
+                            },
+                        )
+                    }
                 },
                 onLocalGameClick = {
                     sessionCoordinator.dispatch(
@@ -1258,13 +1043,5 @@ fun DominoPernambucanoApp(
                 onlineUiTraceReporter = state.matchCoordinator,
             )
         }
-    }
-}
-
-private tailrec fun Context.findActivity(): Activity? {
-    return when (this) {
-        is Activity -> this
-        is ContextWrapper -> baseContext.findActivity()
-        else -> null
     }
 }

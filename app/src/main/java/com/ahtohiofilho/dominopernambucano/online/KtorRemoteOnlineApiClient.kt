@@ -129,48 +129,6 @@ class KtorRemoteOnlineApiClient(
         }
     }
 
-    override suspend fun linkPlayGamesIdentity(
-        request: OnlinePlayGamesIdentityRequestDto,
-        accessToken: String,
-    ): OnlineAccountSessionDto {
-        val normalizedAccessToken = accessToken.trim()
-        require(normalizedAccessToken.isNotBlank()) {
-            "A vinculação Play Games exige uma credencial online válida."
-        }
-
-        return executePlayGamesIdentityRequest {
-            httpClient.post(
-                urlString = endpoint(
-                    OnlineRemoteRoutes.LINK_PLAY_GAMES_IDENTITY,
-                ),
-            ) {
-                contentType(ContentType.Application.Json)
-                accept(ContentType.Application.Json)
-                header(
-                    HttpHeaders.Authorization,
-                    "Bearer $normalizedAccessToken",
-                )
-                setBody(request)
-            }.body()
-        }
-    }
-
-    override suspend fun recoverPlayGamesAccount(
-        request: OnlinePlayGamesIdentityRequestDto,
-    ): OnlineAccountSessionDto {
-        return executePlayGamesIdentityRequest {
-            httpClient.post(
-                urlString = endpoint(
-                    OnlineRemoteRoutes.RECOVER_PLAY_GAMES_ACCOUNT,
-                ),
-            ) {
-                contentType(ContentType.Application.Json)
-                accept(ContentType.Application.Json)
-                setBody(request)
-            }.body()
-        }
-    }
-
     override suspend fun enqueuePublicRankedQueue(
         request: PublicRankedQueueEnterRequestDto,
     ): PublicRankedQueueHttpResponseDto {
@@ -566,16 +524,6 @@ class KtorRemoteOnlineApiClient(
             request()
         } catch (error: ResponseException) {
             throw error.toOnlineGoogleIdentityExceptionOrSelf()
-        }
-    }
-
-    private suspend fun executePlayGamesIdentityRequest(
-        request: suspend () -> OnlineAccountSessionDto,
-    ): OnlineAccountSessionDto {
-        return try {
-            request()
-        } catch (error: ResponseException) {
-            throw error.toOnlinePlayGamesIdentityExceptionOrSelf()
         }
     }
 
