@@ -40,7 +40,9 @@ fun PlayModeScreen(
     onCreateOnlineRoomClick: () -> Unit,
     onJoinOnlineRoomClick: () -> Unit,
 ) {
-    DominoBrandScaffold {
+    DominoBrandScaffold(
+        contentVerticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

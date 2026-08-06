@@ -57,6 +57,7 @@ enum class DominoBrandAccent {
 @Composable
 fun DominoBrandScaffold(
     modifier: Modifier = Modifier,
+    contentVerticalAlignment: Alignment.Vertical = Alignment.Top,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Box(
@@ -81,7 +82,8 @@ fun DominoBrandScaffold(
                 .widthIn(max = 560.dp)
                 .align(Alignment.TopCenter),
             verticalArrangement = Arrangement.spacedBy(
-                MaterialTheme.dominoSpacing.md,
+                space = MaterialTheme.dominoSpacing.md,
+                alignment = contentVerticalAlignment,
             ),
             horizontalAlignment = Alignment.CenterHorizontally,
             content = content,
