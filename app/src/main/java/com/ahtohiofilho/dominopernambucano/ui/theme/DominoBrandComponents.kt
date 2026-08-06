@@ -38,12 +38,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
@@ -52,6 +55,11 @@ enum class DominoBrandAccent {
     Red,
     Green,
     Blue,
+}
+
+enum class DominoScreenLayout {
+    Centered,
+    Top,
 }
 
 @Composable
@@ -88,6 +96,51 @@ fun DominoBrandScaffold(
             horizontalAlignment = Alignment.CenterHorizontally,
             content = content,
         )
+    }
+}
+
+@Composable
+fun DominoScreenScaffold(
+    title: String,
+    layout: DominoScreenLayout,
+    modifier: Modifier = Modifier,
+    contentModifier: Modifier = Modifier,
+    titleModifier: Modifier = Modifier,
+    statusMessage: String? = null,
+    statusModifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val verticalAlignment = when (layout) {
+        DominoScreenLayout.Centered ->
+            Alignment.CenterVertically
+        DominoScreenLayout.Top -> Alignment.Top
+    }
+
+    DominoBrandScaffold(
+        modifier = modifier,
+        contentVerticalAlignment = verticalAlignment,
+    ) {
+        Column(
+            modifier = contentModifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(
+                MaterialTheme.dominoSpacing.sm,
+            ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            DominoScreenTitle(
+                text = title,
+                modifier = titleModifier,
+            )
+
+            statusMessage?.let { message ->
+                DominoScreenStatus(
+                    text = message,
+                    modifier = statusModifier,
+                )
+            }
+
+            content()
+        }
     }
 }
 
@@ -257,12 +310,35 @@ fun DominoScreenTitle(
     modifier: Modifier = Modifier,
 ) {
     Text(
-        modifier = modifier.semantics {
-            heading()
-        },
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics {
+                heading()
+            },
         text = text,
         color = DominoSemanticColors.brandText,
         style = MaterialTheme.typography.headlineMedium,
+        textAlign = TextAlign.Center,
+    )
+}
+
+@Composable
+fun DominoScreenStatus(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics {
+                liveRegion = LiveRegionMode.Polite
+            },
+        text = text,
+        color = DominoSemanticColors.brandText.copy(
+            alpha = 0.86f,
+        ),
+        style = MaterialTheme.typography.bodyMedium,
+        textAlign = TextAlign.Center,
     )
 }
 
