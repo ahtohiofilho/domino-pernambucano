@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +103,29 @@ fun DominoBrandScaffold(
 @Composable
 fun DominoScreenScaffold(
     title: String,
+    layout: DominoScreenLayout,
+    modifier: Modifier = Modifier,
+    contentModifier: Modifier = Modifier,
+    titleModifier: Modifier = Modifier,
+    statusMessage: String? = null,
+    statusModifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    DominoScreenScaffold(
+        title = AnnotatedString(title),
+        layout = layout,
+        modifier = modifier,
+        contentModifier = contentModifier,
+        titleModifier = titleModifier,
+        statusMessage = statusMessage,
+        statusModifier = statusModifier,
+        content = content,
+    )
+}
+
+@Composable
+fun DominoScreenScaffold(
+    title: AnnotatedString,
     layout: DominoScreenLayout,
     modifier: Modifier = Modifier,
     contentModifier: Modifier = Modifier,
@@ -307,6 +331,17 @@ fun DominoBrandHeader(
 @Composable
 fun DominoScreenTitle(
     text: String,
+    modifier: Modifier = Modifier,
+) {
+    DominoScreenTitle(
+        text = AnnotatedString(text),
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun DominoScreenTitle(
+    text: AnnotatedString,
     modifier: Modifier = Modifier,
 ) {
     Text(

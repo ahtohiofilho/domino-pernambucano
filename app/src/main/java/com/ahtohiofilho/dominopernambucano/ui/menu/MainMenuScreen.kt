@@ -3,10 +3,14 @@ package com.ahtohiofilho.dominopernambucano.ui.menu
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,10 +30,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,10 +46,10 @@ import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandHeader
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandScaffold
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPrimaryActionCard
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSecondaryActionCard
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenScaffold
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 
@@ -207,53 +208,19 @@ fun MainMenuScreen(
             }
         }
 
-    DominoBrandScaffold {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            val settingsDescription = stringResource(
-                R.string.main_menu_settings_content_description,
-            )
-
-            IconButton(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .testTag(MainMenuSettingsActionTag)
-                    .semantics {
-                        contentDescription = settingsDescription
-                    },
-                onClick = onSettingsClick,
-            ) {
-                Text(
-                    text = "⚙",
-                    color = DominoSemanticColors.brandText,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    top = 124.dp,
-                    bottom = 24.dp,
-                )
-                .testTag(MainMenuContentGroupTag),
-            verticalArrangement = Arrangement.spacedBy(
-                MaterialTheme.dominoSpacing.xxl,
+    Box(
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        DominoScreenScaffold(
+            title = dominoPeBrandNameOnBlue(),
+            layout = DominoScreenLayout.Centered,
+            contentModifier = Modifier.testTag(
+                MainMenuContentGroupTag,
             ),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            titleModifier = Modifier.testTag(MainMenuTitleTag),
+            statusMessage = menuMessage,
+            statusModifier = Modifier.testTag(MainMenuStatusTag),
         ) {
-            DominoBrandHeader(
-                subtitle = stringResource(R.string.brand_subtitle),
-                modifier = Modifier
-                    .testTag(MainMenuTitleTag)
-                    .semantics {
-                        heading()
-                    },
-            )
-
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -263,23 +230,6 @@ fun MainMenuScreen(
                 ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                menuMessage?.let { message ->
-                    Text(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag(MainMenuStatusTag)
-                            .semantics {
-                                liveRegion = LiveRegionMode.Polite
-                            },
-                        text = message,
-                        color = DominoSemanticColors.brandText.copy(
-                            alpha = 0.86f,
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-
                 if (
                     pendingOnlineParticipation is
                             OnlinePendingParticipationLocalResolution
@@ -419,7 +369,32 @@ fun MainMenuScreen(
                 )
             }
         }
-    }
+
+        val settingsDescription = stringResource(
+            R.string.main_menu_settings_content_description,
+        )
+
+        IconButton(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(
+                    top = MaterialTheme.dominoSpacing.md,
+                    end = MaterialTheme.dominoSpacing.lg,
+                )
+                .testTag(MainMenuSettingsActionTag)
+                .semantics {
+                    contentDescription = settingsDescription
+                },
+            onClick = onSettingsClick,
+        ) {
+            Text(
+                text = "⚙",
+                color = DominoSemanticColors.brandText,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 
     if (accountDialogVisible) {

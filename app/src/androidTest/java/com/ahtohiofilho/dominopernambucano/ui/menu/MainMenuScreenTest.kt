@@ -473,12 +473,8 @@ class MainMenuScreenTest {
                     ) / 2f
             val centerTolerancePx =
                 32.dp.toPx()
-            val expectedTitleActionGapPx =
-                40.dp.toPx()
             val actionBalanceTolerancePx =
                 8.dp.toPx()
-            val actualTitleActionGapPx =
-                actionsGroupBounds.top.toPx() - titleBounds.bottom.toPx()
             val playCenterPx =
                 (playBounds.top.toPx() + playBounds.bottom.toPx()) / 2f
             val rankingCenterPx =
@@ -491,24 +487,15 @@ class MainMenuScreenTest {
                     accountBounds.top.toPx() +
                         accountBounds.bottom.toPx()
                     ) / 2f
-            val titleCenterPx =
-                (titleBounds.top.toPx() + titleBounds.bottom.toPx()) / 2f
-            val playRankingStepPx = rankingCenterPx - playCenterPx
-            val rankingAccountStepPx = accountCenterPx - rankingCenterPx
-            val averageActionStepPx =
-                (playRankingStepPx + rankingAccountStepPx) / 2f
-            val titleActionRatio =
-                (playCenterPx - titleCenterPx) / averageActionStepPx
+            val playRankingStepPx =
+                rankingCenterPx - playCenterPx
+            val rankingAccountStepPx =
+                accountCenterPx - rankingCenterPx
 
             assertEquals(
                 rootCenterPx,
                 contentCenterPx,
                 centerTolerancePx,
-            )
-            assertEquals(
-                expectedTitleActionGapPx,
-                actualTitleActionGapPx,
-                2.0f,
             )
             assertTrue(
                 contentGroupBounds.height.toPx() <=
@@ -522,8 +509,6 @@ class MainMenuScreenTest {
                 rankingAccountStepPx,
                 actionBalanceTolerancePx,
             )
-            assertTrue(titleActionRatio >= 1.2f)
-            assertTrue(titleActionRatio <= 1.6f)
         }
     }
 
