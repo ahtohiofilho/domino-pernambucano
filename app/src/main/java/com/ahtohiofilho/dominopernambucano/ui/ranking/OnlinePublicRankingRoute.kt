@@ -44,12 +44,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.testTag
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingClient
@@ -64,6 +61,7 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandShapes
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPatternBackground
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenTitle
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
 internal const val RankingScreenTag = "ranking_screen"
@@ -531,18 +529,10 @@ private fun RankingHeader(
             )
         }
 
-        Text(
+        DominoScreenTitle(
             text = stringResource(R.string.ranking_title),
             modifier = Modifier
-                .align(Alignment.Center)
-                .semantics {
-                    heading()
-                }
                 .testTag(RankingTitleTag),
-            color = DominoSemanticColors.brandText,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center,
         )
     }
 }
