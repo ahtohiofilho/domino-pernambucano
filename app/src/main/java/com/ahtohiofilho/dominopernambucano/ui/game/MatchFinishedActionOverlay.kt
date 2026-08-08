@@ -14,15 +14,27 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
-import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
-import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
+import com.ahtohiofilho.dominopernambucano.ui.components.DominoPrimaryButton
+import com.ahtohiofilho.dominopernambucano.ui.components.DominoSecondaryButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+
+
+internal const val MatchFinishedOverlayTag = "match_finished_overlay"
+internal const val MatchFinishedTitleTag = "match_finished_title"
+internal const val MatchFinishedScoreTag = "match_finished_score"
+internal const val MatchFinishedPrimaryActionTag =
+    "match_finished_primary_action"
+internal const val MatchFinishedSecondaryActionTag =
+    "match_finished_secondary_action"
 
 @Composable
 fun MatchFinishedActionOverlay(
@@ -46,6 +58,7 @@ fun MatchFinishedActionOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .testTag(MatchFinishedOverlayTag)
             .background(DominoColorTokens.InkBlue.copy(alpha = 0.68f))
             .padding(18.dp),
         contentAlignment = Alignment.Center,
@@ -67,6 +80,11 @@ fun MatchFinishedActionOverlay(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
+                modifier = Modifier
+                    .testTag(MatchFinishedTitleTag)
+                    .semantics {
+                        heading()
+                    },
                 text = if (didLocalTeamWin) {
                     stringResource(R.string.game_victory_label)
                 } else {
@@ -79,6 +97,8 @@ fun MatchFinishedActionOverlay(
             )
 
             Text(
+                modifier = Modifier
+                    .testTag(MatchFinishedScoreTag),
                 text = "$localScore × $opponentScore",
                 color = DominoSemanticColors.primaryTextOnDark,
                 style = MaterialTheme.typography.headlineLarge,
@@ -86,12 +106,18 @@ fun MatchFinishedActionOverlay(
                 textAlign = TextAlign.Center,
             )
 
-            PrimaryMenuButton(
+            DominoPrimaryButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(MatchFinishedPrimaryActionTag),
                 text = stringResource(R.string.game_new_match),
                 onClick = onStartNewMatch,
             )
 
-            SecondaryMenuButton(
+            DominoSecondaryButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(MatchFinishedSecondaryActionTag),
                 text = stringResource(R.string.game_return_to_menu),
                 onClick = onBackToMenuClick,
             )
