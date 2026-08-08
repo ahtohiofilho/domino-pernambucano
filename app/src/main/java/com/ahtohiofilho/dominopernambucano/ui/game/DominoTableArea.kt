@@ -41,7 +41,7 @@ fun DominoTableArea(
         modifier = modifier
             .clip(tableShape)
             .background(
-                color = DominoColorTokens.PernambucoBlue.copy(alpha = 0.30f),
+                color = DominoColorTokens.AccentGreen.copy(alpha = 0.36f),
             )
             .border(
                 border = BorderStroke(
