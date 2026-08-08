@@ -20,13 +20,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandScaffold
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandShapes
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenTitle
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenScaffold
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSecondaryActionCard
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
@@ -41,24 +40,18 @@ fun SettingsScreen(
     onSelectionChange: (AppLanguageSelection) -> Unit,
     onBackClick: () -> Unit,
 ) {
-    DominoBrandScaffold {
+    DominoScreenScaffold(
+        title = stringResource(R.string.settings_title),
+        layout = DominoScreenLayout.Top,
+        contentModifier = Modifier.testTag(SettingsScreenTag),
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    top = 96.dp,
-                    bottom = 24.dp,
-                )
-                .testTag(SettingsScreenTag),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(
                 MaterialTheme.dominoSpacing.lg,
             ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            DominoScreenTitle(
-                text = stringResource(R.string.settings_title),
-            )
-
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

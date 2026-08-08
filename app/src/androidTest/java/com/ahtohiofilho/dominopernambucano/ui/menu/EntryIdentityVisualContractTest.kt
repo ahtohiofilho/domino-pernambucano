@@ -216,7 +216,7 @@ class EntryIdentityVisualContractTest {
     }
 
     @Test
-    fun settings_screen_is_compact_and_vertically_balanced() {
+    fun settings_screen_uses_top_form_layout_without_legacy_offset() {
         val context =
             InstrumentationRegistry.getInstrumentation().targetContext
         val explanatoryText =
@@ -251,23 +251,17 @@ class EntryIdentityVisualContractTest {
                 .fetchSemanticsNode()
                 .boundsInRoot
 
-        val contentCenterY =
-            (contentBounds.top + contentBounds.bottom) / 2f
-
-        val minimumAcceptedCenterY =
-            rootBounds.top + rootBounds.height * 0.38f
-
-        val maximumAcceptedCenterY =
-            rootBounds.top + rootBounds.height * 0.62f
+        val maximumAcceptedTop =
+            rootBounds.top + rootBounds.height * 0.20f
 
         assertTrue(
-            "Configurações continua excessivamente concentrada no topo.",
-            contentCenterY >= minimumAcceptedCenterY,
+            "Configurações deve iniciar na faixa superior como formulário.",
+            contentBounds.top <= maximumAcceptedTop,
         )
 
         assertTrue(
-            "Configurações foi deslocada excessivamente para baixo.",
-            contentCenterY <= maximumAcceptedCenterY,
+            "Configurações deve permanecer contida no viewport padrão.",
+            contentBounds.bottom <= rootBounds.bottom,
         )
     }
 
