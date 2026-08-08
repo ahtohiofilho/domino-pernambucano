@@ -49,10 +49,11 @@ import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerIde
 import com.ahtohiofilho.dominopernambucano.online.resolvedDisplayName
 import com.ahtohiofilho.dominopernambucano.online.createDebugHostOnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
-import com.ahtohiofilho.dominopernambucano.ui.menu.MenuScaffold
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenScaffold
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import kotlinx.coroutines.launch
 
@@ -329,18 +330,14 @@ private fun OnlineJoinRoomScreen(
     onCompleteWithFakePlayersClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
-    MenuScaffold {
-        Text(
-            text = if (hasJoinedRoom) {
-                stringResource(R.string.private_room_title)
-            } else {
-                stringResource(R.string.private_room_join_action)
-            },
-            color = DominoSemanticColors.primaryTextOnDark,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-        )
+    DominoScreenScaffold(
+        title = if (hasJoinedRoom) {
+            stringResource(R.string.private_room_title)
+        } else {
+            stringResource(R.string.private_room_join_action)
+        },
+        layout = DominoScreenLayout.Top,
+    ) {
 
         Text(
             text = if (hasJoinedRoom) {

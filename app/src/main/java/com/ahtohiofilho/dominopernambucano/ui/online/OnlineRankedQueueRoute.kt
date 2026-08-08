@@ -21,14 +21,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankedMatchActivation
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
-import com.ahtohiofilho.dominopernambucano.ui.menu.MenuScaffold
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenScaffold
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -121,14 +121,10 @@ private fun OnlineRankedQueueScreen(
     onCancelClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
-    MenuScaffold {
-        Text(
-            text = stringResource(R.string.ranked_queue_title),
-            color = DominoSemanticColors.primaryTextOnDark,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-        )
+    DominoScreenScaffold(
+        title = stringResource(R.string.ranked_queue_title),
+        layout = DominoScreenLayout.Centered,
+    ) {
 
         Column(
             modifier = Modifier.fillMaxWidth(),

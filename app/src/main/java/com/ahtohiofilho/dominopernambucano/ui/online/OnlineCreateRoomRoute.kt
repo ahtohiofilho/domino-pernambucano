@@ -45,10 +45,11 @@ import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerId
 import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.online.resolvedDisplayName
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
-import com.ahtohiofilho.dominopernambucano.ui.menu.MenuScaffold
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenScaffold
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import kotlinx.coroutines.launch
 
@@ -299,14 +300,10 @@ private fun OnlineLobbyScreen(
     onCompleteWithFakePlayersClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
-    MenuScaffold {
-        Text(
-            text = stringResource(R.string.private_room_title),
-            color = DominoSemanticColors.primaryTextOnDark,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-        )
+    DominoScreenScaffold(
+        title = stringResource(R.string.private_room_title),
+        layout = DominoScreenLayout.Top,
+    ) {
 
         Text(
             text = when {
