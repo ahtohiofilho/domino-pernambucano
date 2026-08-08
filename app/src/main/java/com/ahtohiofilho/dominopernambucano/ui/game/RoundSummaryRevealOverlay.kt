@@ -20,6 +20,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +38,13 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import kotlinx.coroutines.delay
 
 private const val ROUND_SUMMARY_ENTER_MILLIS = 260
+
+internal const val RoundSummaryOverlayTag = "round_summary_overlay"
+internal const val RoundSummaryTitleTag = "round_summary_title"
+internal const val RoundSummaryWinnerTag = "round_summary_winner"
+internal const val RoundSummaryScoreTag = "round_summary_score"
+internal const val RoundSummaryMicroHintTag = "round_summary_micro_hint"
+internal const val RoundSummarySleepingPiecesTag = "round_summary_sleeping_pieces"
 
 @Composable
 fun RoundSummaryRevealOverlay(
@@ -82,6 +92,7 @@ fun RoundSummaryRevealOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .testTag(RoundSummaryOverlayTag)
             .background(DominoColorTokens.InkBlue.copy(alpha = 0.18f))
             .padding(12.dp),
     ) {
@@ -101,6 +112,7 @@ fun RoundSummaryRevealOverlay(
             pieces = gameState.sleepingPieces,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
+                .testTag(RoundSummarySleepingPiecesTag)
                 .padding(
                     end = 4.dp,
                     bottom = 72.dp,
@@ -139,6 +151,11 @@ private fun RoundSummaryTableReadBadge(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
+            modifier = Modifier
+                .testTag(RoundSummaryTitleTag)
+                .semantics {
+                    heading()
+                },
             text = getRoundSummaryTitle(
                 winKind = gameState.roundWinKind,
             ),
@@ -150,15 +167,21 @@ private fun RoundSummaryTableReadBadge(
 
         RoundSummaryWinnerLine(
             gameState = gameState,
+            modifier = Modifier
+                .testTag(RoundSummaryWinnerTag),
         )
 
         RoundSummaryScoreLine(
             gameState = gameState,
             localPlayerIndex = localPlayerIndex,
+            modifier = Modifier
+                .testTag(RoundSummaryScoreTag),
         )
 
         RoundSummaryMicroHint(
             gameState = gameState,
+            modifier = Modifier
+                .testTag(RoundSummaryMicroHintTag),
         )
     }
 }
@@ -166,6 +189,7 @@ private fun RoundSummaryTableReadBadge(
 @Composable
 private fun RoundSummaryWinnerLine(
     gameState: DominoGameState,
+    modifier: Modifier = Modifier,
 ) {
     val winnerPlayerIndex = gameState.roundWinnerPlayerIndex
         ?: return
@@ -180,6 +204,7 @@ private fun RoundSummaryWinnerLine(
         )
 
     Text(
+        modifier = modifier,
         text = stringResource(
             R.string.game_round_winner_format,
             winnerName,
@@ -196,6 +221,7 @@ private fun RoundSummaryWinnerLine(
 private fun RoundSummaryScoreLine(
     gameState: DominoGameState,
     localPlayerIndex: Int,
+    modifier: Modifier = Modifier,
 ) {
     val localTeamIndex = localPlayerIndex % 2
     val opponentTeamIndex = if (localTeamIndex == 0) {
@@ -208,6 +234,7 @@ private fun RoundSummaryScoreLine(
     val opponentScore = gameState.teamScores.getOrElse(opponentTeamIndex) { 0 }
 
     Row(
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -237,12 +264,14 @@ private fun RoundSummaryScoreLine(
 @Composable
 private fun RoundSummaryMicroHint(
     gameState: DominoGameState,
+    modifier: Modifier = Modifier,
 ) {
     val hint = getRoundSummaryMicroHint(
         gameState = gameState,
     ) ?: return
 
     Text(
+        modifier = modifier,
         text = hint,
         color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.68f),
         style = MaterialTheme.typography.labelSmall,
