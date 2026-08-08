@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
@@ -31,6 +32,7 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 
 internal const val OnlineAccountDialogTag = "online_account_dialog"
+internal const val OnlineAccountTitleTag = "online_account_title"
 internal const val OnlineAccountPrimaryActionTag =
     "online_account_primary_action"
 internal const val OnlineAccountDismissActionTag =
@@ -136,7 +138,14 @@ fun OnlineAccountDialog(
             }
         },
         title = {
-            Text(text = stringResource(R.string.account_title))
+            Text(
+                modifier = Modifier
+                    .testTag(OnlineAccountTitleTag)
+                    .semantics {
+                        heading()
+                    },
+                text = stringResource(R.string.account_title),
+            )
         },
         text = {
             Column(
