@@ -1,31 +1,27 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 
-private const val CountdownLateralOffsetFraction = 0.18f
-private val CountdownWarningYellow = Color(0xFFFFC107)
-private val CountdownCriticalRed = Color(0xFFD32F2F)
+private const val PartnerClockLateralOffsetFraction = 0.30f
+private const val LocalClockLateralOffsetFraction = 0.24f
+private const val SideClockLateralOffsetFraction = 0.18f
+
+private enum class DominoClockPairOrientation {
+    HORIZONTAL,
+    VERTICAL,
+}
 
 @Composable
 fun DominoTurnCountdownHud(
@@ -46,197 +42,176 @@ fun DominoTurnCountdownHud(
     BoxWithConstraints(
         modifier = modifier,
     ) {
-        val horizontalLateralOffset = maxWidth * CountdownLateralOffsetFraction
-        val verticalLateralOffset = maxHeight * CountdownLateralOffsetFraction
+        val partnerLateralOffset =
+            maxWidth * PartnerClockLateralOffsetFraction
 
-        CountdownClocks(
+        val localLateralOffset =
+            maxWidth * LocalClockLateralOffsetFraction
+
+        val sideLateralOffset =
+            maxHeight * SideClockLateralOffsetFraction
+
+        DominoPlayerClockPair(
             playerIndex = topPlayerIndex,
             uiState = uiState,
-            isCurrent = currentPlayerIndex == topPlayerIndex,
+            isCurrent =
+                currentPlayerIndex == topPlayerIndex,
+            orientation =
+                DominoClockPairOrientation.VERTICAL,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(
-                    top = DominoGameVisualTokens.HeaderSlotHeight + 6.dp,
+                    top =
+                        DominoGameVisualTokens.HeaderSlotHeight +
+                        6.dp,
                 )
                 .offset(
-                    x = horizontalLateralOffset,
+                    x = partnerLateralOffset,
                 ),
         )
 
-        CountdownClocks(
+        DominoPlayerClockPair(
             playerIndex = leftPlayerIndex,
             uiState = uiState,
-            isCurrent = currentPlayerIndex == leftPlayerIndex,
+            isCurrent =
+                currentPlayerIndex == leftPlayerIndex,
+            orientation =
+                DominoClockPairOrientation.VERTICAL,
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(
                     start = 10.dp,
                 )
                 .offset(
-                    y = -verticalLateralOffset,
+                    y = -sideLateralOffset,
                 ),
         )
 
-        CountdownClocks(
+        DominoPlayerClockPair(
             playerIndex = rightPlayerIndex,
             uiState = uiState,
-            isCurrent = currentPlayerIndex == rightPlayerIndex,
+            isCurrent =
+                currentPlayerIndex == rightPlayerIndex,
+            orientation =
+                DominoClockPairOrientation.VERTICAL,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(
                     end = 10.dp,
                 )
                 .offset(
-                    y = verticalLateralOffset,
+                    y = sideLateralOffset,
                 ),
         )
 
-        CountdownClocks(
+        DominoPlayerClockPair(
             playerIndex = localPlayerIndex,
             uiState = uiState,
-            isCurrent = currentPlayerIndex == localPlayerIndex,
+            isCurrent =
+                currentPlayerIndex == localPlayerIndex,
+            orientation =
+                DominoClockPairOrientation.HORIZONTAL,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(
-                    bottom = DominoGameVisualTokens.LocalHandSlotHeight + 8.dp,
+                    bottom =
+                        DominoGameVisualTokens.LocalHandSlotHeight +
+                        8.dp,
                 )
                 .offset(
-                    x = horizontalLateralOffset,
+                    x = localLateralOffset,
                 ),
         )
     }
 }
 
 @Composable
-private fun CountdownClocks(
+private fun DominoPlayerClockPair(
     playerIndex: Int,
     uiState: DominoGameUiState,
     isCurrent: Boolean,
+    orientation: DominoClockPairOrientation,
     modifier: Modifier = Modifier,
 ) {
-    val remainingMillis = uiState.playerClockMillis.getOrNull(playerIndex)
-        ?: return
-    val reserveMillis = uiState.playerClockReserveMillis
-        .getOrNull(playerIndex)
-        ?: 0L
+    val primaryMillis =
+        uiState.playerClockMillis.getOrNull(playerIndex)
+            ?: return
+
+    val reserveMillis =
+        uiState.playerClockReserveMillis
+            .getOrNull(playerIndex)
+            ?: 0L
 
     val scale by animateFloatAsState(
-        targetValue = if (isCurrent) 1.14f else 1f,
-        label = "countdownClocksScale",
+        targetValue = if (isCurrent) 1.08f else 1f,
+        label = "dominoPlayerClockPairScale",
     )
 
-    Row(
-        modifier = modifier.graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        },
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CountdownClockNumber(
-            remainingMillis = remainingMillis,
-            isCurrent = isCurrent,
-        )
+    val pairModifier = modifier.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
 
-        Text(
-            text = "+",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Black,
-            color = getCountdownPlusColor(
-                isCurrent = isCurrent,
-            ),
-            maxLines = 1,
-        )
+    when (orientation) {
+        DominoClockPairOrientation.HORIZONTAL -> {
+            Row(
+                modifier = pairModifier,
+                horizontalArrangement =
+                    Arrangement.spacedBy(4.dp),
+                verticalAlignment =
+                    Alignment.CenterVertically,
+            ) {
+                DominoClockBadges(
+                    primaryMillis = primaryMillis,
+                    reserveMillis = reserveMillis,
+                    uiState = uiState,
+                    isCurrent = isCurrent,
+                    compact = false,
+                )
+            }
+        }
 
-        CountdownClockNumber(
-            remainingMillis = reserveMillis,
-            isCurrent = isCurrent,
-        )
+        DominoClockPairOrientation.VERTICAL -> {
+            Column(
+                modifier = pairModifier,
+                verticalArrangement =
+                    Arrangement.spacedBy(3.dp),
+                horizontalAlignment =
+                    Alignment.CenterHorizontally,
+            ) {
+                DominoClockBadges(
+                    primaryMillis = primaryMillis,
+                    reserveMillis = reserveMillis,
+                    uiState = uiState,
+                    isCurrent = isCurrent,
+                    compact = true,
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun CountdownClockNumber(
-    remainingMillis: Long,
+private fun DominoClockBadges(
+    primaryMillis: Long,
+    reserveMillis: Long,
+    uiState: DominoGameUiState,
     isCurrent: Boolean,
+    compact: Boolean,
 ) {
-    val remainingSeconds = formatCountdownSeconds(
-        millis = remainingMillis,
+    DominoPlayerClockBadge(
+        remainingMillis = primaryMillis,
+        kind = DominoPlayerClockKind.PRIMARY,
+        isEnabled = uiState.isTurnClockEnabled,
+        isCurrent = isCurrent,
+        compact = compact,
     )
 
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(
-                getCountdownBackgroundColor(
-                    remainingSeconds = remainingSeconds,
-                    isCurrent = isCurrent,
-                ),
-            )
-            .sizeIn(
-                minWidth = 34.dp,
-                minHeight = 34.dp,
-            )
-            .padding(
-                horizontal = 9.dp,
-                vertical = 6.dp,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = remainingSeconds.toString(),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Black,
-            color = getCountdownTextColor(
-                remainingSeconds = remainingSeconds,
-                isCurrent = isCurrent,
-            ),
-            maxLines = 1,
-        )
-    }
-}
-
-private fun formatCountdownSeconds(
-    millis: Long,
-): Long {
-    return ((millis.coerceAtLeast(0L) + 999L) / 1_000L)
-        .coerceAtLeast(0L)
-}
-
-private fun getCountdownBackgroundColor(
-    remainingSeconds: Long,
-    isCurrent: Boolean,
-): Color {
-    val color = when {
-        remainingSeconds <= 5L -> CountdownCriticalRed
-        remainingSeconds <= 12L -> CountdownWarningYellow
-        else -> DominoColorTokens.PureWhite
-    }
-
-    return color.copy(
-        alpha = if (isCurrent) 0.96f else 0.54f,
-    )
-}
-
-private fun getCountdownTextColor(
-    remainingSeconds: Long,
-    isCurrent: Boolean,
-): Color {
-    val color = if (remainingSeconds <= 5L) {
-        DominoColorTokens.PureWhite
-    } else {
-        DominoColorTokens.InkBlue
-    }
-
-    return color.copy(
-        alpha = if (isCurrent) 1f else 0.82f,
-    )
-}
-
-private fun getCountdownPlusColor(
-    isCurrent: Boolean,
-): Color {
-    return DominoColorTokens.PureWhite.copy(
-        alpha = if (isCurrent) 0.96f else 0.70f,
+    DominoPlayerClockBadge(
+        remainingMillis = reserveMillis,
+        kind = DominoPlayerClockKind.RESERVE,
+        isEnabled = uiState.isTurnClockEnabled,
+        isCurrent = isCurrent,
+        compact = true,
     )
 }

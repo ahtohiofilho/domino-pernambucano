@@ -31,7 +31,9 @@ import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
+import com.ahtohiofilho.dominopernambucano.online.createLegacyCompatibleOnlineAccountProfile
 import com.ahtohiofilho.dominopernambucano.online.createOnlineAccountProfile
+import com.ahtohiofilho.dominopernambucano.online.isValidOnlineAccountTableCode
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchActionReduction
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
@@ -511,6 +513,24 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    private fun resolveRankedTableCodeOrNull(
+        identity: RankedMatchPlayerIdentity,
+    ): String? {
+        val account = accountsByPlayerId[identity.playerId]
+            ?: return null
+
+        if (account.accountId != identity.accountId) {
+            return null
+        }
+
+        val profile = account.toOnlineAccountProfileOrNull()
+            ?: return null
+
+        return profile.tableName.takeIf(
+            ::isValidOnlineAccountTableCode,
+        )
+    }
+
     internal fun createPublicRankedRoom(
         request: CreateOnlineRoomRequestDto,
         identity: OnlineRequestIdentity,
@@ -552,21 +572,6 @@ class InMemoryOnlineServerStore(
                     "Conta autenticada obrigatória para entrar na fila ranqueada.",
             )
 
-            if (request.playerName.isBlank()) {
-                return@synchronized rejectedPublicRankedQueueResult(
-                    reason = "Nome do jogador não informado.",
-                )
-            }
-
-            if (
-                request.playerName.length >
-                MAX_SERVER_PLAYER_NAME_CHARACTERS
-            ) {
-                return@synchronized rejectedPublicRankedQueueResult(
-                    reason = "Nome do jogador acima do limite.",
-                )
-            }
-
             findActivePublicRankedRoom(
                 playerId = rankedIdentity.playerId,
             )?.let { room ->
@@ -590,6 +595,35 @@ class InMemoryOnlineServerStore(
                 return@synchronized rejectedPublicRankedQueueResult(
                     reason =
                         "O jogador já participa de outra sala ativa.",
+                )
+            }
+
+            val rankedTableCode = resolveRankedTableCodeOrNull(
+                identity = rankedIdentity,
+            ) ?: return@synchronized rejectedPublicRankedQueueResult(
+                reason =
+                    "Escolha uma sigla de mesa válida antes de entrar na fila ranqueada.",
+            )
+
+            if (request.playerName != rankedTableCode) {
+                return@synchronized rejectedPublicRankedQueueResult(
+                    reason =
+                        "A sigla enviada à fila não corresponde ao perfil autenticado.",
+                )
+            }
+
+            if (request.playerName.isBlank()) {
+                return@synchronized rejectedPublicRankedQueueResult(
+                    reason = "Nome do jogador não informado.",
+                )
+            }
+
+            if (
+                request.playerName.length >
+                MAX_SERVER_PLAYER_NAME_CHARACTERS
+            ) {
+                return@synchronized rejectedPublicRankedQueueResult(
+                    reason = "Nome do jogador acima do limite.",
                 )
             }
 
@@ -784,6 +818,33 @@ class InMemoryOnlineServerStore(
                     reason =
                         "Conta autenticada obrigatória para partida ranqueada.",
                 )
+            }
+
+            if (
+                matchMode.contributesToRanking &&
+                rankedPlayerIdentity != null
+            ) {
+                val rankedTableCode = resolveRankedTableCodeOrNull(
+                    identity = rankedPlayerIdentity,
+                )
+
+                if (rankedTableCode == null) {
+                    return@synchronized rejectedRoomOperationWithTrace(
+                        operation = "create_public_ranked_room",
+                        playerId = request.localPlayerId,
+                        reason =
+                            "Escolha uma sigla de mesa válida antes da partida ranqueada.",
+                    )
+                }
+
+                if (request.playerName != rankedTableCode) {
+                    return@synchronized rejectedRoomOperationWithTrace(
+                        operation = "create_public_ranked_room",
+                        playerId = request.localPlayerId,
+                        reason =
+                            "A sigla enviada não corresponde ao perfil autenticado.",
+                    )
+                }
             }
 
             if (
@@ -990,6 +1051,37 @@ class InMemoryOnlineServerStore(
                     reason =
                         "Conta autenticada obrigatória para partida ranqueada.",
                 )
+            }
+
+            if (
+                expectedMatchMode.contributesToRanking &&
+                rankedPlayerIdentity != null
+            ) {
+                val rankedTableCode = resolveRankedTableCodeOrNull(
+                    identity = rankedPlayerIdentity,
+                )
+
+                if (rankedTableCode == null) {
+                    return@synchronized rejectedRoomOperationWithTrace(
+                        operation = "join_public_ranked_room",
+                        roomId = currentRoom.roomId,
+                        matchId = currentRoom.matchId,
+                        playerId = request.localPlayerId,
+                        reason =
+                            "Escolha uma sigla de mesa válida antes da partida ranqueada.",
+                    )
+                }
+
+                if (request.playerName != rankedTableCode) {
+                    return@synchronized rejectedRoomOperationWithTrace(
+                        operation = "join_public_ranked_room",
+                        roomId = currentRoom.roomId,
+                        matchId = currentRoom.matchId,
+                        playerId = request.localPlayerId,
+                        reason =
+                            "A sigla enviada não corresponde ao perfil autenticado.",
+                    )
+                }
             }
 
             if (
@@ -1919,7 +2011,7 @@ class InMemoryOnlineServerStore(
                             account.profileUpdatedAtEpochMillis != null &&
                             account.profileUpdatedAtEpochMillis >=
                                 account.createdAtEpochMillis &&
-                            createOnlineAccountProfile(
+                            createLegacyCompatibleOnlineAccountProfile(
                                 publicDisplayName =
                                     account.publicDisplayName,
                                 tableName = account.tableName,

@@ -191,12 +191,21 @@ class PublicRankedMatchFormationIntegrityTest {
                 source.promoteAccount(playerId = "player-$number"),
             )
         }
+        accounts.forEachIndexed { index, account ->
+            requireNotNull(
+                source.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = rankedTableCode(index + 1),
+                ),
+            )
+        }
 
         accounts.forEachIndexed { index, account ->
             source.enqueuePublicRanked(
                 request = CreateOnlineRoomRequestDto(
                     localPlayerId = account.playerId,
-                    playerName = "Jogador ${index + 1}",
+                    playerName = rankedTableCode(index + 1),
                 ),
                 identity = account.toRequestIdentity(),
             )
@@ -235,6 +244,10 @@ class PublicRankedMatchFormationIntegrityTest {
         )
         assertNotNull(restored.getRoomSnapshot(formation.roomId))
     }
+
+    private fun rankedTableCode(
+        playerNumber: Int,
+    ): String = "P0$playerNumber"
 
     private fun candidate(number: Int) =
         PublicRankedFormationCandidate(

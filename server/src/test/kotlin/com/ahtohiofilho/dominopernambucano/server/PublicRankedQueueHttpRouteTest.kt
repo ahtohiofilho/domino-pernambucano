@@ -108,6 +108,13 @@ class PublicRankedQueueHttpRouteTest {
                     playerId = "player-1",
                 ),
             )
+            requireNotNull(
+                store.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = "P01",
+                ),
+            )
 
             application {
                 module(
@@ -124,7 +131,7 @@ class PublicRankedQueueHttpRouteTest {
 
             val maliciousBody = """
                 {
-                  "playerName": "  Jogador 1  ",
+                  "playerName": "P01",
                   "playerId": "attacker-player",
                   "accountId": "attacker-account",
                   "roomId": "attacker-room",
@@ -184,6 +191,15 @@ class PublicRankedQueueHttpRouteTest {
                     ),
                 )
             }
+            accounts.forEach { (playerNumber, account) ->
+                requireNotNull(
+                    store.updateAccountProfile(
+                        accountId = account.accountId,
+                        publicDisplayName = "Jogador Teste",
+                        tableName = rankedTableCode(playerNumber),
+                    ),
+                )
+            }
             val resolver = TestHeaderIdentityResolver(
                 accounts.map { (playerNumber, account) ->
                     "account-$playerNumber" to account.toRequestIdentity()
@@ -204,7 +220,7 @@ class PublicRankedQueueHttpRouteTest {
                     identityKey = "account-$playerNumber",
                     body = json.encodeToString(
                         PublicRankedQueueEnterRequestDto(
-                            playerName = "Jogador $playerNumber",
+                            playerName = rankedTableCode(playerNumber),
                         ),
                     ),
                 )
@@ -289,6 +305,13 @@ class PublicRankedQueueHttpRouteTest {
                     playerId = "player-1",
                 ),
             )
+            requireNotNull(
+                store.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = "P01",
+                ),
+            )
 
             application {
                 module(
@@ -307,7 +330,7 @@ class PublicRankedQueueHttpRouteTest {
                 identityKey = "account-player-1",
                 body = json.encodeToString(
                     PublicRankedQueueEnterRequestDto(
-                        playerName = "Jogador 1",
+                        playerName = "P01",
                     ),
                 ),
             )
@@ -360,6 +383,13 @@ class PublicRankedQueueHttpRouteTest {
                     playerId = "player-1",
                 ),
             )
+            requireNotNull(
+                store.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = "P01",
+                ),
+            )
 
             application {
                 module(
@@ -379,7 +409,7 @@ class PublicRankedQueueHttpRouteTest {
 
             val body = json.encodeToString(
                 PublicRankedQueueEnterRequestDto(
-                    playerName = "Jogador 1",
+                    playerName = "P01",
                 ),
             )
             val first = enqueue(
@@ -443,6 +473,10 @@ class PublicRankedQueueHttpRouteTest {
             )
         }
     }
+
+    private fun rankedTableCode(
+        playerNumber: Int,
+    ): String = "P0$playerNumber"
 
     private fun OnlineServerAccount.toRequestIdentity() =
         OnlineRequestIdentity(

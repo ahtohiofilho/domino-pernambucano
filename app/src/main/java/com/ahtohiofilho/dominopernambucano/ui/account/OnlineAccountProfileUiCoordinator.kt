@@ -1,13 +1,15 @@
 package com.ahtohiofilho.dominopernambucano.ui.account
 
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
-import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_TABLE_NAME_LENGTH
+import com.ahtohiofilho.dominopernambucano.online.ONLINE_ACCOUNT_TABLE_CODE_LENGTH
+import com.ahtohiofilho.dominopernambucano.online.isValidOnlineAccountTableCode
+import com.ahtohiofilho.dominopernambucano.online.normalizeOnlinePublicDisplayName
+import java.util.Locale
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileClientResult
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileFailureKind
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerIdentityStore
-import com.ahtohiofilho.dominopernambucano.online.createOnlineAccountProfile
 
 sealed interface OnlineAccountProfileUiState {
     data object NotAvailable : OnlineAccountProfileUiState
@@ -19,6 +21,7 @@ sealed interface OnlineAccountProfileUiState {
         val tableName: String,
         val established: Boolean,
         val validationFallbackMessage: String,
+        val tableCodeValidationMessage: String,
         val actionInProgress: Boolean = false,
         val feedbackMessage: String? = null,
     ) : OnlineAccountProfileUiState {
@@ -27,6 +30,7 @@ sealed interface OnlineAccountProfileUiState {
                 publicDisplayName = publicDisplayName,
                 tableName = tableName,
                 fallbackMessage = validationFallbackMessage,
+                tableCodeMessage = tableCodeValidationMessage,
             )
 
         val saveEnabled: Boolean
@@ -47,10 +51,24 @@ sealed interface OnlineAccountProfileUiState {
         fun withTableName(
             value: String,
         ): Editing {
+            val normalizedValue = value.uppercase(Locale.ROOT)
+            val resolvedValue = when {
+                normalizedValue.length <=
+                    ONLINE_ACCOUNT_TABLE_CODE_LENGTH -> {
+                    normalizedValue
+                }
+
+                tableName.length >
+                    ONLINE_ACCOUNT_TABLE_CODE_LENGTH &&
+                    normalizedValue.length < tableName.length -> {
+                    normalizedValue
+                }
+
+                else -> tableName
+            }
+
             return copy(
-                tableName = value.take(
-                    MAX_ONLINE_TABLE_NAME_LENGTH,
-                ),
+                tableName = resolvedValue,
                 feedbackMessage = null,
             )
         }
@@ -84,6 +102,8 @@ data class OnlineAccountProfileStrings(
     val loadFailed: String,
     val invalidResponse: String,
     val operationFailed: String,
+    val tableCodeRequired: String,
+    val tableCodeMigrationRequired: String,
 )
 
 class OnlineAccountProfileUiCoordinator(
@@ -96,6 +116,11 @@ class OnlineAccountProfileUiCoordinator(
     ): OnlineAccountProfileLoadOutcome {
         return when (val result = client.fetch()) {
             is OnlineAccountProfileClientResult.Success -> {
+                val requiresTableCodeSelection =
+                    !isValidOnlineAccountTableCode(
+                        rawName = result.profile.tableName,
+                    )
+
                 val synchronizedIdentity = synchronizeIdentity(
                     publicDisplayName =
                         result.profile.publicDisplayName,
@@ -110,6 +135,15 @@ class OnlineAccountProfileUiCoordinator(
                         established = true,
                         validationFallbackMessage =
                             strings.reviewData,
+                        tableCodeValidationMessage =
+                            strings.tableCodeRequired,
+                        feedbackMessage = if (
+                            requiresTableCodeSelection
+                        ) {
+                            strings.tableCodeMigrationRequired
+                        } else {
+                            null
+                        },
                     ),
                     synchronizedIdentity = synchronizedIdentity,
                 )
@@ -128,6 +162,8 @@ class OnlineAccountProfileUiCoordinator(
                             established = false,
                             validationFallbackMessage =
                                 strings.reviewData,
+                            tableCodeValidationMessage =
+                                strings.tableCodeRequired,
                             feedbackMessage =
                                 strings.nameRequired,
                         ),
@@ -166,9 +202,7 @@ class OnlineAccountProfileUiCoordinator(
         return when (
             val result = client.update(
                 publicDisplayName = editor.publicDisplayName,
-                tableName = editor.tableName.takeIf {
-                    value -> value.isNotBlank()
-                },
+                tableName = editor.tableName,
             )
         ) {
             is OnlineAccountProfileClientResult.Success -> {
@@ -186,6 +220,8 @@ class OnlineAccountProfileUiCoordinator(
                         established = true,
                         validationFallbackMessage =
                             strings.reviewData,
+                        tableCodeValidationMessage =
+                            strings.tableCodeRequired,
                         feedbackMessage =
                             strings.profileSaved,
                     ),
@@ -224,19 +260,25 @@ private fun validateOnlineAccountProfileInput(
     publicDisplayName: String,
     tableName: String,
     fallbackMessage: String,
+    tableCodeMessage: String,
 ): String? {
-    return try {
-        createOnlineAccountProfile(
-            publicDisplayName = publicDisplayName,
-            tableName = tableName.takeIf {
-                value -> value.isNotBlank()
-            },
-            updatedAtEpochMillis = 0L,
+    try {
+        normalizeOnlinePublicDisplayName(
+            rawName = publicDisplayName,
         )
-        null
-    } catch (error: IllegalArgumentException) {
-        error.message ?: fallbackMessage
+    } catch (_: IllegalArgumentException) {
+        return fallbackMessage
     }
+
+    if (
+        !isValidOnlineAccountTableCode(
+            rawName = tableName,
+        )
+    ) {
+        return tableCodeMessage
+    }
+
+    return null
 }
 
 private fun OnlineAccountProfileFailureKind.toVisibleMessage(

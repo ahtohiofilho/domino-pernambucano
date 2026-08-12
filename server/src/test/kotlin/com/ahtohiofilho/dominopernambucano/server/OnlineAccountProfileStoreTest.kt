@@ -136,6 +136,59 @@ class OnlineAccountProfileStoreTest {
     }
 
     @Test
+    fun legacy_table_name_remains_readable_after_restore() {
+        val store = InMemoryOnlineServerStore()
+        val legacyAccount = OnlineServerAccount(
+            accountId = "account-legacy",
+            playerId = "player-legacy",
+            createdAtEpochMillis = 1_000L,
+            publicDisplayName = "Antônio Filho",
+            tableName = "ANTÔNIO",
+            profileUpdatedAtEpochMillis = 2_000L,
+        )
+
+        store.restorePersistentState(
+            OnlineServerStoreState(
+                accounts = listOf(legacyAccount),
+            ),
+        )
+
+        assertEquals(
+            "ANTÔNIO",
+            store.getAccountProfile(
+                accountId = legacyAccount.accountId,
+            )?.tableName,
+        )
+    }
+
+    @Test
+    fun profile_update_requires_three_character_table_code() {
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 2_000L },
+            accountIdFactory = { "account-1" },
+        )
+        val account = requireNotNull(
+            store.promoteAccount(
+                playerId = "player-1",
+            ),
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            store.updateAccountProfile(
+                accountId = account.accountId,
+                publicDisplayName = "Antônio Filho",
+                tableName = "ANTÔNIO",
+            )
+        }
+
+        assertNull(
+            store.getAccountProfile(
+                accountId = account.accountId,
+            ),
+        )
+    }
+
+    @Test
     fun schema_six_accounts_migrate_without_inventing_profile() {
         val json = Json {
             encodeDefaults = true

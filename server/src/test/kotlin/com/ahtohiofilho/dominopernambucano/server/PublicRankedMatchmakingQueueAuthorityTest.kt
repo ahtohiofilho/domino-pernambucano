@@ -80,6 +80,15 @@ class PublicRankedMatchmakingQueueAuthorityTest {
                 store.promoteAccount(playerId = "player-$playerNumber"),
             )
         }
+        accounts.forEach { (playerNumber, account) ->
+            requireNotNull(
+                store.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = rankedTableCode(playerNumber),
+                ),
+            )
+        }
 
         (1..3).forEach { playerNumber ->
             val result = store.enqueuePublicRanked(
@@ -141,7 +150,7 @@ class PublicRankedMatchmakingQueueAuthorityTest {
     }
 
     @Test
-    fun repeated_enqueue_refreshes_name_without_changing_fifo_position() {
+    fun repeated_enqueue_refreshes_authoritative_table_code_without_changing_fifo_position() {
         var accountSequence = 0
         val store = InMemoryOnlineServerStore(
             nowEpochMillis = { 1_000L },
@@ -155,6 +164,15 @@ class PublicRankedMatchmakingQueueAuthorityTest {
                 store.promoteAccount(playerId = "player-$playerNumber"),
             )
         }
+        accounts.forEach { (playerNumber, account) ->
+            requireNotNull(
+                store.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = rankedTableCode(playerNumber),
+                ),
+            )
+        }
 
         val first = store.enqueuePublicRanked(
             request = request(1),
@@ -164,8 +182,15 @@ class PublicRankedMatchmakingQueueAuthorityTest {
             request = request(2),
             identity = accounts.getValue(2).toRequestIdentity(),
         )
+        requireNotNull(
+            store.updateAccountProfile(
+                accountId = accounts.getValue(1).accountId,
+                publicDisplayName = "Jogador Teste",
+                tableName = "Z01",
+            ),
+        )
         val refreshed = store.enqueuePublicRanked(
-            request = request(1).copy(playerName = "Nome atualizado"),
+            request = request(1).copy(playerName = "Z01"),
             identity = accounts.getValue(1).toRequestIdentity(),
         )
 
@@ -182,7 +207,7 @@ class PublicRankedMatchmakingQueueAuthorityTest {
         )
 
         assertEquals(
-            "Nome atualizado",
+            "Z01",
             matched.roomSnapshot
                 ?.players
                 ?.single { player -> player.playerId == "player-1" }
@@ -210,6 +235,20 @@ class PublicRankedMatchmakingQueueAuthorityTest {
         )
         val account2 = requireNotNull(
             store.promoteAccount(playerId = "player-2"),
+        )
+        requireNotNull(
+            store.updateAccountProfile(
+                accountId = account1.accountId,
+                publicDisplayName = "Jogador Teste",
+                tableName = rankedTableCode(1),
+            ),
+        )
+        requireNotNull(
+            store.updateAccountProfile(
+                accountId = account2.accountId,
+                publicDisplayName = "Jogador Teste",
+                tableName = rankedTableCode(2),
+            ),
         )
         store.enqueuePublicRanked(
             request = request(1),
@@ -277,6 +316,15 @@ class PublicRankedMatchmakingQueueAuthorityTest {
                 source.promoteAccount(playerId = "player-$playerNumber"),
             )
         }
+        accounts.forEachIndexed { index, account ->
+            requireNotNull(
+                source.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = rankedTableCode(index + 1),
+                ),
+            )
+        }
 
         source.enqueuePublicRanked(
             request = request(1),
@@ -325,8 +373,12 @@ class PublicRankedMatchmakingQueueAuthorityTest {
     private fun request(playerNumber: Int) =
         CreateOnlineRoomRequestDto(
             localPlayerId = "player-$playerNumber",
-            playerName = "Jogador $playerNumber",
+            playerName = rankedTableCode(playerNumber),
         )
+
+    private fun rankedTableCode(
+        playerNumber: Int,
+    ): String = "P0$playerNumber"
 
     private fun OnlineServerAccount.toRequestIdentity() =
         OnlineRequestIdentity(

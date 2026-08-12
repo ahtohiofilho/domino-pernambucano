@@ -5,10 +5,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,13 +28,14 @@ import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
 enum class DominoPlayerSeatOrientation {
     HORIZONTAL,
     VERTICAL,
 }
+
+private val NonLocalIdentitySize = 32.dp
 
 @Composable
 fun DominoPlayerSeat(
@@ -108,21 +110,22 @@ fun DominoPlayerSeat(
             if (compact) 3.dp else 5.dp,
         ),
     ) {
-        PlayerSeatName(
-            name = name,
-            isCurrent = isCurrent,
-            isWinner = isWinner,
-            compact = compact,
-        )
-
-        PlayerSeatParticipantTypeLabel(
-            participantType = participantType,
-            compact = compact,
-        )
+        if (
+            orientation ==
+            DominoPlayerSeatOrientation.VERTICAL
+        ) {
+            PlayerSeatParticipantTypeLabel(
+                participantType = participantType,
+                compact = compact,
+            )
+        }
 
         PlayerStatusIndicatorSlot(
+            name = name,
+            participantType = participantType,
             isCurrent = isCurrent,
             isWinner = isWinner,
+            orientation = orientation,
             compact = compact,
         )
 
@@ -153,18 +156,22 @@ private fun PlayerSeatName(
     isWinner: Boolean,
     compact: Boolean,
 ) {
+    val textColor = if (isCurrent || isWinner) {
+        DominoSemanticColors.scoreHighlight
+    } else {
+        DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.76f)
+    }
+
+    val textStyle = if (compact) {
+        MaterialTheme.typography.labelSmall
+    } else {
+        MaterialTheme.typography.labelMedium
+    }
+
     Text(
         text = name,
-        color = if (isCurrent || isWinner) {
-            DominoSemanticColors.scoreHighlight
-        } else {
-            DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.76f)
-        },
-        style = if (compact) {
-            MaterialTheme.typography.labelSmall
-        } else {
-            MaterialTheme.typography.labelMedium
-        },
+        color = textColor,
+        style = textStyle,
         fontWeight = FontWeight.Black,
         textAlign = TextAlign.Center,
         maxLines = 1,
@@ -197,26 +204,96 @@ private fun PlayerSeatParticipantTypeLabel(
 
 @Composable
 private fun PlayerStatusIndicatorSlot(
+    name: String,
+    participantType: DominoParticipantType,
     isCurrent: Boolean,
     isWinner: Boolean,
+    orientation: DominoPlayerSeatOrientation,
     compact: Boolean,
 ) {
     Box(
-        modifier = Modifier.height(
-            DominoGameVisualTokens.OpponentStatusIndicatorSlotHeight,
-        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(
+                DominoGameVisualTokens.OpponentStatusIndicatorSlotHeight,
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        when {
-            isWinner -> {
-                WinnerStatusPill(
-                    compact = compact,
+        if (
+            orientation ==
+            DominoPlayerSeatOrientation.HORIZONTAL
+        ) {
+            DominoPlayerIdentityDisc(
+                name = name,
+                participantType = participantType,
+                isCurrent = isCurrent,
+                isWinner = isWinner,
+                identitySize = NonLocalIdentitySize,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(
+                        y = if (compact) (-5).dp else (-4).dp,
+                    ),
+            )
+
+            if (
+                participantType ==
+                DominoParticipantType.APPLICATION
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.participant_app_label,
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(
+                            start = if (compact) {
+                                39.dp
+                            } else {
+                                43.dp
+                            },
+                        ),
+                    color = DominoSemanticColors.primaryTextOnDark.copy(
+                        alpha = 0.68f,
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Start,
+                    maxLines = 1,
                 )
             }
 
-            isCurrent -> {
-                CurrentTurnPill(
-                    compact = compact,
+            if (isWinner) {
+                Box(
+                    modifier = Modifier.align(
+                        Alignment.CenterEnd,
+                    ),
+                ) {
+                    WinnerStatusPill(
+                        compact = compact,
+                    )
+                }
+            }
+
+            return@Box
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DominoPlayerIdentityDisc(
+                name = name,
+                participantType = participantType,
+                isCurrent = isCurrent,
+                isWinner = isWinner,
+                identitySize = NonLocalIdentitySize,
+                modifier = Modifier.offset(y = (-3).dp),
+            )
+
+            if (isWinner) {
+                WinnerStatusPill(
+                    compact = true,
                 )
             }
         }
@@ -293,30 +370,5 @@ private fun OpponentVerticalPieces(
                 onClick = null,
             )
         }
-    }
-}
-
-@Composable
-private fun CurrentTurnPill(
-    compact: Boolean,
-) {
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(
-                color = DominoSemanticColors.scoreHighlight.copy(alpha = 0.92f),
-            )
-            .padding(
-                horizontal = if (compact) 7.dp else 9.dp,
-                vertical = if (compact) 4.dp else 5.dp,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(DominoSemanticColors.playableMove)
-                .padding(if (compact) 3.dp else 4.dp),
-        )
     }
 }

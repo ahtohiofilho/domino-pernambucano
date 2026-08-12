@@ -1,14 +1,11 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,107 +19,226 @@ import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
+internal enum class DominoPlayerClockKind {
+    PRIMARY,
+    RESERVE,
+}
+
+internal enum class DominoPlayerClockUrgency {
+    NORMAL,
+    WARNING,
+    CRITICAL,
+}
+
+internal fun resolveDominoPlayerClockUrgency(
+    kind: DominoPlayerClockKind,
+    remainingMillis: Long,
+): DominoPlayerClockUrgency {
+    if (kind == DominoPlayerClockKind.RESERVE) {
+        return DominoPlayerClockUrgency.NORMAL
+    }
+
+    val remainingSeconds = (
+        remainingMillis
+            .coerceAtLeast(0L) +
+            999L
+        ) / 1_000L
+
+    return when {
+        remainingSeconds <= 5L ->
+            DominoPlayerClockUrgency.CRITICAL
+
+        remainingSeconds <= 10L ->
+            DominoPlayerClockUrgency.WARNING
+
+        else ->
+            DominoPlayerClockUrgency.NORMAL
+    }
+}
+
+internal fun formatDominoPlayerClockMillis(
+    millis: Long,
+): String {
+    val totalSeconds = (
+        millis
+            .coerceAtLeast(0L) +
+            999L
+        ) / 1_000L
+
+    return totalSeconds
+        .toString()
+        .padStart(2, '0')
+}
+
 @Composable
-fun DominoPlayerClockBadge(
+internal fun DominoPlayerClockBadge(
     remainingMillis: Long?,
-    totalMillis: Long,
+    kind: DominoPlayerClockKind,
     isEnabled: Boolean,
     isCurrent: Boolean,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
-    if (!isEnabled || remainingMillis == null || totalMillis <= 0L) {
+    if (!isEnabled || remainingMillis == null) {
         return
     }
 
-    val remainingSeconds = (remainingMillis / 1_000L).coerceAtLeast(0L)
+    val urgency = resolveDominoPlayerClockUrgency(
+        kind = kind,
+        remainingMillis = remainingMillis,
+    )
 
-    val progress = (
-            remainingMillis.toFloat() / totalMillis.toFloat()
-            ).coerceIn(
-            minimumValue = 0f,
-            maximumValue = 1f,
-        )
+    val isPrimary =
+        kind == DominoPlayerClockKind.PRIMARY
 
-    val clockColor = getClockColor(
-        remainingSeconds = remainingSeconds,
+    val shape = RoundedCornerShape(
+        if (compact) 9.dp else 11.dp,
+    )
+
+    val backgroundColor = resolveClockBackgroundColor(
+        kind = kind,
+        urgency = urgency,
         isCurrent = isCurrent,
     )
 
-    Column(
+    val contentColor = resolveClockContentColor(
+        kind = kind,
+        urgency = urgency,
+        isCurrent = isCurrent,
+    )
+
+    Row(
         modifier = modifier
             .widthIn(
-                min = if (compact) 46.dp else 58.dp,
+                min = when {
+                    isPrimary && compact -> 50.dp
+                    isPrimary -> 58.dp
+                    compact -> 43.dp
+                    else -> 48.dp
+                },
             )
-            .clip(
-                RoundedCornerShape(
-                    if (compact) 10.dp else 12.dp,
+            .clip(shape)
+            .background(backgroundColor)
+            .border(
+                width = if (isPrimary) 1.dp else 0.75.dp,
+                color = resolveClockBorderColor(
+                    kind = kind,
+                    urgency = urgency,
+                    isCurrent = isCurrent,
                 ),
-            )
-            .background(
-                DominoColorTokens.PureWhite.copy(
-                    alpha = if (isCurrent) 0.22f else 0.13f,
-                ),
+                shape = shape,
             )
             .padding(
                 horizontal = if (compact) 6.dp else 8.dp,
-                vertical = if (compact) 3.dp else 4.dp,
+                vertical = if (compact) 4.dp else 5.dp,
             ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(
-            if (compact) 2.dp else 3.dp,
+        horizontalArrangement = Arrangement.spacedBy(
+            if (compact) 4.dp else 5.dp,
         ),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = formatClockMillis(remainingMillis),
-            style = if (compact) {
-                MaterialTheme.typography.labelSmall
-            } else {
-                MaterialTheme.typography.labelMedium
-            },
+            text = if (isPrimary) "▶" else "⌛",
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Black,
-            color = clockColor,
+            color = contentColor.copy(
+                alpha = if (isPrimary) 0.78f else 0.68f,
+            ),
             maxLines = 1,
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (compact) 3.dp else 4.dp)
-                .clip(CircleShape)
-                .background(
-                    DominoColorTokens.PureWhite.copy(alpha = 0.26f),
-                ),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress)
-                    .height(if (compact) 3.dp else 4.dp)
-                    .clip(CircleShape)
-                    .background(clockColor),
-            )
-        }
+        Text(
+            text = formatDominoPlayerClockMillis(
+                millis = remainingMillis,
+            ),
+            style = if (isPrimary && !compact) {
+                MaterialTheme.typography.titleLarge
+            } else {
+                MaterialTheme.typography.titleMedium
+            },
+            fontWeight = FontWeight.Black,
+            color = contentColor,
+            maxLines = 1,
+        )
     }
 }
 
-private fun getClockColor(
-    remainingSeconds: Long,
+private fun resolveClockBackgroundColor(
+    kind: DominoPlayerClockKind,
+    urgency: DominoPlayerClockUrgency,
     isCurrent: Boolean,
 ): Color {
-    return when {
-        remainingSeconds <= 5L -> DominoSemanticColors.playableMove
-        remainingSeconds <= 10L -> DominoSemanticColors.scoreHighlight
-        isCurrent -> DominoSemanticColors.scoreHighlight
-        else -> DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.92f)
+    if (kind == DominoPlayerClockKind.RESERVE) {
+        return DominoColorTokens.PernambucoBlueDark.copy(
+            alpha = if (isCurrent) 0.92f else 0.76f,
+        )
     }
+
+    val color = when (urgency) {
+        DominoPlayerClockUrgency.CRITICAL ->
+            Color(0xFFD32F2F)
+
+        DominoPlayerClockUrgency.WARNING ->
+            Color(0xFFFFC107)
+
+        DominoPlayerClockUrgency.NORMAL ->
+            DominoColorTokens.PureWhite
+    }
+
+    return color.copy(
+        alpha = if (isCurrent) 0.98f else 0.74f,
+    )
 }
 
-private fun formatClockMillis(
-    millis: Long,
-): String {
-    val totalSeconds = (millis / 1_000L).coerceAtLeast(0L)
-    val minutes = totalSeconds / 60L
-    val seconds = totalSeconds % 60L
+private fun resolveClockContentColor(
+    kind: DominoPlayerClockKind,
+    urgency: DominoPlayerClockUrgency,
+    isCurrent: Boolean,
+): Color {
+    if (kind == DominoPlayerClockKind.RESERVE) {
+        return DominoSemanticColors.primaryTextOnDark.copy(
+            alpha = if (isCurrent) 0.94f else 0.78f,
+        )
+    }
 
-    return "$minutes:${seconds.toString().padStart(2, '0')}"
+    val color = if (
+        urgency == DominoPlayerClockUrgency.CRITICAL
+    ) {
+        DominoColorTokens.PureWhite
+    } else {
+        DominoColorTokens.InkBlue
+    }
+
+    return color.copy(
+        alpha = if (isCurrent) 1f else 0.88f,
+    )
+}
+
+private fun resolveClockBorderColor(
+    kind: DominoPlayerClockKind,
+    urgency: DominoPlayerClockUrgency,
+    isCurrent: Boolean,
+): Color {
+    if (kind == DominoPlayerClockKind.RESERVE) {
+        return DominoSemanticColors.scoreHighlight.copy(
+            alpha = if (isCurrent) 0.62f else 0.36f,
+        )
+    }
+
+    return when (urgency) {
+        DominoPlayerClockUrgency.CRITICAL ->
+            DominoColorTokens.PureWhite.copy(
+                alpha = if (isCurrent) 0.82f else 0.52f,
+            )
+
+        DominoPlayerClockUrgency.WARNING ->
+            DominoColorTokens.InkBlue.copy(
+                alpha = if (isCurrent) 0.54f else 0.34f,
+            )
+
+        DominoPlayerClockUrgency.NORMAL ->
+            DominoSemanticColors.scoreHighlight.copy(
+                alpha = if (isCurrent) 0.72f else 0.40f,
+            )
+    }
 }

@@ -45,6 +45,10 @@ class OnlineAccountProfileUiCoordinatorTest {
             "O servidor retornou uma resposta de perfil inválida.",
         operationFailed =
             "Não foi possível concluir a operação de perfil.",
+        tableCodeRequired =
+            "Escolha uma sigla de mesa com exatamente 3 letras ou números.",
+        tableCodeMigrationRequired =
+            "Substitua seu nome de mesa antigo por uma sigla de 3 caracteres.",
     )
 
     @Test
@@ -85,7 +89,7 @@ class OnlineAccountProfileUiCoordinatorTest {
             val client = FakeProfileClient(
                 fetchResult = profileSuccess(
                     publicDisplayName = "Maria Silva",
-                    tableName = "MS",
+                    tableName = "MS1",
                 ),
                 events = events,
             )
@@ -111,13 +115,13 @@ class OnlineAccountProfileUiCoordinatorTest {
                 events,
             )
             assertEquals("Maria Silva", state.publicDisplayName)
-            assertEquals("MS", state.tableName)
+            assertEquals("MS1", state.tableName)
             assertEquals(
                 "Maria Silva",
                 outcome.synchronizedIdentity?.displayName,
             )
             assertEquals(
-                "MS",
+                "MS1",
                 outcome.synchronizedIdentity?.tableName,
             )
         }
@@ -147,6 +151,8 @@ class OnlineAccountProfileUiCoordinatorTest {
                     established = false,
                     validationFallbackMessage =
                         profileStrings.reviewData,
+                    tableCodeValidationMessage =
+                        profileStrings.tableCodeRequired,
                 ),
             )
 
@@ -195,6 +201,8 @@ class OnlineAccountProfileUiCoordinatorTest {
                     established = true,
                     validationFallbackMessage =
                         profileStrings.reviewData,
+                    tableCodeValidationMessage =
+                        profileStrings.tableCodeRequired,
                 ),
             )
 
@@ -221,6 +229,8 @@ class OnlineAccountProfileUiCoordinatorTest {
                     established = false,
                     validationFallbackMessage =
                         profileStrings.reviewData,
+                    tableCodeValidationMessage =
+                        profileStrings.tableCodeRequired,
                 ),
             )
 
@@ -231,18 +241,81 @@ class OnlineAccountProfileUiCoordinatorTest {
         }
 
     @Test
-    fun editor_enforces_authoritative_input_lengths() {
-        val state = OnlineAccountProfileUiState.Editing(
+    fun editor_enforces_public_name_length_and_table_code_without_truncation() {
+        val initial = OnlineAccountProfileUiState.Editing(
             publicDisplayName = "",
             tableName = "",
             established = false,
             validationFallbackMessage = profileStrings.reviewData,
+            tableCodeValidationMessage =
+                profileStrings.tableCodeRequired,
         )
+
+        val state = initial
             .withPublicDisplayName("A".repeat(80))
-            .withTableName("B".repeat(20))
+            .withTableName("a")
+            .withTableName("ab")
+            .withTableName("ab1")
+            .withTableName("ab12")
 
         assertEquals(60, state.publicDisplayName.length)
-        assertEquals(10, state.tableName.length)
+        assertEquals("AB1", state.tableName)
+    }
+
+    @Test
+    fun legacy_table_name_is_loaded_without_truncation_and_requires_migration() =
+        runBlocking {
+            val client = FakeProfileClient(
+                fetchResult = profileSuccess(
+                    publicDisplayName = "Antônio Filho",
+                    tableName = "ANTÔNIO",
+                ),
+            )
+            val coordinator = OnlineAccountProfileUiCoordinator(
+                client = client,
+                identityStore = FakeIdentityStore(),
+                strings = profileStrings,
+            )
+
+            val outcome = coordinator.load(
+                fallbackIdentity = identity(),
+            )
+            val state =
+                outcome.state as OnlineAccountProfileUiState.Editing
+
+            assertEquals("ANTÔNIO", state.tableName)
+            assertFalse(state.saveEnabled)
+            assertEquals(
+                profileStrings.tableCodeRequired,
+                state.validationMessage,
+            )
+            assertEquals(
+                profileStrings.tableCodeMigrationRequired,
+                state.feedbackMessage,
+            )
+            assertEquals(
+                "ANTÔNIO",
+                outcome.synchronizedIdentity?.tableName,
+            )
+        }
+
+    @Test
+    fun legacy_table_name_can_be_reduced_until_valid_code_is_selected() {
+        val initial = OnlineAccountProfileUiState.Editing(
+            publicDisplayName = "Antônio Filho",
+            tableName = "ANTÔNIO",
+            established = true,
+            validationFallbackMessage = profileStrings.reviewData,
+            tableCodeValidationMessage =
+                profileStrings.tableCodeRequired,
+        )
+
+        val reduced = initial.withTableName("ANTÔNI")
+        val valid = reduced.withTableName("afi")
+
+        assertEquals("ANTÔNI", reduced.tableName)
+        assertEquals("AFI", valid.tableName)
+        assertTrue(valid.saveEnabled)
     }
 
     private fun identity(): OnlinePlayerIdentity {

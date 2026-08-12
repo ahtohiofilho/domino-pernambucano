@@ -96,6 +96,43 @@ class OnlineAccountProfileRemoteClientTest {
         }
 
     @Test
+    fun fetch_accepts_legacy_table_name_for_migration() =
+        runBlocking {
+            val httpClient = HttpClient(
+                MockEngine {
+                    respond(
+                        content = """
+                            {
+                              "publicDisplayName": "Antônio Filho",
+                              "tableName": "ANTÔNIO",
+                              "updatedAtEpochMillis": 2000
+                            }
+                        """.trimIndent(),
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                },
+            ) {
+                expectSuccess = true
+                install(ContentNegotiation) {
+                    json(createOnlineJson())
+                }
+            }
+
+            val result = client(
+                httpClient = httpClient,
+                credential = accountCredential(),
+            ).fetch() as OnlineAccountProfileClientResult.Success
+
+            assertEquals(
+                "ANTÔNIO",
+                result.profile.tableName,
+            )
+
+            httpClient.close()
+        }
+
+    @Test
     fun missing_credential_does_not_call_backend() =
         runBlocking {
             val requestCount = AtomicInteger(0)

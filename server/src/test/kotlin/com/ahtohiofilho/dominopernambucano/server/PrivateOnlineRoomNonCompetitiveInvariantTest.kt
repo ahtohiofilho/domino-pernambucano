@@ -62,11 +62,18 @@ class PrivateOnlineRoomNonCompetitiveInvariantTest {
                 playerId = "public-player-1",
             ),
         )
+        requireNotNull(
+            store.updateAccountProfile(
+                accountId = hostAccount.accountId,
+                publicDisplayName = "Jogador Teste",
+                tableName = "P01",
+            ),
+        )
         val publicRoom = requireNotNull(
             store.createPublicRankedRoom(
                 request = CreateOnlineRoomRequestDto(
                     localPlayerId = "public-player-1",
-                    playerName = "Jogador 1",
+                    playerName = "P01",
                 ),
                 identity = hostAccount.toRequestIdentity(),
             ).roomSnapshot,
@@ -200,11 +207,18 @@ class PrivateOnlineRoomNonCompetitiveInvariantTest {
                 playerId = "managed-player-1",
             ),
         )
+        requireNotNull(
+            store.updateAccountProfile(
+                accountId = hostAccount.accountId,
+                publicDisplayName = "Jogador Teste",
+                tableName = "P01",
+            ),
+        )
         val room = requireNotNull(
             store.createPublicRankedRoom(
                 request = CreateOnlineRoomRequestDto(
                     localPlayerId = "managed-player-1",
-                    playerName = "Jogador 1",
+                    playerName = "P01",
                 ),
                 identity = hostAccount.toRequestIdentity(),
             ).roomSnapshot,
@@ -217,11 +231,19 @@ class PrivateOnlineRoomNonCompetitiveInvariantTest {
                     playerId = playerId,
                 ),
             )
+            val tableCode = "P0$playerNumber"
+            requireNotNull(
+                store.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = tableCode,
+                ),
+            )
             val result = store.joinPublicRankedRoom(
                 request = JoinOnlineRoomRequestDto(
                     roomCode = room.roomCode,
                     localPlayerId = playerId,
-                    playerName = "Jogador $playerNumber",
+                    playerName = tableCode,
                 ),
                 identity = account.toRequestIdentity(),
             )

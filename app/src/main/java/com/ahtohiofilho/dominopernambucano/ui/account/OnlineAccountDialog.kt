@@ -21,7 +21,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.tooling.preview.Preview
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
-import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_TABLE_NAME_LENGTH
+import com.ahtohiofilho.dominopernambucano.online.ONLINE_ACCOUNT_TABLE_CODE_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 import com.ahtohiofilho.dominopernambucano.ui.components.DominoOutlinedTextField
 import com.ahtohiofilho.dominopernambucano.ui.components.DominoPrimaryButton
@@ -361,12 +361,16 @@ private fun OnlineAccountProfileContent(
                     ),
                     enabled = !state.actionInProgress,
                     label = stringResource(
-                        R.string.account_table_name,
+                        R.string.account_table_code,
                     ),
                     supportingText = stringResource(
                         R.string.account_character_count,
                         state.tableName.length,
-                        MAX_ONLINE_TABLE_NAME_LENGTH,
+                        ONLINE_ACCOUNT_TABLE_CODE_LENGTH,
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization =
+                            KeyboardCapitalization.Characters,
                     ),
                     tone = DominoTextFieldTone.OnLight,
                 )

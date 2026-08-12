@@ -105,6 +105,12 @@ fun DominoPernambucanoApp(
         operationFailed = stringResource(
             R.string.account_profile_operation_failed,
         ),
+        tableCodeRequired = stringResource(
+            R.string.account_profile_table_code_required,
+        ),
+        tableCodeMigrationRequired = stringResource(
+            R.string.account_profile_table_code_migration_required,
+        ),
     )
     val resumeParticipationSessionRejected = stringResource(
         R.string.resume_participation_session_rejected,

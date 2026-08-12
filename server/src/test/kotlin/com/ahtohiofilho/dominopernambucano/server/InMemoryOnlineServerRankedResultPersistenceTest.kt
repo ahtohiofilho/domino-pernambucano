@@ -334,7 +334,13 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
     ): OnlineRoomSnapshotDto {
         val createRequest = CreateOnlineRoomRequestDto(
             localPlayerId = "player-1",
-            playerName = "Jogador 1",
+            playerName = if (
+                matchMode == DominoMatchMode.PUBLIC_RANKED
+            ) {
+                rankedTableCode(1)
+            } else {
+                "Jogador 1"
+            },
         )
         val room = requireNotNull(
             if (matchMode == DominoMatchMode.PRIVATE_UNRANKED) {
@@ -343,6 +349,13 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
                 val account = requireNotNull(
                     store.promoteAccount(
                         playerId = createRequest.localPlayerId,
+                    ),
+                )
+                requireNotNull(
+                    store.updateAccountProfile(
+                        accountId = account.accountId,
+                        publicDisplayName = "Jogador Teste",
+                        tableName = createRequest.playerName,
                     ),
                 )
                 store.createPublicRankedRoom(
@@ -356,7 +369,13 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
             val request = JoinOnlineRoomRequestDto(
                 roomCode = room.roomCode,
                 localPlayerId = "player-$playerNumber",
-                playerName = "Jogador $playerNumber",
+                playerName = if (
+                    matchMode == DominoMatchMode.PUBLIC_RANKED
+                ) {
+                    rankedTableCode(playerNumber)
+                } else {
+                    "Jogador $playerNumber"
+                },
             )
             val result =
                 if (matchMode == DominoMatchMode.PRIVATE_UNRANKED) {
@@ -365,6 +384,13 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
                     val account = requireNotNull(
                         store.promoteAccount(
                             playerId = request.localPlayerId,
+                        ),
+                    )
+                    requireNotNull(
+                        store.updateAccountProfile(
+                            accountId = account.accountId,
+                            publicDisplayName = "Jogador Teste",
+                            tableName = request.playerName,
                         ),
                     )
                     store.joinPublicRankedRoom(
@@ -378,7 +404,13 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
         val finalRequest = JoinOnlineRoomRequestDto(
             roomCode = room.roomCode,
             localPlayerId = "player-4",
-            playerName = "Jogador 4",
+            playerName = if (
+                matchMode == DominoMatchMode.PUBLIC_RANKED
+            ) {
+                rankedTableCode(4)
+            } else {
+                "Jogador 4"
+            },
         )
 
         return requireNotNull(
@@ -390,6 +422,13 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
                         playerId = finalRequest.localPlayerId,
                     ),
                 )
+                requireNotNull(
+                    store.updateAccountProfile(
+                        accountId = account.accountId,
+                        publicDisplayName = "Jogador Teste",
+                        tableName = finalRequest.playerName,
+                    ),
+                )
                 store.joinPublicRankedRoom(
                     request = finalRequest,
                     identity = account.toRequestIdentity(),
@@ -397,6 +436,10 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
             }.roomSnapshot,
         )
     }
+
+    private fun rankedTableCode(
+        playerNumber: Int,
+    ): String = "P0$playerNumber"
 
     private fun OnlineServerAccount.toRequestIdentity() =
         OnlineRequestIdentity(

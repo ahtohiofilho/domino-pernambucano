@@ -17,8 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,9 +32,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
@@ -58,6 +56,9 @@ fun DominoLocalHand(
 ) {
     val gameState = uiState.gameState
     val localPlayer = gameState.players.getOrNull(uiState.localPlayerIndex)
+
+    val localPlayerName = localPlayer?.name
+        ?: stringResource(R.string.game_local_player_fallback)
 
     val canInteractWithHand =
         uiState.phase == DominoMatchPhase.WaitingForLocalMove &&
@@ -120,13 +121,20 @@ fun DominoLocalHand(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = localPlayer?.name
-                        ?: stringResource(R.string.game_local_player_fallback),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Black,
-                    color = DominoSemanticColors.primaryTextOnDark,
-                )
+                Box(
+                    modifier = Modifier.size(20.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    DominoPlayerIdentityDisc(
+                        name = localPlayerName,
+                        participantType = localPlayer?.participantType
+                            ?: DominoParticipantType.HUMAN,
+                        isCurrent = gameState.currentPlayerIndex ==
+                                uiState.localPlayerIndex,
+                        isWinner = isWinner,
+                        identitySize = 32.dp,
+                    )
+                }
 
                 LocalHandStatusIndicator(
                     isCurrent = gameState.currentPlayerIndex == uiState.localPlayerIndex,
@@ -139,7 +147,8 @@ fun DominoLocalHand(
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(
-                    DominoGameVisualTokens.LocalHandPieceSpacing,
+                    space = DominoGameVisualTokens.LocalHandPieceSpacing,
+                    alignment = Alignment.CenterHorizontally,
                 ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

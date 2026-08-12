@@ -27,7 +27,7 @@ class PublicRankedAccountAuthorityTest {
         )
         val request = CreateOnlineRoomRequestDto(
             localPlayerId = "player-1",
-            playerName = "Jogador 1",
+            playerName = rankedTableCode(1),
         )
 
         val anonymousResult = store.createPublicRankedRoom(
@@ -79,11 +79,20 @@ class PublicRankedAccountAuthorityTest {
                 ),
             )
         }
+        accounts.forEach { (playerNumber, account) ->
+            requireNotNull(
+                store.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = rankedTableCode(playerNumber),
+                ),
+            )
+        }
         val room = requireNotNull(
             store.createPublicRankedRoom(
                 request = CreateOnlineRoomRequestDto(
                     localPlayerId = "player-1",
-                    playerName = "Jogador 1",
+                    playerName = rankedTableCode(1),
                 ),
                 identity = accounts.getValue(1).toRequestIdentity(),
             ).roomSnapshot,
@@ -93,7 +102,7 @@ class PublicRankedAccountAuthorityTest {
             request = JoinOnlineRoomRequestDto(
                 roomCode = room.roomCode,
                 localPlayerId = "player-2",
-                playerName = "Jogador 2",
+                playerName = rankedTableCode(2),
             ),
             identity = OnlineRequestIdentity(
                 playerId = "player-2",
@@ -115,7 +124,7 @@ class PublicRankedAccountAuthorityTest {
                 request = JoinOnlineRoomRequestDto(
                     roomCode = room.roomCode,
                     localPlayerId = "player-$playerNumber",
-                    playerName = "Jogador $playerNumber",
+                    playerName = rankedTableCode(playerNumber),
                 ),
                 identity = accounts
                     .getValue(playerNumber)
@@ -162,11 +171,20 @@ class PublicRankedAccountAuthorityTest {
                 ),
             )
         }
+        accounts.forEachIndexed { index, account ->
+            requireNotNull(
+                sourceStore.updateAccountProfile(
+                    accountId = account.accountId,
+                    publicDisplayName = "Jogador Teste",
+                    tableName = rankedTableCode(index + 1),
+                ),
+            )
+        }
         val room = requireNotNull(
             sourceStore.createPublicRankedRoom(
                 request = CreateOnlineRoomRequestDto(
                     localPlayerId = "player-1",
-                    playerName = "Jogador 1",
+                    playerName = rankedTableCode(1),
                 ),
                 identity = accounts[0].toRequestIdentity(),
             ).roomSnapshot,
@@ -179,7 +197,7 @@ class PublicRankedAccountAuthorityTest {
                     request = JoinOnlineRoomRequestDto(
                         roomCode = room.roomCode,
                         localPlayerId = "player-$playerNumber",
-                        playerName = "Jogador $playerNumber",
+                        playerName = rankedTableCode(playerNumber),
                     ),
                     identity = account.toRequestIdentity(),
                 ).accepted,
@@ -213,6 +231,10 @@ class PublicRankedAccountAuthorityTest {
             restoredIdentities.map { identity -> identity.accountId },
         )
     }
+
+    private fun rankedTableCode(
+        playerNumber: Int,
+    ): String = "P0$playerNumber"
 
     private fun OnlineServerAccount.toRequestIdentity() =
         OnlineRequestIdentity(

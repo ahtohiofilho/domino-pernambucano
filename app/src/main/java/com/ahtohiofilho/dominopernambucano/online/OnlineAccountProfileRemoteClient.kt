@@ -117,7 +117,9 @@ class OnlineAccountProfileRemoteClient(
         return try {
             val response = request()
 
-            response.requireValid()
+            response.requireValid(
+                operation = operation,
+            )
 
             OnlineAccountProfileClientResult.Success(
                 profile = response,
@@ -150,12 +152,24 @@ private enum class ProfileOperation {
     UPDATE,
 }
 
-private fun OnlineAccountProfileResponseDto.requireValid() {
-    val normalizedProfile = createOnlineAccountProfile(
-        publicDisplayName = publicDisplayName,
-        tableName = tableName,
-        updatedAtEpochMillis = updatedAtEpochMillis,
-    )
+private fun OnlineAccountProfileResponseDto.requireValid(
+    operation: ProfileOperation,
+) {
+    val normalizedProfile = when (operation) {
+        ProfileOperation.FETCH ->
+            createLegacyCompatibleOnlineAccountProfile(
+                publicDisplayName = publicDisplayName,
+                tableName = tableName,
+                updatedAtEpochMillis = updatedAtEpochMillis,
+            )
+
+        ProfileOperation.UPDATE ->
+            createOnlineAccountProfile(
+                publicDisplayName = publicDisplayName,
+                tableName = tableName,
+                updatedAtEpochMillis = updatedAtEpochMillis,
+            )
+    }
 
     require(
         normalizedProfile.publicDisplayName ==
