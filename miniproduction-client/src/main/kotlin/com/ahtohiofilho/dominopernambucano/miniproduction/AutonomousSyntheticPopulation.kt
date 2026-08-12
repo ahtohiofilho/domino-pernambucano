@@ -1,0 +1,209 @@
+package com.ahtohiofilho.dominopernambucano.miniproduction
+
+import com.ahtohiofilho.dominopernambucano.online.OnlineMatchPhaseTypeDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueHttpStatus
+import java.time.Duration
+import java.util.concurrent.atomic.AtomicBoolean
+
+internal class AutonomousSyntheticPopulation(
+    private val config: MiniProductionClientConfig,
+    private val gateway: MiniProductionGateway,
+    private val profiles: List<SyntheticProfile>,
+    credentials: List<SyntheticAccountCredential>,
+    private val running: AtomicBoolean,
+    private val nowEpochMillis: () -> Long = System::currentTimeMillis,
+    private val sleeper: (Long) -> Unit = Thread::sleep,
+) {
+    init {
+        require(profiles.size == credentials.size) {
+            "Cada perfil sintético deve possuir uma credencial."
+        }
+    }
+
+    private val policy = SyntheticPlayerPolicy(
+        syntheticTableCodes = profiles.mapTo(mutableSetOf()) { profile ->
+            profile.tableCode
+        },
+    )
+    private val players = profiles.zip(credentials).map { (profile, credential) ->
+        require(profile.index == credential.profileIndex)
+        SyntheticPlayerRuntime(
+            profile = profile,
+            credential = credential,
+        )
+    }
+    private var lastReportAtEpochMillis = 0L
+    private var acceptedActions = 0L
+    private var rejectedActions = 0L
+    private var transientFailures = 0L
+
+    fun awaitServerReadiness() {
+        val deadline = System.nanoTime() + config.readinessTimeout.toNanos()
+
+        while (running.get() && System.nanoTime() < deadline) {
+            if (gateway.isReady()) {
+                return
+            }
+            sleeper(500L)
+        }
+
+        check(running.get()) {
+            "A população foi interrompida antes da prontidão do servidor."
+        }
+        throw IllegalStateException(
+            "O servidor não ficou pronto em ${config.readinessTimeout.seconds}s.",
+        )
+    }
+
+    fun run() {
+        println(
+            "POPULATION_STARTED accounts=${players.size} " +
+                "baseUrl=${config.normalizedBaseUrl}",
+        )
+
+        while (running.get()) {
+            val now = nowEpochMillis()
+            players.forEach { player ->
+                if (running.get() && now >= player.nextStepAtEpochMillis) {
+                    step(player, now)
+                }
+            }
+            reportIfNeeded(now)
+            sleeper(50L)
+        }
+
+        println("POPULATION_STOPPED")
+    }
+
+    private fun step(
+        player: SyntheticPlayerRuntime,
+        now: Long,
+    ) {
+        try {
+            if (player.matchId == null) {
+                enterQueue(player)
+            } else {
+                advanceMatch(player)
+            }
+            player.nextStepAtEpochMillis = now + config.pollIntervalMillis
+        } catch (failure: MiniProductionHttpException) {
+            when {
+                failure.statusCode == 404 && player.matchId != null -> {
+                    player.clearMatch()
+                    player.nextStepAtEpochMillis = now + 1_000L
+                }
+
+                failure.statusCode == 429 || failure.statusCode >= 500 -> {
+                    transientFailures++
+                    player.nextStepAtEpochMillis = now + 2_000L
+                }
+
+                else -> throw failure
+            }
+        } catch (failure: java.io.IOException) {
+            transientFailures++
+            player.nextStepAtEpochMillis = now + 2_000L
+        }
+    }
+
+    private fun enterQueue(
+        player: SyntheticPlayerRuntime,
+    ) {
+        val queue = gateway.enterRankedQueue(
+            accessToken = player.credential.accessToken,
+            tableCode = player.profile.tableCode,
+        )
+
+        when (queue.status) {
+            PublicRankedQueueHttpStatus.MATCHED -> {
+                player.matchId = requireNotNull(queue.matchId) {
+                    "Resposta MATCHED sem matchId."
+                }
+                player.localSeatIndex = requireNotNull(queue.localSeatIndex) {
+                    "Resposta MATCHED sem localSeatIndex."
+                }
+            }
+
+            PublicRankedQueueHttpStatus.WAITING,
+            PublicRankedQueueHttpStatus.NOT_QUEUED -> Unit
+        }
+    }
+
+    private fun advanceMatch(
+        player: SyntheticPlayerRuntime,
+    ) {
+        val matchId = requireNotNull(player.matchId)
+        val localSeatIndex = requireNotNull(player.localSeatIndex)
+        val snapshot = gateway.fetchMatchSnapshot(
+            accessToken = player.credential.accessToken,
+            matchId = matchId,
+        )
+
+        if (snapshot.phase.type == OnlineMatchPhaseTypeDto.MATCH_FINISHED) {
+            player.completedMatches++
+            player.clearMatch()
+            return
+        }
+
+        val action = policy.chooseAction(
+            snapshot = snapshot,
+            localSeatIndex = localSeatIndex,
+            playerId = player.credential.playerId,
+        ) ?: return
+
+        val result = gateway.submitAction(
+            accessToken = player.credential.accessToken,
+            action = action,
+        )
+
+        if (result.accepted) {
+            acceptedActions++
+        } else {
+            rejectedActions++
+        }
+    }
+
+    private fun reportIfNeeded(
+        now: Long,
+    ) {
+        if (now - lastReportAtEpochMillis < REPORT_INTERVAL.toMillis()) {
+            return
+        }
+        lastReportAtEpochMillis = now
+
+        val activeMatches = players.mapNotNull { player -> player.matchId }
+            .distinct()
+            .size
+        val matchedAccounts = players.count { player -> player.matchId != null }
+        val completedMatches = players.sumOf { player -> player.completedMatches }
+
+        println(
+            "POPULATION_STATUS accounts=${players.size} " +
+                "matchedAccounts=$matchedAccounts " +
+                "activeMatches=$activeMatches " +
+                "queueOrTransition=${players.size - matchedAccounts} " +
+                "completedObservations=$completedMatches " +
+                "acceptedActions=$acceptedActions " +
+                "rejectedActions=$rejectedActions " +
+                "transientFailures=$transientFailures",
+        )
+    }
+
+    private data class SyntheticPlayerRuntime(
+        val profile: SyntheticProfile,
+        val credential: SyntheticAccountCredential,
+        var matchId: String? = null,
+        var localSeatIndex: Int? = null,
+        var nextStepAtEpochMillis: Long = 0L,
+        var completedMatches: Long = 0L,
+    ) {
+        fun clearMatch() {
+            matchId = null
+            localSeatIndex = null
+        }
+    }
+
+    private companion object {
+        val REPORT_INTERVAL: Duration = Duration.ofSeconds(30L)
+    }
+}

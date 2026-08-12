@@ -385,10 +385,10 @@ internal fun createDefaultOnlineSessionTokenService(
             configuredSecret.toByteArray(Charsets.UTF_8)
         }
 
-        serverEnvironment == OnlineServerEnvironment.PRODUCTION -> {
+        serverEnvironment.requiresStableSessionSecret -> {
             throw IllegalStateException(
                 "$SESSION_SIGNING_SECRET_ENVIRONMENT_VARIABLE deve ser " +
-                        "configurada no ambiente de producao.",
+                        "configurada no ambiente persistente.",
             )
         }
 

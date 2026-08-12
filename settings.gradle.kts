@@ -29,4 +29,5 @@ rootProject.name = "Dominó Pernambucano"
 
 include(":app")
 include(":game-core")
+include(":miniproduction-client")
 include(":server")

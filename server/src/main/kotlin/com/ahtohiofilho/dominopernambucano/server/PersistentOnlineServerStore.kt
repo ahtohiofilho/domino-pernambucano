@@ -453,9 +453,9 @@ internal fun createDefaultOnlineServerStore(
     }
 
     if (configuredStateFile == null) {
-        check(serverEnvironment != OnlineServerEnvironment.PRODUCTION) {
+        check(!serverEnvironment.requiresPersistentState) {
             "$ONLINE_SERVER_STATE_FILE_ENVIRONMENT_VARIABLE deve ser " +
-                    "configurada no ambiente de produção."
+                    "configurada no ambiente persistente."
         }
 
         return InMemoryOnlineServerStore(
@@ -469,10 +469,10 @@ internal fun createDefaultOnlineServerStore(
 
     val stateFile = File(configuredStateFile)
 
-    if (serverEnvironment == OnlineServerEnvironment.PRODUCTION) {
+    if (serverEnvironment.requiresPersistentState) {
         require(stateFile.isAbsolute) {
             "$ONLINE_SERVER_STATE_FILE_ENVIRONMENT_VARIABLE deve usar " +
-                    "caminho absoluto em produção."
+                    "caminho absoluto no ambiente persistente."
         }
     }
 

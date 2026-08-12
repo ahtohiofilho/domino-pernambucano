@@ -48,6 +48,21 @@ class RankingPublicationPolicyTest {
     }
 
     @Test
+    fun miniproduction_thresholds_are_fixed_at_twelve() {
+        assertEquals(
+            RankingPublicationProfile.MINIPRODUCTION,
+            RankingPublicationPolicy.miniproduction.profile,
+        )
+        RankingCycleKind.values().forEach { kind ->
+            assertEquals(
+                12,
+                RankingPublicationPolicy.miniproduction
+                    .thresholdFor(kind),
+            )
+        }
+    }
+
+    @Test
     fun publication_boundary_is_evaluated_without_truncating_capacity() {
         RankingCycleKind.values().forEach { kind ->
             val policy = RankingPublicationPolicy.production
@@ -97,6 +112,11 @@ class RankingPublicationPolicyTest {
         assertEquals(
             RankingPublicationPolicy.homologation,
             OnlineServerEnvironment.HOMOLOGATION
+                .rankingPublicationPolicy,
+        )
+        assertEquals(
+            RankingPublicationPolicy.miniproduction,
+            OnlineServerEnvironment.MINIPRODUCTION
                 .rankingPublicationPolicy,
         )
 

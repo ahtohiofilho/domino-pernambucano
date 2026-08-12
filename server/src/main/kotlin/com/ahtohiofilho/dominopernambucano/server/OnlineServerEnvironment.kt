@@ -8,19 +8,35 @@ internal const val ONLINE_SERVER_PORT_ENVIRONMENT_VARIABLE =
 
 internal const val DEFAULT_ONLINE_SERVER_PORT = 8080
 internal const val HOMOLOGATION_ONLINE_SERVER_PORT = 18080
+internal const val MINIPRODUCTION_ONLINE_SERVER_PORT = 18080
 
 enum class OnlineServerEnvironment {
     DEVELOPMENT,
     HOMOLOGATION,
+    MINIPRODUCTION,
     TEST,
     PRODUCTION,
 }
 
 internal val OnlineServerEnvironment.allowsDevelopmentIdentityHeader: Boolean
-    get() = this != OnlineServerEnvironment.PRODUCTION
+    get() = this == OnlineServerEnvironment.DEVELOPMENT ||
+        this == OnlineServerEnvironment.HOMOLOGATION ||
+        this == OnlineServerEnvironment.TEST
 
 internal val OnlineServerEnvironment.allowsDevelopmentBots: Boolean
     get() = this == OnlineServerEnvironment.DEVELOPMENT
+
+internal val OnlineServerEnvironment.requiresPersistentState: Boolean
+    get() = this == OnlineServerEnvironment.MINIPRODUCTION ||
+        this == OnlineServerEnvironment.PRODUCTION
+
+internal val OnlineServerEnvironment.requiresStableSessionSecret: Boolean
+    get() = this == OnlineServerEnvironment.MINIPRODUCTION ||
+        this == OnlineServerEnvironment.PRODUCTION
+
+internal val OnlineServerEnvironment.usesIsolatedPort: Boolean
+    get() = this == OnlineServerEnvironment.HOMOLOGATION ||
+        this == OnlineServerEnvironment.MINIPRODUCTION
 
 internal fun resolveOnlineServerEnvironment(
     readEnvironmentVariable: (String) -> String? = { variableName ->
@@ -42,6 +58,7 @@ internal fun resolveOnlineServerEnvironment(
     return when (configuredValue) {
         "development" -> OnlineServerEnvironment.DEVELOPMENT
         "homologation" -> OnlineServerEnvironment.HOMOLOGATION
+        "miniproduction" -> OnlineServerEnvironment.MINIPRODUCTION
         "test" -> OnlineServerEnvironment.TEST
         "production" -> OnlineServerEnvironment.PRODUCTION
         else -> throw IllegalArgumentException(
@@ -76,6 +93,9 @@ internal fun resolveOnlineServerPort(
             serverEnvironment == OnlineServerEnvironment.HOMOLOGATION ->
                 HOMOLOGATION_ONLINE_SERVER_PORT
 
+            serverEnvironment == OnlineServerEnvironment.MINIPRODUCTION ->
+                MINIPRODUCTION_ONLINE_SERVER_PORT
+
             else -> DEFAULT_ONLINE_SERVER_PORT
         }
 
@@ -83,9 +103,9 @@ internal fun resolveOnlineServerPort(
         "$ONLINE_SERVER_PORT_ENVIRONMENT_VARIABLE deve estar entre 1 e 65535."
     }
 
-    if (serverEnvironment == OnlineServerEnvironment.HOMOLOGATION) {
+    if (serverEnvironment.usesIsolatedPort) {
         require(port != DEFAULT_ONLINE_SERVER_PORT) {
-            "A homologacao nao pode usar a porta padrao de producao " +
+            "O ambiente isolado nao pode usar a porta padrao de producao " +
                 "$DEFAULT_ONLINE_SERVER_PORT."
         }
     }

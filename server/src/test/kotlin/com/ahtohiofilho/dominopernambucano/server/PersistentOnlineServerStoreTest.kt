@@ -324,6 +324,68 @@ class PersistentOnlineServerStoreTest {
     }
 
     @Test
+    fun miniproduction_requires_absolute_state_and_returns_persistent_store() {
+        val traceLogger = OnlineTraceLogger()
+
+        assertThrows(IllegalStateException::class.java) {
+            createDefaultOnlineServerStore(
+                serverEnvironment =
+                    OnlineServerEnvironment.MINIPRODUCTION,
+                autoFillDevelopmentBotsAfterTwoHumanPlayers = false,
+                traceLogger = traceLogger,
+                readEnvironmentVariable = { null },
+            )
+        }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            createDefaultOnlineServerStore(
+                serverEnvironment =
+                    OnlineServerEnvironment.MINIPRODUCTION,
+                autoFillDevelopmentBotsAfterTwoHumanPlayers = false,
+                traceLogger = traceLogger,
+                readEnvironmentVariable = { variableName ->
+                    if (
+                        variableName ==
+                        ONLINE_SERVER_STATE_FILE_ENVIRONMENT_VARIABLE
+                    ) {
+                        "relative-state.json"
+                    } else {
+                        null
+                    }
+                },
+            )
+        }
+
+        val root = temporaryRoot()
+        val stateFile = File(root, "miniproduction-state.json")
+
+        try {
+            val store = createDefaultOnlineServerStore(
+                serverEnvironment =
+                    OnlineServerEnvironment.MINIPRODUCTION,
+                autoFillDevelopmentBotsAfterTwoHumanPlayers = false,
+                traceLogger = traceLogger,
+                readEnvironmentVariable = { variableName ->
+                    if (
+                        variableName ==
+                        ONLINE_SERVER_STATE_FILE_ENVIRONMENT_VARIABLE
+                    ) {
+                        stateFile.absolutePath
+                    } else {
+                        null
+                    }
+                },
+            )
+
+            assertTrue(store is PersistentOnlineServerStore)
+            assertTrue(stateFile.isFile)
+            store.close()
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun persistence_failure_changes_readiness_until_a_write_succeeds() {
         val root = temporaryRoot()
         val stateFile = File(root, "authoritative-state.json")

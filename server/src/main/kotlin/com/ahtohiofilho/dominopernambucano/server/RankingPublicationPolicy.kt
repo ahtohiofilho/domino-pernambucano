@@ -5,6 +5,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 internal enum class RankingPublicationProfile {
     PRODUCTION,
     HOMOLOGATION,
+    MINIPRODUCTION,
     TEST,
 }
 
@@ -48,6 +49,13 @@ internal data class RankingPublicationThresholds(
             weekly = 4,
             monthly = 4,
             annual = 4,
+        )
+
+        val miniproduction = RankingPublicationThresholds(
+            daily = 12,
+            weekly = 12,
+            monthly = 12,
+            annual = 12,
         )
     }
 }
@@ -104,6 +112,11 @@ internal class RankingPublicationPolicy private constructor(
             thresholds = RankingPublicationThresholds.homologation,
         )
 
+        val miniproduction = RankingPublicationPolicy(
+            profile = RankingPublicationProfile.MINIPRODUCTION,
+            thresholds = RankingPublicationThresholds.miniproduction,
+        )
+
         fun test(
             thresholds: RankingPublicationThresholds,
         ): RankingPublicationPolicy {
@@ -120,6 +133,9 @@ internal val OnlineServerEnvironment.rankingPublicationPolicy:
     get() = when (this) {
         OnlineServerEnvironment.HOMOLOGATION ->
             RankingPublicationPolicy.homologation
+
+        OnlineServerEnvironment.MINIPRODUCTION ->
+            RankingPublicationPolicy.miniproduction
 
         OnlineServerEnvironment.DEVELOPMENT,
         OnlineServerEnvironment.TEST,

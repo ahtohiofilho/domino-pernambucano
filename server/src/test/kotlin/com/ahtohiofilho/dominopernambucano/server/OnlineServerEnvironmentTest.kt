@@ -75,6 +75,22 @@ class OnlineServerEnvironmentTest {
     }
 
     @Test
+    fun miniproduction_disables_development_identity_and_bots() {
+        val environment = resolveOnlineServerEnvironment(
+            readEnvironmentVariable = { "  MiNiPrOdUcTiOn  " },
+        )
+
+        assertEquals(
+            OnlineServerEnvironment.MINIPRODUCTION,
+            environment,
+        )
+        assertFalse(environment.allowsDevelopmentIdentityHeader)
+        assertFalse(environment.allowsDevelopmentBots)
+        assertTrue(environment.requiresPersistentState)
+        assertTrue(environment.requiresStableSessionSecret)
+    }
+
+    @Test
     fun homologation_uses_an_isolated_default_port() {
         assertEquals(
             DEFAULT_ONLINE_SERVER_PORT,
@@ -90,15 +106,35 @@ class OnlineServerEnvironmentTest {
                 readEnvironmentVariable = { null },
             ),
         )
+        assertEquals(
+            MINIPRODUCTION_ONLINE_SERVER_PORT,
+            resolveOnlineServerPort(
+                serverEnvironment =
+                    OnlineServerEnvironment.MINIPRODUCTION,
+                readEnvironmentVariable = { null },
+            ),
+        )
     }
 
     @Test
-    fun homologation_rejects_the_production_port_and_invalid_values() {
+    fun isolated_environments_reject_the_production_port_and_invalid_values() {
         assertThrows(
             IllegalArgumentException::class.java,
         ) {
             resolveOnlineServerPort(
                 serverEnvironment = OnlineServerEnvironment.HOMOLOGATION,
+                readEnvironmentVariable = {
+                    DEFAULT_ONLINE_SERVER_PORT.toString()
+                },
+            )
+        }
+
+        assertThrows(
+            IllegalArgumentException::class.java,
+        ) {
+            resolveOnlineServerPort(
+                serverEnvironment =
+                    OnlineServerEnvironment.MINIPRODUCTION,
                 readEnvironmentVariable = {
                     DEFAULT_ONLINE_SERVER_PORT.toString()
                 },
@@ -131,6 +167,19 @@ class OnlineServerEnvironmentTest {
         ) {
             createDefaultOnlineSessionTokenService(
                 serverEnvironment = OnlineServerEnvironment.PRODUCTION,
+                readEnvironmentVariable = { null },
+            )
+        }
+    }
+
+    @Test
+    fun miniproduction_requires_configured_signing_secret() {
+        assertThrows(
+            IllegalStateException::class.java,
+        ) {
+            createDefaultOnlineSessionTokenService(
+                serverEnvironment =
+                    OnlineServerEnvironment.MINIPRODUCTION,
                 readEnvironmentVariable = { null },
             )
         }
