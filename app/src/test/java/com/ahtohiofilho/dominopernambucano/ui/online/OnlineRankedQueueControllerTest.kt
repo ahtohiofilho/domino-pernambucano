@@ -7,6 +7,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankedMatchActivat
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankedMatchActivationFailureKind
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueClientResult
+import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueFailureKind
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueuePollingPolicy
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueState
 import com.ahtohiofilho.dominopernambucano.online.toOnlineSnapshotDto
@@ -115,6 +116,31 @@ class OnlineRankedQueueControllerTest {
             controller.state.value,
         )
     }
+
+    @Test
+    fun unavailable_cancel_returns_locally_to_cancelled_state() =
+        runBlocking {
+            val client = FakeQueueClient(
+                cancelResult = OnlineRankedQueueClientResult.Failure(
+                    kind = OnlineRankedQueueFailureKind.UNAVAILABLE,
+                    retryable = true,
+                ),
+            )
+            val controller = OnlineRankedQueueController(
+                queueClient = client,
+                activateMatch = { _, _ ->
+                    error("Activation was not expected.")
+                },
+            )
+
+            controller.cancel()
+
+            assertEquals(listOf("cancel"), client.calls)
+            assertEquals(
+                OnlineRankedQueueUiState.Cancelled,
+                controller.state.value,
+            )
+        }
 
     @Test
     fun invalid_ranked_activation_is_blocked_before_navigation() =

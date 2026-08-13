@@ -33,13 +33,16 @@ class OnlineGoogleAccountManager(
     },
 ) {
     fun currentStatus(): OnlineGoogleAccountStatus {
-        if (!available) {
-            return OnlineGoogleAccountStatus.UNAVAILABLE
-        }
-
         val credential = sessionCredentialRepository
             .getStoredCredentialOrNull()
-            ?: return OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL
+
+        if (credential == null) {
+            return if (available) {
+                OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL
+            } else {
+                OnlineGoogleAccountStatus.UNAVAILABLE
+            }
+        }
 
         return when (credential.sessionKind) {
             OnlineSessionKind.ANONYMOUS -> {
@@ -47,7 +50,12 @@ class OnlineGoogleAccountManager(
                     OnlineGoogleAccountStatus.VISITOR
                 } else {
                     sessionCredentialRepository.getValidCredentialOrNull()
-                    OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL
+
+                    if (available) {
+                        OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL
+                    } else {
+                        OnlineGoogleAccountStatus.UNAVAILABLE
+                    }
                 }
             }
 

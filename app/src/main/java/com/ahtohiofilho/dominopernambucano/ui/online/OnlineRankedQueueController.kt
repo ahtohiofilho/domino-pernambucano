@@ -126,7 +126,15 @@ class OnlineRankedQueueController(
                 }
 
                 is OnlineRankedQueueClientResult.Failure -> {
-                    mutableState.value = result.toUiFailure()
+                    mutableState.value = if (
+                        result.kind ==
+                        OnlineRankedQueueFailureKind.UNAVAILABLE &&
+                        result.retryable
+                    ) {
+                        OnlineRankedQueueUiState.Cancelled
+                    } else {
+                        result.toUiFailure()
+                    }
                 }
             }
         } catch (cancellation: CancellationException) {

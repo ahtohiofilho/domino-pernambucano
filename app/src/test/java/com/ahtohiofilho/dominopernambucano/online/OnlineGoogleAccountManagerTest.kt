@@ -38,6 +38,28 @@ class OnlineGoogleAccountManagerTest {
     }
 
     @Test
+    fun valid_account_remains_connected_when_google_provider_is_unavailable() {
+        val store = ManagerCredentialStore(
+            credential = accountCredential(
+                expiresAtEpochMillis = 2_000L,
+            ),
+        )
+        val credentialRepository = credentialRepository(store)
+        val manager = OnlineGoogleAccountManager(
+            available = false,
+            googleIdTokenProvider = null,
+            googleIdentityRepository = null,
+            sessionCredentialRepository = credentialRepository,
+            nowEpochMillis = { 1_000L },
+        )
+
+        assertEquals(
+            OnlineGoogleAccountStatus.CONNECTED,
+            manager.currentStatus(),
+        )
+    }
+
+    @Test
     fun cancelled_google_selection_does_not_change_visitor() = runBlocking {
         val original = anonymousCredential()
         val store = ManagerCredentialStore(original)

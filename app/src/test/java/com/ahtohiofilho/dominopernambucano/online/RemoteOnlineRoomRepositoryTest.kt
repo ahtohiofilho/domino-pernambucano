@@ -22,7 +22,9 @@ import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -1546,6 +1548,77 @@ class RemoteOnlineRoomRepositoryTest {
                 },
             )
         }
+
+    @Test
+    fun polling_stops_after_finished_room_snapshot() = runBlocking {
+        val initialRoom = createInMatchRoomSnapshot()
+        val finishedRoom = initialRoom.copy(
+            status = OnlineRoomStatusDto.FINISHED,
+            updatedAtEpochMillis = 2_000L,
+        )
+        val match = createMatchSnapshot(
+            revision = 1L,
+        )
+        val traceBuffer = InMemoryOnlineTraceBuffer()
+        val apiClient = FakeRemoteOnlineApiClient(
+            createRoomResult = OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = initialRoom,
+                localSeatIndex = 0,
+            ),
+            roomSnapshotsById = mutableMapOf(
+                initialRoom.roomId to finishedRoom,
+            ),
+            matchSnapshotsById = mutableMapOf(
+                match.matchId to match,
+            ),
+        )
+        val repository = createRepository(
+            apiClient = apiClient,
+            pollingPolicy = OnlineRemotePollingPolicy(
+                enabled = true,
+                intervalMillis = 1L,
+            ),
+            coroutineDispatcher = Dispatchers.Default,
+            traceLogger = createTraceLogger(traceBuffer),
+        )
+
+        repository.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = "player-1",
+                playerName = "Jogador 1",
+            ),
+        )
+
+        withTimeout(2_000L) {
+            while (
+                traceBuffer.snapshot().none { entry ->
+                    entry.event.type ==
+                        OnlineTraceType.POLLING_STOPPED &&
+                        entry.event.attributes["reason"] ==
+                        "room_finished"
+                }
+            ) {
+                delay(10L)
+            }
+        }
+
+        val requestCountAtStop =
+            apiClient.fetchRoomSnapshotRequests.size
+        delay(25L)
+
+        assertEquals(1, requestCountAtStop)
+        assertEquals(
+            requestCountAtStop,
+            apiClient.fetchRoomSnapshotRequests.size,
+        )
+        assertEquals(
+            OnlineRoomStatusDto.FINISHED,
+            repository.roomSnapshot.value?.status,
+        )
+
+        repository.leaveRoom()
+    }
 
     @Test
     fun activate_pending_participation_match_resume_does_not_publish_when_valid_session_is_absent() =

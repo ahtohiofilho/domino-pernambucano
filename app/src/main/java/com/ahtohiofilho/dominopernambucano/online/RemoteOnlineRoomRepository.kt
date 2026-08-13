@@ -1362,13 +1362,23 @@ class RemoteOnlineRoomRepository(
                         )
 
                     if (authenticationFailure == null) {
-                        refreshSnapshots(
+                        val refreshedRoomStatus = refreshSnapshots(
                             client = client,
                             roomId = roomId,
                             fallbackMatchId = mutableMatchSnapshot.value?.matchId,
                             trigger = "polling",
                             playerId = playerId,
                         )
+
+                        if (
+                            refreshedRoomStatus ==
+                            OnlineRoomStatusDto.FINISHED
+                        ) {
+                            stopPolling(
+                                reason = "room_finished",
+                            )
+                            return@launch
+                        }
                     } else {
                         trace(
                             level = OnlineTraceLevel.WARN,
@@ -1415,10 +1425,11 @@ class RemoteOnlineRoomRepository(
         fallbackMatchId: String?,
         trigger: String,
         playerId: String?,
-    ) {
+    ): OnlineRoomStatusDto? {
         val resolvedPlayerId = playerId ?: activePlayerId
 
         var latestMatchId = fallbackMatchId
+        var latestRoomStatus: OnlineRoomStatusDto? = null
 
         val roomRequestStartedAtEpochMillis = nowEpochMillis()
 
@@ -1438,6 +1449,7 @@ class RemoteOnlineRoomRepository(
             client.fetchRoomSnapshot(roomId)
         }.onSuccess { room ->
             mutableRoomSnapshot.value = room
+            latestRoomStatus = room.status
             latestMatchId = room.matchId ?: latestMatchId
 
             trace(
@@ -1468,15 +1480,18 @@ class RemoteOnlineRoomRepository(
             )
         }
 
-        val matchId = latestMatchId ?: return
+        val matchId = latestMatchId
+        if (matchId != null) {
+            fetchAndPublishMatchSnapshot(
+                client = client,
+                roomId = roomId,
+                matchId = matchId,
+                trigger = trigger,
+                playerId = resolvedPlayerId,
+            )
+        }
 
-        fetchAndPublishMatchSnapshot(
-            client = client,
-            roomId = roomId,
-            matchId = matchId,
-            trigger = trigger,
-            playerId = resolvedPlayerId,
-        )
+        return latestRoomStatus
     }
 
     private suspend fun fetchAndPublishMatchSnapshot(
