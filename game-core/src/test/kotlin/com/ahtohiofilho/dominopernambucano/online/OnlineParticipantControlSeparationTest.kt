@@ -158,6 +158,54 @@ class OnlineParticipantControlSeparationTest {
         )
     }
 
+    @Test
+    fun winning_round_summary_advances_to_match_finished_without_dealing_again() {
+        val room = createRoomSnapshot()
+        val finishedGameState = applyOnlineRoomPlayerNames(
+            gameState = createInitialDominoGameState(),
+            room = room,
+        ).copy(
+            currentPlayerIndex = 0,
+            lastRoundWinnerIndex = 0,
+            teamScores = listOf(6, 3),
+            roundWinnerPlayerIndex = 0,
+            roundWinnerTeamIndex = 0,
+            roundWinKind = RoundWinKind.COMMON,
+            gameWinnerTeamIndex = 0,
+        )
+        val currentSnapshot = DominoMatchRuntimeState(
+            gameState = finishedGameState,
+            roundNumber = 4,
+            localPlayerIndex = 0,
+            phase = DominoMatchPhase.RoundSummary,
+            clockPolicy = DominoMatchClockPolicy.OnlinePerPlayerRound,
+        ).toOnlineSnapshotDto(
+            roomId = room.roomId,
+            matchId = requireNotNull(room.matchId),
+            revision = 11L,
+        )
+
+        val reduction = reduceOnlineStartNextRoundAction(
+            action = createOnlineStartNextRoundAction(
+                roomId = room.roomId,
+                matchId = requireNotNull(room.matchId),
+                playerId = "human-player-0",
+                revision = currentSnapshot.revision,
+                actionId = "finish-after-winning-summary",
+            ),
+            currentRoom = room,
+            currentSnapshot = currentSnapshot,
+        )
+
+        assertTrue(reduction is OnlineMatchActionReduction.Accepted)
+        val finalState =
+            (reduction as OnlineMatchActionReduction.Accepted).runtimeState
+
+        assertEquals(DominoMatchPhase.MatchFinished, finalState.phase)
+        assertEquals(4, finalState.roundNumber)
+        assertEquals(finishedGameState, finalState.gameState)
+    }
+
     private fun createRoomSnapshot(): OnlineRoomSnapshotDto {
         return OnlineRoomSnapshotDto(
             roomId = "room-1",

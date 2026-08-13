@@ -376,12 +376,12 @@ class LocalDominoMatchCoordinator(
     ): DominoMatchPhase {
         val gameState = runtimeState.gameState
 
-        if (isGameFinished(gameState)) {
-            return DominoMatchPhase.MatchFinished
-        }
-
         if (isRoundFinished(gameState)) {
             return DominoMatchPhase.RoundSummary
+        }
+
+        if (isGameFinished(gameState)) {
+            return DominoMatchPhase.MatchFinished
         }
 
         val currentPlayerIndex = gameState.currentPlayerIndex

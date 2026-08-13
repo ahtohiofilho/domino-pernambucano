@@ -50,6 +50,11 @@ class LocalDominoMatchCoordinatorTest {
 
                 DominoMatchPhase.WaitingForLocalMove -> {
                     val gameState = runtimeState.gameState
+                    if (gameState.currentPlayerIndex != runtimeState.localPlayerIndex) {
+                        coordinator.dispatch(DominoMatchCommand.BotDecisionReady)
+                        return@repeat
+                    }
+
                     val currentPlayer = gameState.players[gameState.currentPlayerIndex]
 
                     val move = currentPlayer.hand
@@ -102,5 +107,71 @@ class LocalDominoMatchCoordinatorTest {
                     finalPhase == DominoMatchPhase.RoundSummary ||
                     finalPhase == DominoMatchPhase.MatchFinished,
         )
+    }
+
+    @Test
+    fun winning_hit_presents_round_summary_before_match_finished() {
+        val coordinator = LocalDominoMatchCoordinator()
+
+        repeat(2_000) {
+            val runtimeState = coordinator.currentState
+
+            when (val phase = runtimeState.phase) {
+                DominoMatchPhase.RoundIntro -> {
+                    coordinator.dispatch(DominoMatchCommand.RoundIntroFinished)
+                }
+
+                DominoMatchPhase.WaitingForLocalMove -> {
+                    val gameState = runtimeState.gameState
+                    if (gameState.currentPlayerIndex != runtimeState.localPlayerIndex) {
+                        coordinator.dispatch(DominoMatchCommand.BotDecisionReady)
+                        return@repeat
+                    }
+
+                    val currentPlayer = gameState.players[gameState.currentPlayerIndex]
+                    val move = currentPlayer.hand
+                        .asSequence()
+                        .flatMap { piece ->
+                            getPlayableMoves(
+                                board = gameState.board,
+                                piece = piece,
+                                openingPiece = gameState.openingPiece,
+                            ).asSequence()
+                        }
+                        .first()
+
+                    coordinator.dispatch(
+                        DominoMatchCommand.LocalMoveSelected(move = move)
+                    )
+                }
+
+                is DominoMatchPhase.PresentingMove,
+                is DominoMatchPhase.PresentingPass -> {
+                    coordinator.dispatch(DominoMatchCommand.PresentationFinished)
+                }
+
+                DominoMatchPhase.RoundSummary -> {
+                    if (runtimeState.gameState.gameWinnerTeamIndex != null) {
+                        coordinator.dispatch(DominoMatchCommand.StartNextRound)
+
+                        assertEquals(
+                            DominoMatchPhase.MatchFinished,
+                            coordinator.currentState.phase,
+                        )
+                        return
+                    }
+
+                    coordinator.dispatch(DominoMatchCommand.StartNextRound)
+                }
+
+                DominoMatchPhase.MatchFinished -> {
+                    throw AssertionError(
+                        "A partida finalizou sem apresentar o resumo da batida vencedora."
+                    )
+                }
+            }
+        }
+
+        throw AssertionError("A simulação não alcançou a batida vencedora.")
     }
 }

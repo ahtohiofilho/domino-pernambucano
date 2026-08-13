@@ -164,14 +164,6 @@ fun RoundIntroPresentationOverlay(
             )
         }
 
-        bottomProgress.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(
-                durationMillis = ROUND_INTRO_ENTER_MILLIS,
-                easing = FastOutSlowInEasing,
-            ),
-        )
-
         launch {
             centerAlpha.animateTo(
                 targetValue = 1f,
@@ -182,10 +174,20 @@ fun RoundIntroPresentationOverlay(
             )
         }
 
-        centerScale.animateTo(
-            targetValue = 1f,
+        launch {
+            centerScale.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = ROUND_INTRO_SCORE_MILLIS,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        }
+
+        bottomProgress.animateTo(
+            targetValue = 0f,
             animationSpec = tween(
-                durationMillis = ROUND_INTRO_SCORE_MILLIS,
+                durationMillis = ROUND_INTRO_ENTER_MILLIS,
                 easing = FastOutSlowInEasing,
             ),
         )

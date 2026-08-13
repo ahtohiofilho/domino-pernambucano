@@ -173,9 +173,10 @@ fun reduceOnlineStartNextRoundAction(
     }
 
     if (isGameFinished(runtimeState.gameState)) {
-        return rejectOnlineAction(
-            reason = "A partida já terminou.",
-            currentSnapshot = currentSnapshot,
+        return OnlineMatchActionReduction.Accepted(
+            runtimeState = runtimeState.copy(
+                phase = DominoMatchPhase.MatchFinished,
+            ),
         )
     }
 
@@ -257,12 +258,12 @@ fun reduceOnlineStartNewMatchAction(
 fun determineOnlineNextPhase(
     gameState: DominoGameState,
 ): DominoMatchPhase {
-    if (isGameFinished(gameState)) {
-        return DominoMatchPhase.MatchFinished
-    }
-
     if (isRoundFinished(gameState)) {
         return DominoMatchPhase.RoundSummary
+    }
+
+    if (isGameFinished(gameState)) {
+        return DominoMatchPhase.MatchFinished
     }
 
     val currentPlayerIndex = gameState.currentPlayerIndex

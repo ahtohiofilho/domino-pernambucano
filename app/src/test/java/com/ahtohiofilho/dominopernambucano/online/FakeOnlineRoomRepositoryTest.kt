@@ -405,7 +405,7 @@ class FakeOnlineRoomRepositoryTest {
     }
 
     @Test
-    fun start_next_round_after_game_finished_is_rejected_and_preserves_snapshot() = runBlocking {
+    fun start_next_round_after_game_finished_publishes_final_phase_and_preserves_game_state() = runBlocking {
         val repository = createFilledRoomRepository()
 
         val finishedGameSnapshot = playUntilGameFinished(
@@ -425,10 +425,17 @@ class FakeOnlineRoomRepositoryTest {
             )
         )
 
-        assertFalse(result.accepted)
-        assertEquals("A partida já terminou.", result.reason)
-        assertEquals(finishedGameSnapshot.revision, result.revision)
-        assertEquals(finishedGameSnapshot, repository.matchSnapshot.value)
+        val finalSnapshot = requireNotNull(repository.matchSnapshot.value)
+
+        assertTrue(result.accepted)
+        assertEquals(finishedGameSnapshot.revision + 1L, result.revision)
+        assertEquals(result.revision, finalSnapshot.revision)
+        assertEquals(
+            OnlineMatchPhaseTypeDto.MATCH_FINISHED,
+            finalSnapshot.phase.type,
+        )
+        assertEquals(finishedGameSnapshot.gameState, finalSnapshot.gameState)
+        assertEquals(finishedGameSnapshot.roundNumber, finalSnapshot.roundNumber)
     }
 
     private suspend fun createFilledRoomRepository(): FakeOnlineRoomRepository {
