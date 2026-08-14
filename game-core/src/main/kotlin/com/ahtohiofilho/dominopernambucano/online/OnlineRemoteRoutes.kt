@@ -3,6 +3,8 @@ package com.ahtohiofilho.dominopernambucano.online
 object OnlineRemoteRoutes {
     const val CREATE_ANONYMOUS_SESSION = "sessions/anonymous"
     const val PROMOTE_ACCOUNT = "accounts/promote"
+    const val RECOVER_SYNTHETIC_ACCOUNT =
+        "accounts/synthetic/recover"
     const val LINK_GOOGLE_IDENTITY = "accounts/identities/google/link"
     const val RECOVER_GOOGLE_ACCOUNT = "accounts/identities/google/recover"
     const val RANKED_QUEUE = "ranked-queue"

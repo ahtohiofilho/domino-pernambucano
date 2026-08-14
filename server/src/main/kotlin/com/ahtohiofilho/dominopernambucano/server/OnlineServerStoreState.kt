@@ -7,6 +7,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
@@ -41,6 +42,8 @@ data class OnlineServerAccount(
     val publicDisplayName: String? = null,
     val tableName: String? = null,
     val profileUpdatedAtEpochMillis: Long? = null,
+    val participantType: OnlineParticipantTypeDto =
+        OnlineParticipantTypeDto.HUMAN,
 )
 
 internal fun OnlineServerAccount.toOnlineAccountProfileOrNull():

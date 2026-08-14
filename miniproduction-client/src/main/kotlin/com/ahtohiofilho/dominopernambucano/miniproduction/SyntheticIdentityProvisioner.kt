@@ -36,15 +36,15 @@ internal class SyntheticIdentityProvisioner(
         profile: SyntheticProfile,
     ): SyntheticAccountCredential {
         if (account.expiresAtEpochMillis <= nowEpochMillis() + 60_000L) {
-            return create(profile)
+            return recover(account, profile)
         }
 
         val currentProfile = try {
             gateway.fetchAccountProfile(account.accessToken)
         } catch (failure: MiniProductionHttpException) {
             return when (failure.statusCode) {
-                401, 403 -> create(profile)
-                404 -> updateOrReplace(account, profile)
+                401, 403 -> recover(account, profile)
+                404 -> update(account, profile)
                 else -> throw failure
             }
         }
@@ -53,12 +53,45 @@ internal class SyntheticIdentityProvisioner(
             return account
         }
 
-        return updateOrReplace(account, profile)
+        return update(account, profile)
     }
 
-    private fun updateOrReplace(
+    private fun recover(
         account: SyntheticAccountCredential,
         profile: SyntheticProfile,
+    ): SyntheticAccountCredential {
+        val renewedSession = gateway.recoverSyntheticAccount(
+            accountId = account.accountId,
+        )
+        require(renewedSession.accountId == account.accountId) {
+            "A recuperação sintética alterou o accountId."
+        }
+        require(renewedSession.playerId == account.playerId) {
+            "A recuperação sintética alterou o playerId."
+        }
+
+        val renewed = account.copy(
+            accessToken = renewedSession.accessToken,
+            expiresAtEpochMillis = renewedSession.expiresAtEpochMillis,
+        )
+        val currentProfile = gateway.fetchAccountProfile(
+            accessToken = renewed.accessToken,
+        )
+        return if (currentProfile.matches(profile)) {
+            renewed
+        } else {
+            update(
+                account = renewed,
+                profile = profile,
+                recoverSessionOnAuthFailure = false,
+            )
+        }
+    }
+
+    private fun update(
+        account: SyntheticAccountCredential,
+        profile: SyntheticProfile,
+        recoverSessionOnAuthFailure: Boolean = true,
     ): SyntheticAccountCredential {
         val updated = try {
             gateway.updateAccountProfile(
@@ -67,7 +100,13 @@ internal class SyntheticIdentityProvisioner(
             )
         } catch (failure: MiniProductionHttpException) {
             return when (failure.statusCode) {
-                401, 403 -> create(profile)
+                401, 403 -> {
+                    if (recoverSessionOnAuthFailure) {
+                        recover(account, profile)
+                    } else {
+                        throw failure
+                    }
+                }
                 else -> throw failure
             }
         }

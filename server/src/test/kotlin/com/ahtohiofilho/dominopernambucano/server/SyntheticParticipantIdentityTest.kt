@@ -1,0 +1,234 @@
+package com.ahtohiofilho.dominopernambucano.server
+
+import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SyntheticParticipantIdentityTest {
+    @Test
+    fun provisioning_secret_is_explicit_and_compared_exactly() {
+        val secret = "0123456789abcdef0123456789abcdef"
+        val policy = SyntheticProvisioningPolicy.fixedForTest(secret)
+
+        assertTrue(policy.authorizes(secret))
+        assertFalse(policy.authorizes("${secret}x"))
+        assertFalse(SyntheticProvisioningPolicy.Disabled.authorizes(secret))
+    }
+
+    @Test
+    fun synthetic_account_type_is_persistent_and_cannot_be_downgraded() {
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+            accountIdFactory = { "account-synthetic" },
+        )
+        val account = requireNotNull(
+            store.promoteSyntheticAccount(
+                playerId = "player-synthetic",
+            ),
+        )
+
+        assertEquals(
+            OnlineParticipantTypeDto.SYNTHETIC,
+            account.participantType,
+        )
+        assertEquals(
+            OnlineParticipantTypeDto.SYNTHETIC,
+            store.snapshotPersistentState()
+                .accounts
+                .single()
+                .participantType,
+        )
+        val ordinaryRetry = requireNotNull(
+            store.promoteAccount(
+                playerId = "player-synthetic",
+                expectedAccountId = account.accountId,
+            ),
+        )
+        assertEquals(
+            OnlineParticipantTypeDto.SYNTHETIC,
+            ordinaryRetry.participantType,
+        )
+    }
+
+    @Test
+    fun mixed_external_accounts_share_canonical_ranked_match_without_app_bot_control() {
+        var accountSequence = 0
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+            accountIdFactory = {
+                accountSequence++
+                "account-$accountSequence"
+            },
+        )
+        val publicNames = listOf(
+            "Jogador Um",
+            "Jogador Dois",
+            "Jogador Tres",
+            "Jogador Quatro",
+        )
+        val accounts = (1..4).associateWith { index ->
+            val account = if (index <= 2) {
+                store.promoteAccount(playerId = "player-$index")
+            } else {
+                store.promoteSyntheticAccount(playerId = "player-$index")
+            }
+            requireNotNull(account).also {
+                requireNotNull(
+                    store.updateAccountProfile(
+                        accountId = it.accountId,
+                        publicDisplayName = publicNames[index - 1],
+                        tableName = "P0$index",
+                    ),
+                )
+            }
+        }
+
+        var matched: PublicRankedQueueResult? = null
+        accounts.forEach { (index, account) ->
+            matched = store.enqueuePublicRanked(
+                request = CreateOnlineRoomRequestDto(
+                    localPlayerId = account.playerId,
+                    playerName = "P0$index",
+                ),
+                identity = account.toRequestIdentity(),
+            )
+        }
+
+        val room = requireNotNull(requireNotNull(matched).roomSnapshot)
+        val participantTypeByPlayer = room.players.associate { player ->
+            player.playerId to player.participantType
+        }
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            participantTypeByPlayer.getValue("player-1"),
+        )
+        assertEquals(
+            OnlineParticipantTypeDto.HUMAN,
+            participantTypeByPlayer.getValue("player-2"),
+        )
+        assertEquals(
+            OnlineParticipantTypeDto.SYNTHETIC,
+            participantTypeByPlayer.getValue("player-3"),
+        )
+        assertEquals(
+            OnlineParticipantTypeDto.SYNTHETIC,
+            participantTypeByPlayer.getValue("player-4"),
+        )
+
+        val storedMatch = store.snapshotPersistentState().matches.single()
+        assertTrue(storedMatch.applicationSeatIndexes.isEmpty())
+    }
+
+    @Test
+    fun mixed_external_ranked_match_restores_with_canonical_participant_types() {
+        var accountSequence = 0
+        val firstStore = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+            accountIdFactory = {
+                accountSequence++
+                "account-$accountSequence"
+            },
+        )
+        val publicNames = listOf(
+            "Jogador Um",
+            "Jogador Dois",
+            "Jogador Tres",
+            "Jogador Quatro",
+        )
+        val accounts = (1..4).associateWith { index ->
+            requireNotNull(
+                if (index <= 2) {
+                    firstStore.promoteAccount(playerId = "player-$index")
+                } else {
+                    firstStore.promoteSyntheticAccount(
+                        playerId = "player-$index",
+                    )
+                },
+            ).also { account ->
+                requireNotNull(
+                    firstStore.updateAccountProfile(
+                        accountId = account.accountId,
+                        publicDisplayName = publicNames[index - 1],
+                        tableName = "P0$index",
+                    ),
+                )
+            }
+        }
+
+        var matched: PublicRankedQueueResult? = null
+        accounts.forEach { (index, account) ->
+            matched = firstStore.enqueuePublicRanked(
+                request = CreateOnlineRoomRequestDto(
+                    localPlayerId = account.playerId,
+                    playerName = "P0$index",
+                ),
+                identity = account.toRequestIdentity(),
+            )
+        }
+        val originalRoom = requireNotNull(
+            requireNotNull(matched).roomSnapshot,
+        )
+        val persistedState = firstStore.snapshotPersistentState()
+        val restartedStore = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+
+        restartedStore.restorePersistentState(persistedState)
+
+        assertEquals(
+            originalRoom,
+            restartedStore.getRoomSnapshot(originalRoom.roomId),
+        )
+        assertEquals(
+            persistedState.accounts.associate { account ->
+                account.playerId to account.participantType
+            },
+            restartedStore.snapshotPersistentState()
+                .accounts
+                .associate { account ->
+                    account.playerId to account.participantType
+                },
+        )
+
+        val syntheticPlayerIds = persistedState.accounts
+            .filter { account ->
+                account.participantType ==
+                    OnlineParticipantTypeDto.SYNTHETIC
+            }
+            .mapTo(mutableSetOf()) { account -> account.playerId }
+        val divergentState = persistedState.copy(
+            rooms = persistedState.rooms.map { room ->
+                room.copy(
+                    players = room.players.map { player ->
+                        if (player.playerId in syntheticPlayerIds) {
+                            player.copy(
+                                participantType =
+                                    OnlineParticipantTypeDto.HUMAN,
+                            )
+                        } else {
+                            player
+                        }
+                    },
+                )
+            },
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            InMemoryOnlineServerStore().restorePersistentState(
+                divergentState,
+            )
+        }
+    }
+
+    private fun OnlineServerAccount.toRequestIdentity() =
+        OnlineRequestIdentity(
+            playerId = playerId,
+            principalId = accountId,
+            sessionId = "synthetic-test:$playerId",
+            kind = OnlinePrincipalKind.ACCOUNT,
+            accountId = accountId,
+        )
+}

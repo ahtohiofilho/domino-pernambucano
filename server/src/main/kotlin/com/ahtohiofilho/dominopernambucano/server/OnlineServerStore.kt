@@ -39,6 +39,18 @@ interface OnlineServerStore : AutoCloseable {
     ): OnlineServerAccount?
 
     /**
+     * Promotes or confirms an externally controlled synthetic account.
+     *
+     * This boundary is called only after server-side provisioning
+     * authorization. Synthetic remains distinct from APPLICATION: the latter
+     * is reserved for server-owned development bots.
+     */
+    fun promoteSyntheticAccount(
+        playerId: String,
+        expectedAccountId: String? = null,
+    ): OnlineServerAccount?
+
+    /**
      * Vincula uma identidade externa sem fundir contas existentes.
      * A mesma operacao e idempotente apenas para a conta canonica original.
      */
@@ -52,6 +64,13 @@ interface OnlineServerStore : AutoCloseable {
     fun findAccountByExternalIdentity(
         provider: OnlineExternalIdentityProvider,
         subject: String,
+    ): OnlineServerAccount?
+
+    /**
+     * Resolves an existing synthetic account for authorized session renewal.
+     */
+    fun findSyntheticAccount(
+        accountId: String,
     ): OnlineServerAccount?
 
     fun getAccountProfile(

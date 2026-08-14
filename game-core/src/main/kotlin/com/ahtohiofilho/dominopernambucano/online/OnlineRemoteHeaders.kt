@@ -9,4 +9,6 @@ package com.ahtohiofilho.dominopernambucano.online
  */
 object OnlineRemoteHeaders {
     const val DEVELOPMENT_PLAYER_ID = "X-Domino-Development-Player-Id"
+    const val SYNTHETIC_PROVISIONING_SECRET =
+        "X-Domino-Synthetic-Provisioning-Secret"
 }

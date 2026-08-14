@@ -13,6 +13,7 @@ internal class AutonomousSyntheticPopulation(
     private val running: AtomicBoolean,
     private val nowEpochMillis: () -> Long = System::currentTimeMillis,
     private val sleeper: (Long) -> Unit = Thread::sleep,
+    private val heartbeat: (Long) -> Unit = {},
 ) {
     init {
         require(profiles.size == credentials.size) {
@@ -36,6 +37,10 @@ internal class AutonomousSyntheticPopulation(
     private var acceptedActions = 0L
     private var rejectedActions = 0L
     private var transientFailures = 0L
+    private val liveness = SyntheticRuntimeLiveness(
+        maxSilenceMillis = config.maxSilenceMillis,
+        heartbeat = heartbeat,
+    )
 
     fun awaitServerReadiness() {
         val deadline = System.nanoTime() + config.readinessTimeout.toNanos()
@@ -56,8 +61,11 @@ internal class AutonomousSyntheticPopulation(
     }
 
     fun run() {
+        val startedAt = nowEpochMillis()
+        liveness.start(startedAt)
         println(
             "POPULATION_STARTED accounts=${players.size} " +
+                "target=${config.runtimeTarget} " +
                 "baseUrl=${config.normalizedBaseUrl}",
         )
 
@@ -68,6 +76,7 @@ internal class AutonomousSyntheticPopulation(
                     step(player, now)
                 }
             }
+            liveness.assertHealthy(now)
             reportIfNeeded(now)
             sleeper(50L)
         }
@@ -85,6 +94,7 @@ internal class AutonomousSyntheticPopulation(
             } else {
                 advanceMatch(player)
             }
+            liveness.recordSuccessfulInteraction(now)
             player.nextStepAtEpochMillis = now + config.pollIntervalMillis
         } catch (failure: MiniProductionHttpException) {
             when {
@@ -170,6 +180,7 @@ internal class AutonomousSyntheticPopulation(
             return
         }
         lastReportAtEpochMillis = now
+        liveness.recordHealthyHeartbeat(now)
 
         val activeMatches = players.mapNotNull { player -> player.matchId }
             .distinct()

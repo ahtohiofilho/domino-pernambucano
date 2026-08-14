@@ -58,12 +58,43 @@ class SyntheticIdentityProvisionerTest {
             ).provision(syntheticRoster.take(1))
         }
     }
+
+    @Test
+    fun expired_session_recovers_the_same_account_without_reprovisioning() {
+        val root = Files.createTempDirectory("synthetic-identities")
+        val gateway = FakeProvisioningGateway()
+        val store = SyntheticIdentityStore(
+            stateDirectory = root,
+            baseUrl = "https://domino.example",
+        )
+        val profile = syntheticRoster.first()
+        val first = SyntheticIdentityProvisioner(
+            gateway = gateway,
+            store = store,
+            nowEpochMillis = { 1_000L },
+        ).provision(listOf(profile)).single()
+
+        gateway.expireAccountSessions()
+        val recovered = SyntheticIdentityProvisioner(
+            gateway = gateway,
+            store = store,
+            nowEpochMillis = { 10_000_000L },
+        ).provision(listOf(profile)).single()
+
+        assertEquals(first.accountId, recovered.accountId)
+        assertEquals(first.playerId, recovered.playerId)
+        assertEquals(1, gateway.anonymousSessionsCreated)
+        assertEquals(1, gateway.syntheticSessionsRecovered)
+        assertEquals(recovered, store.load().single())
+    }
 }
 
 private class FakeProvisioningGateway(
     private val changePlayerIdOnPromotion: Boolean = false,
 ) : MiniProductionGateway {
     var anonymousSessionsCreated: Int = 0
+        private set
+    var syntheticSessionsRecovered: Int = 0
         private set
     private val anonymousPlayersByToken = mutableMapOf<String, String>()
     private val profilesByAccountToken =
@@ -101,6 +132,25 @@ private class FakeProvisioningGateway(
             expiresAtEpochMillis = 9_999_999L,
         )
     }
+
+    override fun recoverSyntheticAccount(
+        accountId: String,
+    ): OnlineAccountSessionDto {
+        syntheticSessionsRecovered++
+        val sequence = accountId.substringAfterLast('-')
+        return OnlineAccountSessionDto(
+            accountId = accountId,
+            playerId = "player-$sequence",
+            accessToken = "recovered-token-$sequence",
+            expiresAtEpochMillis = 20_000_000L,
+        ).also { session ->
+            profilesByAccountToken[session.accessToken] = requireNotNull(
+                profilesByAccountToken["account-token-$sequence"],
+            )
+        }
+    }
+
+    fun expireAccountSessions() = Unit
 
     override fun fetchAccountProfile(
         accessToken: String,

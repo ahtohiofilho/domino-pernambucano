@@ -53,6 +53,16 @@ class PersistentOnlineServerStore private constructor(
         )
     }
 
+    override fun promoteSyntheticAccount(
+        playerId: String,
+        expectedAccountId: String?,
+    ): OnlineServerAccount? = mutate {
+        delegate.promoteSyntheticAccount(
+            playerId = playerId,
+            expectedAccountId = expectedAccountId,
+        )
+    }
+
     override fun linkExternalIdentity(
         playerId: String,
         expectedAccountId: String?,
@@ -75,6 +85,12 @@ class PersistentOnlineServerStore private constructor(
             provider = provider,
             subject = subject,
         )
+    }
+
+    override fun findSyntheticAccount(
+        accountId: String,
+    ): OnlineServerAccount? = read {
+        delegate.findSyntheticAccount(accountId = accountId)
     }
 
     override fun getAccountProfile(

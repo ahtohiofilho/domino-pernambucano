@@ -1,0 +1,32 @@
+services:
+  synthetic-population:
+    image: registry.example.invalid/domino-pe/synthetic-population:REPLACE_ME
+    restart: unless-stopped
+    read_only: true
+    init: true
+    environment:
+      DOMINO_SYNTHETIC_RUNTIME_TARGET: REMOTE_PRODUCTION
+      DOMINO_SYNTHETIC_BASE_URL: ${DOMINO_SYNTHETIC_BASE_URL:?required}
+      DOMINO_SYNTHETIC_CLIENT_STATE_DIR: /state
+      DOMINO_SYNTHETIC_POPULATION_SIZE: "16"
+      DOMINO_SYNTHETIC_POLL_INTERVAL_MILLIS: "750"
+      DOMINO_SYNTHETIC_HEARTBEAT_FILE: /state/runtime-heartbeat
+      DOMINO_SYNTHETIC_MAX_SILENCE_MILLIS: "180000"
+      DOMINO_SYNTHETIC_PROVISIONING_SECRET_FILE: /run/secrets/synthetic_provisioning_secret
+    volumes:
+      - synthetic-participant-state:/state
+    secrets:
+      - synthetic_provisioning_secret
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  synthetic-participant-state:
+
+secrets:
+  synthetic_provisioning_secret:
+    file: ${DOMINO_SYNTHETIC_PROVISIONING_SECRET_FILE:?required}

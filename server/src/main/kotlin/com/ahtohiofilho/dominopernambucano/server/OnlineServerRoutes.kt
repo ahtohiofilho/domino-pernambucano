@@ -7,7 +7,9 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileUpdateRequ
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
+import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
 import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueEnterRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineSyntheticAccountRecoveryRequestDto
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -28,6 +30,8 @@ internal fun Route.onlineServerRoutes(
     googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier,
     rankingPublicationPolicy: RankingPublicationPolicy =
         DEFAULT_RANKING_PUBLICATION_POLICY,
+    syntheticProvisioningPolicy: SyntheticProvisioningPolicy =
+        SyntheticProvisioningPolicy.Disabled,
     nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
@@ -77,6 +81,39 @@ internal fun Route.onlineServerRoutes(
                 ),
             )
         }
+
+        post("/${OnlineRemoteRoutes.RECOVER_SYNTHETIC_ACCOUNT}") {
+            val suppliedSecret = call.request.headers[
+                OnlineRemoteHeaders.SYNTHETIC_PROVISIONING_SECRET
+            ]
+            if (
+                suppliedSecret == null ||
+                !syntheticProvisioningPolicy.authorizes(suppliedSecret)
+            ) {
+                call.respond(HttpStatusCode.Unauthorized)
+                return@post
+            }
+
+            val request =
+                call.receive<OnlineSyntheticAccountRecoveryRequestDto>()
+            val account = try {
+                store.findSyntheticAccount(accountId = request.accountId)
+            } catch (_: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@post
+            }
+            if (account == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@post
+            }
+
+            call.respond(
+                sessionTokenService.issueAccountSession(
+                    playerId = account.playerId,
+                    accountId = account.accountId,
+                ),
+            )
+        }
     }
 
     rateLimit(AUTHENTICATED_MUTATION_RATE_LIMIT_NAME) {
@@ -84,10 +121,27 @@ internal fun Route.onlineServerRoutes(
             val identity = call.requireOnlineIdentity(
                 identityResolver = identityResolver,
             ) ?: return@post
-            val account = store.promoteAccount(
-                playerId = identity.playerId,
-                expectedAccountId = identity.accountId,
-            )
+            val suppliedSyntheticSecret = call.request.headers[
+                OnlineRemoteHeaders.SYNTHETIC_PROVISIONING_SECRET
+            ]
+            val account = when {
+                suppliedSyntheticSecret == null -> store.promoteAccount(
+                    playerId = identity.playerId,
+                    expectedAccountId = identity.accountId,
+                )
+
+                syntheticProvisioningPolicy.authorizes(
+                    suppliedSyntheticSecret,
+                ) -> store.promoteSyntheticAccount(
+                    playerId = identity.playerId,
+                    expectedAccountId = identity.accountId,
+                )
+
+                else -> {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@post
+                }
+            }
 
             if (account == null) {
                 call.respond(

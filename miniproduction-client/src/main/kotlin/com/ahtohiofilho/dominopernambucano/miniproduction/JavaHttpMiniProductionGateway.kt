@@ -8,6 +8,8 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
+import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
+import com.ahtohiofilho.dominopernambucano.online.OnlineSyntheticAccountRecoveryRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueEnterRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueHttpResponseDto
 import java.net.URI
@@ -60,6 +62,23 @@ internal class JavaHttpMiniProductionGateway(
                 method = "POST",
                 route = OnlineRemoteRoutes.PROMOTE_ACCOUNT,
                 accessToken = anonymousAccessToken,
+                syntheticProvisioning = true,
+            ),
+        )
+    }
+
+    override fun recoverSyntheticAccount(
+        accountId: String,
+    ): OnlineAccountSessionDto {
+        return decode(
+            route = OnlineRemoteRoutes.RECOVER_SYNTHETIC_ACCOUNT,
+            response = executeSuccessful(
+                method = "POST",
+                route = OnlineRemoteRoutes.RECOVER_SYNTHETIC_ACCOUNT,
+                requestBody = json.encodeToString(
+                    OnlineSyntheticAccountRecoveryRequestDto(accountId),
+                ),
+                syntheticProvisioning = true,
             ),
         )
     }
@@ -151,12 +170,14 @@ internal class JavaHttpMiniProductionGateway(
         route: String,
         accessToken: String? = null,
         requestBody: String? = null,
+        syntheticProvisioning: Boolean = false,
     ): HttpResponse<String> {
         val response = execute(
             method = method,
             route = route,
             accessToken = accessToken,
             requestBody = requestBody,
+            syntheticProvisioning = syntheticProvisioning,
         )
 
         if (response.statusCode() !in 200..299) {
@@ -175,12 +196,13 @@ internal class JavaHttpMiniProductionGateway(
         route: String,
         accessToken: String?,
         requestBody: String?,
+        syntheticProvisioning: Boolean = false,
     ): HttpResponse<String> {
         val builder = HttpRequest.newBuilder()
             .uri(URI.create("${config.normalizedBaseUrl}/${route.trimStart('/')}"))
             .timeout(config.requestTimeout)
             .header("Accept", "application/json")
-            .header("User-Agent", "DominoPE-Miniproduction/1")
+            .header("User-Agent", "DominoPE-SyntheticPopulation/1")
 
         accessToken
             ?.trim()
@@ -188,6 +210,13 @@ internal class JavaHttpMiniProductionGateway(
             ?.let { token ->
                 builder.header("Authorization", "Bearer $token")
             }
+
+        if (syntheticProvisioning) {
+            builder.header(
+                OnlineRemoteHeaders.SYNTHETIC_PROVISIONING_SECRET,
+                config.syntheticProvisioningSecret,
+            )
+        }
 
         if (requestBody != null) {
             builder.header("Content-Type", "application/json")

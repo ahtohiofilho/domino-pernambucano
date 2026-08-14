@@ -1,0 +1,67 @@
+# syntax=docker/dockerfile:1
+
+FROM eclipse-temurin:11-jdk-jammy AS jdk11
+
+FROM eclipse-temurin:21-jdk-jammy AS build
+
+WORKDIR /workspace
+
+COPY --from=jdk11 /opt/java/openjdk /opt/jdk11
+
+COPY gradlew gradlew.bat ./
+COPY gradle ./gradle
+COPY settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY game-core ./game-core
+COPY miniproduction-client ./miniproduction-client
+
+# Gradle exige os diretórios de todos os projetos declarados, mesmo quando
+# somente o cliente externo é empacotado. Nenhum código Android ou do servidor
+# entra nesta imagem.
+RUN mkdir -p app server && \
+    chmod +x ./gradlew && \
+    ./gradlew :miniproduction-client:installDist --no-daemon \
+        -Dorg.gradle.java.installations.paths=/opt/jdk11 \
+        -Dorg.gradle.java.installations.auto-download=false
+
+FROM eclipse-temurin:11-jre-jammy
+
+RUN groupadd --system --gid 10002 domino-synthetic && \
+    useradd \
+        --system \
+        --uid 10002 \
+        --gid domino-synthetic \
+        --home-dir /opt/domino-synthetic \
+        --shell /usr/sbin/nologin \
+        domino-synthetic && \
+    mkdir -p /opt/domino-synthetic /state && \
+    chown -R domino-synthetic:domino-synthetic \
+        /opt/domino-synthetic /state
+
+WORKDIR /opt/domino-synthetic
+
+COPY --from=build --chown=domino-synthetic:domino-synthetic \
+    /workspace/miniproduction-client/build/install/miniproduction-client/ ./
+
+RUN chmod +x ./bin/miniproduction-client
+
+ENV LANG=C.UTF-8 \
+    JAVA_OPTS="-XX:MaxRAMPercentage=50.0 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8" \
+    DOMINO_SYNTHETIC_RUNTIME_TARGET=REMOTE_PRODUCTION \
+    DOMINO_SYNTHETIC_CLIENT_STATE_DIR=/state \
+    DOMINO_SYNTHETIC_POPULATION_SIZE=16 \
+    DOMINO_SYNTHETIC_HEARTBEAT_FILE=/state/runtime-heartbeat \
+    DOMINO_SYNTHETIC_MAX_SILENCE_MILLIS=180000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD test -s /state/runtime-heartbeat && \
+        now=$$(($$(date +%s) * 1000)) && \
+        beat=$$(tr -d '\r\n' < /state/runtime-heartbeat) && \
+        test "$$beat" -gt 0 && \
+        test $$((now - beat)) -le \
+            "$${DOMINO_SYNTHETIC_MAX_SILENCE_MILLIS:-180000}"
+
+USER 10002:10002
+
+STOPSIGNAL SIGTERM
+
+ENTRYPOINT ["/opt/domino-synthetic/bin/miniproduction-client"]

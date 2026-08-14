@@ -18,6 +18,7 @@ fun main() {
         val config = MiniProductionClientConfig.fromEnvironment()
         val profiles = syntheticRoster.take(config.populationSize)
         val gateway = JavaHttpMiniProductionGateway(config)
+        val heartbeat = SyntheticRuntimeHeartbeat(config.heartbeatFile)
         val store = SyntheticIdentityStore(
             stateDirectory = config.stateDirectory,
             baseUrl = config.normalizedBaseUrl,
@@ -44,6 +45,7 @@ fun main() {
                 profiles = profiles,
                 credentials = credentials,
                 running = running,
+                heartbeat = heartbeat::record,
             ).run()
         }
     } catch (failure: Throwable) {

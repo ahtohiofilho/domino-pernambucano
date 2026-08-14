@@ -4,7 +4,7 @@ param(
     [ValidateRange(1, 180)]
     [int]$DurationMinutes = 60,
     [ValidateRange(12, 20)]
-    [int]$PopulationSize = 15,
+    [int]$PopulationSize = 16,
     [string]$RuntimeRoot = "",
     [string]$GoogleWebClientId = ""
 )
@@ -398,6 +398,7 @@ try {
     }
     $processJob = New-Object DominoMiniProductionJob
 
+    $syntheticProvisioningSecret = New-SessionSecret
     $serverEnvironment = @{
         DOMINO_SERVER_ENVIRONMENT = "miniproduction"
         DOMINO_SERVER_PORT = $MiniProductionPort.ToString()
@@ -405,6 +406,8 @@ try {
         DOMINO_SERVER_STATE_FILE = (Join-Path $runDirectory (
             "server\authoritative-state.json"
         ))
+        DOMINO_SYNTHETIC_PROVISIONING_SECRET =
+            $syntheticProvisioningSecret
     }
     if ($googleLoginConfigured) {
         $serverEnvironment["DOMINO_GOOGLE_WEB_CLIENT_ID"] = $GoogleWebClientId
@@ -445,6 +448,8 @@ try {
         )
         DOMINO_MINIPRODUCTION_POPULATION_SIZE = $PopulationSize.ToString()
         DOMINO_MINIPRODUCTION_POLL_INTERVAL_MILLIS = "750"
+        DOMINO_SYNTHETIC_PROVISIONING_SECRET =
+            $syntheticProvisioningSecret
     }
     $populationProcess = Start-OwnedProcess `
         -Launcher $populationLauncher `

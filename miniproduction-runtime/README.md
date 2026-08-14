@@ -18,7 +18,7 @@ O processo:
 2. constrói distribuições JVM do servidor e da população;
 3. cria estado autoritativo e identidades em diretório isolado;
 4. inicia o servidor no ambiente `miniproduction`;
-5. aguarda `/ready` e inicia 15 clientes externos;
+5. aguarda `/ready` e inicia 16 clientes externos classificados como sintéticos;
 6. monitora ambos até 60 minutos ou solicitação de parada;
 7. encerra toda a árvore de processos e gera evidência operacional.
 

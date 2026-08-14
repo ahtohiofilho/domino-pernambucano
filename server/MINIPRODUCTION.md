@@ -18,6 +18,7 @@ DOMINO_SERVER_ENVIRONMENT=miniproduction
 DOMINO_SERVER_PORT=18080
 DOMINO_SESSION_SIGNING_SECRET=<segredo com pelo menos 32 bytes>
 DOMINO_SERVER_STATE_FILE=<caminho absoluto isolado>
+DOMINO_SYNTHETIC_PROVISIONING_SECRET=<segredo com pelo menos 32 bytes>
 ```
 
 Para validar o login Google real, configure também:
@@ -32,6 +33,11 @@ O perfil usa limiar fixo de 12 contas elegíveis nos quatro recortes. Essa
 redução é uma política explícita do ambiente, não uma injeção de ranking. As
 contas precisam concluir partidas ranqueadas reais; fórmula, elegibilidade,
 persistência, projeção pública e UI permanecem canônicas.
+
+As 16 contas externas são persistidas com tipo `SYNTHETIC`. Esse tipo não é
+`APPLICATION`: as ações continuam chegando pelo mesmo contrato HTTP das contas
+humanas e o servidor não joga em nome delas. A política de ranking, divulgação
+visual e premiações será definida em incrementos próprios.
 
 ## Limites deste incremento
 

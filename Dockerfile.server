@@ -15,9 +15,10 @@ COPY game-core ./game-core
 COPY server ./server
 
 # Gradle 9.4 requires every project declared in settings.gradle.kts to have a
-# directory, even when only :server is built. The Android sources stay outside
-# this server-only context; an empty project directory satisfies that contract.
-RUN mkdir -p app && \
+# directory, even when only :server is built. The Android and synthetic-client
+# sources stay outside this server-only context; empty project directories
+# satisfy that contract without widening the production image context.
+RUN mkdir -p app miniproduction-client && \
     chmod +x ./gradlew && \
     ./gradlew :server:installDist --no-daemon \
         -Dorg.gradle.java.installations.paths=/opt/jdk11 \

@@ -279,7 +279,32 @@ class InMemoryOnlineServerStore(
     override fun promoteAccount(
         playerId: String,
         expectedAccountId: String?,
+    ): OnlineServerAccount? = promoteAccount(
+        playerId = playerId,
+        expectedAccountId = expectedAccountId,
+        participantType = OnlineParticipantTypeDto.HUMAN,
+    )
+
+    override fun promoteSyntheticAccount(
+        playerId: String,
+        expectedAccountId: String?,
+    ): OnlineServerAccount? = promoteAccount(
+        playerId = playerId,
+        expectedAccountId = expectedAccountId,
+        participantType = OnlineParticipantTypeDto.SYNTHETIC,
+    )
+
+    private fun promoteAccount(
+        playerId: String,
+        expectedAccountId: String?,
+        participantType: OnlineParticipantTypeDto,
     ): OnlineServerAccount? {
+        require(
+            participantType == OnlineParticipantTypeDto.HUMAN ||
+                participantType == OnlineParticipantTypeDto.SYNTHETIC
+        ) {
+            "Contas persistentes não podem usar controle APPLICATION."
+        }
         return synchronized(lock) {
             val normalizedPlayerId = playerId.trim()
             require(
@@ -297,11 +322,19 @@ class InMemoryOnlineServerStore(
             if (expectedAccountId != null) {
                 return@synchronized existingAccount?.takeIf { account ->
                     account.accountId == normalizedExpectedAccountId
+                }?.let { account ->
+                    promoteParticipantTypeIfAuthorized(
+                        account = account,
+                        participantType = participantType,
+                    )
                 }
             }
 
             if (existingAccount != null) {
-                return@synchronized existingAccount
+                return@synchronized promoteParticipantTypeIfAuthorized(
+                    account = existingAccount,
+                    participantType = participantType,
+                )
             }
 
             val accountId = accountIdFactory().trim()
@@ -323,9 +356,37 @@ class InMemoryOnlineServerStore(
                 accountId = accountId,
                 playerId = normalizedPlayerId,
                 createdAtEpochMillis = nowEpochMillis(),
+                participantType = participantType,
             ).also { account ->
                 accountsByPlayerId[normalizedPlayerId] = account
             }
+        }
+    }
+
+    private fun promoteParticipantTypeIfAuthorized(
+        account: OnlineServerAccount,
+        participantType: OnlineParticipantTypeDto,
+    ): OnlineServerAccount {
+        if (account.participantType == participantType) {
+            return account
+        }
+        if (
+            account.participantType == OnlineParticipantTypeDto.SYNTHETIC &&
+            participantType == OnlineParticipantTypeDto.HUMAN
+        ) {
+            return account
+        }
+        check(
+            account.participantType == OnlineParticipantTypeDto.HUMAN &&
+                participantType == OnlineParticipantTypeDto.SYNTHETIC
+        ) {
+            "Uma conta sintética não pode ser reclassificada como humana."
+        }
+
+        return account.copy(
+            participantType = OnlineParticipantTypeDto.SYNTHETIC,
+        ).also { updated ->
+            accountsByPlayerId[updated.playerId] = updated
         }
     }
 
@@ -426,6 +487,22 @@ class InMemoryOnlineServerStore(
 
             accountsByPlayerId.values.firstOrNull { account ->
                 account.accountId == identity.accountId
+            }
+        }
+    }
+
+    override fun findSyntheticAccount(
+        accountId: String,
+    ): OnlineServerAccount? {
+        return synchronized(lock) {
+            val normalizedAccountId = requireStoreIdentifier(
+                value = accountId,
+                fieldName = "accountId",
+            )
+            accountsByPlayerId.values.firstOrNull { account ->
+                account.accountId == normalizedAccountId &&
+                    account.participantType ==
+                    OnlineParticipantTypeDto.SYNTHETIC
             }
         }
     }
@@ -1177,7 +1254,7 @@ class InMemoryOnlineServerStore(
 
                 roomsById[updatedRoom.roomId] = updatedRoom
 
-                val controlReclaimed = reclaimHumanSeatControlIfNeeded(
+                val controlReclaimed = reclaimExternalSeatControlIfNeeded(
                     room = updatedRoom,
                     player = existingPlayer,
                 )
@@ -1999,6 +2076,8 @@ class InMemoryOnlineServerStore(
                     account.playerId.length <=
                     MAX_SERVER_IDENTIFIER_CHARACTERS &&
                     account.createdAtEpochMillis >= 0L &&
+                    account.participantType !=
+                        OnlineParticipantTypeDto.APPLICATION &&
                     (
                         (
                             account.publicDisplayName == null &&
@@ -2128,12 +2207,15 @@ class InMemoryOnlineServerStore(
                     true
                 } else {
                     room.players.all { player ->
-                        player.participantType ==
-                            OnlineParticipantTypeDto.HUMAN &&
+                        val account = persistedAccountsByPlayerId[
+                            player.playerId
+                        ]
+                        player.participantType !=
+                            OnlineParticipantTypeDto.APPLICATION &&
                             player.seatIndex != null &&
-                            persistedAccountsByPlayerId[
-                                player.playerId
-                            ] != null
+                            account != null &&
+                            account.participantType ==
+                                player.participantType
                     } &&
                         room.players.map { player ->
                             requireNotNull(
@@ -2504,8 +2586,11 @@ class InMemoryOnlineServerStore(
                         name = candidate.playerName,
                         seatIndex = seatIndex,
                         connected = true,
-                        participantType =
-                            OnlineParticipantTypeDto.HUMAN,
+                        participantType = requireNotNull(
+                            accountsByPlayerId[candidate.playerId],
+                        ) {
+                            "Candidato ranqueado sem conta persistente."
+                        }.participantType,
                     )
                 }
             val room = OnlineRoomSnapshotDto(
@@ -2636,12 +2721,12 @@ class InMemoryOnlineServerStore(
         check(
             room.players.size == 4 &&
                 room.players.all { player ->
-                    player.participantType ==
-                        OnlineParticipantTypeDto.HUMAN &&
+                    player.participantType !=
+                        OnlineParticipantTypeDto.APPLICATION &&
                         player.seatIndex != null
                 }
         ) {
-            "Partida ranqueada exige quatro assentos humanos."
+            "Partida ranqueada exige quatro contas externas."
         }
 
         val identities = room.players
@@ -2839,11 +2924,11 @@ class InMemoryOnlineServerStore(
             require(
                 room.players.size == 4 &&
                         room.players.all { player ->
-                            player.participantType ==
-                                    OnlineParticipantTypeDto.HUMAN
+                            player.participantType !=
+                                    OnlineParticipantTypeDto.APPLICATION
                         },
             ) {
-                "Partida ranqueada exige quatro jogadores humanos."
+                "Partida ranqueada exige quatro contas externas."
             }
         }
 
@@ -3774,13 +3859,13 @@ class InMemoryOnlineServerStore(
      * O snapshot preserva o mesmo instante-base do relógio. Assim, publicar a
      * troca de controlador não concede tempo adicional ao jogador da vez.
      */
-    private fun reclaimHumanSeatControlIfNeeded(
+    private fun reclaimExternalSeatControlIfNeeded(
         room: OnlineRoomSnapshotDto,
         player: OnlineRoomPlayerDto,
     ): Boolean {
         if (
             room.status != OnlineRoomStatusDto.IN_MATCH ||
-            player.participantType != OnlineParticipantTypeDto.HUMAN
+            player.participantType == OnlineParticipantTypeDto.APPLICATION
         ) {
             return false
         }

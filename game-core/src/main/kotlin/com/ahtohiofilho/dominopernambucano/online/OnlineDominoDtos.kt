@@ -147,6 +147,9 @@ fun DominoParticipantType.toOnlineDto(): OnlineParticipantTypeDto {
         DominoParticipantType.HUMAN ->
             OnlineParticipantTypeDto.HUMAN
 
+        DominoParticipantType.SYNTHETIC ->
+            OnlineParticipantTypeDto.SYNTHETIC
+
         DominoParticipantType.APPLICATION ->
             OnlineParticipantTypeDto.APPLICATION
     }
@@ -156,6 +159,9 @@ fun OnlineParticipantTypeDto.toDomain(): DominoParticipantType {
     return when (this) {
         OnlineParticipantTypeDto.HUMAN ->
             DominoParticipantType.HUMAN
+
+        OnlineParticipantTypeDto.SYNTHETIC ->
+            DominoParticipantType.SYNTHETIC
 
         OnlineParticipantTypeDto.APPLICATION ->
             DominoParticipantType.APPLICATION

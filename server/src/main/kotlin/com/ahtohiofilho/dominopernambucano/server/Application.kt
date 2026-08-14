@@ -91,6 +91,8 @@ private fun Application.module(
             serverEnvironment = serverEnvironment,
             rankingPublicationPolicy =
                 serverEnvironment.rankingPublicationPolicy,
+            syntheticProvisioningPolicy =
+                SyntheticProvisioningPolicy.fromEnvironment(),
             traceIngestionPolicy = traceIngestionPolicy,
             traceArchive = traceArchive,
             serverTraceSink = serverTraceSink,
@@ -123,6 +125,8 @@ internal fun Application.module(
         createDefaultOnlineGoogleIdentityTokenVerifier(),
     rankingPublicationPolicy: RankingPublicationPolicy =
         serverEnvironment.rankingPublicationPolicy,
+    syntheticProvisioningPolicy: SyntheticProvisioningPolicy =
+        SyntheticProvisioningPolicy.Disabled,
     rateLimitPolicy: OnlineServerRateLimitPolicy =
         OnlineServerRateLimitPolicy.Default,
     nowEpochMillis: () -> Long = {
@@ -196,6 +200,7 @@ internal fun Application.module(
             identityResolver = identityResolver,
             googleIdentityTokenVerifier = googleIdentityTokenVerifier,
             rankingPublicationPolicy = rankingPublicationPolicy,
+            syntheticProvisioningPolicy = syntheticProvisioningPolicy,
             nowEpochMillis = nowEpochMillis,
         )
     }

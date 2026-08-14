@@ -17,6 +17,10 @@ internal interface MiniProductionGateway {
         anonymousAccessToken: String,
     ): OnlineAccountSessionDto
 
+    fun recoverSyntheticAccount(
+        accountId: String,
+    ): OnlineAccountSessionDto
+
     fun fetchAccountProfile(
         accessToken: String,
     ): OnlineAccountProfileResponseDto
