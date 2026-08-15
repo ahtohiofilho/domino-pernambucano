@@ -54,11 +54,11 @@ ENV LANG=C.UTF-8 \
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
     CMD test -s /state/runtime-heartbeat && \
-        now=$$(($$(date +%s) * 1000)) && \
-        beat=$$(tr -d '\r\n' < /state/runtime-heartbeat) && \
-        test "$$beat" -gt 0 && \
-        test $$((now - beat)) -le \
-            "$${DOMINO_SYNTHETIC_MAX_SILENCE_MILLIS:-180000}"
+        now=$(($(date +%s) * 1000)) && \
+        beat=$(tr -d '\r\n' < /state/runtime-heartbeat) && \
+        test "$beat" -gt 0 && \
+        test $((now - beat)) -le \
+            "${DOMINO_SYNTHETIC_MAX_SILENCE_MILLIS:-180000}"
 
 USER 10002:10002
 
