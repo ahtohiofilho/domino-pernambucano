@@ -223,12 +223,27 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    private fun officialRankedResults(): List<RankedMatchResult> {
+        return rankedResultsById.values.filter { result ->
+            result.players.none { player ->
+                val accountId = player.accountId
+                    ?: return@none false
+                val account = accountsByPlayerId[player.playerId]
+                    ?: return@none false
+
+                account.accountId == accountId &&
+                    account.participantType ==
+                    OnlineParticipantTypeDto.SYNTHETIC
+            }
+        }
+    }
+
     private fun buildLiveRankedCycleLadder(
         period: RankedCyclePeriod,
     ): RankedCycleLadder {
         return buildRankedCycleLadder(
             period = period,
-            results = rankedResultsById.values.toList(),
+            results = officialRankedResults(),
         )
     }
 
@@ -237,7 +252,7 @@ class InMemoryOnlineServerStore(
     ): Int {
         require(referenceEpochMillis >= 0L)
 
-        val closedPeriods = rankedResultsById.values
+        val closedPeriods = officialRankedResults()
             .asSequence()
             .flatMap { result ->
                 resolveRankingCycles(
