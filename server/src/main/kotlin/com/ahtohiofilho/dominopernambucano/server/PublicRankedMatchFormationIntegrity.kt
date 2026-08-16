@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -30,6 +31,8 @@ internal data class PublicRankedFormationCandidate(
     val accountId: String,
     val playerName: String,
     val enqueuedAtEpochMillis: Long,
+    val participantType: OnlineParticipantTypeDto =
+        OnlineParticipantTypeDto.HUMAN,
 )
 
 internal data class PublicRankedMatchFormationPlan(
@@ -40,6 +43,9 @@ internal data class PublicRankedMatchFormationPlan(
     val auditNonce: String,
     val repeatedEncounterScore: Int,
     val repeatedPartnerScore: Int,
+    val humanCount: Int,
+    val syntheticCount: Int,
+    val oldestHumanWaitMillis: Long,
 )
 
 internal fun planPublicRankedMatchFormation(
@@ -62,26 +68,71 @@ internal fun planPublicRankedMatchFormation(
         ).coerceAtLeast(0L) <=
             policy.publicRankedFormationHistoryRetentionMillis
     }
-    val window = queuedCandidates.take(
+    val prioritizedCandidates = queuedCandidates.sortedWith(
+        compareBy<PublicRankedFormationCandidate> { candidate ->
+            when (candidate.participantType) {
+                OnlineParticipantTypeDto.HUMAN -> 0
+                OnlineParticipantTypeDto.SYNTHETIC -> 1
+                OnlineParticipantTypeDto.APPLICATION -> 2
+            }
+        }.thenBy { candidate ->
+            candidate.enqueuedAtEpochMillis
+        }.thenBy { candidate ->
+            candidate.accountId
+        },
+    )
+    val window = prioritizedCandidates.take(
         policy.publicRankedFormationLookaheadSize.coerceAtMost(
-            queuedCandidates.size,
+            prioritizedCandidates.size,
         ),
     )
-    val oldest = window.first()
-    val alternatives = window.drop(1)
-    val candidateQuartets = combinationsOfThree(alternatives)
+    val oldestHuman = window.firstOrNull { candidate ->
+        candidate.participantType == OnlineParticipantTypeDto.HUMAN
+    } ?: return null
+    val oldestHumanWaitMillis = (
+        nowEpochMillis - oldestHuman.enqueuedAtEpochMillis
+    ).coerceAtLeast(0L)
+    val alternatives = window.filterNot { candidate ->
+        candidate.accountId == oldestHuman.accountId
+    }
+    val fallbackEligibleQuartets = combinationsOfThree(alternatives)
         .map { companions ->
-            listOf(oldest) + companions
+            listOf(oldestHuman) + companions
         }
-        .filterNot { quartet ->
-            isExactCohortCoolingDown(
+        .filter { quartet ->
+            isSyntheticFallbackEligible(
                 candidates = quartet,
-                history = history,
-                nowEpochMillis = nowEpochMillis,
-                cooldownMillis =
-                    policy.publicRankedExactCohortCooldownMillis,
+                oldestHumanWaitMillis = oldestHumanWaitMillis,
+                policy = policy,
             )
         }
+
+    if (fallbackEligibleQuartets.isEmpty()) {
+        return null
+    }
+
+    val maximumHumanCount = fallbackEligibleQuartets.maxOf { quartet ->
+        quartet.count { candidate ->
+            candidate.participantType ==
+                OnlineParticipantTypeDto.HUMAN
+        }
+    }
+    val humanPriorityQuartets =
+        fallbackEligibleQuartets.filter { quartet ->
+            quartet.count { candidate ->
+                candidate.participantType ==
+                    OnlineParticipantTypeDto.HUMAN
+            } == maximumHumanCount
+        }
+    val candidateQuartets = humanPriorityQuartets.filterNot { quartet ->
+        isExactCohortCoolingDown(
+            candidates = quartet,
+            history = history,
+            nowEpochMillis = nowEpochMillis,
+            cooldownMillis =
+                policy.publicRankedExactCohortCooldownMillis,
+        )
+    }
 
     if (candidateQuartets.isEmpty()) {
         return null
@@ -139,6 +190,9 @@ internal fun planPublicRankedMatchFormation(
         auditNonce = entropy.nextNonceHex(),
         repeatedEncounterScore = minimumEncounterScore,
         repeatedPartnerScore = seatPlan.repeatedPartnerScore,
+        humanCount = maximumHumanCount,
+        syntheticCount = 4 - maximumHumanCount,
+        oldestHumanWaitMillis = oldestHumanWaitMillis,
     )
 }
 
@@ -170,6 +224,40 @@ internal fun createPublicRankedFormationAuditCommitment(
     return MessageDigest.getInstance("SHA-256")
         .digest(canonical.toByteArray(Charsets.UTF_8))
         .toHexString()
+}
+
+private fun isSyntheticFallbackEligible(
+    candidates: List<PublicRankedFormationCandidate>,
+    oldestHumanWaitMillis: Long,
+    policy: OnlineServerStoreResourcePolicy,
+): Boolean {
+    require(candidates.size == 4)
+
+    val humanCount = candidates.count { candidate ->
+        candidate.participantType == OnlineParticipantTypeDto.HUMAN
+    }
+    val syntheticCount = candidates.count { candidate ->
+        candidate.participantType == OnlineParticipantTypeDto.SYNTHETIC
+    }
+
+    if (humanCount + syntheticCount != candidates.size) {
+        return false
+    }
+    if (humanCount == 0) {
+        return false
+    }
+    if (syntheticCount == 0) {
+        return true
+    }
+
+    val requiredWaitMillis =
+        policy.publicRankedSyntheticFallbackInitialDelayMillis +
+            (
+                syntheticCount - 1
+            ).toLong() *
+            policy.publicRankedSyntheticFallbackAdditionalSeatDelayMillis
+
+    return oldestHumanWaitMillis >= requiredWaitMillis
 }
 
 private data class SeatPlan(

@@ -77,9 +77,58 @@ class MiniProductionClientConfigTest {
         assertEquals("http://127.0.0.1:18080", config.normalizedBaseUrl)
         assertEquals(DEFAULT_SYNTHETIC_POPULATION_SIZE, config.populationSize)
         assertEquals(
+            DEFAULT_SYNTHETIC_STANDBY_POOL_SIZE,
+            config.standbyPoolSize,
+        )
+        assertEquals(
+            DEFAULT_SYNTHETIC_STANDBY_POLL_INTERVAL_MILLIS,
+            config.standbyPollIntervalMillis,
+        )
+        assertEquals(
             SyntheticRuntimeTarget.LOCAL_MINIPRODUCTION,
             config.runtimeTarget,
         )
+    }
+
+    @Test
+    fun environment_reads_low_cost_standby_controls() {
+        val stateDirectory = Files.createTempDirectory("synthetic-config")
+        val values = mapOf(
+            MINI_PRODUCTION_CLIENT_STATE_DIR_VARIABLE to
+                stateDirectory.toString(),
+            SYNTHETIC_PROVISIONING_SECRET_VARIABLE to TEST_SECRET,
+            SYNTHETIC_STANDBY_POOL_SIZE_VARIABLE to "4",
+            SYNTHETIC_STANDBY_POLL_INTERVAL_VARIABLE to "12000",
+        )
+
+        val config = MiniProductionClientConfig.fromEnvironment(values::get)
+
+        assertEquals(4, config.standbyPoolSize)
+        assertEquals(12_000L, config.standbyPollIntervalMillis)
+    }
+
+    @Test
+    fun standby_controls_reject_too_small_pool_and_excessive_silence() {
+        val stateDirectory = Files.createTempDirectory("synthetic-config")
+
+        assertThrows(IllegalArgumentException::class.java) {
+            MiniProductionClientConfig(
+                baseUri = URI.create("http://127.0.0.1:18080"),
+                stateDirectory = stateDirectory,
+                syntheticProvisioningSecret = TEST_SECRET,
+                populationSize = 12,
+                standbyPoolSize = 2,
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            MiniProductionClientConfig(
+                baseUri = URI.create("http://127.0.0.1:18080"),
+                stateDirectory = stateDirectory,
+                syntheticProvisioningSecret = TEST_SECRET,
+                populationSize = 12,
+                standbyPollIntervalMillis = 60_001L,
+            )
+        }
     }
 
     @Test

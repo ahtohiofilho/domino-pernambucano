@@ -1589,6 +1589,14 @@ class InMemoryOnlineServerStore(
                 nowEpochMillis = now,
             )
 
+            val roomCountBeforeRankedFormation = roomsById.size
+            formPublicRankedMatchesFromQueue(
+                nowEpochMillis = now,
+            )
+            if (roomsById.size != roomCountBeforeRankedFormation) {
+                stateChanged = true
+            }
+
             matchesById.values.forEach { matchRecord ->
                 val previousRevision = matchRecord.snapshot.revision
 
@@ -2479,7 +2487,24 @@ class InMemoryOnlineServerStore(
     private fun queuedPublicRankedResult(
         accountId: String,
     ): PublicRankedQueueResult {
-        val position = publicRankedQueueByAccountId.keys
+        val queuedEntry = publicRankedQueueByAccountId[accountId]
+        val participantType = queuedEntry?.let { entry ->
+            accountsByPlayerId[entry.playerId]?.participantType
+        }
+        val visibleAccountIds = if (
+            participantType == OnlineParticipantTypeDto.HUMAN
+        ) {
+            publicRankedQueueByAccountId.values
+                .filter { entry ->
+                    accountsByPlayerId[entry.playerId]
+                        ?.participantType ==
+                        OnlineParticipantTypeDto.HUMAN
+                }
+                .map { entry -> entry.accountId }
+        } else {
+            publicRankedQueueByAccountId.keys.toList()
+        }
+        val position = visibleAccountIds
             .indexOf(accountId)
             .takeIf { index -> index >= 0 }
             ?.plus(1)
@@ -2562,6 +2587,9 @@ class InMemoryOnlineServerStore(
                             playerName = entry.playerName,
                             enqueuedAtEpochMillis =
                                 entry.enqueuedAtEpochMillis,
+                            participantType = requireNotNull(
+                                accountsByPlayerId[entry.playerId],
+                            ).participantType,
                         )
                     },
                 recentHistory = publicRankedFormationHistory,
@@ -2677,6 +2705,14 @@ class InMemoryOnlineServerStore(
                         plan.repeatedEncounterScore.toString(),
                     "repeatedPartnerScore" to
                         plan.repeatedPartnerScore.toString(),
+                    "humanPlayerCount" to
+                        plan.humanCount.toString(),
+                    "syntheticPlayerCount" to
+                        plan.syntheticCount.toString(),
+                    "syntheticFallback" to
+                        (plan.syntheticCount > 0).toString(),
+                    "oldestHumanWaitMillis" to
+                        plan.oldestHumanWaitMillis.toString(),
                     "seatAssignmentAuthority" to "server",
                 ),
             )

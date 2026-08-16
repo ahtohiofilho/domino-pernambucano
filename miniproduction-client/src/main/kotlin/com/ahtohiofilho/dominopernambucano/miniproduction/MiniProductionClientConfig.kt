@@ -17,6 +17,10 @@ internal const val SYNTHETIC_POPULATION_SIZE_VARIABLE =
     "DOMINO_SYNTHETIC_POPULATION_SIZE"
 internal const val SYNTHETIC_POLL_INTERVAL_VARIABLE =
     "DOMINO_SYNTHETIC_POLL_INTERVAL_MILLIS"
+internal const val SYNTHETIC_STANDBY_POOL_SIZE_VARIABLE =
+    "DOMINO_SYNTHETIC_STANDBY_POOL_SIZE"
+internal const val SYNTHETIC_STANDBY_POLL_INTERVAL_VARIABLE =
+    "DOMINO_SYNTHETIC_STANDBY_POLL_INTERVAL_MILLIS"
 internal const val SYNTHETIC_HEARTBEAT_FILE_VARIABLE =
     "DOMINO_SYNTHETIC_HEARTBEAT_FILE"
 internal const val SYNTHETIC_MAX_SILENCE_VARIABLE =
@@ -36,8 +40,13 @@ internal const val MINI_PRODUCTION_POLL_INTERVAL_VARIABLE =
     "DOMINO_MINIPRODUCTION_POLL_INTERVAL_MILLIS"
 
 internal const val DEFAULT_SYNTHETIC_POPULATION_SIZE = 16
+internal const val DEFAULT_SYNTHETIC_STANDBY_POOL_SIZE = 6
+internal const val DEFAULT_SYNTHETIC_STANDBY_POLL_INTERVAL_MILLIS = 5_000L
 private const val DEFAULT_POLL_INTERVAL_MILLIS = 750L
 private const val DEFAULT_MAX_SILENCE_MILLIS = 180_000L
+private const val MINIMUM_SYNTHETIC_STANDBY_POOL_SIZE = 3
+private const val MINIMUM_STANDBY_POLL_INTERVAL_MILLIS = 1_000L
+private const val MAXIMUM_STANDBY_POLL_INTERVAL_MILLIS = 60_000L
 private const val PRODUCTION_SERVER_PORT = 8080
 private const val MINIMUM_POPULATION_SIZE = 12
 
@@ -54,6 +63,9 @@ internal data class MiniProductionClientConfig(
         SyntheticRuntimeTarget.LOCAL_MINIPRODUCTION,
     val populationSize: Int = DEFAULT_SYNTHETIC_POPULATION_SIZE,
     val pollIntervalMillis: Long = DEFAULT_POLL_INTERVAL_MILLIS,
+    val standbyPoolSize: Int = DEFAULT_SYNTHETIC_STANDBY_POOL_SIZE,
+    val standbyPollIntervalMillis: Long =
+        DEFAULT_SYNTHETIC_STANDBY_POLL_INTERVAL_MILLIS,
     val requestTimeout: Duration = Duration.ofSeconds(10L),
     val readinessTimeout: Duration = Duration.ofSeconds(60L),
     val heartbeatFile: Path? = null,
@@ -120,6 +132,20 @@ internal data class MiniProductionClientConfig(
         }
         require(pollIntervalMillis in 250L..5_000L) {
             "O intervalo de polling deve ficar entre 250 e 5000 ms."
+        }
+        require(
+            standbyPoolSize in
+                MINIMUM_SYNTHETIC_STANDBY_POOL_SIZE..populationSize
+        ) {
+            "O pool de standby deve possuir entre " +
+                "$MINIMUM_SYNTHETIC_STANDBY_POOL_SIZE e $populationSize contas."
+        }
+        require(
+            standbyPollIntervalMillis in
+                MINIMUM_STANDBY_POLL_INTERVAL_MILLIS..
+                MAXIMUM_STANDBY_POLL_INTERVAL_MILLIS
+        ) {
+            "O polling de standby deve ficar entre 1 e 60 segundos."
         }
         require(maxSilenceMillis in 30_000L..900_000L) {
             "A tolerância de silêncio deve ficar entre 30 e 900 segundos."
@@ -194,6 +220,23 @@ internal data class MiniProductionClientConfig(
                         "O intervalo de polling deve ser um inteiro.",
                     )
             } ?: DEFAULT_POLL_INTERVAL_MILLIS
+            val standbyPoolSizeValue =
+                value(SYNTHETIC_STANDBY_POOL_SIZE_VARIABLE)
+            val standbyPoolSize = standbyPoolSizeValue?.let { rawValue ->
+                rawValue.toIntOrNull()
+                    ?: throw IllegalStateException(
+                        "O pool de standby deve ser um inteiro.",
+                    )
+            } ?: DEFAULT_SYNTHETIC_STANDBY_POOL_SIZE
+            val standbyPollIntervalValue =
+                value(SYNTHETIC_STANDBY_POLL_INTERVAL_VARIABLE)
+            val standbyPollIntervalMillis =
+                standbyPollIntervalValue?.let { rawValue ->
+                    rawValue.toLongOrNull()
+                        ?: throw IllegalStateException(
+                            "O polling de standby deve ser um inteiro.",
+                        )
+                } ?: DEFAULT_SYNTHETIC_STANDBY_POLL_INTERVAL_MILLIS
             val heartbeatFile = value(SYNTHETIC_HEARTBEAT_FILE_VARIABLE)
                 ?.let(Paths::get)
             val maxSilenceValue = value(SYNTHETIC_MAX_SILENCE_VARIABLE)
@@ -234,6 +277,8 @@ internal data class MiniProductionClientConfig(
                 runtimeTarget = runtimeTarget,
                 populationSize = populationSize,
                 pollIntervalMillis = pollIntervalMillis,
+                standbyPoolSize = standbyPoolSize,
+                standbyPollIntervalMillis = standbyPollIntervalMillis,
                 heartbeatFile = heartbeatFile,
                 maxSilenceMillis = maxSilenceMillis,
             )

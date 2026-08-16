@@ -56,9 +56,10 @@ class SyntheticParticipantIdentityTest {
 
     @Test
     fun mixed_external_accounts_share_canonical_ranked_match_without_app_bot_control() {
+        var now = 1_000L
         var accountSequence = 0
         val store = InMemoryOnlineServerStore(
-            nowEpochMillis = { 1_000L },
+            nowEpochMillis = { now },
             accountIdFactory = {
                 accountSequence++
                 "account-$accountSequence"
@@ -87,9 +88,8 @@ class SyntheticParticipantIdentityTest {
             }
         }
 
-        var matched: PublicRankedQueueResult? = null
         accounts.forEach { (index, account) ->
-            matched = store.enqueuePublicRanked(
+            store.enqueuePublicRanked(
                 request = CreateOnlineRoomRequestDto(
                     localPlayerId = account.playerId,
                     playerName = "P0$index",
@@ -98,7 +98,13 @@ class SyntheticParticipantIdentityTest {
             )
         }
 
-        val room = requireNotNull(requireNotNull(matched).roomSnapshot)
+        assertTrue(store.snapshotPersistentState().rooms.isEmpty())
+        now = 21_000L
+        assertTrue(store.advanceAuthoritativeTime())
+        val matched = store.getPublicRankedQueueStatus(
+            identity = accounts.getValue(1).toRequestIdentity(),
+        )
+        val room = requireNotNull(matched.roomSnapshot)
         val participantTypeByPlayer = room.players.associate { player ->
             player.playerId to player.participantType
         }
@@ -125,9 +131,10 @@ class SyntheticParticipantIdentityTest {
 
     @Test
     fun mixed_external_ranked_match_restores_with_canonical_participant_types() {
+        var now = 1_000L
         var accountSequence = 0
         val firstStore = InMemoryOnlineServerStore(
-            nowEpochMillis = { 1_000L },
+            nowEpochMillis = { now },
             accountIdFactory = {
                 accountSequence++
                 "account-$accountSequence"
@@ -159,9 +166,8 @@ class SyntheticParticipantIdentityTest {
             }
         }
 
-        var matched: PublicRankedQueueResult? = null
         accounts.forEach { (index, account) ->
-            matched = firstStore.enqueuePublicRanked(
+            firstStore.enqueuePublicRanked(
                 request = CreateOnlineRoomRequestDto(
                     localPlayerId = account.playerId,
                     playerName = "P0$index",
@@ -169,9 +175,13 @@ class SyntheticParticipantIdentityTest {
                 identity = account.toRequestIdentity(),
             )
         }
-        val originalRoom = requireNotNull(
-            requireNotNull(matched).roomSnapshot,
+        assertTrue(firstStore.snapshotPersistentState().rooms.isEmpty())
+        now = 21_000L
+        assertTrue(firstStore.advanceAuthoritativeTime())
+        val matched = firstStore.getPublicRankedQueueStatus(
+            identity = accounts.getValue(1).toRequestIdentity(),
         )
+        val originalRoom = requireNotNull(matched.roomSnapshot)
         val persistedState = firstStore.snapshotPersistentState()
         val restartedStore = InMemoryOnlineServerStore(
             nowEpochMillis = { 1_000L },

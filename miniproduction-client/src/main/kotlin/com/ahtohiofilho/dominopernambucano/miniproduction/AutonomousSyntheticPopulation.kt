@@ -65,14 +65,23 @@ internal class AutonomousSyntheticPopulation(
         liveness.start(startedAt)
         println(
             "POPULATION_STARTED accounts=${players.size} " +
+                "standbyPool=${config.standbyPoolSize} " +
+                "standbyPollMillis=${config.standbyPollIntervalMillis} " +
                 "target=${config.runtimeTarget} " +
                 "baseUrl=${config.normalizedBaseUrl}",
         )
 
         while (running.get()) {
             val now = nowEpochMillis()
+            rebalanceStandby(now)
             players.forEach { player ->
-                if (running.get() && now >= player.nextStepAtEpochMillis) {
+                val eligibleForStep =
+                    player.matchId != null || player.standbyEnabled
+                if (
+                    running.get() &&
+                    eligibleForStep &&
+                    now >= player.nextStepAtEpochMillis
+                ) {
                     step(player, now)
                 }
             }
@@ -95,7 +104,12 @@ internal class AutonomousSyntheticPopulation(
                 advanceMatch(player)
             }
             liveness.recordSuccessfulInteraction(now)
-            player.nextStepAtEpochMillis = now + config.pollIntervalMillis
+            val nextDelayMillis = if (player.matchId == null) {
+                config.standbyPollIntervalMillis
+            } else {
+                config.pollIntervalMillis
+            }
+            player.nextStepAtEpochMillis = now + nextDelayMillis
         } catch (failure: MiniProductionHttpException) {
             when {
                 failure.statusCode == 404 && player.matchId != null -> {
@@ -132,6 +146,7 @@ internal class AutonomousSyntheticPopulation(
                 player.localSeatIndex = requireNotNull(queue.localSeatIndex) {
                     "Resposta MATCHED sem localSeatIndex."
                 }
+                player.standbyEnabled = false
             }
 
             PublicRankedQueueHttpStatus.WAITING,
@@ -173,6 +188,55 @@ internal class AutonomousSyntheticPopulation(
         }
     }
 
+    private fun rebalanceStandby(
+        now: Long,
+    ) {
+        val matchedProfileIndexes = players
+            .filter { player -> player.matchId != null }
+            .mapTo(mutableSetOf()) { player -> player.profile.index }
+        val currentStandbyProfileIndexes = players
+            .filter { player ->
+                player.matchId == null && player.standbyEnabled
+            }
+            .mapTo(mutableSetOf()) { player -> player.profile.index }
+        val selectedStandbyProfileIndexes =
+            selectSyntheticStandbyProfileIndexes(
+                profileIndexesInPriorityOrder =
+                    players.map { player -> player.profile.index },
+                matchedProfileIndexes = matchedProfileIndexes,
+                currentStandbyProfileIndexes =
+                    currentStandbyProfileIndexes,
+                targetSize = config.standbyPoolSize,
+            )
+
+        val newlyActivated = players.filter { player ->
+            player.matchId == null &&
+                !player.standbyEnabled &&
+                player.profile.index in selectedStandbyProfileIndexes
+        }
+        val activationSpacingMillis = (
+            config.standbyPollIntervalMillis /
+                config.standbyPoolSize.toLong()
+        ).coerceAtLeast(250L)
+
+        newlyActivated.forEachIndexed { index, player ->
+            player.standbyEnabled = true
+            player.nextStepAtEpochMillis = maxOf(
+                player.nextStepAtEpochMillis,
+                now + index.toLong() * activationSpacingMillis,
+            )
+        }
+
+        players.forEach { player ->
+            if (
+                player.matchId == null &&
+                player.profile.index !in selectedStandbyProfileIndexes
+            ) {
+                player.standbyEnabled = false
+            }
+        }
+    }
+
     private fun reportIfNeeded(
         now: Long,
     ) {
@@ -186,13 +250,19 @@ internal class AutonomousSyntheticPopulation(
             .distinct()
             .size
         val matchedAccounts = players.count { player -> player.matchId != null }
+        val standbyAccounts = players.count { player ->
+            player.matchId == null && player.standbyEnabled
+        }
+        val dormantAccounts =
+            players.size - matchedAccounts - standbyAccounts
         val completedMatches = players.sumOf { player -> player.completedMatches }
 
         println(
             "POPULATION_STATUS accounts=${players.size} " +
                 "matchedAccounts=$matchedAccounts " +
                 "activeMatches=$activeMatches " +
-                "queueOrTransition=${players.size - matchedAccounts} " +
+                "standbyAccounts=$standbyAccounts " +
+                "dormantAccounts=$dormantAccounts " +
                 "completedObservations=$completedMatches " +
                 "acceptedActions=$acceptedActions " +
                 "rejectedActions=$rejectedActions " +
@@ -207,10 +277,12 @@ internal class AutonomousSyntheticPopulation(
         var localSeatIndex: Int? = null,
         var nextStepAtEpochMillis: Long = 0L,
         var completedMatches: Long = 0L,
+        var standbyEnabled: Boolean = false,
     ) {
         fun clearMatch() {
             matchId = null
             localSeatIndex = null
+            standbyEnabled = false
         }
     }
 

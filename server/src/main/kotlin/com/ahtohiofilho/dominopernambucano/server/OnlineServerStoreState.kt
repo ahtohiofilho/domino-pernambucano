@@ -117,6 +117,10 @@ data class OnlineServerStoreResourcePolicy(
     val maxPublicRankedQueueSize: Int = 16_384,
     val publicRankedQueueEntryRetentionMillis: Long = 2L * 60L * 1_000L,
     val publicRankedFormationLookaheadSize: Int = 8,
+    val publicRankedSyntheticFallbackInitialDelayMillis: Long =
+        15L * 1_000L,
+    val publicRankedSyntheticFallbackAdditionalSeatDelayMillis: Long =
+        5L * 1_000L,
     val publicRankedExactCohortCooldownMillis: Long =
         30L * 60L * 1_000L,
     val publicRankedFormationHistoryRetentionMillis: Long =
@@ -132,6 +136,10 @@ data class OnlineServerStoreResourcePolicy(
         require(maxPublicRankedQueueSize >= 4)
         require(publicRankedQueueEntryRetentionMillis > 0L)
         require(publicRankedFormationLookaheadSize >= 4)
+        require(publicRankedSyntheticFallbackInitialDelayMillis >= 0L)
+        require(
+            publicRankedSyntheticFallbackAdditionalSeatDelayMillis > 0L,
+        )
         require(publicRankedExactCohortCooldownMillis >= 0L)
         require(publicRankedFormationHistoryRetentionMillis > 0L)
         require(maxPublicRankedFormationHistoryCount > 0)
