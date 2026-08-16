@@ -1029,6 +1029,121 @@ class InMemoryOnlineServerStoreTest {
         )
     }
 
+    @Test
+    fun default_finalized_room_retention_is_one_hour() {
+        assertEquals(
+            1L * 60L * 60L * 1_000L,
+            OnlineServerStoreResourcePolicy.Default
+                .finalizedRoomRetentionMillis,
+        )
+    }
+
+    @Test
+    fun finalized_room_pruning_removes_match_and_action_results_at_boundary() {
+        var nowEpochMillis = 1_000L
+        val store = InMemoryOnlineServerStore(
+            resourcePolicy = OnlineServerStoreResourcePolicy(
+                maxRoomCount = 1,
+                maxActionResultCount = 8,
+                finalizedRoomRetentionMillis = 1_000L,
+                pruneIntervalMillis = 1L,
+            ),
+            nowEpochMillis = { nowEpochMillis },
+        )
+
+        val startedRoom = startFourHumanMatch(
+            store = store,
+        )
+        val matchId = requireNotNull(
+            startedRoom.matchId,
+        )
+        val snapshot = requireNotNull(
+            store.getMatchSnapshot(
+                matchId = matchId,
+            ),
+        )
+
+        val cachedResult = store.submitAction(
+            createOnlineSnapshotRequestAction(
+                roomId = startedRoom.roomId,
+                matchId = matchId,
+                playerId = "player-1",
+                revision = snapshot.revision,
+                actionId = "finalized-retention-cache",
+            ),
+        )
+
+        assertTrue(cachedResult.accepted)
+
+        val persistedState = store.snapshotPersistentState()
+
+        assertEquals(
+            1,
+            persistedState.actionResults.count { storedAction ->
+                storedAction.matchId == matchId
+            },
+        )
+
+        store.restorePersistentState(
+            persistedState.copy(
+                rooms = persistedState.rooms.map { room ->
+                    if (room.roomId == startedRoom.roomId) {
+                        room.copy(
+                            status = OnlineRoomStatusDto.FINISHED,
+                            updatedAtEpochMillis = nowEpochMillis,
+                        )
+                    } else {
+                        room
+                    }
+                },
+            ),
+        )
+
+        nowEpochMillis += 999L
+
+        val beforeBoundary = store.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = "player-before-boundary",
+                playerName = "Antes do limite",
+            ),
+        )
+
+        assertTrue(!beforeBoundary.accepted)
+        assertTrue(
+            store.getRoomSnapshot(startedRoom.roomId) != null,
+        )
+        assertTrue(
+            store.getMatchSnapshot(matchId) != null,
+        )
+
+        nowEpochMillis += 1L
+
+        val replacement = store.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = "player-after-boundary",
+                playerName = "Apos o limite",
+            ),
+        )
+
+        assertTrue(replacement.accepted)
+        assertEquals(
+            null,
+            store.getRoomSnapshot(startedRoom.roomId),
+        )
+        assertEquals(
+            null,
+            store.getMatchSnapshot(matchId),
+        )
+
+        val stateAfterPrune = store.snapshotPersistentState()
+
+        assertEquals(
+            0,
+            stateAfterPrune.actionResults.count { storedAction ->
+                storedAction.matchId == matchId
+            },
+        )
+    }
     private fun getSnapshotAtHumanSeat(
         store: InMemoryOnlineServerStore,
         roomId: String,

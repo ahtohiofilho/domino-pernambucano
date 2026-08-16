@@ -123,7 +123,7 @@ data class OnlineServerStoreResourcePolicy(
         24L * 60L * 60L * 1_000L,
     val maxPublicRankedFormationHistoryCount: Int = 4_096,
     val waitingRoomRetentionMillis: Long = 6L * 60L * 60L * 1_000L,
-    val finalizedRoomRetentionMillis: Long = 24L * 60L * 60L * 1_000L,
+    val finalizedRoomRetentionMillis: Long = 1L * 60L * 60L * 1_000L,
     val pruneIntervalMillis: Long = 60L * 1_000L,
 ) {
     init {
