@@ -536,6 +536,10 @@ fun DominoPernambucanoApp(
                     onlineGoogleAccountActionInProgress,
                 onlineGoogleAccountFeedbackMessage =
                     onlineGoogleAccountFeedbackMessage,
+                onlineAccountDisplayName =
+                    onlinePlayerIdentity.displayName,
+                onlineAccountTableName =
+                    onlinePlayerIdentity.tableName,
                 onlineAccountProfileUiState =
                     onlineAccountProfileUiState,
                 onAccountDialogOpened = {

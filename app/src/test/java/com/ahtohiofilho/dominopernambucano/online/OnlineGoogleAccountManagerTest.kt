@@ -78,6 +78,32 @@ class OnlineGoogleAccountManagerTest {
     }
 
     @Test
+    fun google_connection_timeout_returns_failure_without_changing_credential() =
+        runBlocking {
+            val original = anonymousCredential()
+            val store = ManagerCredentialStore(original)
+            val credentialRepository = credentialRepository(store)
+            val manager = createManager(
+                credentialRepository = credentialRepository,
+                tokenProvider = ManagerDelayedTokenProvider(
+                    delayMillis = 5_000L,
+                ),
+                connectionTimeoutMillis = 50L,
+            )
+
+            val result = manager.connect()
+
+            assertEquals(
+                OnlineGoogleAccountActionResult.Failure(
+                    message =
+                        "Não foi possível conectar sua conta agora. Tente novamente.",
+                ),
+                result,
+            )
+            assertEquals(original, store.credential)
+        }
+
+    @Test
     fun successful_connection_refreshes_status_without_exposing_token() =
         runBlocking {
             val store = ManagerCredentialStore(
@@ -116,6 +142,7 @@ class OnlineGoogleAccountManagerTest {
         credentialRepository: OnlineSessionCredentialRepository,
         tokenProvider: GoogleIdTokenProvider = ManagerTokenProvider(),
         apiClient: ManagerGoogleApiClient = ManagerGoogleApiClient(),
+        connectionTimeoutMillis: Long = 30_000L,
     ): OnlineGoogleAccountManager {
         return OnlineGoogleAccountManager(
             available = true,
@@ -126,6 +153,7 @@ class OnlineGoogleAccountManagerTest {
             ),
             sessionCredentialRepository = credentialRepository,
             nowEpochMillis = { 1_000L },
+            connectionTimeoutMillis = connectionTimeoutMillis,
         )
     }
 
@@ -186,6 +214,15 @@ private class ManagerTokenProvider(
     override suspend fun requestIdToken(): String {
         failure?.let { throw it }
         return token
+    }
+}
+
+private class ManagerDelayedTokenProvider(
+    private val delayMillis: Long,
+) : GoogleIdTokenProvider {
+    override suspend fun requestIdToken(): String {
+        kotlinx.coroutines.delay(delayMillis)
+        return "google-id-token"
     }
 }
 

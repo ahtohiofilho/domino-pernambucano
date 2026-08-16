@@ -15,6 +15,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +77,8 @@ fun MainMenuScreen(
         OnlineGoogleAccountStatus.UNAVAILABLE,
     onlineGoogleAccountActionInProgress: Boolean = false,
     onlineGoogleAccountFeedbackMessage: String? = null,
+    onlineAccountDisplayName: String? = null,
+    onlineAccountTableName: String? = null,
     onlineAccountProfileUiState: OnlineAccountProfileUiState =
         OnlineAccountProfileUiState.NotAvailable,
     onAccountDialogOpened: () -> Unit = {},
@@ -94,6 +97,19 @@ fun MainMenuScreen(
 ) {
     var accountDialogVisible by remember {
         mutableStateOf(false)
+    }
+    var reopenAccountAfterGoogleAction by remember {
+        mutableStateOf(false)
+    }
+
+    LaunchedEffect(onlineGoogleAccountActionInProgress) {
+        if (
+            !onlineGoogleAccountActionInProgress &&
+            reopenAccountAfterGoogleAction
+        ) {
+            reopenAccountAfterGoogleAction = false
+            accountDialogVisible = true
+        }
     }
 
     val inspectionInProgress =
@@ -207,6 +223,44 @@ fun MainMenuScreen(
                 }
             }
         }
+
+    val connectedAccountName = onlineAccountDisplayName
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+    val connectedTableName = onlineAccountTableName
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+    val accountTitle = if (
+        onlineGoogleAccountStatus == OnlineGoogleAccountStatus.CONNECTED &&
+        connectedAccountName != null
+    ) {
+        connectedAccountName
+    } else {
+        stringResource(R.string.main_menu_account)
+    }
+    val accountSupport = when (onlineGoogleAccountStatus) {
+        OnlineGoogleAccountStatus.CONNECTED -> {
+            if (connectedTableName != null) {
+                stringResource(R.string.account_state_connected) +
+                    " · " + connectedTableName
+            } else {
+                stringResource(R.string.account_state_connected)
+            }
+        }
+
+        OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
+            stringResource(R.string.account_state_recovery_required)
+
+        OnlineGoogleAccountStatus.VISITOR ->
+            stringResource(R.string.account_state_visitor)
+
+        OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL ->
+            stringResource(R.string.account_state_disconnected)
+
+        OnlineGoogleAccountStatus.UNAVAILABLE ->
+            stringResource(R.string.account_state_unavailable)
+    }
+
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -351,12 +405,8 @@ fun MainMenuScreen(
                     modifier = Modifier.testTag(
                         MainMenuAccountActionTag,
                     ),
-                    title = stringResource(
-                        R.string.main_menu_account,
-                    ),
-                    supportingText = stringResource(
-                        R.string.main_menu_account_support,
-                    ),
+                    title = accountTitle,
+                    supportingText = accountSupport,
                     accent = DominoBrandAccent.Green,
                     onClick = {
                         accountDialogVisible = true
@@ -411,7 +461,11 @@ fun MainMenuScreen(
                 onAccountProfileSaveClick,
             onRetryProfileClick =
                 onAccountProfileRetryClick,
-            onConnectGoogleClick = onConnectGoogleAccountClick,
+            onConnectGoogleClick = {
+                reopenAccountAfterGoogleAction = true
+                accountDialogVisible = false
+                onConnectGoogleAccountClick()
+            },
             onDismissRequest = {
                 accountDialogVisible = false
             },

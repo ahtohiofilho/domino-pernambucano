@@ -1,6 +1,9 @@
 package com.ahtohiofilho.dominopernambucano.online
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
+
+private const val DEFAULT_GOOGLE_CONNECTION_TIMEOUT_MILLIS = 30_000L
 
 enum class OnlineGoogleAccountStatus {
     UNAVAILABLE,
@@ -31,7 +34,15 @@ class OnlineGoogleAccountManager(
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
+    private val connectionTimeoutMillis: Long =
+        DEFAULT_GOOGLE_CONNECTION_TIMEOUT_MILLIS,
 ) {
+    init {
+        require(connectionTimeoutMillis > 0L) {
+            "O timeout da conexão Google deve ser positivo."
+        }
+    }
+
     fun currentStatus(): OnlineGoogleAccountStatus {
         val credential = sessionCredentialRepository
             .getStoredCredentialOrNull()
@@ -80,8 +91,18 @@ class OnlineGoogleAccountManager(
         }
 
         return try {
-            val idToken = tokenProvider.requestIdToken()
-            identityRepository.connectGoogleIdentity(idToken)
+            val connected = withTimeoutOrNull(connectionTimeoutMillis) {
+                val idToken = tokenProvider.requestIdToken()
+                identityRepository.connectGoogleIdentity(idToken)
+                true
+            } ?: false
+
+            if (!connected) {
+                return OnlineGoogleAccountActionResult.Failure(
+                    message =
+                        "Não foi possível conectar sua conta agora. Tente novamente.",
+                )
+            }
 
             OnlineGoogleAccountActionResult.Success(
                 status = currentStatus(),

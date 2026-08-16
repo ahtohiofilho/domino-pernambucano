@@ -44,7 +44,11 @@ fun PlayModeScreen(
     ) {
         DominoPrimaryActionCard(
             title = stringResource(R.string.play_mode_ranked),
-            supportingText = null,
+            supportingText = if (onlineActionInProgress) {
+                stringResource(R.string.account_connecting)
+            } else {
+                stringResource(R.string.play_mode_ranked_support)
+            },
             onClick = onRankedGameClick,
             enabled = !onlineActionInProgress,
             leadingContent = {
