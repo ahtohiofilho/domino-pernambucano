@@ -26,6 +26,8 @@ internal fun DominoOutlinedTextField(
     supportingText: String? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     tone: DominoTextFieldTone = DominoTextFieldTone.OnLight,
+    isError: Boolean = false,
+    success: Boolean = false,
 ) {
     val colors = when (tone) {
         DominoTextFieldTone.OnDark ->
@@ -36,9 +38,16 @@ internal fun DominoOutlinedTextField(
                     DominoSemanticColors.primaryTextOnDark,
                 disabledTextColor =
                     DominoSemanticColors.disabledContentOnDark,
-                focusedBorderColor = DominoColorTokens.PureWhite,
-                unfocusedBorderColor =
-                    DominoSemanticColors.highContrastBorder,
+                focusedBorderColor = if (success) {
+                    DominoSemanticColors.brandPositive
+                } else {
+                    DominoColorTokens.PureWhite
+                },
+                unfocusedBorderColor = if (success) {
+                    DominoSemanticColors.brandPositive
+                } else {
+                    DominoSemanticColors.highContrastBorder
+                },
                 disabledBorderColor =
                     DominoSemanticColors.lowContrastBorder,
                 focusedLabelColor = DominoColorTokens.PureWhite,
@@ -55,11 +64,23 @@ internal fun DominoOutlinedTextField(
                 unfocusedTextColor = DominoSemanticColors.dialogBody,
                 disabledTextColor =
                     DominoSemanticColors.dialogDisabledDismissAction,
-                focusedBorderColor = DominoSemanticColors.dialogAction,
-                unfocusedBorderColor = DominoSemanticColors.dialogBody,
+                focusedBorderColor = if (success) {
+                    DominoSemanticColors.brandPositive
+                } else {
+                    DominoSemanticColors.dialogAction
+                },
+                unfocusedBorderColor = if (success) {
+                    DominoSemanticColors.brandPositive
+                } else {
+                    DominoSemanticColors.dialogBody
+                },
                 disabledBorderColor =
                     DominoSemanticColors.dialogDisabledDismissAction,
-                focusedLabelColor = DominoSemanticColors.dialogAction,
+                focusedLabelColor = if (success) {
+                    DominoSemanticColors.brandPositive
+                } else {
+                    DominoSemanticColors.dialogAction
+                },
                 unfocusedLabelColor = DominoSemanticColors.dialogBody,
                 disabledLabelColor =
                     DominoSemanticColors.dialogDisabledDismissAction,
@@ -73,6 +94,7 @@ internal fun DominoOutlinedTextField(
         modifier = modifier.fillMaxWidth(),
         enabled = enabled,
         singleLine = singleLine,
+        isError = isError,
         label = {
             Text(text = label)
         },

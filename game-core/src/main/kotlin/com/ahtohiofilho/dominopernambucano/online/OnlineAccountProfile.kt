@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import java.text.Normalizer
 import java.util.Locale
 
 const val MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH = 60
@@ -13,6 +14,8 @@ private val onlineLegacyAccountTableNameRegex =
 private val onlineAccountTableCodeRegex =
     Regex("^[A-Z0-9]{$ONLINE_ACCOUNT_TABLE_CODE_LENGTH}$")
 private val onlineProfileLocale = Locale.forLanguageTag("pt-BR")
+private val onlineAccountTableCodeCombiningMarkRegex =
+    Regex("\\p{M}+")
 
 data class OnlineAccountProfile(
     val publicDisplayName: String,
@@ -58,6 +61,37 @@ fun normalizeOnlinePublicDisplayName(
     return normalizedName
 }
 
+fun normalizeOnlineAccountTableCodeInput(
+    rawName: String?,
+): String {
+    val normalizedCode = Normalizer
+        .normalize(
+            rawName.orEmpty(),
+            Normalizer.Form.NFD,
+        )
+        .replace(
+            regex = onlineAccountTableCodeCombiningMarkRegex,
+            replacement = "",
+        )
+        .uppercase(onlineProfileLocale)
+        .filter { character ->
+            character in 'A'..'Z' ||
+                character in '0'..'9'
+        }
+
+    return normalizedCode.take(
+        ONLINE_ACCOUNT_TABLE_CODE_LENGTH,
+    )
+}
+
+fun suggestOnlineAccountTableCode(
+    publicDisplayName: String,
+): String {
+    return normalizeOnlineAccountTableCodeInput(
+        rawName = publicDisplayName,
+    )
+}
+
 fun normalizeOnlineAccountTableName(
     rawName: String?,
     publicDisplayName: String,
@@ -75,14 +109,14 @@ fun normalizeOnlineAccountTableName(
         normalizedTableCode.length ==
             ONLINE_ACCOUNT_TABLE_CODE_LENGTH,
     ) {
-        "A sigla da mesa deve ter exatamente 3 caracteres."
+        "O nome curto deve ter exatamente 3 caracteres."
     }
     require(
         normalizedTableCode.matches(
             onlineAccountTableCodeRegex,
         ),
     ) {
-        "A sigla da mesa deve conter apenas A-Z e 0-9."
+        "O nome curto deve conter apenas A-Z e 0-9."
     }
 
     return normalizedTableCode

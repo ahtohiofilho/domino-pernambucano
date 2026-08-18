@@ -46,6 +46,22 @@ class OnlineAccountProfileTest {
     }
 
     @Test
+    fun account_short_name_suggestion_is_three_ascii_characters() {
+        assertEquals(
+            "JOG",
+            suggestOnlineAccountTableCode("Jogador"),
+        )
+        assertEquals(
+            "ANT",
+            suggestOnlineAccountTableCode("Antônio Filho"),
+        )
+        assertEquals(
+            "A1F",
+            normalizeOnlineAccountTableCodeInput("á-1_fXYZ"),
+        )
+    }
+
+    @Test
     fun legacy_table_name_remains_readable_without_truncation() {
         val profile = createLegacyCompatibleOnlineAccountProfile(
             publicDisplayName = "Antônio Filho",

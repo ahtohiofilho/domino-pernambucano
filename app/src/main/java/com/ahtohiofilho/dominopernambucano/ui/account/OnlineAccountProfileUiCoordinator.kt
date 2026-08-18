@@ -3,8 +3,9 @@ package com.ahtohiofilho.dominopernambucano.ui.account
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.ONLINE_ACCOUNT_TABLE_CODE_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.isValidOnlineAccountTableCode
+import com.ahtohiofilho.dominopernambucano.online.normalizeOnlineAccountTableCodeInput
 import com.ahtohiofilho.dominopernambucano.online.normalizeOnlinePublicDisplayName
-import java.util.Locale
+import com.ahtohiofilho.dominopernambucano.online.suggestOnlineAccountTableCode
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileClientResult
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileFailureKind
@@ -51,24 +52,10 @@ sealed interface OnlineAccountProfileUiState {
         fun withTableName(
             value: String,
         ): Editing {
-            val normalizedValue = value.uppercase(Locale.ROOT)
-            val resolvedValue = when {
-                normalizedValue.length <=
-                    ONLINE_ACCOUNT_TABLE_CODE_LENGTH -> {
-                    normalizedValue
-                }
-
-                tableName.length >
-                    ONLINE_ACCOUNT_TABLE_CODE_LENGTH &&
-                    normalizedValue.length < tableName.length -> {
-                    normalizedValue
-                }
-
-                else -> tableName
-            }
-
             return copy(
-                tableName = resolvedValue,
+                tableName = normalizeOnlineAccountTableCodeInput(
+                    rawName = value,
+                ),
                 feedbackMessage = null,
             )
         }
@@ -120,18 +107,24 @@ class OnlineAccountProfileUiCoordinator(
                     !isValidOnlineAccountTableCode(
                         rawName = result.profile.tableName,
                     )
+                val editorTableName =
+                    resolveOnlineAccountEditorTableName(
+                        publicDisplayName =
+                            result.profile.publicDisplayName,
+                        tableName = result.profile.tableName,
+                    )
 
                 val synchronizedIdentity = synchronizeIdentity(
                     publicDisplayName =
                         result.profile.publicDisplayName,
-                    tableName = result.profile.tableName,
+                    tableName = editorTableName,
                 )
 
                 OnlineAccountProfileLoadOutcome(
                     state = OnlineAccountProfileUiState.Editing(
                         publicDisplayName =
                             result.profile.publicDisplayName,
-                        tableName = result.profile.tableName,
+                        tableName = editorTableName,
                         established = true,
                         validationFallbackMessage =
                             strings.reviewData,
@@ -154,11 +147,27 @@ class OnlineAccountProfileUiCoordinator(
                     result.kind ==
                     OnlineAccountProfileFailureKind.NOT_ESTABLISHED
                 ) {
+                    val editorTableName =
+                        resolveOnlineAccountEditorTableName(
+                            publicDisplayName =
+                                fallbackIdentity.displayName,
+                            tableName = fallbackIdentity.tableName,
+                        )
+                    val synchronizedIdentity = if (
+                        editorTableName != fallbackIdentity.tableName
+                    ) {
+                        identityStore.updateTableName(
+                            tableName = editorTableName,
+                        )
+                    } else {
+                        null
+                    }
+
                     OnlineAccountProfileLoadOutcome(
                         state = OnlineAccountProfileUiState.Editing(
                             publicDisplayName =
                                 fallbackIdentity.displayName,
-                            tableName = fallbackIdentity.tableName,
+                            tableName = editorTableName,
                             established = false,
                             validationFallbackMessage =
                                 strings.reviewData,
@@ -167,7 +176,7 @@ class OnlineAccountProfileUiCoordinator(
                             feedbackMessage =
                                 strings.nameRequired,
                         ),
-                        synchronizedIdentity = null,
+                        synchronizedIdentity = synchronizedIdentity,
                     )
                 } else {
                     OnlineAccountProfileLoadOutcome(
@@ -252,6 +261,25 @@ class OnlineAccountProfileUiCoordinator(
 
         return identityStore.updateTableName(
             tableName = tableName,
+        )
+    }
+}
+
+private fun resolveOnlineAccountEditorTableName(
+    publicDisplayName: String,
+    tableName: String,
+): String {
+    return if (
+        isValidOnlineAccountTableCode(
+            rawName = tableName,
+        )
+    ) {
+        normalizeOnlineAccountTableCodeInput(
+            rawName = tableName,
+        )
+    } else {
+        suggestOnlineAccountTableCode(
+            publicDisplayName = publicDisplayName,
         )
     }
 }

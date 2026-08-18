@@ -23,6 +23,7 @@ import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.ONLINE_ACCOUNT_TABLE_CODE_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
+import com.ahtohiofilho.dominopernambucano.online.isValidOnlineAccountTableCode
 import com.ahtohiofilho.dominopernambucano.ui.components.DominoOutlinedTextField
 import com.ahtohiofilho.dominopernambucano.ui.components.DominoPrimaryButton
 import com.ahtohiofilho.dominopernambucano.ui.components.DominoTextAction
@@ -320,6 +321,23 @@ private fun OnlineAccountProfileContent(
         }
 
         is OnlineAccountProfileUiState.Editing -> {
+            val tableCodeValid =
+                isValidOnlineAccountTableCode(
+                    rawName = state.tableName,
+                )
+            val tableCodeHasInput = state.tableName.isNotBlank()
+            val tableCodeSupportingText = if (tableCodeValid) {
+                stringResource(
+                    R.string.account_short_name_valid,
+                )
+            } else {
+                stringResource(
+                    R.string.account_short_name_hint,
+                    state.tableName.length,
+                    ONLINE_ACCOUNT_TABLE_CODE_LENGTH,
+                )
+            }
+
             Column(
                 verticalArrangement = Arrangement.spacedBy(
                     MaterialTheme.dominoSpacing.xs,
@@ -363,26 +381,31 @@ private fun OnlineAccountProfileContent(
                     label = stringResource(
                         R.string.account_table_code,
                     ),
-                    supportingText = stringResource(
-                        R.string.account_character_count,
-                        state.tableName.length,
-                        ONLINE_ACCOUNT_TABLE_CODE_LENGTH,
-                    ),
+                    supportingText = tableCodeSupportingText,
                     keyboardOptions = KeyboardOptions(
                         capitalization =
                             KeyboardCapitalization.Characters,
                     ),
                     tone = DominoTextFieldTone.OnLight,
+                    isError =
+                        tableCodeHasInput && !tableCodeValid,
+                    success = tableCodeValid,
                 )
 
-                state.validationMessage?.let { message ->
-                    Text(
-                        modifier = Modifier.semantics {
-                            liveRegion = LiveRegionMode.Assertive
-                        },
-                        text = message,
-                    )
-                }
+                state.validationMessage
+                    ?.takeUnless { message ->
+                        message ==
+                            state.tableCodeValidationMessage
+                    }
+                    ?.let { message ->
+                        Text(
+                            modifier = Modifier.semantics {
+                                liveRegion =
+                                    LiveRegionMode.Assertive
+                            },
+                            text = message,
+                        )
+                    }
 
                 state.feedbackMessage?.let { message ->
                     Text(

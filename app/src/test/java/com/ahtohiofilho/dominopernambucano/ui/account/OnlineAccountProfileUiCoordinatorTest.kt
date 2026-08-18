@@ -28,7 +28,7 @@ private fun profileSuccess(
 
 class OnlineAccountProfileUiCoordinatorTest {
     private val profileStrings = OnlineAccountProfileStrings(
-        nameRequired = "Complete seu nome público para criar o perfil da conta.",
+        nameRequired = "Complete seu nome público e escolha um nome curto.",
         profileSaved = "Perfil salvo. O ranking e a mesa usarão estes nomes.",
         reviewData = "Revise os dados do perfil.",
         sessionUnavailable =
@@ -36,7 +36,7 @@ class OnlineAccountProfileUiCoordinatorTest {
         connectToEditProfile =
             "Conecte uma conta para editar o perfil público.",
         profileMissing = "O perfil da conta ainda não foi criado.",
-        reviewNames = "Revise o nome público e o nome de mesa.",
+        reviewNames = "Revise o nome público e o nome curto.",
         rateLimited =
             "Muitas tentativas em pouco tempo. Aguarde e tente novamente.",
         loadFailed =
@@ -46,9 +46,9 @@ class OnlineAccountProfileUiCoordinatorTest {
         operationFailed =
             "Não foi possível concluir a operação de perfil.",
         tableCodeRequired =
-            "Escolha uma sigla de mesa com exatamente 3 letras ou números.",
+            "Use exatamente 3 caracteres no nome curto.",
         tableCodeMigrationRequired =
-            "Substitua seu nome de mesa antigo por uma sigla de 3 caracteres.",
+            "Revise a sugestão de 3 caracteres para o nome curto.",
     )
 
     @Test
@@ -80,6 +80,44 @@ class OnlineAccountProfileUiCoordinatorTest {
             assertEquals("AFI", state.tableName)
             assertFalse(state.established)
             assertEquals(1, client.fetchCount)
+        }
+
+    @Test
+    fun missing_profile_replaces_legacy_default_with_short_name_suggestion() =
+        runBlocking {
+            val client = FakeProfileClient(
+                fetchResult =
+                    OnlineAccountProfileClientResult.Failure(
+                        kind =
+                            OnlineAccountProfileFailureKind
+                                .NOT_ESTABLISHED,
+                        retryable = false,
+                    ),
+            )
+            val identityStore = FakeIdentityStore()
+            val coordinator = OnlineAccountProfileUiCoordinator(
+                client = client,
+                identityStore = identityStore,
+                strings = profileStrings,
+            )
+
+            val outcome = coordinator.load(
+                fallbackIdentity = OnlinePlayerIdentity(
+                    playerId = "player-1",
+                    displayName = "Jogador",
+                    tableName = "JOGADOR",
+                ),
+            )
+            val state =
+                outcome.state as OnlineAccountProfileUiState.Editing
+
+            assertEquals("Jogador", state.publicDisplayName)
+            assertEquals("JOG", state.tableName)
+            assertEquals(
+                "JOG",
+                outcome.synchronizedIdentity?.tableName,
+            )
+            assertFalse(state.saveEnabled)
         }
 
     @Test
@@ -263,7 +301,7 @@ class OnlineAccountProfileUiCoordinatorTest {
     }
 
     @Test
-    fun legacy_table_name_is_loaded_without_truncation_and_requires_migration() =
+    fun legacy_table_name_is_converted_to_three_character_suggestion() =
         runBlocking {
             val client = FakeProfileClient(
                 fetchResult = profileSuccess(
@@ -283,37 +321,32 @@ class OnlineAccountProfileUiCoordinatorTest {
             val state =
                 outcome.state as OnlineAccountProfileUiState.Editing
 
-            assertEquals("ANTÔNIO", state.tableName)
-            assertFalse(state.saveEnabled)
-            assertEquals(
-                profileStrings.tableCodeRequired,
-                state.validationMessage,
-            )
+            assertEquals("ANT", state.tableName)
+            assertTrue(state.saveEnabled)
+            assertNull(state.validationMessage)
             assertEquals(
                 profileStrings.tableCodeMigrationRequired,
                 state.feedbackMessage,
             )
             assertEquals(
-                "ANTÔNIO",
+                "ANT",
                 outcome.synchronizedIdentity?.tableName,
             )
         }
 
     @Test
-    fun legacy_table_name_can_be_reduced_until_valid_code_is_selected() {
+    fun editor_filters_normalizes_and_caps_short_name_to_three_characters() {
         val initial = OnlineAccountProfileUiState.Editing(
             publicDisplayName = "Antônio Filho",
-            tableName = "ANTÔNIO",
+            tableName = "",
             established = true,
             validationFallbackMessage = profileStrings.reviewData,
             tableCodeValidationMessage =
                 profileStrings.tableCodeRequired,
         )
 
-        val reduced = initial.withTableName("ANTÔNI")
-        val valid = reduced.withTableName("afi")
+        val valid = initial.withTableName("á-f_i 2026")
 
-        assertEquals("ANTÔNI", reduced.tableName)
         assertEquals("AFI", valid.tableName)
         assertTrue(valid.saveEnabled)
     }
