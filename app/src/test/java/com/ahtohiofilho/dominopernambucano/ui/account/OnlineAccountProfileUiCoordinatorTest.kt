@@ -211,6 +211,19 @@ class OnlineAccountProfileUiCoordinatorTest {
                 outcome.synchronizedIdentity?.tableName,
             )
             assertTrue(outcome.state.established)
+            assertTrue(outcome.state.saveSucceeded)
+            assertFalse(outcome.state.saveEnabled)
+            assertEquals(
+                profileStrings.profileSaved,
+                outcome.state.feedbackMessage,
+            )
+
+            val editedAgain =
+                outcome.state.withTableName("AF2")
+
+            assertFalse(editedAgain.saveSucceeded)
+            assertTrue(editedAgain.saveEnabled)
+            assertNull(editedAgain.feedbackMessage)
         }
 
     @Test
@@ -247,6 +260,8 @@ class OnlineAccountProfileUiCoordinatorTest {
             assertNull(outcome.synchronizedIdentity)
             assertEquals(0, identityStore.displayUpdateCount)
             assertEquals(0, identityStore.tableUpdateCount)
+            assertFalse(outcome.state.saveSucceeded)
+            assertTrue(outcome.state.saveEnabled)
         }
 
     @Test

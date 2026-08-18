@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.tooling.preview.Preview
 import com.ahtohiofilho.dominopernambucano.R
@@ -213,12 +214,19 @@ fun OnlineAccountDialog(
                         modifier = Modifier.testTag(
                             OnlineAccountPrimaryActionTag,
                         ),
-                        text = if (editor.actionInProgress) {
-                            stringResource(R.string.account_saving)
-                        } else {
-                            stringResource(
-                                R.string.account_save_profile,
-                            )
+                        text = when {
+                            editor.actionInProgress ->
+                                stringResource(R.string.account_saving)
+
+                            editor.saveSucceeded ->
+                                stringResource(
+                                    R.string.account_profile_saved_action,
+                                )
+
+                            else ->
+                                stringResource(
+                                    R.string.account_save_profile,
+                                )
                         },
                         onClick = onSaveProfileClick,
                         enabled =
@@ -410,9 +418,27 @@ private fun OnlineAccountProfileContent(
                 state.feedbackMessage?.let { message ->
                     Text(
                         modifier = Modifier.semantics {
-                            liveRegion = LiveRegionMode.Polite
+                            liveRegion = if (state.saveSucceeded) {
+                                LiveRegionMode.Assertive
+                            } else {
+                                LiveRegionMode.Polite
+                            }
                         },
-                        text = message,
+                        text = if (state.saveSucceeded) {
+                            "\u2713 $message"
+                        } else {
+                            message
+                        },
+                        color = if (state.saveSucceeded) {
+                            DominoSemanticColors.brandPositive
+                        } else {
+                            DominoSemanticColors.dialogBody
+                        },
+                        fontWeight = if (state.saveSucceeded) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        },
                     )
                 }
             }

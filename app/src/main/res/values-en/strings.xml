@@ -70,6 +70,7 @@
     <string name="account_connecting">Connecting...</string>
     <string name="account_saving">Saving...</string>
     <string name="account_save_profile">Save profile</string>
+    <string name="account_profile_saved_action">Saved</string>
     <string name="account_retry">Try again</string>
     <string name="common_close">Close</string>
     <string name="account_profile_unavailable">The online profile is not available in this environment.</string>

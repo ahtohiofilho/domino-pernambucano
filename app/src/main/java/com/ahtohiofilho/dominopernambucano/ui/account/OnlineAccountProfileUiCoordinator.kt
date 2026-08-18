@@ -25,6 +25,7 @@ sealed interface OnlineAccountProfileUiState {
         val tableCodeValidationMessage: String,
         val actionInProgress: Boolean = false,
         val feedbackMessage: String? = null,
+        val saveSucceeded: Boolean = false,
     ) : OnlineAccountProfileUiState {
         val validationMessage: String?
             get() = validateOnlineAccountProfileInput(
@@ -35,7 +36,10 @@ sealed interface OnlineAccountProfileUiState {
             )
 
         val saveEnabled: Boolean
-            get() = !actionInProgress && validationMessage == null
+            get() =
+                !actionInProgress &&
+                    validationMessage == null &&
+                    !saveSucceeded
 
         fun withPublicDisplayName(
             value: String,
@@ -46,6 +50,7 @@ sealed interface OnlineAccountProfileUiState {
                         MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH,
                     ),
                 feedbackMessage = null,
+                saveSucceeded = false,
             )
         }
 
@@ -57,6 +62,7 @@ sealed interface OnlineAccountProfileUiState {
                     rawName = value,
                 ),
                 feedbackMessage = null,
+                saveSucceeded = false,
             )
         }
     }
@@ -203,6 +209,7 @@ class OnlineAccountProfileUiCoordinator(
                 state = editor.copy(
                     actionInProgress = false,
                     feedbackMessage = validationMessage,
+                    saveSucceeded = false,
                 ),
                 synchronizedIdentity = null,
             )
@@ -233,6 +240,7 @@ class OnlineAccountProfileUiCoordinator(
                             strings.tableCodeRequired,
                         feedbackMessage =
                             strings.profileSaved,
+                        saveSucceeded = true,
                     ),
                     synchronizedIdentity = synchronizedIdentity,
                 )
@@ -244,6 +252,7 @@ class OnlineAccountProfileUiCoordinator(
                         actionInProgress = false,
                         feedbackMessage =
                             result.kind.toVisibleMessage(strings),
+                        saveSucceeded = false,
                     ),
                     synchronizedIdentity = null,
                 )

@@ -70,6 +70,7 @@
     <string name="account_connecting">Conectando...</string>
     <string name="account_saving">Guardando...</string>
     <string name="account_save_profile">Guardar perfil</string>
+    <string name="account_profile_saved_action">Guardado</string>
     <string name="account_retry">Intentar de nuevo</string>
     <string name="common_close">Cerrar</string>
     <string name="account_profile_unavailable">El perfil en línea no está disponible en este entorno.</string>
