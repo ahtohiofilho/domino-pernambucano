@@ -24,7 +24,7 @@ import kotlinx.serialization.json.Json
 
 internal const val DEFAULT_PUBLIC_RANKING_PAGE_SIZE = 50
 internal const val MAXIMUM_PUBLIC_RANKING_PAGE_SIZE = 100
-internal const val CURRENT_RANKING_CACHE_MAX_AGE_SECONDS = 0
+internal const val CURRENT_RANKING_CACHE_MAX_AGE_SECONDS = 300
 internal const val HISTORICAL_RANKING_CACHE_MAX_AGE_SECONDS = 300
 internal const val CLOSED_CYCLES_CACHE_MAX_AGE_SECONDS = 30
 
@@ -97,13 +97,7 @@ internal suspend fun ApplicationCall.respondPublicRanking(
         publicationDecision = publicationDecision,
         retainedRankingSize = retainedRankingSize,
     )
-    val publishedStandings =
-        if (publicationDecision.isPublished) {
-            ladder.standings
-        } else {
-            emptyList()
-        }
-    val entries = publishedStandings
+    val entries = ladder.standings
         .drop(offset)
         .take(limit)
         .map { standing ->
@@ -116,8 +110,7 @@ internal suspend fun ApplicationCall.respondPublicRanking(
         }
 
     val consumed = offset.toLong() + entries.size.toLong()
-    val viewer = if (publicationDecision.isPublished) {
-        viewerAccountId
+    val viewer = viewerAccountId
         ?.trim()
         ?.takeIf { accountId -> accountId.isNotBlank() }
         ?.let { accountId ->
@@ -133,9 +126,6 @@ internal suspend fun ApplicationCall.respondPublicRanking(
                     awardDecision.tierFor(standing.rank),
             )
         }
-    } else {
-        null
-    }
 
     val response = PublicRankingResponseDto(
             cycle = cycle,
@@ -170,8 +160,7 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             offset = offset,
             limit = limit,
             hasMore =
-                publicationDecision.isPublished &&
-                    consumed < retainedRankingSize.toLong(),
+                consumed < retainedRankingSize.toLong(),
             entries = entries,
             viewer = viewer,
         )

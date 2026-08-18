@@ -59,6 +59,7 @@ class OnlineDominoMatchCoordinator(
         OnlineTraceLogger(),
     private val catchUpPolicy: OnlinePresentationCatchUpPolicy =
         OnlinePresentationCatchUpPolicy(),
+    private val onMatchFinished: () -> Unit = {},
 ) : DominoMatchCoordinator, OnlineGameUiTraceReporter {
     private val coordinatorScope = CoroutineScope(
         SupervisorJob() + coroutineDispatcher,
@@ -99,6 +100,7 @@ class OnlineDominoMatchCoordinator(
      * reutilizem a mesma revisão enquanto a confirmação ainda está em trânsito.
      */
     private var inFlightAction: OnlinePlayerActionDto? = null
+    private var matchFinishedCallbackDispatched = false
 
     override val state: StateFlow<DominoMatchRuntimeState> =
         mutableState.asStateFlow()
@@ -669,6 +671,15 @@ class OnlineDominoMatchCoordinator(
         automaticPlayerIndexes = queuedRuntimeState.automaticPlayerIndexes
         mutableState.value = queuedRuntimeState.runtimeState
             .toStableDisplayRuntimeState()
+
+        if (
+            !matchFinishedCallbackDispatched &&
+            queuedRuntimeState.runtimeState.phase ==
+                DominoMatchPhase.MatchFinished
+        ) {
+            matchFinishedCallbackDispatched = true
+            onMatchFinished()
+        }
 
         trace(
             level = OnlineTraceLevel.INFO,

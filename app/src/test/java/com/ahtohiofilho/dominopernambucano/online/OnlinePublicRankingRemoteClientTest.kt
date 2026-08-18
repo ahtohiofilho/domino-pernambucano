@@ -3,10 +3,12 @@ package com.ahtohiofilho.dominopernambucano.online
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.cache.HttpCache
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headers
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import java.util.concurrent.atomic.AtomicInteger
@@ -76,6 +78,189 @@ class OnlinePublicRankingRemoteClientTest {
                     .competitorId
                     .contains("account"),
             )
+
+            httpClient.close()
+        }
+
+    @Test
+    fun below_threshold_classification_with_entries_is_valid() =
+        runBlocking {
+            val httpClient = HttpClient(
+                MockEngine {
+                    respond(
+                        content = validResponseJson()
+                            .replace(
+                                "\"publicationThreshold\": 1",
+                                "\"publicationThreshold\": 100",
+                            )
+                            .replace(
+                                "\"publicationStatus\": \"PUBLISHED\"",
+                                "\"publicationStatus\": \"BELOW_THRESHOLD\"",
+                            )
+                            .replace(
+                                "\"eligiblePlayersRemaining\": 0",
+                                "\"eligiblePlayersRemaining\": 96",
+                            )
+                            .replace(
+                                "\"awardsEligible\": true",
+                                "\"awardsEligible\": false",
+                            ),
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                },
+            ) {
+                expectSuccess = true
+                install(ContentNegotiation) {
+                    json(createOnlineJson())
+                }
+            }
+
+            val result = client(
+                httpClient = httpClient,
+                credential = anonymousCredential(),
+            ).fetch(
+                cycle = PublicRankingCycleDto.DAILY,
+                limit = 2,
+            ) as OnlinePublicRankingClientResult.Success
+
+            assertEquals(
+                PublicRankingPublicationStatusDto.BELOW_THRESHOLD,
+                result.response.publicationStatus,
+            )
+            assertEquals(2, result.response.entries.size)
+            assertTrue(result.response.hasMore)
+            assertFalse(result.response.awardsEligible)
+
+            httpClient.close()
+        }
+
+    @Test
+    fun current_first_page_cache_expires_and_can_be_invalidated() =
+        runBlocking {
+            val requestCount = AtomicInteger(0)
+            var now = 1_000L
+            val httpClient = HttpClient(
+                MockEngine {
+                    requestCount.incrementAndGet()
+                    respond(
+                        content = validResponseJson(),
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                },
+            ) {
+                expectSuccess = true
+                install(ContentNegotiation) {
+                    json(createOnlineJson())
+                }
+            }
+
+            val rankingClient = client(
+                httpClient = httpClient,
+                credential = anonymousCredential(),
+                nowEpochMillis = { now },
+            )
+
+            repeat(2) {
+                rankingClient.fetch(
+                    cycle = PublicRankingCycleDto.DAILY,
+                    limit = 2,
+                ) as OnlinePublicRankingClientResult.Success
+            }
+            assertEquals(1, requestCount.get())
+
+            now += 300_001L
+            rankingClient.fetch(
+                cycle = PublicRankingCycleDto.DAILY,
+                limit = 2,
+            ) as OnlinePublicRankingClientResult.Success
+            assertEquals(2, requestCount.get())
+
+            rankingClient.invalidateCurrentRankingCache()
+            rankingClient.fetch(
+                cycle = PublicRankingCycleDto.DAILY,
+                limit = 2,
+            ) as OnlinePublicRankingClientResult.Success
+            assertEquals(3, requestCount.get())
+
+            httpClient.close()
+        }
+    @Test
+    fun current_first_page_invalidation_revalidates_real_http_cache() =
+        runBlocking {
+            val requestCount = AtomicInteger(0)
+            var observedNoCache = false
+            var observedIfNoneMatch = false
+            var now = 1_000L
+
+            val httpClient = HttpClient(
+                MockEngine { request ->
+                    val currentRequestCount =
+                        requestCount.incrementAndGet()
+
+                    if (currentRequestCount == 2) {
+                        observedNoCache =
+                            request.headers[HttpHeaders.CacheControl]
+                                ?.contains("no-cache") == true
+                        observedIfNoneMatch =
+                            request.headers[HttpHeaders.IfNoneMatch] ==
+                                "\"ranking-v1\""
+                    }
+
+                    respond(
+                        content = validResponseJson(),
+                        status = HttpStatusCode.OK,
+                        headers =
+                            cacheableJsonHeaders(
+                                etag =
+                                    if (currentRequestCount == 1) {
+                                        "\"ranking-v1\""
+                                    } else {
+                                        "\"ranking-v2\""
+                                    },
+                            ),
+                    )
+                },
+            ) {
+                expectSuccess = true
+                install(HttpCache)
+                install(ContentNegotiation) {
+                    json(createOnlineJson())
+                }
+            }
+
+            val rankingClient = client(
+                httpClient = httpClient,
+                credential = anonymousCredential(),
+                nowEpochMillis = { now },
+            )
+
+            rankingClient.fetch(
+                cycle = PublicRankingCycleDto.DAILY,
+                limit = 2,
+            ) as OnlinePublicRankingClientResult.Success
+            rankingClient.fetch(
+                cycle = PublicRankingCycleDto.DAILY,
+                limit = 2,
+            ) as OnlinePublicRankingClientResult.Success
+            assertEquals(1, requestCount.get())
+
+            rankingClient.invalidateCurrentRankingCache()
+            rankingClient.fetch(
+                cycle = PublicRankingCycleDto.DAILY,
+                limit = 2,
+            ) as OnlinePublicRankingClientResult.Success
+
+            assertEquals(2, requestCount.get())
+            assertTrue(observedNoCache)
+            assertTrue(observedIfNoneMatch)
+
+            rankingClient.fetch(
+                cycle = PublicRankingCycleDto.DAILY,
+                limit = 2,
+            ) as OnlinePublicRankingClientResult.Success
+            assertEquals(2, requestCount.get())
 
             httpClient.close()
         }
@@ -488,6 +673,7 @@ class OnlinePublicRankingRemoteClientTest {
     private fun client(
         httpClient: HttpClient,
         credential: OnlineSessionCredential?,
+        nowEpochMillis: () -> Long = { 1_000L },
     ): OnlinePublicRankingRemoteClient {
         return OnlinePublicRankingRemoteClient(
             remoteApiClient = KtorRemoteOnlineApiClient(
@@ -501,6 +687,7 @@ class OnlinePublicRankingRemoteClientTest {
                     store = MemoryCredentialStore(credential),
                     nowEpochMillis = { 1_000L },
                 ),
+            nowEpochMillis = nowEpochMillis,
         )
     }
 
@@ -648,6 +835,21 @@ class OnlinePublicRankingRemoteClientTest {
               ]
             }
         """.trimIndent()
+    }
+
+    private fun cacheableJsonHeaders(
+        etag: String,
+    ) = headers {
+        append(
+            HttpHeaders.ContentType,
+            ContentType.Application.Json.toString(),
+        )
+        append(
+            HttpHeaders.CacheControl,
+            "private, max-age=300, must-revalidate",
+        )
+        append(HttpHeaders.ETag, etag)
+        append(HttpHeaders.Vary, HttpHeaders.Authorization)
     }
 
     private fun jsonHeaders() = headersOf(

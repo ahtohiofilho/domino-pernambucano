@@ -260,9 +260,16 @@ class PublicHistoricalRankingHttpRouteTest {
             assertFalse(ranking.awardsEligible)
             assertEquals(1, ranking.awardRuleVersion)
             assertEquals(0, ranking.awardedRankingSize)
-            assertTrue(ranking.entries.isEmpty())
+            assertEquals(4, ranking.entries.size)
             assertFalse(ranking.hasMore)
-            assertNull(ranking.viewer)
+            assertNotNull(ranking.viewer)
+            assertEquals(1, requireNotNull(ranking.viewer).rank)
+            assertNull(requireNotNull(ranking.viewer).awardTier)
+            assertTrue(
+                ranking.entries.all { entry ->
+                    entry.awardTier == null
+                },
+            )
         }
 
     @Test

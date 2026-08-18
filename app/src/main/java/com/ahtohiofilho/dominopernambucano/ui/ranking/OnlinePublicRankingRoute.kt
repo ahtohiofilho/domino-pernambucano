@@ -387,10 +387,6 @@ internal fun OnlinePublicRankingScreen(
     val hasRankingSelection =
         selectedScope == PublicRankingScope.CURRENT ||
             selectedClosedCycleId != null
-    val pendingResponse = latestResponse
-        ?.takeIf { response ->
-            response.isOfficialRankingPending()
-        }
 
     Box(
         modifier = Modifier
@@ -445,17 +441,28 @@ internal fun OnlinePublicRankingScreen(
                     locale = locale,
                 )
 
-                if (response.isOfficialRankingPublished()) {
-                    response.viewer?.let { viewer ->
-                        RankingEntryCard(
-                            entry = viewer,
-                            locale = locale,
-                            heading = stringResource(
-                                R.string.ranking_your_position,
-                            ),
-                            highlighted = true,
-                        )
+                if (response.isOfficialRankingPending()) {
+                    RankingPublicationPendingContent(
+                        response = response,
+                    )
+                }
+
+                val viewer = response.viewer
+                val viewerAlreadyVisible = viewer?.let { currentViewer ->
+                    entries.any { entry ->
+                        entry.competitorId == currentViewer.competitorId
                     }
+                } == true
+
+                if (viewer != null && !viewerAlreadyVisible) {
+                    RankingEntryCard(
+                        entry = viewer,
+                        locale = locale,
+                        heading = stringResource(
+                            R.string.ranking_your_position,
+                        ),
+                        highlighted = true,
+                    )
                 }
             }
 
@@ -480,12 +487,6 @@ internal fun OnlinePublicRankingScreen(
                     )
                 }
 
-                pendingResponse != null -> {
-                    RankingPublicationPendingContent(
-                        modifier = Modifier.weight(1f),
-                        response = pendingResponse,
-                    )
-                }
 
                 !loading && entries.isEmpty() -> {
                     RankingEmptyContent(
@@ -500,6 +501,8 @@ internal fun OnlinePublicRankingScreen(
                         entries = entries,
                         locale = locale,
                         latestResponse = latestResponse,
+                        viewerCompetitorId =
+                            latestResponse?.viewer?.competitorId,
                         failure = failure,
                         loading = loading,
                         onLoadMore = onLoadMore,
@@ -914,6 +917,7 @@ private fun RankingEntries(
     entries: List<PublicRankingEntryDto>,
     locale: java.util.Locale,
     latestResponse: PublicRankingResponseDto?,
+    viewerCompetitorId: String?,
     failure: OnlinePublicRankingFailureKind?,
     loading: Boolean,
     onLoadMore: () -> Unit,
@@ -929,9 +933,20 @@ private fun RankingEntries(
                 entry.competitorId
             },
         ) { entry ->
+            val highlighted =
+                entry.competitorId == viewerCompetitorId
+
             RankingEntryCard(
                 entry = entry,
                 locale = locale,
+                heading = if (highlighted) {
+                    stringResource(
+                        R.string.ranking_your_position,
+                    )
+                } else {
+                    null
+                },
+                highlighted = highlighted,
             )
         }
 

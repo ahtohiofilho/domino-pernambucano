@@ -85,6 +85,20 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun fetchPublicRankingRevalidated(
+        cycle: PublicRankingCycleDto,
+        offset: Int = 0,
+        limit: Int = 50,
+        rankingRevision: String? = null,
+    ): PublicRankingResponseDto {
+        return fetchPublicRanking(
+            cycle = cycle,
+            offset = offset,
+            limit = limit,
+            rankingRevision = rankingRevision,
+        )
+    }
+
     suspend fun fetchHistoricalPublicRanking(
         cycle: PublicRankingCycleDto,
         cycleId: String,

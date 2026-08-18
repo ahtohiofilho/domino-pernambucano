@@ -78,11 +78,65 @@ class PublicRankingHttpRouteTest {
         assertFalse(response.awardsEligible)
         assertEquals(1, response.awardRuleVersion)
         assertEquals(0, response.awardedRankingSize)
-        assertTrue(response.entries.isEmpty())
-        assertFalse(response.hasMore)
+        assertEquals(2, response.entries.size)
+        assertTrue(response.hasMore)
         assertNull(response.viewer)
+        assertTrue(
+            response.entries.all { entry ->
+                entry.awardTier == null
+            },
+        )
     }
 
+    @Test
+    fun account_view_below_threshold_still_includes_classification_and_viewer() =
+        testApplication {
+            val day = rankingInstant()
+            val resolver = headerResolver(
+                "account-a" to OnlineRequestIdentity(
+                    playerId = "player-a",
+                    principalId = "principal-a",
+                    sessionId = "session-a",
+                    kind = OnlinePrincipalKind.ACCOUNT,
+                    accountId = "account-0000-0",
+                ),
+            )
+
+            application {
+                module(
+                    store = storeWithRanking(day),
+                    serverEnvironment = OnlineServerEnvironment.TEST,
+                    identityResolver = resolver,
+                    nowEpochMillis = { day },
+                )
+            }
+
+            val httpResponse = client.get(
+                rankingUrl(offset = 0, limit = 2),
+            ) {
+                header(TEST_IDENTITY_HEADER, "account-a")
+            }
+            val ranking = json.decodeFromString<PublicRankingResponseDto>(
+                httpResponse.bodyAsText(),
+            )
+
+            assertEquals(HttpStatusCode.OK, httpResponse.status)
+            assertEquals(
+                PublicRankingPublicationStatusDto.BELOW_THRESHOLD,
+                ranking.publicationStatus,
+            )
+            assertFalse(ranking.awardsEligible)
+            assertEquals(2, ranking.entries.size)
+            assertTrue(ranking.hasMore)
+            assertNotNull(ranking.viewer)
+            assertEquals(1, requireNotNull(ranking.viewer).rank)
+            assertNull(requireNotNull(ranking.viewer).awardTier)
+            assertTrue(
+                ranking.entries.all { entry ->
+                    entry.awardTier == null
+                },
+            )
+        }
     @Test
     fun account_view_includes_own_position_without_authority_ids() = testApplication {
         val day = rankingInstant()
@@ -213,7 +267,7 @@ class PublicRankingHttpRouteTest {
 
             assertEquals(HttpStatusCode.OK, first.status)
             assertEquals(
-                "private, max-age=0, must-revalidate",
+                "private, max-age=300, must-revalidate",
                 first.headers[HttpHeaders.CacheControl],
             )
             assertTrue(entityTag.matches(Regex("\"[0-9a-f]{64}\"")))

@@ -201,6 +201,23 @@ class KtorRemoteOnlineApiClient(
             offset = offset,
             limit = limit,
             rankingRevision = rankingRevision,
+            forceRevalidation = false,
+        )
+    }
+
+    override suspend fun fetchPublicRankingRevalidated(
+        cycle: PublicRankingCycleDto,
+        offset: Int,
+        limit: Int,
+        rankingRevision: String?,
+    ): PublicRankingResponseDto {
+        return fetchPublicRankingResponse(
+            cycle = cycle,
+            cycleId = null,
+            offset = offset,
+            limit = limit,
+            rankingRevision = rankingRevision,
+            forceRevalidation = true,
         )
     }
 
@@ -218,6 +235,7 @@ class KtorRemoteOnlineApiClient(
             offset = offset,
             limit = limit,
             rankingRevision = null,
+            forceRevalidation = false,
         )
     }
 
@@ -227,6 +245,7 @@ class KtorRemoteOnlineApiClient(
         offset: Int,
         limit: Int,
         rankingRevision: String?,
+        forceRevalidation: Boolean,
     ): PublicRankingResponseDto {
         require(offset >= 0)
         require(limit in 1..100)
@@ -260,6 +279,12 @@ class KtorRemoteOnlineApiClient(
                 parameter(
                     key = "revision",
                     value = expectedRevision,
+                )
+            }
+            if (forceRevalidation) {
+                header(
+                    HttpHeaders.CacheControl,
+                    "no-cache",
                 )
             }
             accept(ContentType.Application.Json)

@@ -69,13 +69,26 @@ interface OnlinePublicRankingClient {
             "Closed ranking cycles are not configured for this client.",
         )
     }
+
+    fun invalidateCurrentRankingCache() = Unit
 }
 
 class OnlinePublicRankingRemoteClient(
     private val remoteApiClient: RemoteOnlineApiClient,
     private val sessionCredentialRepository:
         OnlineSessionCredentialRepository,
+    private val nowEpochMillis: () -> Long = System::currentTimeMillis,
 ) : OnlinePublicRankingClient {
+    private val currentRankingCache =
+        mutableMapOf<CurrentRankingCacheKey, CurrentRankingCacheEntry>()
+    private var currentRankingRevalidationUntilEpochMillis = Long.MIN_VALUE
+
+    override fun invalidateCurrentRankingCache() {
+        currentRankingCache.clear()
+        currentRankingRevalidationUntilEpochMillis =
+            nowEpochMillis() + CURRENT_RANKING_CLIENT_CACHE_TTL_MILLIS
+    }
+
     override suspend fun fetch(
         cycle: PublicRankingCycleDto,
         offset: Int,
@@ -136,14 +149,61 @@ class OnlinePublicRankingRemoteClient(
 
         applyCredential(credential)
 
+        val currentRankingCacheKey =
+            if (
+                normalizedCycleId == null &&
+                offset == 0 &&
+                normalizedRevision == null
+            ) {
+                CurrentRankingCacheKey(
+                    cycle = cycle,
+                    limit = limit,
+                    viewerIdentity =
+                        credential.accountId ?: credential.playerId,
+                )
+            } else {
+                null
+            }
+
+        currentRankingCacheKey?.let { cacheKey ->
+            val cached = currentRankingCache[cacheKey]
+            if (cached != null) {
+                val ageMillis =
+                    nowEpochMillis() - cached.cachedAtEpochMillis
+                if (
+                    ageMillis >= 0L &&
+                    ageMillis < CURRENT_RANKING_CLIENT_CACHE_TTL_MILLIS
+                ) {
+                    return OnlinePublicRankingClientResult.Success(
+                        response = cached.response,
+                    )
+                }
+                currentRankingCache.remove(cacheKey)
+            }
+        }
+
+        val forceCurrentRankingRevalidation =
+            currentRankingCacheKey != null &&
+                nowEpochMillis() <
+                currentRankingRevalidationUntilEpochMillis
+
         return try {
             val response = if (normalizedCycleId == null) {
-                remoteApiClient.fetchPublicRanking(
-                    cycle = cycle,
-                    offset = offset,
-                    limit = limit,
-                    rankingRevision = normalizedRevision,
-                )
+                if (forceCurrentRankingRevalidation) {
+                    remoteApiClient.fetchPublicRankingRevalidated(
+                        cycle = cycle,
+                        offset = offset,
+                        limit = limit,
+                        rankingRevision = normalizedRevision,
+                    )
+                } else {
+                    remoteApiClient.fetchPublicRanking(
+                        cycle = cycle,
+                        offset = offset,
+                        limit = limit,
+                        rankingRevision = normalizedRevision,
+                    )
+                }
             } else {
                 remoteApiClient.fetchHistoricalPublicRanking(
                     cycle = cycle,
@@ -161,13 +221,29 @@ class OnlinePublicRankingRemoteClient(
                 requestedRankingRevision = normalizedRevision,
             )
 
+            currentRankingCacheKey?.let { cacheKey ->
+                currentRankingCache[cacheKey] =
+                    CurrentRankingCacheEntry(
+                        response = response,
+                        cachedAtEpochMillis = nowEpochMillis(),
+                    )
+            }
+
             OnlinePublicRankingClientResult.Success(
                 response = response,
             )
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: OnlinePublicRankingHttpException) {
-            error.toRankingClientFailure()
+            val failure = error.toRankingClientFailure()
+            if (
+                failure.kind ==
+                OnlinePublicRankingFailureKind
+                    .PAGINATION_RESTART_REQUIRED
+            ) {
+                invalidateCurrentRankingCache()
+            }
+            failure
         } catch (_: HttpRequestTimeoutException) {
             unavailableRankingFailure()
         } catch (_: IOException) {
@@ -257,6 +333,18 @@ class OnlinePublicRankingRemoteClient(
 
 private const val SUPPORTED_RANKING_AWARD_RULE_VERSION = 1
 private const val MAXIMUM_AWARDED_RANKING_SIZE = 50
+private const val CURRENT_RANKING_CLIENT_CACHE_TTL_MILLIS = 300_000L
+
+private data class CurrentRankingCacheKey(
+    val cycle: PublicRankingCycleDto,
+    val limit: Int,
+    val viewerIdentity: String,
+)
+
+private data class CurrentRankingCacheEntry(
+    val response: PublicRankingResponseDto,
+    val cachedAtEpochMillis: Long,
+)
 
 private fun PublicRankingResponseDto.requireValidFor(
     requestedCycle: PublicRankingCycleDto,
@@ -302,9 +390,6 @@ private fun PublicRankingResponseDto.requireValidFor(
             require(totalEligiblePlayers < publicationThreshold)
             require(eligiblePlayersRemaining > 0)
             require(!awardsEligible)
-            require(entries.isEmpty())
-            require(viewer == null)
-            require(!hasMore)
         }
 
         PublicRankingPublicationStatusDto.PUBLISHED -> {

@@ -960,6 +960,10 @@ fun DominoPernambucanoApp(
                                 initialSnapshot =
                                     activation.initialSnapshot,
                                 traceLogger = onlineTraceLogger,
+                                onMatchFinished = {
+                                    onlinePublicRankingRemoteClient
+                                        ?.invalidateCurrentRankingCache()
+                                },
                             )
 
                         sessionCoordinator.dispatch(
