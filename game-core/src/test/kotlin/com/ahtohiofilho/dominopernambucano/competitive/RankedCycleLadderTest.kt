@@ -135,6 +135,70 @@ class RankedCycleLadderTest {
     }
 
     @Test
+    fun excludes_selected_accounts_without_discarding_mixed_result() {
+        val period = dailyPeriod(
+            year = 2026,
+            month = 7,
+            day = 25,
+        )
+        val mixed = result(
+            matchId = "mixed",
+            completedAtEpochMillis = epochMillis(
+                year = 2026,
+                month = 7,
+                day = 25,
+                hour = 12,
+            ),
+            players = listOf(
+                player(0, "account-a", true, 6, 4, 2, 0),
+                player(1, "account-s", false, -3, 3, 1, 0),
+                player(2, "account-c", true, 6, 1, 0, 0),
+                player(3, "account-t", false, -3, 0, 0, 0),
+            ),
+        )
+        val syntheticOnly = result(
+            matchId = "synthetic-only",
+            completedAtEpochMillis = mixed.completedAtEpochMillis + 1L,
+            players = listOf(
+                player(0, "account-s", true, 6, 4, 2, 0),
+                player(1, "account-t", false, -3, 3, 1, 0),
+                player(2, "account-u", true, 6, 1, 0, 0),
+                player(3, "account-v", false, -3, 0, 0, 0),
+            ),
+        )
+
+        val ladder = buildRankedCycleLadder(
+            period = period,
+            results = listOf(
+                mixed,
+                syntheticOnly,
+            ),
+            excludedAccountIds = setOf(
+                "account-s",
+                "account-t",
+                "account-u",
+                "account-v",
+            ),
+        )
+
+        assertEquals(1, ladder.resultCount)
+        assertEquals(
+            setOf(
+                "account-a",
+                "account-c",
+            ),
+            ladder.standings
+                .map { standing -> standing.accountId }
+                .toSet(),
+        )
+        assertTrue(
+            ladder.standings.all { standing ->
+                standing.stats.games == 1L
+            },
+        )
+    }
+
+    @Test
     fun rejects_duplicate_result_ids_before_accumulating() {
         val period = dailyPeriod(
             year = 2026,

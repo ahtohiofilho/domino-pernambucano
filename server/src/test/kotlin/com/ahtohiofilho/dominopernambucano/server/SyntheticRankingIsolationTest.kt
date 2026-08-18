@@ -19,7 +19,7 @@ import org.junit.Test
 
 class SyntheticRankingIsolationTest {
     @Test
-    fun live_ladder_excludes_entire_result_when_any_account_is_synthetic() {
+    fun live_ladder_counts_mixed_result_for_humans_and_excludes_synthetic_rows() {
         val day = epochMillis(
             year = 2026,
             month = 8,
@@ -37,7 +37,7 @@ class SyntheticRankingIsolationTest {
             completedAtEpochMillis = day,
         )
 
-        assertEquals(1, ladder.resultCount)
+        assertEquals(2, ladder.resultCount)
         assertEquals(
             setOf(
                 "account-a",
@@ -54,9 +54,15 @@ class SyntheticRankingIsolationTest {
                 standing.accountId == "account-s"
             },
         )
-        assertTrue(
-            ladder.standings.all { standing ->
-                standing.stats.games == 1L
+        assertEquals(
+            mapOf(
+                "account-a" to 2L,
+                "account-b" to 2L,
+                "account-c" to 2L,
+                "account-d" to 1L,
+            ),
+            ladder.standings.associate { standing ->
+                standing.accountId to standing.stats.games
             },
         )
     }
@@ -92,7 +98,7 @@ class SyntheticRankingIsolationTest {
         assertNotNull(snapshot)
         requireNotNull(snapshot)
 
-        assertEquals(1, snapshot.resultCount)
+        assertEquals(2, snapshot.resultCount)
         assertEquals(
             setOf(
                 "account-a",
@@ -109,9 +115,15 @@ class SyntheticRankingIsolationTest {
                 standing.accountId == "account-s"
             },
         )
-        assertTrue(
-            snapshot.standings.all { standing ->
-                standing.games == 1L
+        assertEquals(
+            mapOf(
+                "account-a" to 2L,
+                "account-b" to 2L,
+                "account-c" to 2L,
+                "account-d" to 1L,
+            ),
+            snapshot.standings.associate { standing ->
+                standing.accountId to standing.games
             },
         )
     }
@@ -162,6 +174,9 @@ class SyntheticRankingIsolationTest {
                 account("account-c", OnlineParticipantTypeDto.HUMAN),
                 account("account-d", OnlineParticipantTypeDto.HUMAN),
                 account("account-s", OnlineParticipantTypeDto.SYNTHETIC),
+                account("account-t", OnlineParticipantTypeDto.SYNTHETIC),
+                account("account-u", OnlineParticipantTypeDto.SYNTHETIC),
+                account("account-v", OnlineParticipantTypeDto.SYNTHETIC),
             ),
             rankedResults = listOf(
                 result(
@@ -182,6 +197,16 @@ class SyntheticRankingIsolationTest {
                         "account-s",
                         "account-b",
                         "account-c",
+                    ),
+                ),
+                result(
+                    matchId = "synthetic-only",
+                    completedAtEpochMillis = day + 2_000L,
+                    accountIds = listOf(
+                        "account-s",
+                        "account-t",
+                        "account-u",
+                        "account-v",
                     ),
                 ),
             ),

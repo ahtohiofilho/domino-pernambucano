@@ -34,7 +34,11 @@ data class RankedCycleLadder(
 fun buildRankedCycleLadder(
     period: RankedCyclePeriod,
     results: Collection<RankedMatchResult>,
+    excludedAccountIds: Set<String> = emptySet(),
 ): RankedCycleLadder {
+    require(
+        excludedAccountIds.none { accountId -> accountId.isBlank() },
+    )
     require(
         results.map { result -> result.resultId }.distinct().size ==
                 results.size,
@@ -44,7 +48,10 @@ fun buildRankedCycleLadder(
 
     val matchingResults = results.filter { result ->
         result.rankingRuleVersion == period.rankingRuleVersion &&
-                period.contains(result.completedAtEpochMillis)
+                period.contains(result.completedAtEpochMillis) &&
+                result.players.any { player ->
+                    player.accountId !in excludedAccountIds
+                }
     }
     val statsByAccountId = linkedMapOf<String, RankedLadderStats>()
 
@@ -65,6 +72,11 @@ fun buildRankedCycleLadder(
 
         result.players.forEachIndexed { index, player ->
             val accountId = accountIds[index]
+
+            if (accountId in excludedAccountIds) {
+                return@forEachIndexed
+            }
+
             val current = statsByAccountId[accountId]
                 ?: RankedLadderStats()
 

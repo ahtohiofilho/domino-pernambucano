@@ -223,17 +223,23 @@ class InMemoryOnlineServerStore(
         }
     }
 
-    private fun officialRankedResults(): List<RankedMatchResult> {
-        return rankedResultsById.values.filter { result ->
-            result.players.none { player ->
-                val accountId = player.accountId
-                    ?: return@none false
-                val account = accountsByPlayerId[player.playerId]
-                    ?: return@none false
-
-                account.accountId == accountId &&
-                    account.participantType ==
+    private fun syntheticRankingAccountIds(): Set<String> {
+        return accountsByPlayerId.values
+            .asSequence()
+            .filter { account ->
+                account.participantType ==
                     OnlineParticipantTypeDto.SYNTHETIC
+            }
+            .map { account -> account.accountId }
+            .toSet()
+    }
+
+    private fun officialRankedResults(): List<RankedMatchResult> {
+        val excludedAccountIds = syntheticRankingAccountIds()
+
+        return rankedResultsById.values.filter { result ->
+            result.players.any { player ->
+                player.accountId !in excludedAccountIds
             }
         }
     }
@@ -244,6 +250,7 @@ class InMemoryOnlineServerStore(
         return buildRankedCycleLadder(
             period = period,
             results = officialRankedResults(),
+            excludedAccountIds = syntheticRankingAccountIds(),
         )
     }
 
