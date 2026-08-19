@@ -118,7 +118,7 @@ class OnlineRankedQueueControllerTest {
     }
 
     @Test
-    fun unavailable_cancel_returns_locally_to_cancelled_state() =
+    fun unavailable_cancel_keeps_retryable_failure_state() =
         runBlocking {
             val client = FakeQueueClient(
                 cancelResult = OnlineRankedQueueClientResult.Failure(
@@ -137,7 +137,11 @@ class OnlineRankedQueueControllerTest {
 
             assertEquals(listOf("cancel"), client.calls)
             assertEquals(
-                OnlineRankedQueueUiState.Cancelled,
+                OnlineRankedQueueUiState.Failure(
+                    kind =
+                        OnlineRankedQueueUiFailureKind.UNAVAILABLE,
+                    retryable = true,
+                ),
                 controller.state.value,
             )
         }
