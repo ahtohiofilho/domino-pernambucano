@@ -37,29 +37,29 @@ internal data class DominoMatchHeaderTeamLabels(
     val opponentTeam: String,
 )
 
+internal fun resolveDominoVisiblePlayerCode(
+    name: String,
+): String {
+    val normalized = name
+        .trim()
+        .uppercase(Locale.ROOT)
+
+    return if (normalized.matches(Regex("^[A-Z0-9]{3}$"))) {
+        normalized
+    } else {
+        "\u2014"
+    }
+}
+
+@Suppress("UNUSED_PARAMETER")
 internal fun resolveDominoMatchHeaderCode(
     name: String,
     participantType: DominoParticipantType,
     playerIndex: Int,
 ): String {
-    if (participantType == DominoParticipantType.APPLICATION) {
-        return "BOT"
-    }
-
-    val normalized = name
-        .trim()
-        .uppercase(Locale.ROOT)
-
-    if (normalized.matches(Regex("^[A-Z0-9]{3}$"))) {
-        return normalized
-    }
-
-    return "P" + (playerIndex + 1)
-        .toString()
-        .padStart(
-            length = 2,
-            padChar = '0',
-        )
+    return resolveDominoVisiblePlayerCode(
+        name = name,
+    )
 }
 
 internal fun buildDominoMatchHeaderTeamLabels(
@@ -67,7 +67,7 @@ internal fun buildDominoMatchHeaderTeamLabels(
     localPlayerIndex: Int,
 ): DominoMatchHeaderTeamLabels {
     fun codeAt(index: Int): String {
-        return playerCodes.getOrNull(index) ?: "P00"
+        return playerCodes.getOrNull(index) ?: "\u2014"
     }
 
     val localIndex = localPlayerIndex.mod(4)

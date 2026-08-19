@@ -4,7 +4,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.ahtohiofilho.dominopernambucano.R
@@ -25,11 +25,11 @@ class DominoPlayerSeatParticipantTypeTest {
             .getString(R.string.participant_app_label)
 
     @Test
-    fun application_participant_is_identified_on_game_table() {
+    fun application_participant_uses_robot_semantics_without_visible_word_label() {
         composeRule.setContent {
             DominoPernambucanoTheme {
                 DominoPlayerSeat(
-                    name = "Bot 3",
+                    name = "B03",
                     participantType =
                         DominoParticipantType.APPLICATION,
                     pieces = emptyList(),
@@ -41,22 +41,28 @@ class DominoPlayerSeatParticipantTypeTest {
         }
 
         composeRule
-            .onNodeWithText("Bot 3")
-            .assertIsDisplayed()
-
-        composeRule
-            .onNodeWithText(
+            .onNodeWithContentDescription(
                 applicationParticipantLabel,
             )
             .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText(
+                applicationParticipantLabel,
+            )
+            .assertCountEquals(0)
+
+        composeRule
+            .onAllNodesWithText("B")
+            .assertCountEquals(0)
     }
 
     @Test
-    fun human_participant_has_no_application_label_on_game_table() {
+    fun human_participant_uses_descriptive_semantics_without_single_initial() {
         composeRule.setContent {
             DominoPernambucanoTheme {
                 DominoPlayerSeat(
-                    name = "Jogador humano",
+                    name = "A1F",
                     participantType =
                         DominoParticipantType.HUMAN,
                     pieces = emptyList(),
@@ -68,8 +74,12 @@ class DominoPlayerSeatParticipantTypeTest {
         }
 
         composeRule
-            .onNodeWithText("Jogador humano")
+            .onNodeWithContentDescription("A1F")
             .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText("A")
+            .assertCountEquals(0)
 
         composeRule
             .onAllNodesWithText(

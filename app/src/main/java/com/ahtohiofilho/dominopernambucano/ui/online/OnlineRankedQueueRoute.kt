@@ -1,8 +1,13 @@
 package com.ahtohiofilho.dominopernambucano.ui.online
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,13 +23,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankedMatchActivation
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
+import com.ahtohiofilho.dominopernambucano.ui.game.DominoPlayerIdentityDisc
+import com.ahtohiofilho.dominopernambucano.ui.game.resolveDominoVisiblePlayerCode
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
@@ -108,6 +117,7 @@ fun OnlineRankedQueueRoute(
 
     OnlineRankedQueueScreen(
         uiState = uiState,
+        playerName = playerName,
         onRetryClick = ::startOrRetry,
         onCancelClick = ::cancelQueue,
         onBackClick = onBackClick,
@@ -117,6 +127,7 @@ fun OnlineRankedQueueRoute(
 @Composable
 private fun OnlineRankedQueueScreen(
     uiState: OnlineRankedQueueUiState,
+    playerName: String,
     onRetryClick: () -> Unit,
     onCancelClick: () -> Unit,
     onBackClick: () -> Unit,
@@ -132,7 +143,9 @@ private fun OnlineRankedQueueScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (uiState.showsProgress()) {
-                CircularProgressIndicator()
+                RankedMatchmakingCluster(
+                    localPlayerName = playerName,
+                )
             }
 
             Text(
@@ -209,6 +222,72 @@ private fun OnlineRankedQueueScreen(
             OnlineRankedQueueUiState.OpeningMatch,
             is OnlineRankedQueueUiState.MatchReady -> Unit
         }
+    }
+}
+
+@Composable
+private fun RankedMatchmakingCluster(
+    localPlayerName: String,
+) {
+    val localCode = resolveDominoVisiblePlayerCode(
+        name = localPlayerName,
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            DominoPlayerIdentityDisc(
+                name = localPlayerName,
+                participantType = DominoParticipantType.HUMAN,
+                isCurrent = false,
+                isWinner = false,
+                identitySize = 44.dp,
+            )
+
+            Text(
+                text = localCode,
+                color = DominoSemanticColors.primaryTextOnDark,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+        }
+
+        repeat(3) {
+            RankedSearchingPlayerSlot()
+        }
+    }
+}
+
+@Composable
+private fun RankedSearchingPlayerSlot() {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .border(
+                width = 1.dp,
+                color = DominoSemanticColors.primaryTextOnDark.copy(
+                    alpha = 0.30f,
+                ),
+                shape = CircleShape,
+            )
+            .clearAndSetSemantics { },
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+            color = DominoSemanticColors.primaryTextOnDark.copy(
+                alpha = 0.62f,
+            ),
+            strokeWidth = 2.dp,
+        )
     }
 }
 

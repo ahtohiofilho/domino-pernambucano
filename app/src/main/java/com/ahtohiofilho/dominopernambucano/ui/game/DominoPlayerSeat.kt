@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,11 +19,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
@@ -110,16 +104,6 @@ fun DominoPlayerSeat(
             if (compact) 3.dp else 5.dp,
         ),
     ) {
-        if (
-            orientation ==
-            DominoPlayerSeatOrientation.VERTICAL
-        ) {
-            PlayerSeatParticipantTypeLabel(
-                participantType = participantType,
-                compact = compact,
-            )
-        }
-
         PlayerStatusIndicatorSlot(
             name = name,
             participantType = participantType,
@@ -149,58 +133,6 @@ fun DominoPlayerSeat(
     }
 }
 
-@Composable
-private fun PlayerSeatName(
-    name: String,
-    isCurrent: Boolean,
-    isWinner: Boolean,
-    compact: Boolean,
-) {
-    val textColor = if (isCurrent || isWinner) {
-        DominoSemanticColors.scoreHighlight
-    } else {
-        DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.76f)
-    }
-
-    val textStyle = if (compact) {
-        MaterialTheme.typography.labelSmall
-    } else {
-        MaterialTheme.typography.labelMedium
-    }
-
-    Text(
-        text = name,
-        color = textColor,
-        style = textStyle,
-        fontWeight = FontWeight.Black,
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-    )
-}
-
-@Composable
-private fun PlayerSeatParticipantTypeLabel(
-    participantType: DominoParticipantType,
-    compact: Boolean,
-) {
-    if (
-        participantType !=
-        DominoParticipantType.APPLICATION
-    ) {
-        return
-    }
-
-    Text(
-        text = stringResource(R.string.participant_app_label),
-        color = DominoSemanticColors.primaryTextOnDark.copy(
-            alpha = 0.68f,
-        ),
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-    )
-}
 
 @Composable
 private fun PlayerStatusIndicatorSlot(
@@ -235,33 +167,6 @@ private fun PlayerStatusIndicatorSlot(
                         y = if (compact) (-5).dp else (-4).dp,
                     ),
             )
-
-            if (
-                participantType ==
-                DominoParticipantType.APPLICATION
-            ) {
-                Text(
-                    text = stringResource(
-                        R.string.participant_app_label,
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(
-                            start = if (compact) {
-                                39.dp
-                            } else {
-                                43.dp
-                            },
-                        ),
-                    color = DominoSemanticColors.primaryTextOnDark.copy(
-                        alpha = 0.68f,
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Start,
-                    maxLines = 1,
-                )
-            }
 
             if (isWinner) {
                 Box(

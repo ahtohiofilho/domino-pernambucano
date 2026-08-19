@@ -18,11 +18,11 @@ class DominoMatchHeaderTest {
     }
 
     @Test
-    fun application_uses_neutral_bot_code() {
+    fun application_valid_table_code_is_preserved() {
         assertEquals(
-            "BOT",
+            "B03",
             resolveDominoMatchHeaderCode(
-                name = "Aplicativo",
+                name = "b03",
                 participantType = DominoParticipantType.APPLICATION,
                 playerIndex = 1,
             ),
@@ -30,13 +30,25 @@ class DominoMatchHeaderTest {
     }
 
     @Test
-    fun legacy_human_name_uses_neutral_seat_code_instead_of_initials() {
+    fun legacy_human_full_name_uses_neutral_dash() {
         assertEquals(
-            "P03",
+            "\u2014",
             resolveDominoMatchHeaderCode(
                 name = "Antônio Filho",
                 participantType = DominoParticipantType.HUMAN,
                 playerIndex = 2,
+            ),
+        )
+    }
+
+    @Test
+    fun legacy_application_name_uses_neutral_dash() {
+        assertEquals(
+            "\u2014",
+            resolveDominoMatchHeaderCode(
+                name = "Aplicativo",
+                participantType = DominoParticipantType.APPLICATION,
+                playerIndex = 3,
             ),
         )
     }

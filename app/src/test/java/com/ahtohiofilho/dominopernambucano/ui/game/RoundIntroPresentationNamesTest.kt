@@ -6,16 +6,16 @@ import org.junit.Test
 
 class RoundIntroPresentationNamesTest {
     @Test
-    fun round_intro_uses_short_table_names_without_changing_domain_names() {
+    fun round_intro_uses_only_valid_short_table_codes_without_changing_domain_names() {
         val players = listOf(
             DominoPlayer(
                 id = 0,
-                name = "Antônio Filho",
+                name = "A1F",
                 hand = emptyList(),
             ),
             DominoPlayer(
                 id = 1,
-                name = "Maria Eduarda",
+                name = "M02",
                 hand = emptyList(),
             ),
             DominoPlayer(
@@ -25,7 +25,7 @@ class RoundIntroPresentationNamesTest {
             ),
             DominoPlayer(
                 id = 3,
-                name = "João Pedro",
+                name = "J04",
                 hand = emptyList(),
             ),
         )
@@ -37,21 +37,21 @@ class RoundIntroPresentationNamesTest {
         )
 
         assertEquals(
-            listOf("ANTÔNIO", "JOSÉ"),
+            listOf("A1F", "\u2014"),
             presentations.topTeam.playerNames,
         )
 
         assertEquals(
-            listOf("MARIA", "JOÃO"),
+            listOf("M02", "J04"),
             presentations.bottomTeam.playerNames,
         )
 
         assertEquals(
             listOf(
-                "Antônio Filho",
-                "Maria Eduarda",
+                "A1F",
+                "M02",
                 "José da Silva",
-                "João Pedro",
+                "J04",
             ),
             players.map { player ->
                 player.name
