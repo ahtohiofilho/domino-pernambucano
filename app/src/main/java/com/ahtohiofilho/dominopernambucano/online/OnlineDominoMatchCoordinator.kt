@@ -264,6 +264,10 @@ class OnlineDominoMatchCoordinator(
     }
 
     fun dispose() {
+        if (currentState.phase == DominoMatchPhase.MatchFinished) {
+            repository.releaseCompletedMatchLocally()
+        }
+
         coordinatorScope.cancel()
     }
 

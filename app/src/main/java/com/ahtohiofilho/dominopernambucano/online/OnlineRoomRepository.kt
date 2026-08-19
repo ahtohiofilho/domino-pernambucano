@@ -91,5 +91,11 @@ interface OnlineRoomRepository {
         )
     }
 
+    /*
+     * Libera apenas o estado local de uma partida online já concluída.
+     * Não envia ação remota e não representa abandono de partida ativa.
+     */
+    fun releaseCompletedMatchLocally() = Unit
+
     suspend fun leaveRoom()
 }

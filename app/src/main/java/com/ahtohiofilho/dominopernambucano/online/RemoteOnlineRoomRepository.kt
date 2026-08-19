@@ -965,6 +965,42 @@ class RemoteOnlineRoomRepository(
         }
     }
 
+    override fun releaseCompletedMatchLocally() {
+        val client = apiClient
+        val currentSnapshot = mutableMatchSnapshot.value
+        val currentRoom = mutableRoomSnapshot.value
+
+        onlineParticipationBindingRepository?.clear()
+
+        stopPolling(
+            reason = "completed_match_local_release",
+        )
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.ROOM_LEFT,
+            roomId = currentRoom?.roomId,
+            matchId = currentSnapshot?.matchId,
+            attributes = mapOf(
+                "source" to "completed_match_local_release",
+                "remoteActionSubmitted" to "false",
+                "hadRoomSnapshot" to (currentRoom != null).toString(),
+                "hadMatchSnapshot" to (currentSnapshot != null).toString(),
+            ),
+        )
+
+        mutableRoomSnapshot.value = null
+        mutableMatchSnapshot.value = null
+        activePlayerId = null
+        activeSessionCredential = null
+        client?.setBearerAccessToken(
+            accessToken = null,
+        )
+        client?.setDevelopmentPlayerId(
+            playerId = null,
+        )
+    }
+
     override suspend fun leaveRoom() {
         onlineParticipationBindingRepository?.clear()
 

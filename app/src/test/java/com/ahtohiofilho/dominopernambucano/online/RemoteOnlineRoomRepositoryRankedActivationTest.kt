@@ -74,6 +74,84 @@ class RemoteOnlineRoomRepositoryRankedActivationTest {
         }
 
     @Test
+    fun completed_ranked_match_local_release_clears_state_without_remote_action() =
+        runBlocking {
+            val match = createMatchSnapshot()
+            val room = createRoomSnapshot(
+                roomId = match.roomId,
+                matchId = match.matchId,
+                playerId = "player-1",
+                localSeatIndex = 2,
+            )
+            val api = FakeRemoteApi(
+                room = room,
+                match = match,
+            )
+            val bindingStore = InMemoryBindingStore()
+            val repository = RemoteOnlineRoomRepository(
+                config = OnlineBackendConfig.remote(
+                    baseUrl = "http://localhost:8080",
+                ),
+                apiClient = api,
+                pollingPolicy = OnlineRemotePollingPolicy.Disabled,
+                coroutineDispatcher = Dispatchers.Unconfined,
+                sessionCredentialRepository =
+                    OnlineSessionCredentialRepository(
+                        store = InMemoryCredentialStore(
+                            credential = accountCredential(),
+                        ),
+                        nowEpochMillis = { 1_000L },
+                    ),
+                onlineParticipationBindingRepository =
+                    OnlineParticipationBindingRepository(
+                        store = bindingStore,
+                    ),
+            )
+
+            val activation = repository.activatePublicRankedMatch(
+                matchId = match.matchId,
+                localSeatIndex = 2,
+            )
+
+            assertTrue(
+                activation is OnlinePublicRankedMatchActivation.Ready,
+            )
+            assertEquals(
+                "account-token",
+                api.bearerToken,
+            )
+            assertTrue(
+                bindingStore.binding != null,
+            )
+
+            repository.releaseCompletedMatchLocally()
+
+            assertEquals(
+                null,
+                bindingStore.binding,
+            )
+            assertEquals(
+                null,
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                null,
+                repository.roomSnapshot.value,
+            )
+            assertEquals(
+                null,
+                api.bearerToken,
+            )
+            assertEquals(
+                null,
+                api.observedDevelopmentPlayerId,
+            )
+            assertTrue(
+                api.submitActionRequests.isEmpty(),
+            )
+        }
+
+    @Test
     fun visitor_is_rejected_before_ranked_snapshot_fetch() = runBlocking {
         val api = FakeRemoteApi(
             room = createRoomSnapshot(
@@ -215,6 +293,7 @@ class RemoteOnlineRoomRepositoryRankedActivationTest {
     ) : RemoteOnlineApiClient {
         val roomRequests = mutableListOf<String>()
         val matchRequests = mutableListOf<String>()
+        val submitActionRequests = mutableListOf<OnlinePlayerActionDto>()
         var bearerToken: String? = null
         var observedDevelopmentPlayerId: String? = "legacy"
 
@@ -259,7 +338,12 @@ class RemoteOnlineRoomRepositoryRankedActivationTest {
         override suspend fun submitAction(
             action: OnlinePlayerActionDto,
         ): OnlineActionResultDto {
-            error("Not used.")
+            submitActionRequests += action
+
+            return OnlineActionResultDto(
+                accepted = true,
+                revision = match.revision,
+            )
         }
 
         override suspend fun submitTraceBatch(

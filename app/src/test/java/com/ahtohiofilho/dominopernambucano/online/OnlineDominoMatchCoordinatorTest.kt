@@ -27,6 +27,98 @@ import org.junit.Test
 
 class OnlineDominoMatchCoordinatorTest {
     @Test
+    fun dispose_releases_local_repository_state_after_match_finished() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) { emptyList() },
+            ).copy(
+                phase = DominoMatchPhase.MatchFinished,
+            )
+
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+            )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            coordinator.dispatch(
+                DominoMatchCommand.RoundIntroFinished,
+            )
+
+            assertEquals(
+                DominoMatchPhase.MatchFinished,
+                coordinator.currentState.phase,
+            )
+
+            coordinator.dispose()
+
+            assertEquals(
+                1,
+                repository.completedMatchLocalReleaseCount,
+            )
+        }
+
+    @Test
+    fun dispose_does_not_release_local_repository_state_during_active_match() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) { emptyList() },
+            )
+
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+            )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = runtimeState.toSnapshot(
+                    revision = 1L,
+                ),
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            coordinator.dispatch(
+                DominoMatchCommand.RoundIntroFinished,
+            )
+
+            assertEquals(
+                DominoMatchPhase.WaitingForLocalMove,
+                coordinator.currentState.phase,
+            )
+
+            coordinator.dispose()
+
+            assertEquals(
+                0,
+                repository.completedMatchLocalReleaseCount,
+            )
+        }
+
+    @Test
     fun remote_revisions_arriving_during_move_presentation_are_presented_in_order() =
         runBlocking {
             val openingPiece = DominoPiece(
@@ -1713,6 +1805,9 @@ class OnlineDominoMatchCoordinatorTest {
 
         val submittedActions = mutableListOf<OnlinePlayerActionDto>()
 
+        var completedMatchLocalReleaseCount = 0
+            private set
+
         override val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?> =
             mutableRoomSnapshot.asStateFlow()
 
@@ -1750,6 +1845,10 @@ class OnlineDominoMatchCoordinatorTest {
                 accepted = true,
                 revision = mutableMatchSnapshot.value?.revision,
             )
+        }
+
+        override fun releaseCompletedMatchLocally() {
+            completedMatchLocalReleaseCount += 1
         }
 
         override suspend fun leaveRoom() = Unit
