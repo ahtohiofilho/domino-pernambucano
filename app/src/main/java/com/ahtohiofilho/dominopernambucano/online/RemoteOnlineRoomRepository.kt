@@ -392,14 +392,27 @@ class RemoteOnlineRoomRepository(
                     resolvedResult
                 },
                 onFailure = { error ->
-                    traceTransportFailure(
-                        operation = "submit_action",
-                        error = error,
-                        action = action,
-                        durationMillis = elapsedMillisSince(
-                            startedAtEpochMillis = startedAtEpochMillis,
-                        ),
-                    )
+                    val remoteSessionRejected =
+                        isRemoteSessionRejected(error)
+
+                    if (remoteSessionRejected) {
+                        invalidateActiveMatchAfterRemoteSessionRejected(
+                            roomId = action.roomId,
+                            matchId = action.matchId,
+                            playerId = action.playerId,
+                            operation = "submit_action",
+                            trigger = "action",
+                        )
+                    } else {
+                        traceTransportFailure(
+                            operation = "submit_action",
+                            error = error,
+                            action = action,
+                            durationMillis = elapsedMillisSince(
+                                startedAtEpochMillis = startedAtEpochMillis,
+                            ),
+                        )
+                    }
 
                     val rejectedResult = rejectedAction(
                         action = action,
@@ -415,7 +428,11 @@ class RemoteOnlineRoomRepository(
                         snapshotRevision = rejectedResult.revision,
                         attributes = action.traceAttributes() + mapOf(
                             "reason" to rejectedResult.reason.orEmpty().take(180),
-                            "source" to "transport_failure",
+                            "source" to if (remoteSessionRejected) {
+                                "remote_session_rejected"
+                            } else {
+                                "transport_failure"
+                            },
                         ),
                     )
 
@@ -1471,6 +1488,50 @@ class RemoteOnlineRoomRepository(
         }
     }
 
+    private fun isRemoteSessionRejected(
+        error: Throwable,
+    ): Boolean {
+        return error is io.ktor.client.plugins.ClientRequestException &&
+                error.response.status ==
+                io.ktor.http.HttpStatusCode.Unauthorized
+    }
+
+    private fun invalidateActiveMatchAfterRemoteSessionRejected(
+        roomId: String?,
+        matchId: String?,
+        playerId: String?,
+        operation: String,
+        trigger: String,
+    ): Boolean {
+        trace(
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.POLLING_FAILED,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            attributes = mapOf(
+                "operation" to operation,
+                "trigger" to trigger,
+                "source" to "remote_session_rejected",
+                "reason" to "remote_http_401",
+            ),
+        )
+
+        val published = publishActiveMatchSessionInvalidation(
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+        )
+
+        if (published) {
+            stopPolling(
+                reason = "active_session_invalidated",
+            )
+        }
+
+        return published
+    }
+
     private fun publishActiveMatchSessionInvalidation(
         roomId: String?,
         matchId: String?,
@@ -1536,7 +1597,10 @@ class RemoteOnlineRoomRepository(
     ): OnlineRoomStatusDto? {
         val resolvedPlayerId = playerId ?: activePlayerId
 
-        var latestMatchId = fallbackMatchId
+        var latestMatchId =
+            fallbackMatchId
+                ?: mutableMatchSnapshot.value?.matchId
+                ?: mutableRoomSnapshot.value?.matchId
         var latestRoomStatus: OnlineRoomStatusDto? = null
 
         val roomRequestStartedAtEpochMillis = nowEpochMillis()
@@ -1553,9 +1617,9 @@ class RemoteOnlineRoomRepository(
             ),
         )
 
-        runCatching {
-            client.fetchRoomSnapshot(roomId)
-        }.onSuccess { room ->
+        try {
+            val room = client.fetchRoomSnapshot(roomId)
+
             mutableRoomSnapshot.value = room
             latestRoomStatus = room.status
             latestMatchId = room.matchId ?: latestMatchId
@@ -1574,12 +1638,23 @@ class RemoteOnlineRoomRepository(
                     ).toString(),
                 ),
             )
-        }.onFailure { error ->
+        } catch (error: Throwable) {
+            if (isRemoteSessionRejected(error)) {
+                invalidateActiveMatchAfterRemoteSessionRejected(
+                    roomId = roomId,
+                    matchId = latestMatchId,
+                    playerId = resolvedPlayerId,
+                    operation = "fetch_room_snapshot",
+                    trigger = trigger,
+                )
+                return null
+            }
+
             traceTransportFailure(
                 operation = "fetch_room_snapshot",
                 error = error,
                 roomId = roomId,
-                matchId = fallbackMatchId,
+                matchId = latestMatchId,
                 playerId = resolvedPlayerId,
                 durationMillis = elapsedMillisSince(
                     startedAtEpochMillis = roomRequestStartedAtEpochMillis,
@@ -1683,6 +1758,17 @@ class RemoteOnlineRoomRepository(
         } catch (error: Throwable) {
             if (error is CancellationException) {
                 throw error
+            }
+
+            if (isRemoteSessionRejected(error)) {
+                invalidateActiveMatchAfterRemoteSessionRejected(
+                    roomId = roomId,
+                    matchId = matchId,
+                    playerId = playerId,
+                    operation = "fetch_match_snapshot",
+                    trigger = trigger,
+                )
+                return
             }
 
             traceTransportFailure(
@@ -1794,6 +1880,17 @@ class RemoteOnlineRoomRepository(
         } catch (error: Throwable) {
             if (error is CancellationException) {
                 throw error
+            }
+
+            if (isRemoteSessionRejected(error)) {
+                invalidateActiveMatchAfterRemoteSessionRejected(
+                    roomId = roomId,
+                    matchId = matchId,
+                    playerId = playerId,
+                    operation = "fetch_match_updates",
+                    trigger = trigger,
+                )
+                return
             }
 
             traceTransportFailure(

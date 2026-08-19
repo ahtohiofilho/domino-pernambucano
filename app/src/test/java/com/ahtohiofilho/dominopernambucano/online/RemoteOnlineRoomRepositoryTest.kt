@@ -1553,6 +1553,463 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
+    fun submit_action_remote_401_emits_invalidation_and_stops_polling() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 1L,
+            )
+            val session = createAnonymousSession(
+                playerId = "player-1",
+            )
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+                submitActionFailure = createUnauthorizedClientRequestException(),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                pollingPolicy = OnlineRemotePollingPolicy(
+                    enabled = true,
+                    intervalMillis = 1_000L,
+                ),
+                coroutineDispatcher = Dispatchers.Default,
+                traceLogger = createTraceLogger(traceBuffer),
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = session.playerId,
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            val invalidationDeferred = async(
+                start = CoroutineStart.UNDISPATCHED,
+            ) {
+                repository
+                    .activeMatchSessionInvalidationEvents
+                    .first()
+            }
+
+            val action = createOnlinePassTurnAction(
+                roomId = room.roomId,
+                matchId = match.matchId,
+                playerId = session.playerId,
+                revision = match.revision,
+                actionId = "remote-401-action",
+            )
+
+            val result = repository.submitAction(
+                action = action,
+            )
+
+            assertEquals(
+                false,
+                result.accepted,
+            )
+            assertEquals(
+                listOf(action),
+                apiClient.submitActionRequests,
+            )
+            assertEquals(
+                OnlineActiveMatchSessionInvalidation(
+                    roomId = room.roomId,
+                    matchId = match.matchId,
+                    playerId = session.playerId,
+                ),
+                withTimeout(2_000L) {
+                    invalidationDeferred.await()
+                },
+            )
+            assertTrue(
+                traceBuffer.snapshot().any { entry ->
+                    entry.event.type ==
+                        OnlineTraceType.POLLING_STOPPED &&
+                        entry.event.attributes["reason"] ==
+                            "active_session_invalidated"
+                },
+            )
+
+            val requestCountAtStop =
+                apiClient.fetchRoomSnapshotRequests.size
+
+            delay(50L)
+
+            assertEquals(
+                requestCountAtStop,
+                apiClient.fetchRoomSnapshotRequests.size,
+            )
+
+            repository.leaveRoom()
+        }
+
+    @Test
+    fun polling_room_snapshot_remote_401_emits_single_invalidation_and_stops_polling() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 1L,
+            )
+            val session = createAnonymousSession(
+                playerId = "player-1",
+            )
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+                fetchRoomSnapshotFailure =
+                    createUnauthorizedClientRequestException(),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                pollingPolicy = OnlineRemotePollingPolicy(
+                    enabled = true,
+                    intervalMillis = 50L,
+                ),
+                coroutineDispatcher = Dispatchers.Default,
+                traceLogger = createTraceLogger(traceBuffer),
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = session.playerId,
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            val invalidationDeferred = async(
+                start = CoroutineStart.UNDISPATCHED,
+            ) {
+                repository
+                    .activeMatchSessionInvalidationEvents
+                    .first()
+            }
+
+            val invalidation = withTimeout(2_000L) {
+                invalidationDeferred.await()
+            }
+
+            assertEquals(
+                OnlineActiveMatchSessionInvalidation(
+                    roomId = room.roomId,
+                    matchId = match.matchId,
+                    playerId = session.playerId,
+                ),
+                invalidation,
+            )
+
+            withTimeout(2_000L) {
+                while (
+                    traceBuffer.snapshot().none { entry ->
+                        entry.event.type ==
+                            OnlineTraceType.POLLING_STOPPED &&
+                            entry.event.attributes["reason"] ==
+                                "active_session_invalidated"
+                    }
+                ) {
+                    delay(10L)
+                }
+            }
+
+            assertEquals(
+                emptyList<Pair<String, Long>>(),
+                apiClient.fetchMatchSnapshotsAfterRequests,
+            )
+
+            val roomRequestCountAtStop =
+                apiClient.fetchRoomSnapshotRequests.size
+
+            delay(100L)
+
+            assertEquals(
+                roomRequestCountAtStop,
+                apiClient.fetchRoomSnapshotRequests.size,
+            )
+
+            repository.leaveRoom()
+        }
+
+    @Test
+    fun polling_match_snapshot_remote_401_emits_single_invalidation_and_stops_polling() =
+        runBlocking {
+            val waitingRoom = createWaitingRoomSnapshot()
+            val activeRoom = createInMatchRoomSnapshot()
+            val session = createAnonymousSession(
+                playerId = "player-1",
+            )
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = waitingRoom,
+                    localSeatIndex = 0,
+                ),
+                fetchMatchSnapshotFailure =
+                    createUnauthorizedClientRequestException(),
+                roomSnapshotsById = mutableMapOf(
+                    waitingRoom.roomId to activeRoom,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                pollingPolicy = OnlineRemotePollingPolicy(
+                    enabled = true,
+                    intervalMillis = 50L,
+                ),
+                coroutineDispatcher = Dispatchers.Default,
+                traceLogger = createTraceLogger(traceBuffer),
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = session.playerId,
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            val invalidationDeferred = async(
+                start = CoroutineStart.UNDISPATCHED,
+            ) {
+                repository
+                    .activeMatchSessionInvalidationEvents
+                    .first()
+            }
+
+            assertEquals(
+                OnlineActiveMatchSessionInvalidation(
+                    roomId = activeRoom.roomId,
+                    matchId = requireNotNull(activeRoom.matchId),
+                    playerId = session.playerId,
+                ),
+                withTimeout(2_000L) {
+                    invalidationDeferred.await()
+                },
+            )
+
+            withTimeout(2_000L) {
+                while (
+                    traceBuffer.snapshot().none { entry ->
+                        entry.event.type ==
+                            OnlineTraceType.POLLING_STOPPED &&
+                            entry.event.attributes["reason"] ==
+                                "active_session_invalidated"
+                    }
+                ) {
+                    delay(10L)
+                }
+            }
+
+            val matchRequestCountAtStop =
+                apiClient.fetchMatchSnapshotRequests.size
+
+            delay(100L)
+
+            assertEquals(
+                matchRequestCountAtStop,
+                apiClient.fetchMatchSnapshotRequests.size,
+            )
+
+            repository.leaveRoom()
+        }
+
+    @Test
+    fun polling_match_updates_remote_401_emits_single_invalidation_and_stops_polling() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 1L,
+            )
+            val session = createAnonymousSession(
+                playerId = "player-1",
+            )
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+                fetchMatchSnapshotsAfterFailure =
+                    createUnauthorizedClientRequestException(),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                pollingPolicy = OnlineRemotePollingPolicy(
+                    enabled = true,
+                    intervalMillis = 50L,
+                ),
+                coroutineDispatcher = Dispatchers.Default,
+                traceLogger = createTraceLogger(traceBuffer),
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = session.playerId,
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            val invalidationDeferred = async(
+                start = CoroutineStart.UNDISPATCHED,
+            ) {
+                repository
+                    .activeMatchSessionInvalidationEvents
+                    .first()
+            }
+
+            assertEquals(
+                OnlineActiveMatchSessionInvalidation(
+                    roomId = room.roomId,
+                    matchId = match.matchId,
+                    playerId = session.playerId,
+                ),
+                withTimeout(2_000L) {
+                    invalidationDeferred.await()
+                },
+            )
+
+            withTimeout(2_000L) {
+                while (
+                    traceBuffer.snapshot().none { entry ->
+                        entry.event.type ==
+                            OnlineTraceType.POLLING_STOPPED &&
+                            entry.event.attributes["reason"] ==
+                                "active_session_invalidated"
+                    }
+                ) {
+                    delay(10L)
+                }
+            }
+
+            val updatesRequestCountAtStop =
+                apiClient.fetchMatchSnapshotsAfterRequests.size
+
+            delay(100L)
+
+            assertEquals(
+                updatesRequestCountAtStop,
+                apiClient.fetchMatchSnapshotsAfterRequests.size,
+            )
+
+            repository.leaveRoom()
+        }
+
+    @Test
+    fun remote_500_does_not_emit_active_session_invalidation() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 1L,
+            )
+            val session = createAnonymousSession(
+                playerId = "player-1",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+                submitActionFailure = createInternalServerErrorException(),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = session.playerId,
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            val invalidationDeferred = async(
+                start = CoroutineStart.UNDISPATCHED,
+            ) {
+                repository
+                    .activeMatchSessionInvalidationEvents
+                    .first()
+            }
+
+            val action = createOnlinePassTurnAction(
+                roomId = room.roomId,
+                matchId = match.matchId,
+                playerId = session.playerId,
+                revision = match.revision,
+                actionId = "remote-500-action",
+            )
+
+            val result = repository.submitAction(
+                action = action,
+            )
+
+            assertEquals(
+                false,
+                result.accepted,
+            )
+            assertEquals(
+                listOf(action),
+                apiClient.submitActionRequests,
+            )
+
+            delay(100L)
+
+            assertEquals(
+                false,
+                invalidationDeferred.isCompleted,
+            )
+
+            invalidationDeferred.cancel()
+            repository.leaveRoom()
+        }
+
+    @Test
     fun submit_action_local_auth_failure_emits_active_match_session_invalidation() =
         runBlocking {
             val room = createInMatchRoomSnapshot()
@@ -3704,6 +4161,7 @@ class RemoteOnlineRoomRepositoryTest {
         private val submitTraceBatchFailure: Throwable? = null,
         private val fetchRoomSnapshotFailure: Throwable? = null,
         private val fetchMatchSnapshotFailure: Throwable? = null,
+        private val fetchMatchSnapshotsAfterFailure: Throwable? = null,
         private val roomSnapshotsById: MutableMap<String, OnlineRoomSnapshotDto> =
             mutableMapOf(),
         private val matchSnapshotsById: MutableMap<String, OnlineMatchSnapshotDto> =
@@ -3826,6 +4284,10 @@ class RemoteOnlineRoomRepositoryTest {
             afterRevision: Long,
         ): List<OnlineMatchSnapshotDto> {
             fetchMatchSnapshotsAfterRequests += matchId to afterRevision
+
+            fetchMatchSnapshotsAfterFailure?.let { error ->
+                throw error
+            }
 
             val configuredSnapshots = matchSnapshotsAfterById[matchId]
 
