@@ -386,6 +386,49 @@ class LocalDominoSessionCoordinator(
         )
     }
 
+    fun returnActiveOnlineMatchToMainMenuAfterRemoteSessionRejected(
+        binding: OnlineParticipationBinding,
+    ): Boolean {
+        val onlineMatchState = mutableState.value
+            as? DominoSessionState.OnlineMatch
+            ?: return false
+
+        onlineMatchState.matchCoordinator.dispose()
+
+        val pendingParticipation =
+            resolvePendingOnlineParticipation()
+
+        val exactBindingStillPending =
+            pendingParticipation is
+                OnlinePendingParticipationLocalResolution
+                    .ReadyForRemoteReconciliation &&
+                pendingParticipation.binding == binding
+
+        val sessionRejection = if (exactBindingStillPending) {
+            OnlinePendingParticipationSessionRejection
+                .RemoteSessionRejected(
+                    binding = binding,
+                )
+        } else {
+            OnlinePendingParticipationSessionRejection
+                .NotRejected
+        }
+
+        val mainMenuState = DominoSessionState.MainMenu(
+            pendingOnlineParticipation = pendingParticipation,
+            pendingOnlineParticipationInspection =
+                OnlinePendingParticipationInspectionState
+                    .NotRequested,
+            pendingOnlineParticipationSessionRejection =
+                sessionRejection,
+        )
+
+        latestMainMenuState = mainMenuState
+        mutableState.value = mainMenuState
+
+        return exactBindingStillPending
+    }
+
     private fun resolvePendingOnlineParticipation():
         OnlinePendingParticipationLocalResolution {
         return OnlinePendingParticipationLocalResolver(

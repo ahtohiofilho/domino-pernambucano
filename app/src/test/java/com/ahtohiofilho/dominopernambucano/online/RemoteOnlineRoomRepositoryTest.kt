@@ -21,8 +21,11 @@ import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
@@ -1547,6 +1550,189 @@ class RemoteOnlineRoomRepositoryTest {
                     entry.event.type == OnlineTraceType.POLLING_STOPPED
                 },
             )
+        }
+
+    @Test
+    fun submit_action_local_auth_failure_emits_active_match_session_invalidation() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 1L,
+            )
+            val session = createAnonymousSession(
+                playerId = "player-1",
+            )
+            val sessionStore = InMemoryOnlineAnonymousSessionStore(
+                initialSession = session,
+            )
+            val sessionRepository =
+                OnlineAnonymousSessionRepository(
+                    store = sessionStore,
+                    nowEpochMillis = { 1_000L },
+                )
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    sessionRepository,
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = session.playerId,
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            val invalidationDeferred = async(
+                start = CoroutineStart.UNDISPATCHED,
+            ) {
+                repository
+                    .activeMatchSessionInvalidationEvents
+                    .first()
+            }
+
+            sessionStore.clear()
+
+            val action = createOnlinePassTurnAction(
+                roomId = room.roomId,
+                matchId = match.matchId,
+                playerId = session.playerId,
+                revision = match.revision,
+                actionId = "session-invalidated-action",
+            )
+
+            val result = repository.submitAction(
+                action = action,
+            )
+
+            assertEquals(
+                false,
+                result.accepted,
+            )
+            assertEquals(
+                emptyList<OnlinePlayerActionDto>(),
+                apiClient.submitActionRequests,
+            )
+            assertEquals(
+                OnlineActiveMatchSessionInvalidation(
+                    roomId = room.roomId,
+                    matchId = match.matchId,
+                    playerId = session.playerId,
+                ),
+                withTimeout(2_000L) {
+                    invalidationDeferred.await()
+                },
+            )
+        }
+
+    @Test
+    fun polling_local_auth_failure_stops_polling_and_emits_active_match_session_invalidation() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 1L,
+            )
+            val session = createAnonymousSession(
+                playerId = "player-1",
+            )
+            val sessionStore = InMemoryOnlineAnonymousSessionStore(
+                initialSession = session,
+            )
+            val sessionRepository =
+                OnlineAnonymousSessionRepository(
+                    store = sessionStore,
+                    nowEpochMillis = { 1_000L },
+                )
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+            val apiClient = FakeRemoteOnlineApiClient(
+                createRoomResult = OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = room,
+                    localSeatIndex = 0,
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                pollingPolicy = OnlineRemotePollingPolicy(
+                    enabled = true,
+                    intervalMillis = 5L,
+                ),
+                coroutineDispatcher = Dispatchers.Default,
+                traceLogger = createTraceLogger(traceBuffer),
+                anonymousSessionRepository =
+                    sessionRepository,
+            )
+
+            repository.createRoom(
+                CreateOnlineRoomRequestDto(
+                    localPlayerId = session.playerId,
+                    playerName = "Jogador 1",
+                ),
+            )
+
+            val invalidationDeferred = async(
+                start = CoroutineStart.UNDISPATCHED,
+            ) {
+                repository
+                    .activeMatchSessionInvalidationEvents
+                    .first()
+            }
+
+            sessionStore.clear()
+
+            val invalidation = withTimeout(2_000L) {
+                invalidationDeferred.await()
+            }
+
+            assertEquals(
+                OnlineActiveMatchSessionInvalidation(
+                    roomId = room.roomId,
+                    matchId = match.matchId,
+                    playerId = session.playerId,
+                ),
+                invalidation,
+            )
+
+            withTimeout(2_000L) {
+                while (
+                    traceBuffer.snapshot().none { entry ->
+                        entry.event.type ==
+                            OnlineTraceType.POLLING_STOPPED &&
+                            entry.event.attributes["reason"] ==
+                                "active_session_invalidated"
+                    }
+                ) {
+                    delay(10L)
+                }
+            }
+
+            val requestCountAtStop =
+                apiClient.fetchRoomSnapshotRequests.size
+
+            delay(30L)
+
+            assertEquals(
+                requestCountAtStop,
+                apiClient.fetchRoomSnapshotRequests.size,
+            )
+
+            repository.leaveRoom()
         }
 
     @Test

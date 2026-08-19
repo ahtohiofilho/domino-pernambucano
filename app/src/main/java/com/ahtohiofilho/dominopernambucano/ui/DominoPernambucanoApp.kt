@@ -1047,6 +1047,33 @@ fun DominoPernambucanoApp(
         }
 
         is DominoSessionState.OnlineMatch -> {
+            val activeSessionInvalidation by
+                state.matchCoordinator
+                    .activeSessionInvalidation
+                    .collectAsState()
+
+            LaunchedEffect(
+                state.matchCoordinator,
+                activeSessionInvalidation,
+            ) {
+                val invalidatedBinding =
+                    activeSessionInvalidation
+                        ?: return@LaunchedEffect
+
+                val rejectionRecorded =
+                    sessionCoordinator
+                        .returnActiveOnlineMatchToMainMenuAfterRemoteSessionRejected(
+                            binding = invalidatedBinding,
+                        )
+
+                pendingOnlineMatchResumeFeedbackMessage =
+                    if (rejectionRecorded) {
+                        resumeParticipationSessionRejected
+                    } else {
+                        null
+                    }
+            }
+
             DominoGameRoute(
                 matchCoordinator = state.matchCoordinator,
                 onBackToMenuClick = {

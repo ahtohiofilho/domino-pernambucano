@@ -16,8 +16,11 @@ import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogge
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceSource
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
@@ -116,6 +119,141 @@ class OnlineDominoMatchCoordinatorTest {
                 0,
                 repository.completedMatchLocalReleaseCount,
             )
+        }
+
+    @Test
+    fun matching_session_invalidation_exposes_exact_binding_and_clears_inflight_action() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            )
+            val snapshot = runtimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = snapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = snapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+
+                repository.publishActiveMatchSessionInvalidation(
+                    OnlineActiveMatchSessionInvalidation(
+                        roomId = TEST_ROOM_ID,
+                        matchId = TEST_MATCH_ID,
+                        playerId = TEST_PLAYER_ID,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    OnlineParticipationBinding(
+                        roomId = TEST_ROOM_ID,
+                        matchId = TEST_MATCH_ID,
+                        playerId = TEST_PLAYER_ID,
+                        localSeatIndex = 0,
+                    ),
+                    coordinator.activeSessionInvalidation.value,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                assertEquals(
+                    2,
+                    repository.submittedActions.size,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun different_match_session_invalidation_is_ignored() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            )
+            val snapshot = runtimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = snapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = snapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                repository.publishActiveMatchSessionInvalidation(
+                    OnlineActiveMatchSessionInvalidation(
+                        roomId = TEST_ROOM_ID,
+                        matchId = "different-match",
+                        playerId = TEST_PLAYER_ID,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    null,
+                    coordinator.activeSessionInvalidation.value,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+            } finally {
+                coordinator.dispose()
+            }
         }
 
     @Test
@@ -1803,6 +1941,11 @@ class OnlineDominoMatchCoordinatorTest {
         private val mutableMatchSnapshot =
             MutableStateFlow<OnlineMatchSnapshotDto?>(initialSnapshot)
 
+        private val mutableActiveMatchSessionInvalidationEvents =
+            MutableSharedFlow<OnlineActiveMatchSessionInvalidation>(
+                extraBufferCapacity = 8,
+            )
+
         val submittedActions = mutableListOf<OnlinePlayerActionDto>()
 
         var completedMatchLocalReleaseCount = 0
@@ -1814,10 +1957,23 @@ class OnlineDominoMatchCoordinatorTest {
         override val matchSnapshot: StateFlow<OnlineMatchSnapshotDto?> =
             mutableMatchSnapshot.asStateFlow()
 
+        override val activeMatchSessionInvalidationEvents:
+            Flow<OnlineActiveMatchSessionInvalidation> =
+            mutableActiveMatchSessionInvalidationEvents.asSharedFlow()
+
         fun publishMatchSnapshot(
             snapshot: OnlineMatchSnapshotDto,
         ) {
             mutableMatchSnapshot.value = snapshot
+        }
+
+        fun publishActiveMatchSessionInvalidation(
+            invalidation: OnlineActiveMatchSessionInvalidation,
+        ) {
+            check(
+                mutableActiveMatchSessionInvalidationEvents
+                    .tryEmit(invalidation),
+            )
         }
 
         override suspend fun createRoom(

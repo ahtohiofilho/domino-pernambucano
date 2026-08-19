@@ -71,6 +71,11 @@ class RemoteOnlineRoomRepository(
             extraBufferCapacity = 256,
         )
 
+    private val mutableActiveMatchSessionInvalidationEvents =
+        MutableSharedFlow<OnlineActiveMatchSessionInvalidation>(
+            extraBufferCapacity = 8,
+        )
+
     private var pollingJob: Job? = null
     private var pollingRoomId: String? = null
     private var activePlayerId: String? = null
@@ -95,6 +100,10 @@ class RemoteOnlineRoomRepository(
 
     override val matchSnapshotEvents: Flow<OnlineMatchSnapshotDto> =
         mutableMatchSnapshotEvents.asSharedFlow()
+
+    override val activeMatchSessionInvalidationEvents:
+        Flow<OnlineActiveMatchSessionInvalidation> =
+        mutableActiveMatchSessionInvalidationEvents.asSharedFlow()
 
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
@@ -305,6 +314,18 @@ class RemoteOnlineRoomRepository(
                         "source" to "authentication_failure",
                     ),
                 )
+
+                if (
+                    publishActiveMatchSessionInvalidation(
+                        roomId = action.roomId,
+                        matchId = action.matchId,
+                        playerId = action.playerId,
+                    )
+                ) {
+                    stopPolling(
+                        reason = "active_session_invalidated",
+                    )
+                }
 
                 return@withLock rejectedResult
             }
@@ -1416,21 +1437,72 @@ class RemoteOnlineRoomRepository(
                             return@launch
                         }
                     } else {
+                        val activeMatchId =
+                            mutableMatchSnapshot.value?.matchId
+                                ?: mutableRoomSnapshot.value?.matchId
+
                         trace(
                             level = OnlineTraceLevel.WARN,
                             type = OnlineTraceType.POLLING_FAILED,
                             roomId = roomId,
-                            matchId = mutableMatchSnapshot.value?.matchId,
+                            matchId = activeMatchId,
                             playerId = playerId,
                             attributes = mapOf(
                                 "reason" to authenticationFailure.take(180),
                                 "source" to "authentication_failure",
                             ),
                         )
+
+                        if (
+                            publishActiveMatchSessionInvalidation(
+                                roomId = roomId,
+                                matchId = activeMatchId,
+                                playerId = playerId,
+                            )
+                        ) {
+                            stopPolling(
+                                reason = "active_session_invalidated",
+                            )
+                            return@launch
+                        }
                     }
                 }
             }
         }
+    }
+
+    private fun publishActiveMatchSessionInvalidation(
+        roomId: String?,
+        matchId: String?,
+        playerId: String?,
+    ): Boolean {
+        val resolvedRoomId = roomId
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return false
+
+        val resolvedMatchId = matchId
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return false
+
+        val resolvedPlayerId = playerId
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return false
+
+        mutableActiveMatchSessionInvalidationEvents.tryEmit(
+            OnlineActiveMatchSessionInvalidation(
+                roomId = resolvedRoomId,
+                matchId = resolvedMatchId,
+                playerId = resolvedPlayerId,
+            ),
+        )
+
+        return true
     }
 
     private fun stopPolling(

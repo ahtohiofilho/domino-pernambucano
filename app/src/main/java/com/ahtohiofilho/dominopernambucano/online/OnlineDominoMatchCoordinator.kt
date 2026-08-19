@@ -100,10 +100,18 @@ class OnlineDominoMatchCoordinator(
      * reutilizem a mesma revisão enquanto a confirmação ainda está em trânsito.
      */
     private var inFlightAction: OnlinePlayerActionDto? = null
+
+    private val mutableActiveSessionInvalidation =
+        MutableStateFlow<OnlineParticipationBinding?>(null)
+
     private var matchFinishedCallbackDispatched = false
 
     override val state: StateFlow<DominoMatchRuntimeState> =
         mutableState.asStateFlow()
+
+    val activeSessionInvalidation:
+        StateFlow<OnlineParticipationBinding?> =
+        mutableActiveSessionInvalidation.asStateFlow()
 
     override val currentState: DominoMatchRuntimeState
         get() = mutableState.value
@@ -221,6 +229,29 @@ class OnlineDominoMatchCoordinator(
                     automaticPlayerIndexes = snapshot.automaticPlayerIndexes.toSet(),
                     hasRevisionGap = hasRevisionGap,
                 )
+            }
+        }
+
+        coordinatorScope.launch {
+            repository.activeMatchSessionInvalidationEvents.collect {
+                    invalidation ->
+                if (
+                    invalidation.roomId != roomId ||
+                    invalidation.matchId != matchId ||
+                    invalidation.playerId != localPlayerId
+                ) {
+                    return@collect
+                }
+
+                inFlightAction = null
+
+                mutableActiveSessionInvalidation.value =
+                    OnlineParticipationBinding(
+                        roomId = roomId,
+                        matchId = matchId,
+                        playerId = localPlayerId,
+                        localSeatIndex = localPlayerIndex,
+                    )
             }
         }
     }

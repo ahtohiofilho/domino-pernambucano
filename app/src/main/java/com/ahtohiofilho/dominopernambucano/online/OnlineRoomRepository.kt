@@ -5,7 +5,14 @@ import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatch
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
+
+data class OnlineActiveMatchSessionInvalidation(
+    val roomId: String,
+    val matchId: String,
+    val playerId: String,
+)
 
 interface OnlineRoomRepository {
     val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?>
@@ -18,6 +25,10 @@ interface OnlineRoomRepository {
      */
     val matchSnapshotEvents: Flow<OnlineMatchSnapshotDto>
         get() = matchSnapshot.filterNotNull()
+
+    val activeMatchSessionInvalidationEvents:
+        Flow<OnlineActiveMatchSessionInvalidation>
+        get() = emptyFlow()
 
     suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
