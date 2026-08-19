@@ -712,7 +712,7 @@ fun DominoPernambucanoApp(
                                     is OnlinePendingParticipationMatchResumePreparation
                                         .NoLongerRecoverable -> {
                                         sessionCoordinator
-                                            .invalidatePendingOnlineParticipationRemoteConfirmation(
+                                            .discardNoLongerRecoverablePendingOnlineParticipation(
                                                 binding =
                                                     pendingParticipation.binding,
                                             )

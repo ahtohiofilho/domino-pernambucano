@@ -275,6 +275,41 @@ class LocalDominoSessionCoordinator(
         )
     }
 
+    fun discardNoLongerRecoverablePendingOnlineParticipation(
+        binding: OnlineParticipationBinding,
+    ) {
+        val mainMenuState = mutableState.value
+            as? DominoSessionState.MainMenu
+            ?: return
+
+        val readyParticipation = mainMenuState
+            .pendingOnlineParticipation
+            as? OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation
+            ?: return
+
+        if (readyParticipation.binding != binding) {
+            return
+        }
+
+        onlineParticipationBindingRepository?.clearIfMatches(
+            binding = binding,
+        )
+
+        updateMainMenuState(
+            mainMenuState.copy(
+                pendingOnlineParticipation =
+                    resolvePendingOnlineParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState
+                        .NotRequested,
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .NotRejected,
+            ),
+        )
+    }
+
     fun discardRemoteSessionRejectedPendingOnlineParticipation() {
         val mainMenuState = mutableState.value
             as? DominoSessionState.MainMenu

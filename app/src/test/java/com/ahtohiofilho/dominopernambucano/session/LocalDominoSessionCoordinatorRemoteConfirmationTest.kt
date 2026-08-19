@@ -227,6 +227,126 @@ class LocalDominoSessionCoordinatorRemoteConfirmationTest {
         )
     }
 
+    @Test
+    fun discarding_no_longer_recoverable_pending_participation_clears_matching_binding() {
+        val binding = onlineParticipationBinding(
+            roomId = "room-1",
+            playerId = "player-1",
+        )
+        val bindingStore = MutableOnlineParticipationBindingStore(
+            binding = binding,
+        )
+        val anonymousSessionStore = MutableOnlineAnonymousSessionStore(
+            session = validAnonymousSession(
+                playerId = binding.playerId,
+            ),
+        )
+        val bindingRepository = OnlineParticipationBindingRepository(
+            store = bindingStore,
+        )
+        val anonymousSessionRepository =
+            OnlineAnonymousSessionRepository(
+                store = anonymousSessionStore,
+                nowEpochMillis = { 0L },
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineAnonymousSessionRepository =
+                anonymousSessionRepository,
+        )
+
+        coordinator.discardNoLongerRecoverablePendingOnlineParticipation(
+            binding = binding,
+        )
+
+        val mainMenuState = coordinator.currentState
+            as DominoSessionState.MainMenu
+
+        assertEquals(
+            null,
+            bindingRepository.getValidBindingOrNull(),
+        )
+        assertEquals(
+            OnlinePendingParticipationLocalResolution
+                .NoPendingParticipation,
+            mainMenuState.pendingOnlineParticipation,
+        )
+        assertEquals(
+            OnlinePendingParticipationInspectionState.NotRequested,
+            mainMenuState.pendingOnlineParticipationInspection,
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection.NotRejected,
+            mainMenuState.pendingOnlineParticipationSessionRejection,
+        )
+    }
+
+    @Test
+    fun discarding_no_longer_recoverable_pending_participation_does_not_clear_newer_binding() {
+        val originalBinding = onlineParticipationBinding(
+            roomId = "room-1",
+            playerId = "player-1",
+        )
+        val replacementBinding = onlineParticipationBinding(
+            roomId = "room-2",
+            playerId = "player-2",
+        )
+        val bindingStore = MutableOnlineParticipationBindingStore(
+            binding = originalBinding,
+        )
+        val anonymousSessionStore = MutableOnlineAnonymousSessionStore(
+            session = validAnonymousSession(
+                playerId = originalBinding.playerId,
+            ),
+        )
+        val bindingRepository = OnlineParticipationBindingRepository(
+            store = bindingStore,
+        )
+        val anonymousSessionRepository =
+            OnlineAnonymousSessionRepository(
+                store = anonymousSessionStore,
+                nowEpochMillis = { 0L },
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineAnonymousSessionRepository =
+                anonymousSessionRepository,
+        )
+
+        bindingRepository.save(
+            binding = replacementBinding,
+        )
+
+        coordinator.discardNoLongerRecoverablePendingOnlineParticipation(
+            binding = originalBinding,
+        )
+
+        val mainMenuState = coordinator.currentState
+            as DominoSessionState.MainMenu
+
+        assertEquals(
+            replacementBinding,
+            bindingRepository.getValidBindingOrNull(),
+        )
+        assertEquals(
+            OnlinePendingParticipationLocalResolution
+                .BlockedByAnonymousSessionIdentityMismatch(
+                    binding = replacementBinding,
+                ),
+            mainMenuState.pendingOnlineParticipation,
+        )
+        assertEquals(
+            OnlinePendingParticipationInspectionState.NotRequested,
+            mainMenuState.pendingOnlineParticipationInspection,
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection.NotRejected,
+            mainMenuState.pendingOnlineParticipationSessionRejection,
+        )
+    }
+
     private fun onlineParticipationBinding(
         roomId: String,
         playerId: String,
