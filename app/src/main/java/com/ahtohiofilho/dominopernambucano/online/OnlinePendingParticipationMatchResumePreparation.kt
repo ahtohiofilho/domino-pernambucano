@@ -29,6 +29,7 @@ sealed interface OnlinePendingParticipationMatchResumePreparation {
 
 enum class OnlinePendingParticipationMatchResumeInvalidReason {
     ROOM_NOT_FOUND,
+    MATCH_NOT_FOUND,
     ROOM_ID_MISMATCH,
     ROOM_CLOSED,
     ROOM_FINISHED,

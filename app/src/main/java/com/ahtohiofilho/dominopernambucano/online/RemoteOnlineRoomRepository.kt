@@ -589,6 +589,10 @@ class RemoteOnlineRoomRepository(
                 accessToken = session.accessToken,
             )
 
+            var remoteNotFoundReason =
+                OnlinePendingParticipationMatchResumeInvalidReason
+                    .ROOM_NOT_FOUND
+
             try {
                 val room = client.fetchRoomSnapshot(
                     roomId = binding.roomId,
@@ -633,6 +637,10 @@ class RemoteOnlineRoomRepository(
                                     .MISSING_MATCH_ID,
                         )
 
+                remoteNotFoundReason =
+                    OnlinePendingParticipationMatchResumeInvalidReason
+                        .MATCH_NOT_FOUND
+
                 val match = client.fetchMatchSnapshot(
                     matchId = matchId,
                 )
@@ -669,6 +677,16 @@ class RemoteOnlineRoomRepository(
                 ) {
                     return@withLock OnlinePendingParticipationMatchResumePreparation
                         .RemoteSessionRejected
+                }
+
+                if (
+                    error is io.ktor.client.plugins.ClientRequestException &&
+                            error.response.status == io.ktor.http.HttpStatusCode.NotFound
+                ) {
+                    return@withLock OnlinePendingParticipationMatchResumePreparation
+                        .NoLongerRecoverable(
+                            reason = remoteNotFoundReason,
+                        )
                 }
 
                 OnlinePendingParticipationMatchResumePreparation

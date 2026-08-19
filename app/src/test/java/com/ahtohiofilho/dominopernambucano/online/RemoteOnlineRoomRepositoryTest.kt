@@ -2689,6 +2689,164 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
+    fun prepare_pending_participation_match_resume_room_404_returns_no_longer_recoverable_room_not_found_without_mutating_local_state() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val sessionStore = InMemoryOnlineAnonymousSessionStore(
+                initialSession = session,
+            )
+            val sessionRepository = OnlineAnonymousSessionRepository(
+                store = sessionStore,
+                nowEpochMillis = { 1_000L },
+            )
+            val bindingRepository = OnlineParticipationBindingRepository(
+                store = InMemoryOnlineParticipationBindingStore(),
+            )
+            bindingRepository.save(
+                binding = binding,
+            )
+
+            val apiClient = FakeRemoteOnlineApiClient(
+                fetchRoomSnapshotFailure = createNotFoundClientRequestException(),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository = sessionRepository,
+                onlineParticipationBindingRepository = bindingRepository,
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .NoLongerRecoverable(
+                        reason =
+                            OnlinePendingParticipationMatchResumeInvalidReason
+                                .ROOM_NOT_FOUND,
+                    ),
+                result,
+            )
+            assertEquals(
+                listOf(binding.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                session,
+                sessionStore.read(),
+            )
+            assertEquals(
+                binding,
+                bindingRepository.getValidBindingOrNull(),
+            )
+            assertEquals(
+                listOf(
+                    session.accessToken,
+                    null,
+                ),
+                apiClient.bearerAccessTokenUpdates,
+            )
+        }
+
+    @Test
+    fun prepare_pending_participation_match_resume_match_404_returns_no_longer_recoverable_match_not_found_without_mutating_local_state() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val sessionStore = InMemoryOnlineAnonymousSessionStore(
+                initialSession = session,
+            )
+            val sessionRepository = OnlineAnonymousSessionRepository(
+                store = sessionStore,
+                nowEpochMillis = { 1_000L },
+            )
+            val bindingRepository = OnlineParticipationBindingRepository(
+                store = InMemoryOnlineParticipationBindingStore(),
+            )
+            bindingRepository.save(
+                binding = binding,
+            )
+
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                fetchMatchSnapshotFailure = createNotFoundClientRequestException(),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository = sessionRepository,
+                onlineParticipationBindingRepository = bindingRepository,
+            )
+
+            val result = repository.preparePendingParticipationMatchResume(
+                binding = binding,
+            )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation
+                    .NoLongerRecoverable(
+                        reason =
+                            OnlinePendingParticipationMatchResumeInvalidReason
+                                .MATCH_NOT_FOUND,
+                    ),
+                result,
+            )
+            assertEquals(
+                listOf(binding.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                listOf(requireNotNull(room.matchId)),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertNull(
+                repository.roomSnapshot.value,
+            )
+            assertNull(
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                session,
+                sessionStore.read(),
+            )
+            assertEquals(
+                binding,
+                bindingRepository.getValidBindingOrNull(),
+            )
+            assertEquals(
+                listOf(
+                    session.accessToken,
+                    null,
+                ),
+                apiClient.bearerAccessTokenUpdates,
+            )
+        }
+
+    @Test
     fun prepare_pending_participation_match_resume_returns_remote_session_rejected_when_room_read_returns_401_without_mutating_local_state() =
         runBlocking {
             val binding = createPendingParticipationBinding(
