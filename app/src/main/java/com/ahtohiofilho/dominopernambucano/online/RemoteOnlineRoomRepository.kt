@@ -95,6 +95,8 @@ private var consecutiveReadRateLimits: Int = 0
 private var readRateLimitBackoffMillis: Long? = null
 private var consecutiveReadTransportFailures: Int = 0
 private var readTransportBackoffMillis: Long? = null
+private var consecutiveReadServerFailures: Int = 0
+private var readServerBackoffMillis: Long? = null
 
 private enum class ActiveReadRefreshOutcome {
     SUCCESS,
@@ -1632,6 +1634,7 @@ private enum class ActiveReadRefreshOutcome {
 
         resetReadRateLimitBackoff()
         resetReadTransportBackoff()
+        resetReadServerBackoff()
         pollingRoomId = roomId
 
         trace(
@@ -1714,6 +1717,7 @@ private suspend fun delayBeforePollingRefresh() {
         pollingPolicy.calculateEffectivePollingDelayMillis(
             rateLimitBackoffMillis = readRateLimitBackoffMillis,
             transportBackoffMillis = readTransportBackoffMillis,
+            serverBackoffMillis = readServerBackoffMillis,
         )
 
     delay(delayMillis)
@@ -1869,6 +1873,85 @@ private fun handleRemoteReadTransportBackoff(
     return true
 }
 
+private fun isRemoteServerFailure(
+    error: Throwable,
+): Boolean {
+    if (error is CancellationException) {
+        return false
+    }
+
+    val response = (
+        error as? io.ktor.client.plugins.ResponseException
+    )?.response ?: return false
+
+    return response.status.value in 500..599
+}
+
+private fun handleRemoteReadServerBackoff(
+    error: Throwable,
+    roomId: String?,
+    matchId: String?,
+    playerId: String?,
+    operation: String,
+    trigger: String,
+    durationMillis: Long,
+): Boolean {
+    if (!isRemoteServerFailure(error)) {
+        return false
+    }
+
+    val response = (
+        error as io.ktor.client.plugins.ResponseException
+    ).response
+
+    consecutiveReadServerFailures =
+        (consecutiveReadServerFailures + 1)
+            .coerceAtMost(30)
+
+    val backoffMillis =
+        pollingPolicy.calculateServerBackoffMillis(
+            consecutiveServerFailures =
+                consecutiveReadServerFailures,
+        )
+
+    readServerBackoffMillis = backoffMillis
+
+    val attributes = mapOf(
+        "operation" to operation,
+        "trigger" to trigger,
+        "source" to "remote_server_backoff",
+        "reason" to "remote_http_5xx",
+        "httpStatus" to response.status.value.toString(),
+        "consecutiveServerFailures" to
+                consecutiveReadServerFailures.toString(),
+        "backoffMillis" to backoffMillis.toString(),
+        "durationMillis" to durationMillis.toString(),
+        "failureType" to
+                (error::class.simpleName ?: "Throwable").take(120),
+    )
+
+    trace(
+        level = OnlineTraceLevel.WARN,
+        type = OnlineTraceType.TRANSPORT_FAILURE,
+        roomId = roomId,
+        matchId = matchId,
+        playerId = playerId,
+        attributes = attributes,
+    )
+
+    if (trigger == "polling") {
+        trace(
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.POLLING_FAILED,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            attributes = attributes,
+        )
+    }
+
+    return true
+}
 private fun retryAfterMillisOrNull(
     error: Throwable,
 ): Long? {
@@ -1905,6 +1988,11 @@ private fun resetReadRateLimitBackoff() {
 private fun resetReadTransportBackoff() {
     consecutiveReadTransportFailures = 0
     readTransportBackoffMillis = null
+}
+
+private fun resetReadServerBackoff() {
+    consecutiveReadServerFailures = 0
+    readServerBackoffMillis = null
 }
 
     private fun isRemoteSessionRejected(
@@ -2303,6 +2391,22 @@ private suspend fun refreshSnapshots(
             return null
         }
 
+        if (
+            handleRemoteReadServerBackoff(
+                error = error,
+                roomId = roomId,
+                matchId = latestMatchId,
+                playerId = resolvedPlayerId,
+                operation = "fetch_room_snapshot",
+                trigger = trigger,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis =
+                        roomRequestStartedAtEpochMillis,
+                ),
+            )
+        ) {
+            return null
+        }
         traceTransportFailure(
             operation = "fetch_room_snapshot",
             error = error,
@@ -2336,6 +2440,7 @@ private suspend fun refreshSnapshots(
     ) {
         resetReadRateLimitBackoff()
         resetReadTransportBackoff()
+        resetReadServerBackoff()
     }
 
     return latestRoomStatus
@@ -2495,6 +2600,21 @@ private suspend fun fetchAndPublishLatestMatchSnapshot(
             return ActiveReadRefreshOutcome.OTHER_FAILURE
         }
 
+        if (
+            handleRemoteReadServerBackoff(
+                error = error,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                operation = "fetch_match_snapshot",
+                trigger = trigger,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis = startedAtEpochMillis,
+                ),
+            )
+        ) {
+            return ActiveReadRefreshOutcome.OTHER_FAILURE
+        }
         traceTransportFailure(
             operation = "fetch_match_snapshot",
             error = error,
@@ -2681,6 +2801,21 @@ private suspend fun fetchAndPublishMatchSnapshotsAfter(
             return ActiveReadRefreshOutcome.OTHER_FAILURE
         }
 
+        if (
+            handleRemoteReadServerBackoff(
+                error = error,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                operation = "fetch_match_updates",
+                trigger = trigger,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis = startedAtEpochMillis,
+                ),
+            )
+        ) {
+            return ActiveReadRefreshOutcome.OTHER_FAILURE
+        }
         traceTransportFailure(
             operation = "fetch_match_updates",
             error = error,
