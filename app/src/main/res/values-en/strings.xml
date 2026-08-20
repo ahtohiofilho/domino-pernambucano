@@ -213,6 +213,7 @@
     <string name="room_fill_app_players_disabled">Filling the table with app-controlled players is disabled in this environment.</string>
     <string name="ranked_match_title">Ranked match</string>
     <string name="resume_participation_session_rejected">Could not resume online participation: this device\'s session was rejected.</string>
+    <string name="active_match_no_longer_available">This online match is no longer available.</string>
     <string name="resume_participation_device_failed">Could not resume on this device. Verify the participation again.</string>
     <string name="resume_participation_expired">The previous online participation is no longer available. Verify again.</string>
     <string name="resume_participation_retry">Could not resume right now. Try again.</string>

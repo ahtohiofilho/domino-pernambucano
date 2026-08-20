@@ -213,6 +213,7 @@
     <string name="room_fill_app_players_disabled">Completar a mesa com jogadores controlados pelo aplicativo está desabilitado neste ambiente.</string>
     <string name="ranked_match_title">Partida rankeada</string>
     <string name="resume_participation_session_rejected">Não foi possível retomar a participação online: a sessão deste dispositivo foi rejeitada.</string>
+    <string name="active_match_no_longer_available">A partida online não está mais disponível.</string>
     <string name="resume_participation_device_failed">Não foi possível retomar neste dispositivo. Verifique a participação novamente.</string>
     <string name="resume_participation_expired">A participação online anterior não está mais disponível. Verifique novamente.</string>
     <string name="resume_participation_retry">Não foi possível retomar agora. Tente novamente.</string>

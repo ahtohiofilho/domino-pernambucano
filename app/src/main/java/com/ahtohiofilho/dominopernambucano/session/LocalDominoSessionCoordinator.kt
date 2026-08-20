@@ -429,6 +429,37 @@ class LocalDominoSessionCoordinator(
         return exactBindingStillPending
     }
 
+    fun returnActiveOnlineMatchToMainMenuAfterRemoteResourceLoss(
+        binding: OnlineParticipationBinding,
+    ): Boolean {
+        val onlineMatchState = mutableState.value
+            as? DominoSessionState.OnlineMatch
+            ?: return false
+
+        onlineMatchState.matchCoordinator.dispose()
+
+        val bindingCleared = onlineParticipationBindingRepository
+            ?.clearIfMatches(
+                binding = binding,
+            ) ?: false
+
+        val mainMenuState = DominoSessionState.MainMenu(
+            pendingOnlineParticipation =
+                resolvePendingOnlineParticipation(),
+            pendingOnlineParticipationInspection =
+                OnlinePendingParticipationInspectionState
+                    .NotRequested,
+            pendingOnlineParticipationSessionRejection =
+                OnlinePendingParticipationSessionRejection
+                    .NotRejected,
+        )
+
+        latestMainMenuState = mainMenuState
+        mutableState.value = mainMenuState
+
+        return bindingCleared
+    }
+
     private fun resolvePendingOnlineParticipation():
         OnlinePendingParticipationLocalResolution {
         return OnlinePendingParticipationLocalResolver(

@@ -19,6 +19,10 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomOperationResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineSessionCredential
+import com.ahtohiofilho.dominopernambucano.online.OnlineSessionCredentialRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineSessionCredentialStore
+import com.ahtohiofilho.dominopernambucano.online.OnlineSessionKind
 import com.ahtohiofilho.dominopernambucano.online.toOnlineSnapshotDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -522,6 +526,150 @@ class LocalDominoSessionCoordinatorRemoteConfirmationTest {
         )
     }
 
+    @Test
+    fun active_match_resource_loss_clears_exact_binding_preserves_account_credential_and_is_not_session_rejection() {
+        val binding = onlineParticipationBinding(
+            roomId = "room-1",
+            playerId = "player-1",
+        )
+        val bindingStore = MutableOnlineParticipationBindingStore(
+            binding = null,
+        )
+        val bindingRepository =
+            OnlineParticipationBindingRepository(
+                store = bindingStore,
+            )
+        val credential = validAccountCredential(
+            playerId = binding.playerId,
+        )
+        val credentialRepository =
+            OnlineSessionCredentialRepository(
+                store = MutableOnlineSessionCredentialStore(
+                    credential = credential,
+                ),
+                nowEpochMillis = { 0L },
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineSessionCredentialRepository =
+                credentialRepository,
+        )
+        val matchCoordinator =
+            createOnlineMatchCoordinator(
+                binding = binding,
+            )
+
+        coordinator.dispatch(
+            DominoSessionCommand.StartOnlineMatch(
+                matchCoordinator = matchCoordinator,
+            ),
+        )
+
+        bindingRepository.save(
+            binding = binding,
+        )
+
+        assertEquals(
+            true,
+            coordinator
+                .returnActiveOnlineMatchToMainMenuAfterRemoteResourceLoss(
+                    binding = binding,
+                ),
+        )
+
+        val mainMenuState = coordinator.currentState
+            as DominoSessionState.MainMenu
+
+        assertEquals(
+            null,
+            bindingRepository.getValidBindingOrNull(),
+        )
+        assertEquals(
+            credential,
+            credentialRepository.getStoredCredentialOrNull(),
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection.NotRejected,
+            mainMenuState.pendingOnlineParticipationSessionRejection,
+        )
+    }
+
+    @Test
+    fun active_match_resource_loss_preserves_newer_replacement_binding() {
+        val invalidatedBinding = onlineParticipationBinding(
+            roomId = "room-1",
+            playerId = "player-1",
+        )
+        val replacementBinding = onlineParticipationBinding(
+            roomId = "room-2",
+            playerId = invalidatedBinding.playerId,
+        )
+        val bindingStore = MutableOnlineParticipationBindingStore(
+            binding = null,
+        )
+        val bindingRepository =
+            OnlineParticipationBindingRepository(
+                store = bindingStore,
+            )
+        val credentialRepository =
+            OnlineSessionCredentialRepository(
+                store = MutableOnlineSessionCredentialStore(
+                    credential = validAccountCredential(
+                        playerId = invalidatedBinding.playerId,
+                    ),
+                ),
+                nowEpochMillis = { 0L },
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineSessionCredentialRepository =
+                credentialRepository,
+        )
+        val matchCoordinator =
+            createOnlineMatchCoordinator(
+                binding = invalidatedBinding,
+            )
+
+        coordinator.dispatch(
+            DominoSessionCommand.StartOnlineMatch(
+                matchCoordinator = matchCoordinator,
+            ),
+        )
+
+        bindingRepository.save(
+            binding = replacementBinding,
+        )
+
+        assertEquals(
+            false,
+            coordinator
+                .returnActiveOnlineMatchToMainMenuAfterRemoteResourceLoss(
+                    binding = invalidatedBinding,
+                ),
+        )
+
+        val mainMenuState = coordinator.currentState
+            as DominoSessionState.MainMenu
+
+        assertEquals(
+            replacementBinding,
+            bindingRepository.getValidBindingOrNull(),
+        )
+        assertEquals(
+            OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation(
+                    binding = replacementBinding,
+                ),
+            mainMenuState.pendingOnlineParticipation,
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection.NotRejected,
+            mainMenuState.pendingOnlineParticipationSessionRejection,
+        )
+    }
+
     private fun createOnlineMatchCoordinator(
         binding: OnlineParticipationBinding,
     ): OnlineDominoMatchCoordinator {
@@ -610,6 +758,18 @@ class LocalDominoSessionCoordinatorRemoteConfirmationTest {
         )
     }
 
+    private fun validAccountCredential(
+        playerId: String,
+    ): OnlineSessionCredential {
+        return OnlineSessionCredential(
+            sessionKind = OnlineSessionKind.ACCOUNT,
+            playerId = playerId,
+            accessToken = "account-access-token-$playerId",
+            expiresAtEpochMillis = Long.MAX_VALUE,
+            accountId = "account-$playerId",
+        )
+    }
+
     private fun validAnonymousSession(
         playerId: String,
     ): OnlineAnonymousSessionDto {
@@ -654,5 +814,25 @@ private class MutableOnlineAnonymousSessionStore(
 
     override fun clear() {
         session = null
+    }
+}
+
+private class MutableOnlineSessionCredentialStore(
+    private var credential: OnlineSessionCredential?,
+) : OnlineSessionCredentialStore {
+    override fun read(): OnlineSessionCredential? {
+        return credential
+    }
+
+    override fun write(
+        credential: OnlineSessionCredential,
+    ): Boolean {
+        this.credential = credential
+        return true
+    }
+
+    override fun clear(): Boolean {
+        credential = null
+        return true
     }
 }

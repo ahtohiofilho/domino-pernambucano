@@ -213,6 +213,7 @@
     <string name="room_fill_app_players_disabled">Completar la mesa con jugadores controlados por la aplicación está deshabilitado en este entorno.</string>
     <string name="ranked_match_title">Partida clasificatoria</string>
     <string name="resume_participation_session_rejected">No se pudo reanudar la participación en línea: se rechazó la sesión de este dispositivo.</string>
+    <string name="active_match_no_longer_available">Esta partida en línea ya no está disponible.</string>
     <string name="resume_participation_device_failed">No se pudo reanudar en este dispositivo. Verifica nuevamente la participación.</string>
     <string name="resume_participation_expired">La participación en línea anterior ya no está disponible. Verifica nuevamente.</string>
     <string name="resume_participation_retry">No se pudo reanudar ahora. Inténtalo de nuevo.</string>

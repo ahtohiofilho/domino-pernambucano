@@ -115,6 +115,9 @@ fun DominoPernambucanoApp(
     val resumeParticipationSessionRejected = stringResource(
         R.string.resume_participation_session_rejected,
     )
+    val activeMatchNoLongerAvailable = stringResource(
+        R.string.active_match_no_longer_available,
+    )
     val resumeParticipationDeviceFailed = stringResource(
         R.string.resume_participation_device_failed,
     )
@@ -1052,6 +1055,11 @@ fun DominoPernambucanoApp(
                     .activeSessionInvalidation
                     .collectAsState()
 
+            val activeResourceLoss by
+                state.matchCoordinator
+                    .activeResourceLoss
+                    .collectAsState()
+
             LaunchedEffect(
                 state.matchCoordinator,
                 activeSessionInvalidation,
@@ -1072,6 +1080,23 @@ fun DominoPernambucanoApp(
                     } else {
                         null
                     }
+            }
+
+            LaunchedEffect(
+                state.matchCoordinator,
+                activeResourceLoss,
+            ) {
+                val resourceLoss =
+                    activeResourceLoss
+                        ?: return@LaunchedEffect
+
+                sessionCoordinator
+                    .returnActiveOnlineMatchToMainMenuAfterRemoteResourceLoss(
+                        binding = resourceLoss.binding,
+                    )
+
+                pendingOnlineMatchResumeFeedbackMessage =
+                    activeMatchNoLongerAvailable
             }
 
             DominoGameRoute(

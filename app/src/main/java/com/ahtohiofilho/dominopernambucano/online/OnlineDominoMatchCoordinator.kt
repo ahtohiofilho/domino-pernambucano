@@ -28,6 +28,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+data class OnlineActiveMatchResourceLossResolution(
+    val binding: OnlineParticipationBinding,
+    val reason: OnlineActiveMatchResourceLossReason,
+)
+
 data class OnlinePresentationCatchUpPolicy(
     val maxQueuedGameplayPresentations: Int = 4,
     val retainedGameplayPresentations: Int = 1,
@@ -104,6 +109,9 @@ class OnlineDominoMatchCoordinator(
     private val mutableActiveSessionInvalidation =
         MutableStateFlow<OnlineParticipationBinding?>(null)
 
+    private val mutableActiveResourceLoss =
+        MutableStateFlow<OnlineActiveMatchResourceLossResolution?>(null)
+
     private var matchFinishedCallbackDispatched = false
 
     override val state: StateFlow<DominoMatchRuntimeState> =
@@ -112,6 +120,10 @@ class OnlineDominoMatchCoordinator(
     val activeSessionInvalidation:
         StateFlow<OnlineParticipationBinding?> =
         mutableActiveSessionInvalidation.asStateFlow()
+
+    val activeResourceLoss:
+        StateFlow<OnlineActiveMatchResourceLossResolution?> =
+        mutableActiveResourceLoss.asStateFlow()
 
     override val currentState: DominoMatchRuntimeState
         get() = mutableState.value
@@ -251,6 +263,32 @@ class OnlineDominoMatchCoordinator(
                         matchId = matchId,
                         playerId = localPlayerId,
                         localSeatIndex = localPlayerIndex,
+                    )
+            }
+        }
+
+        coordinatorScope.launch {
+            repository.activeMatchResourceLossEvents.collect {
+                    resourceLoss ->
+                if (
+                    resourceLoss.roomId != roomId ||
+                    resourceLoss.matchId != matchId ||
+                    resourceLoss.playerId != localPlayerId
+                ) {
+                    return@collect
+                }
+
+                inFlightAction = null
+
+                mutableActiveResourceLoss.value =
+                    OnlineActiveMatchResourceLossResolution(
+                        binding = OnlineParticipationBinding(
+                            roomId = roomId,
+                            matchId = matchId,
+                            playerId = localPlayerId,
+                            localSeatIndex = localPlayerIndex,
+                        ),
+                        reason = resourceLoss.reason,
                     )
             }
         }

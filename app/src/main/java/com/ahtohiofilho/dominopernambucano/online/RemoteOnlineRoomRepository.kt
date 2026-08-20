@@ -76,6 +76,11 @@ class RemoteOnlineRoomRepository(
             extraBufferCapacity = 8,
         )
 
+    private val mutableActiveMatchResourceLossEvents =
+        MutableSharedFlow<OnlineActiveMatchResourceLoss>(
+            extraBufferCapacity = 8,
+        )
+
     private var pollingJob: Job? = null
     private var pollingRoomId: String? = null
     private var activePlayerId: String? = null
@@ -104,6 +109,10 @@ class RemoteOnlineRoomRepository(
     override val activeMatchSessionInvalidationEvents:
         Flow<OnlineActiveMatchSessionInvalidation> =
         mutableActiveMatchSessionInvalidationEvents.asSharedFlow()
+
+    override val activeMatchResourceLossEvents:
+        Flow<OnlineActiveMatchResourceLoss> =
+        mutableActiveMatchResourceLossEvents.asSharedFlow()
 
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
@@ -1514,6 +1523,14 @@ class RemoteOnlineRoomRepository(
                 io.ktor.http.HttpStatusCode.Unauthorized
     }
 
+    private fun isRemoteResourceNotFound(
+        error: Throwable,
+    ): Boolean {
+        return error is io.ktor.client.plugins.ClientRequestException &&
+                error.response.status ==
+                io.ktor.http.HttpStatusCode.NotFound
+    }
+
     private fun invalidateActiveMatchAfterRemoteSessionRejected(
         roomId: String?,
         matchId: String?,
@@ -1578,6 +1595,81 @@ class RemoteOnlineRoomRepository(
                 roomId = resolvedRoomId,
                 matchId = resolvedMatchId,
                 playerId = resolvedPlayerId,
+            ),
+        )
+
+        return true
+    }
+
+    private fun invalidateActiveMatchAfterRemoteResourceLoss(
+        roomId: String?,
+        matchId: String?,
+        playerId: String?,
+        reason: OnlineActiveMatchResourceLossReason,
+        operation: String,
+        trigger: String,
+    ): Boolean {
+        trace(
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.POLLING_FAILED,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            attributes = mapOf(
+                "operation" to operation,
+                "trigger" to trigger,
+                "source" to "remote_resource_not_found",
+                "reason" to "remote_http_404",
+                "resourceLossReason" to reason.name,
+            ),
+        )
+
+        val published = publishActiveMatchResourceLoss(
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            reason = reason,
+        )
+
+        if (published) {
+            stopPolling(
+                reason = "active_resource_lost",
+            )
+        }
+
+        return published
+    }
+
+    private fun publishActiveMatchResourceLoss(
+        roomId: String?,
+        matchId: String?,
+        playerId: String?,
+        reason: OnlineActiveMatchResourceLossReason,
+    ): Boolean {
+        val resolvedRoomId = roomId
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return false
+
+        val resolvedMatchId = matchId
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return false
+
+        val resolvedPlayerId = playerId
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return false
+
+        mutableActiveMatchResourceLossEvents.tryEmit(
+            OnlineActiveMatchResourceLoss(
+                roomId = resolvedRoomId,
+                matchId = resolvedMatchId,
+                playerId = resolvedPlayerId,
+                reason = reason,
             ),
         )
 
@@ -1662,6 +1754,19 @@ class RemoteOnlineRoomRepository(
                     roomId = roomId,
                     matchId = latestMatchId,
                     playerId = resolvedPlayerId,
+                    operation = "fetch_room_snapshot",
+                    trigger = trigger,
+                )
+                return null
+            }
+
+            if (isRemoteResourceNotFound(error)) {
+                invalidateActiveMatchAfterRemoteResourceLoss(
+                    roomId = roomId,
+                    matchId = latestMatchId,
+                    playerId = resolvedPlayerId,
+                    reason =
+                        OnlineActiveMatchResourceLossReason.ROOM_NOT_FOUND,
                     operation = "fetch_room_snapshot",
                     trigger = trigger,
                 )
@@ -1789,6 +1894,19 @@ class RemoteOnlineRoomRepository(
                 return
             }
 
+            if (isRemoteResourceNotFound(error)) {
+                invalidateActiveMatchAfterRemoteResourceLoss(
+                    roomId = roomId,
+                    matchId = matchId,
+                    playerId = playerId,
+                    reason =
+                        OnlineActiveMatchResourceLossReason.MATCH_NOT_FOUND,
+                    operation = "fetch_match_snapshot",
+                    trigger = trigger,
+                )
+                return
+            }
+
             traceTransportFailure(
                 operation = "fetch_match_snapshot",
                 error = error,
@@ -1905,6 +2023,19 @@ class RemoteOnlineRoomRepository(
                     roomId = roomId,
                     matchId = matchId,
                     playerId = playerId,
+                    operation = "fetch_match_updates",
+                    trigger = trigger,
+                )
+                return
+            }
+
+            if (isRemoteResourceNotFound(error)) {
+                invalidateActiveMatchAfterRemoteResourceLoss(
+                    roomId = roomId,
+                    matchId = matchId,
+                    playerId = playerId,
+                    reason =
+                        OnlineActiveMatchResourceLossReason.MATCH_NOT_FOUND,
                     operation = "fetch_match_updates",
                     trigger = trigger,
                 )

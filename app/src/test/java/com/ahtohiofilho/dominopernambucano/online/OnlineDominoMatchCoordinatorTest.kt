@@ -257,6 +257,111 @@ class OnlineDominoMatchCoordinatorTest {
         }
 
     @Test
+    fun matching_resource_loss_exposes_exact_binding_and_reason() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            )
+            val snapshot = runtimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = snapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = snapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                repository.publishActiveMatchResourceLoss(
+                    OnlineActiveMatchResourceLoss(
+                        roomId = TEST_ROOM_ID,
+                        matchId = TEST_MATCH_ID,
+                        playerId = TEST_PLAYER_ID,
+                        reason =
+                            OnlineActiveMatchResourceLossReason.MATCH_NOT_FOUND,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    OnlineActiveMatchResourceLossResolution(
+                        binding = OnlineParticipationBinding(
+                            roomId = TEST_ROOM_ID,
+                            matchId = TEST_MATCH_ID,
+                            playerId = TEST_PLAYER_ID,
+                            localSeatIndex = 0,
+                        ),
+                        reason =
+                            OnlineActiveMatchResourceLossReason.MATCH_NOT_FOUND,
+                    ),
+                    coordinator.activeResourceLoss.value,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun different_match_resource_loss_is_ignored() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            )
+            val snapshot = runtimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = snapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = snapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                repository.publishActiveMatchResourceLoss(
+                    OnlineActiveMatchResourceLoss(
+                        roomId = TEST_ROOM_ID,
+                        matchId = "different-match",
+                        playerId = TEST_PLAYER_ID,
+                        reason =
+                            OnlineActiveMatchResourceLossReason.MATCH_NOT_FOUND,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    null,
+                    coordinator.activeResourceLoss.value,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
     fun remote_revisions_arriving_during_move_presentation_are_presented_in_order() =
         runBlocking {
             val openingPiece = DominoPiece(
@@ -1946,6 +2051,11 @@ class OnlineDominoMatchCoordinatorTest {
                 extraBufferCapacity = 8,
             )
 
+        private val mutableActiveMatchResourceLossEvents =
+            MutableSharedFlow<OnlineActiveMatchResourceLoss>(
+                extraBufferCapacity = 8,
+            )
+
         val submittedActions = mutableListOf<OnlinePlayerActionDto>()
 
         var completedMatchLocalReleaseCount = 0
@@ -1961,6 +2071,10 @@ class OnlineDominoMatchCoordinatorTest {
             Flow<OnlineActiveMatchSessionInvalidation> =
             mutableActiveMatchSessionInvalidationEvents.asSharedFlow()
 
+        override val activeMatchResourceLossEvents:
+            Flow<OnlineActiveMatchResourceLoss> =
+            mutableActiveMatchResourceLossEvents.asSharedFlow()
+
         fun publishMatchSnapshot(
             snapshot: OnlineMatchSnapshotDto,
         ) {
@@ -1973,6 +2087,15 @@ class OnlineDominoMatchCoordinatorTest {
             check(
                 mutableActiveMatchSessionInvalidationEvents
                     .tryEmit(invalidation),
+            )
+        }
+
+        fun publishActiveMatchResourceLoss(
+            resourceLoss: OnlineActiveMatchResourceLoss,
+        ) {
+            check(
+                mutableActiveMatchResourceLossEvents
+                    .tryEmit(resourceLoss),
             )
         }
 
