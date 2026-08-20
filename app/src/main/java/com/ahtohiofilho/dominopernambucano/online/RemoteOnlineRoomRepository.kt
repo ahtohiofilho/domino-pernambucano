@@ -93,6 +93,8 @@ class RemoteOnlineRoomRepository(
 
 private var consecutiveReadRateLimits: Int = 0
 private var readRateLimitBackoffMillis: Long? = null
+private var consecutiveReadTransportFailures: Int = 0
+private var readTransportBackoffMillis: Long? = null
 
 private enum class ActiveReadRefreshOutcome {
     SUCCESS,
@@ -1629,6 +1631,7 @@ private enum class ActiveReadRefreshOutcome {
         )
 
         resetReadRateLimitBackoff()
+        resetReadTransportBackoff()
         pollingRoomId = roomId
 
         trace(
@@ -1707,22 +1710,13 @@ private enum class ActiveReadRefreshOutcome {
     }
 
 private suspend fun delayBeforePollingRefresh() {
-    val baseDelayMillis = pollingPolicy.intervalMillis
-        .coerceAtLeast(0L)
+    val delayMillis =
+        pollingPolicy.calculateEffectivePollingDelayMillis(
+            rateLimitBackoffMillis = readRateLimitBackoffMillis,
+            transportBackoffMillis = readTransportBackoffMillis,
+        )
 
-    delay(baseDelayMillis)
-
-    val cooperativeDelayMillis =
-        readRateLimitBackoffMillis
-            ?: return
-
-    val additionalDelayMillis =
-        (cooperativeDelayMillis - baseDelayMillis)
-            .coerceAtLeast(0L)
-
-    if (additionalDelayMillis > 0L) {
-        delay(additionalDelayMillis)
-    }
+    delay(delayMillis)
 }
 
 private fun isRemoteRateLimited(
@@ -1799,6 +1793,82 @@ private fun handleRemoteReadRateLimit(
     return true
 }
 
+private fun isGenericNoResponseReadTransportFailure(
+    error: Throwable,
+): Boolean {
+    if (error is CancellationException) {
+        return false
+    }
+
+    if (error is io.ktor.client.plugins.ResponseException) {
+        return false
+    }
+
+    return error is java.io.IOException ||
+            error is io.ktor.client.plugins.HttpRequestTimeoutException
+}
+
+private fun handleRemoteReadTransportBackoff(
+    error: Throwable,
+    roomId: String?,
+    matchId: String?,
+    playerId: String?,
+    operation: String,
+    trigger: String,
+    durationMillis: Long,
+): Boolean {
+    if (!isGenericNoResponseReadTransportFailure(error)) {
+        return false
+    }
+
+    consecutiveReadTransportFailures =
+        (consecutiveReadTransportFailures + 1)
+            .coerceAtMost(30)
+
+    val backoffMillis =
+        pollingPolicy.calculateTransportBackoffMillis(
+            consecutiveTransportFailures =
+                consecutiveReadTransportFailures,
+        )
+
+    readTransportBackoffMillis = backoffMillis
+
+    val attributes = mapOf(
+        "operation" to operation,
+        "trigger" to trigger,
+        "source" to "remote_transport_backoff",
+        "reason" to "remote_no_response_transport_failure",
+        "consecutiveTransportFailures" to
+                consecutiveReadTransportFailures.toString(),
+        "backoffMillis" to backoffMillis.toString(),
+        "durationMillis" to durationMillis.toString(),
+        "failureType" to
+                (error::class.simpleName ?: "Throwable").take(120),
+    )
+
+    trace(
+        level = OnlineTraceLevel.WARN,
+        type = OnlineTraceType.TRANSPORT_FAILURE,
+        roomId = roomId,
+        matchId = matchId,
+        playerId = playerId,
+        attributes = attributes,
+    )
+
+    if (trigger == "polling") {
+        trace(
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.POLLING_FAILED,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            attributes = attributes,
+        )
+    }
+
+    return true
+}
+
 private fun retryAfterMillisOrNull(
     error: Throwable,
 ): Long? {
@@ -1830,6 +1900,11 @@ private fun retryAfterMillisOrNull(
 private fun resetReadRateLimitBackoff() {
     consecutiveReadRateLimits = 0
     readRateLimitBackoffMillis = null
+}
+
+private fun resetReadTransportBackoff() {
+    consecutiveReadTransportFailures = 0
+    readTransportBackoffMillis = null
 }
 
     private fun isRemoteSessionRejected(
@@ -2152,6 +2227,10 @@ private suspend fun refreshSnapshots(
             ),
         )
     } catch (error: Throwable) {
+        if (error is CancellationException) {
+            throw error
+        }
+
         if (isRemoteSessionRejected(error)) {
             invalidateActiveMatchAfterRemoteSessionRejected(
                 roomId = roomId,
@@ -2207,6 +2286,23 @@ private suspend fun refreshSnapshots(
             return null
         }
 
+        if (
+            handleRemoteReadTransportBackoff(
+                error = error,
+                roomId = roomId,
+                matchId = latestMatchId,
+                playerId = resolvedPlayerId,
+                operation = "fetch_room_snapshot",
+                trigger = trigger,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis =
+                        roomRequestStartedAtEpochMillis,
+                ),
+            )
+        ) {
+            return null
+        }
+
         traceTransportFailure(
             operation = "fetch_room_snapshot",
             error = error,
@@ -2239,6 +2335,7 @@ private suspend fun refreshSnapshots(
         matchReadOutcome == ActiveReadRefreshOutcome.SUCCESS
     ) {
         resetReadRateLimitBackoff()
+        resetReadTransportBackoff()
     }
 
     return latestRoomStatus
@@ -2380,6 +2477,22 @@ private suspend fun fetchAndPublishLatestMatchSnapshot(
             )
         ) {
             return ActiveReadRefreshOutcome.RATE_LIMITED
+        }
+
+        if (
+            handleRemoteReadTransportBackoff(
+                error = error,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                operation = "fetch_match_snapshot",
+                trigger = trigger,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis = startedAtEpochMillis,
+                ),
+            )
+        ) {
+            return ActiveReadRefreshOutcome.OTHER_FAILURE
         }
 
         traceTransportFailure(
@@ -2550,6 +2663,22 @@ private suspend fun fetchAndPublishMatchSnapshotsAfter(
             )
         ) {
             return ActiveReadRefreshOutcome.RATE_LIMITED
+        }
+
+        if (
+            handleRemoteReadTransportBackoff(
+                error = error,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                operation = "fetch_match_updates",
+                trigger = trigger,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis = startedAtEpochMillis,
+                ),
+            )
+        ) {
+            return ActiveReadRefreshOutcome.OTHER_FAILURE
         }
 
         traceTransportFailure(
