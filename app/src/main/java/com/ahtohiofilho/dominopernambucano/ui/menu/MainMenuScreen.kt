@@ -81,6 +81,8 @@ fun MainMenuScreen(
     onlineAccountTableName: String? = null,
     onlineAccountProfileUiState: OnlineAccountProfileUiState =
         OnlineAccountProfileUiState.NotAvailable,
+    openAccountDialogOnEnter: Boolean = false,
+    onAccountDialogOpenRequestConsumed: () -> Unit = {},
     onAccountDialogOpened: () -> Unit = {},
     onAccountProfilePublicDisplayNameChange: (String) -> Unit =
         {},
@@ -100,6 +102,14 @@ fun MainMenuScreen(
     }
     var reopenAccountAfterGoogleAction by remember {
         mutableStateOf(false)
+    }
+
+    LaunchedEffect(openAccountDialogOnEnter) {
+        if (openAccountDialogOnEnter) {
+            onAccountDialogOpenRequestConsumed()
+            accountDialogVisible = true
+            onAccountDialogOpened()
+        }
     }
 
     LaunchedEffect(onlineGoogleAccountActionInProgress) {

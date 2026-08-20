@@ -150,6 +150,10 @@ fun DominoPernambucanoApp(
         mutableStateOf(false)
     }
 
+    var openAccountDialogOnNextMainMenu by rememberSaveable {
+        mutableStateOf(false)
+    }
+
     val onlineTraceClientSessionId = remember {
         "android-${UUID.randomUUID()}"
     }
@@ -548,6 +552,11 @@ fun DominoPernambucanoApp(
                     onlinePlayerIdentity.tableName,
                 onlineAccountProfileUiState =
                     onlineAccountProfileUiState,
+                openAccountDialogOnEnter =
+                    openAccountDialogOnNextMainMenu,
+                onAccountDialogOpenRequestConsumed = {
+                    openAccountDialogOnNextMainMenu = false
+                },
                 onAccountDialogOpened = {
                     requestOnlineAccountProfile()
                 },
@@ -976,6 +985,12 @@ fun DominoPernambucanoApp(
                             DominoSessionCommand.StartOnlineMatch(
                                 matchCoordinator = matchCoordinator,
                             ),
+                        )
+                    },
+                    onAccountAccessClick = {
+                        openAccountDialogOnNextMainMenu = true
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.BackToMainMenu,
                         )
                     },
                     onBackClick = {

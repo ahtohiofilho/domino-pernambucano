@@ -49,6 +49,7 @@ fun OnlineRankedQueueRoute(
     playerName: String,
     onStartOnlineMatch:
         (OnlinePublicRankedMatchActivation.Ready) -> Unit,
+    onAccountAccessClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
     val controller = remember(
@@ -120,6 +121,7 @@ fun OnlineRankedQueueRoute(
         playerName = playerName,
         onRetryClick = ::startOrRetry,
         onCancelClick = ::cancelQueue,
+        onAccountAccessClick = onAccountAccessClick,
         onBackClick = onBackClick,
     )
 }
@@ -130,6 +132,7 @@ private fun OnlineRankedQueueScreen(
     playerName: String,
     onRetryClick: () -> Unit,
     onCancelClick: () -> Unit,
+    onAccountAccessClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
     DominoScreenScaffold(
@@ -192,18 +195,30 @@ private fun OnlineRankedQueueScreen(
             }
 
             is OnlineRankedQueueUiState.Failure -> {
-                SecondaryMenuButton(
-                    text = if (uiState.retryable) {
-                        stringResource(R.string.ranked_queue_cancel_search)
-                    } else {
-                        stringResource(R.string.common_back)
-                    },
-                    onClick = if (uiState.retryable) {
-                        onCancelClick
-                    } else {
-                        onBackClick
-                    },
-                )
+                if (uiState.showsAccountRemediation()) {
+                    PrimaryMenuButton(
+                        text = stringResource(R.string.main_menu_account),
+                        onClick = onAccountAccessClick,
+                    )
+
+                    SecondaryMenuButton(
+                        text = stringResource(R.string.common_back),
+                        onClick = onBackClick,
+                    )
+                } else {
+                    SecondaryMenuButton(
+                        text = if (uiState.retryable) {
+                            stringResource(R.string.ranked_queue_cancel_search)
+                        } else {
+                            stringResource(R.string.common_back)
+                        },
+                        onClick = if (uiState.retryable) {
+                            onCancelClick
+                        } else {
+                            onBackClick
+                        },
+                    )
+                }
             }
 
             OnlineRankedQueueUiState.NotQueued -> {
@@ -299,6 +314,20 @@ private fun OnlineRankedQueueUiState.showsProgress(): Boolean {
         this == OnlineRankedQueueUiState.OpeningMatch
 }
 
+internal fun OnlineRankedQueueUiState.showsAccountRemediation(): Boolean {
+    val failure = this as? OnlineRankedQueueUiState.Failure
+        ?: return false
+
+    if (failure.retryable) {
+        return false
+    }
+
+    return failure.kind ==
+        OnlineRankedQueueUiFailureKind.AUTHENTICATION_REQUIRED ||
+        failure.kind ==
+        OnlineRankedQueueUiFailureKind.ACCOUNT_REQUIRED
+}
+
 @Composable
 private fun OnlineRankedQueueUiState.primaryMessage(): String {
     return when (this) {
@@ -337,10 +366,15 @@ private fun OnlineRankedQueueUiState.secondaryMessage(): String {
             stringResource(R.string.online_queue_opening_table)
 
         is OnlineRankedQueueUiState.Failure -> {
-            if (retryable) {
-                stringResource(R.string.online_queue_may_remain_active)
-            } else {
-                stringResource(R.string.online_queue_account_access_hint)
+            when {
+                retryable ->
+                    stringResource(R.string.online_queue_may_remain_active)
+
+                showsAccountRemediation() ->
+                    stringResource(R.string.online_queue_account_access_hint)
+
+                else ->
+                    stringResource(R.string.online_queue_ranked_policy)
             }
         }
 

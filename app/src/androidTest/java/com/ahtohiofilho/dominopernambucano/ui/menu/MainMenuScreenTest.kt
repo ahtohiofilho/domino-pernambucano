@@ -9,6 +9,10 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -26,6 +30,8 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
+import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialogTag
+import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDismissActionTag
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -539,6 +545,90 @@ class MainMenuScreenTest {
                 )
             },
         )
+    }
+
+    @Test
+    fun main_menu_external_account_request_opens_dialog() {
+        var openedCount = 0
+        var consumedCount = 0
+
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.NotRequested,
+                pendingOnlineMatchResumeInProgress = false,
+                openAccountDialogOnEnter = true,
+                onAccountDialogOpenRequestConsumed = {
+                    consumedCount += 1
+                },
+                onAccountDialogOpened = {
+                    openedCount += 1
+                },
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithTag(OnlineAccountDialogTag)
+            .assertIsDisplayed()
+
+        composeRule.runOnIdle {
+            assertEquals(1, openedCount)
+            assertEquals(1, consumedCount)
+        }
+    }
+
+    @Test
+    fun main_menu_external_account_request_is_consumed_without_loop() {
+        var openRequest by mutableStateOf(true)
+        var openedCount = 0
+        var consumedCount = 0
+
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.NotRequested,
+                pendingOnlineMatchResumeInProgress = false,
+                openAccountDialogOnEnter = openRequest,
+                onAccountDialogOpenRequestConsumed = {
+                    consumedCount += 1
+                    openRequest = false
+                },
+                onAccountDialogOpened = {
+                    openedCount += 1
+                },
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithTag(OnlineAccountDialogTag)
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(OnlineAccountDismissActionTag)
+            .performClick()
+
+        composeRule
+            .onAllNodesWithTag(OnlineAccountDialogTag)
+            .assertCountEquals(0)
+
+        composeRule.runOnIdle {
+            assertEquals(1, openedCount)
+            assertEquals(1, consumedCount)
+        }
     }
 
     private fun readyParticipation():
