@@ -33,6 +33,11 @@ data class OnlineActiveMatchResourceLossResolution(
     val reason: OnlineActiveMatchResourceLossReason,
 )
 
+data class OnlineActiveMatchParticipationAuthorizationLossResolution(
+    val binding: OnlineParticipationBinding,
+    val reason: OnlineActiveMatchParticipationAuthorizationLossReason,
+)
+
 data class OnlinePresentationCatchUpPolicy(
     val maxQueuedGameplayPresentations: Int = 4,
     val retainedGameplayPresentations: Int = 1,
@@ -112,6 +117,9 @@ class OnlineDominoMatchCoordinator(
     private val mutableActiveResourceLoss =
         MutableStateFlow<OnlineActiveMatchResourceLossResolution?>(null)
 
+    private val mutableActiveParticipationAuthorizationLoss =
+        MutableStateFlow<OnlineActiveMatchParticipationAuthorizationLossResolution?>(null)
+
     private var matchFinishedCallbackDispatched = false
 
     override val state: StateFlow<DominoMatchRuntimeState> =
@@ -124,6 +132,10 @@ class OnlineDominoMatchCoordinator(
     val activeResourceLoss:
         StateFlow<OnlineActiveMatchResourceLossResolution?> =
         mutableActiveResourceLoss.asStateFlow()
+
+    val activeParticipationAuthorizationLoss:
+        StateFlow<OnlineActiveMatchParticipationAuthorizationLossResolution?> =
+        mutableActiveParticipationAuthorizationLoss.asStateFlow()
 
     override val currentState: DominoMatchRuntimeState
         get() = mutableState.value
@@ -289,6 +301,32 @@ class OnlineDominoMatchCoordinator(
                             localSeatIndex = localPlayerIndex,
                         ),
                         reason = resourceLoss.reason,
+                    )
+            }
+        }
+
+        coordinatorScope.launch {
+            repository.activeMatchParticipationAuthorizationLossEvents.collect {
+                    authorizationLoss ->
+                if (
+                    authorizationLoss.roomId != roomId ||
+                    authorizationLoss.matchId != matchId ||
+                    authorizationLoss.playerId != localPlayerId
+                ) {
+                    return@collect
+                }
+
+                inFlightAction = null
+
+                mutableActiveParticipationAuthorizationLoss.value =
+                    OnlineActiveMatchParticipationAuthorizationLossResolution(
+                        binding = OnlineParticipationBinding(
+                            roomId = roomId,
+                            matchId = matchId,
+                            playerId = localPlayerId,
+                            localSeatIndex = localPlayerIndex,
+                        ),
+                        reason = authorizationLoss.reason,
                     )
             }
         }

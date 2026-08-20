@@ -257,6 +257,114 @@ class OnlineDominoMatchCoordinatorTest {
         }
 
     @Test
+    fun matching_authorization_loss_exposes_exact_binding_and_reason() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            )
+            val snapshot = runtimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = snapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = snapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                repository.publishActiveMatchParticipationAuthorizationLoss(
+                    OnlineActiveMatchParticipationAuthorizationLoss(
+                        roomId = TEST_ROOM_ID,
+                        matchId = TEST_MATCH_ID,
+                        playerId = TEST_PLAYER_ID,
+                        reason =
+                            OnlineActiveMatchParticipationAuthorizationLossReason
+                            .MATCH_PARTICIPATION_FORBIDDEN,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    OnlineActiveMatchParticipationAuthorizationLossResolution(
+                        binding = OnlineParticipationBinding(
+                            roomId = TEST_ROOM_ID,
+                            matchId = TEST_MATCH_ID,
+                            playerId = TEST_PLAYER_ID,
+                            localSeatIndex = 0,
+                        ),
+                        reason =
+                            OnlineActiveMatchParticipationAuthorizationLossReason
+                            .MATCH_PARTICIPATION_FORBIDDEN,
+                    ),
+                    coordinator.activeParticipationAuthorizationLoss.value,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun different_match_authorization_loss_is_ignored() =
+        runBlocking {
+            val runtimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            )
+            val snapshot = runtimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = snapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = snapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                repository.publishActiveMatchParticipationAuthorizationLoss(
+                    OnlineActiveMatchParticipationAuthorizationLoss(
+                        roomId = TEST_ROOM_ID,
+                        matchId = "different-match",
+                        playerId = TEST_PLAYER_ID,
+                        reason =
+                            OnlineActiveMatchParticipationAuthorizationLossReason
+                            .MATCH_PARTICIPATION_FORBIDDEN,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    null,
+                    coordinator.activeParticipationAuthorizationLoss.value,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
     fun matching_resource_loss_exposes_exact_binding_and_reason() =
         runBlocking {
             val runtimeState = createRuntimeState(
@@ -2056,6 +2164,11 @@ class OnlineDominoMatchCoordinatorTest {
                 extraBufferCapacity = 8,
             )
 
+        private val mutableActiveMatchParticipationAuthorizationLossEvents =
+            MutableSharedFlow<OnlineActiveMatchParticipationAuthorizationLoss>(
+                extraBufferCapacity = 8,
+            )
+
         val submittedActions = mutableListOf<OnlinePlayerActionDto>()
 
         var completedMatchLocalReleaseCount = 0
@@ -2074,6 +2187,10 @@ class OnlineDominoMatchCoordinatorTest {
         override val activeMatchResourceLossEvents:
             Flow<OnlineActiveMatchResourceLoss> =
             mutableActiveMatchResourceLossEvents.asSharedFlow()
+
+        override val activeMatchParticipationAuthorizationLossEvents:
+            Flow<OnlineActiveMatchParticipationAuthorizationLoss> =
+            mutableActiveMatchParticipationAuthorizationLossEvents.asSharedFlow()
 
         fun publishMatchSnapshot(
             snapshot: OnlineMatchSnapshotDto,
@@ -2096,6 +2213,16 @@ class OnlineDominoMatchCoordinatorTest {
             check(
                 mutableActiveMatchResourceLossEvents
                     .tryEmit(resourceLoss),
+            )
+        }
+
+        fun publishActiveMatchParticipationAuthorizationLoss(
+            authorizationLoss:
+                OnlineActiveMatchParticipationAuthorizationLoss,
+        ) {
+            check(
+                mutableActiveMatchParticipationAuthorizationLossEvents
+                    .tryEmit(authorizationLoss),
             )
         }
 

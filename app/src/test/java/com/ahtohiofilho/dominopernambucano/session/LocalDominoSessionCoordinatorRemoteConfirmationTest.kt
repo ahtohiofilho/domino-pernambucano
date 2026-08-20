@@ -527,6 +527,221 @@ class LocalDominoSessionCoordinatorRemoteConfirmationTest {
     }
 
     @Test
+    fun authorization_loss_clears_exact_binding_preserves_credential_and_is_not_session_rejection() {
+        val binding = onlineParticipationBinding(
+            roomId = "room-1",
+            playerId = "player-1",
+        )
+        val bindingStore = MutableOnlineParticipationBindingStore(
+            binding = null,
+        )
+        val bindingRepository =
+            OnlineParticipationBindingRepository(
+                store = bindingStore,
+            )
+        val credential = validAccountCredential(
+            playerId = binding.playerId,
+        )
+        val credentialRepository =
+            OnlineSessionCredentialRepository(
+                store = MutableOnlineSessionCredentialStore(
+                    credential = credential,
+                ),
+                nowEpochMillis = { 0L },
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineSessionCredentialRepository =
+                credentialRepository,
+        )
+        val matchCoordinator =
+            createOnlineMatchCoordinator(
+                binding = binding,
+            )
+
+        coordinator.dispatch(
+            DominoSessionCommand.StartOnlineMatch(
+                matchCoordinator = matchCoordinator,
+            ),
+        )
+
+        bindingRepository.save(
+            binding = binding,
+        )
+
+        assertEquals(
+            true,
+            coordinator
+                .returnActiveOnlineMatchToMainMenuAfterRemoteParticipationAuthorizationLoss(
+                    binding = binding,
+                ),
+        )
+
+        val mainMenuState = coordinator.currentState
+            as DominoSessionState.MainMenu
+
+        assertEquals(
+            null,
+            bindingRepository.getValidBindingOrNull(),
+        )
+        assertEquals(
+            credential,
+            credentialRepository.getStoredCredentialOrNull(),
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection.NotRejected,
+            mainMenuState.pendingOnlineParticipationSessionRejection,
+        )
+    }
+
+    @Test
+    fun authorization_loss_preserves_newer_replacement_binding() {
+        val invalidatedBinding = onlineParticipationBinding(
+            roomId = "room-1",
+            playerId = "player-1",
+        )
+        val replacementBinding = onlineParticipationBinding(
+            roomId = "room-2",
+            playerId = invalidatedBinding.playerId,
+        )
+        val bindingStore = MutableOnlineParticipationBindingStore(
+            binding = null,
+        )
+        val bindingRepository =
+            OnlineParticipationBindingRepository(
+                store = bindingStore,
+            )
+        val credentialRepository =
+            OnlineSessionCredentialRepository(
+                store = MutableOnlineSessionCredentialStore(
+                    credential = validAccountCredential(
+                        playerId = invalidatedBinding.playerId,
+                    ),
+                ),
+                nowEpochMillis = { 0L },
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineSessionCredentialRepository =
+                credentialRepository,
+        )
+        val matchCoordinator =
+            createOnlineMatchCoordinator(
+                binding = invalidatedBinding,
+            )
+
+        coordinator.dispatch(
+            DominoSessionCommand.StartOnlineMatch(
+                matchCoordinator = matchCoordinator,
+            ),
+        )
+
+        bindingRepository.save(
+            binding = replacementBinding,
+        )
+
+        assertEquals(
+            false,
+            coordinator
+                .returnActiveOnlineMatchToMainMenuAfterRemoteParticipationAuthorizationLoss(
+                    binding = invalidatedBinding,
+                ),
+        )
+
+        val mainMenuState = coordinator.currentState
+            as DominoSessionState.MainMenu
+
+        assertEquals(
+            replacementBinding,
+            bindingRepository.getValidBindingOrNull(),
+        )
+        assertEquals(
+            OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation(
+                    binding = replacementBinding,
+                ),
+            mainMenuState.pendingOnlineParticipation,
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection.NotRejected,
+            mainMenuState.pendingOnlineParticipationSessionRejection,
+        )
+    }
+
+    @Test
+    fun authorization_loss_preserves_anonymous_session() {
+        val binding = onlineParticipationBinding(
+            roomId = "room-1",
+            playerId = "player-1",
+        )
+        val bindingStore = MutableOnlineParticipationBindingStore(
+            binding = null,
+        )
+        val bindingRepository =
+            OnlineParticipationBindingRepository(
+                store = bindingStore,
+            )
+        val anonymousSession = validAnonymousSession(
+            playerId = binding.playerId,
+        )
+        val anonymousSessionStore =
+            MutableOnlineAnonymousSessionStore(
+                session = anonymousSession,
+            )
+        val anonymousSessionRepository =
+            OnlineAnonymousSessionRepository(
+                store = anonymousSessionStore,
+                nowEpochMillis = { 0L },
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineAnonymousSessionRepository =
+                anonymousSessionRepository,
+        )
+        val matchCoordinator =
+            createOnlineMatchCoordinator(
+                binding = binding,
+            )
+
+        coordinator.dispatch(
+            DominoSessionCommand.StartOnlineMatch(
+                matchCoordinator = matchCoordinator,
+            ),
+        )
+
+        bindingRepository.save(
+            binding = binding,
+        )
+
+        assertEquals(
+            true,
+            coordinator
+                .returnActiveOnlineMatchToMainMenuAfterRemoteParticipationAuthorizationLoss(
+                    binding = binding,
+                ),
+        )
+
+        val mainMenuState = coordinator.currentState
+            as DominoSessionState.MainMenu
+
+        assertEquals(
+            null,
+            bindingRepository.getValidBindingOrNull(),
+        )
+        assertEquals(
+            anonymousSession,
+            anonymousSessionStore.read(),
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection.NotRejected,
+            mainMenuState.pendingOnlineParticipationSessionRejection,
+        )
+    }
+
+    @Test
     fun active_match_resource_loss_clears_exact_binding_preserves_account_credential_and_is_not_session_rejection() {
         val binding = onlineParticipationBinding(
             roomId = "room-1",

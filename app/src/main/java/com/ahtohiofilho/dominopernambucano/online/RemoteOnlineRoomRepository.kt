@@ -81,6 +81,11 @@ class RemoteOnlineRoomRepository(
             extraBufferCapacity = 8,
         )
 
+    private val mutableActiveMatchParticipationAuthorizationLossEvents =
+        MutableSharedFlow<OnlineActiveMatchParticipationAuthorizationLoss>(
+            extraBufferCapacity = 8,
+        )
+
     private var pollingJob: Job? = null
     private var pollingRoomId: String? = null
     private var activePlayerId: String? = null
@@ -113,6 +118,10 @@ class RemoteOnlineRoomRepository(
     override val activeMatchResourceLossEvents:
         Flow<OnlineActiveMatchResourceLoss> =
         mutableActiveMatchResourceLossEvents.asSharedFlow()
+
+    override val activeMatchParticipationAuthorizationLossEvents:
+        Flow<OnlineActiveMatchParticipationAuthorizationLoss> =
+        mutableActiveMatchParticipationAuthorizationLossEvents.asSharedFlow()
 
     override suspend fun createRoom(
         request: CreateOnlineRoomRequestDto,
@@ -403,24 +412,43 @@ class RemoteOnlineRoomRepository(
                 onFailure = { error ->
                     val remoteSessionRejected =
                         isRemoteSessionRejected(error)
+                    val remoteParticipationForbidden =
+                        isRemoteParticipationForbidden(error)
 
-                    if (remoteSessionRejected) {
-                        invalidateActiveMatchAfterRemoteSessionRejected(
-                            roomId = action.roomId,
-                            matchId = action.matchId,
-                            playerId = action.playerId,
-                            operation = "submit_action",
-                            trigger = "action",
-                        )
-                    } else {
-                        traceTransportFailure(
-                            operation = "submit_action",
-                            error = error,
-                            action = action,
-                            durationMillis = elapsedMillisSince(
-                                startedAtEpochMillis = startedAtEpochMillis,
-                            ),
-                        )
+                    when {
+                        remoteSessionRejected -> {
+                            invalidateActiveMatchAfterRemoteSessionRejected(
+                                roomId = action.roomId,
+                                matchId = action.matchId,
+                                playerId = action.playerId,
+                                operation = "submit_action",
+                                trigger = "action",
+                            )
+                        }
+
+                        remoteParticipationForbidden -> {
+                            invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
+                                roomId = action.roomId,
+                                matchId = action.matchId,
+                                playerId = action.playerId,
+                                reason =
+                                    OnlineActiveMatchParticipationAuthorizationLossReason
+                                        .ACTION_IDENTITY_FORBIDDEN,
+                                operation = "submit_action",
+                                trigger = "action",
+                            )
+                        }
+
+                        else -> {
+                            traceTransportFailure(
+                                operation = "submit_action",
+                                error = error,
+                                action = action,
+                                durationMillis = elapsedMillisSince(
+                                    startedAtEpochMillis = startedAtEpochMillis,
+                                ),
+                            )
+                        }
                     }
 
                     val rejectedResult = rejectedAction(
@@ -437,10 +465,15 @@ class RemoteOnlineRoomRepository(
                         snapshotRevision = rejectedResult.revision,
                         attributes = action.traceAttributes() + mapOf(
                             "reason" to rejectedResult.reason.orEmpty().take(180),
-                            "source" to if (remoteSessionRejected) {
-                                "remote_session_rejected"
-                            } else {
-                                "transport_failure"
+                            "source" to when {
+                                remoteSessionRejected ->
+                                    "remote_session_rejected"
+
+                                remoteParticipationForbidden ->
+                                    "remote_participation_forbidden"
+
+                                else ->
+                                    "transport_failure"
                             },
                         ),
                     )
@@ -1523,6 +1556,14 @@ class RemoteOnlineRoomRepository(
                 io.ktor.http.HttpStatusCode.Unauthorized
     }
 
+    private fun isRemoteParticipationForbidden(
+        error: Throwable,
+    ): Boolean {
+        return error is io.ktor.client.plugins.ClientRequestException &&
+                error.response.status ==
+                io.ktor.http.HttpStatusCode.Forbidden
+    }
+
     private fun isRemoteResourceNotFound(
         error: Throwable,
     ): Boolean {
@@ -1595,6 +1636,81 @@ class RemoteOnlineRoomRepository(
                 roomId = resolvedRoomId,
                 matchId = resolvedMatchId,
                 playerId = resolvedPlayerId,
+            ),
+        )
+
+        return true
+    }
+
+    private fun invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
+        roomId: String?,
+        matchId: String?,
+        playerId: String?,
+        reason: OnlineActiveMatchParticipationAuthorizationLossReason,
+        operation: String,
+        trigger: String,
+    ): Boolean {
+        trace(
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.POLLING_FAILED,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            attributes = mapOf(
+                "operation" to operation,
+                "trigger" to trigger,
+                "source" to "remote_participation_forbidden",
+                "reason" to "remote_http_403",
+                "authorizationLossReason" to reason.name,
+            ),
+        )
+
+        val published = publishActiveMatchParticipationAuthorizationLoss(
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            reason = reason,
+        )
+
+        if (published) {
+            stopPolling(
+                reason = "active_participation_forbidden",
+            )
+        }
+
+        return published
+    }
+
+    private fun publishActiveMatchParticipationAuthorizationLoss(
+        roomId: String?,
+        matchId: String?,
+        playerId: String?,
+        reason: OnlineActiveMatchParticipationAuthorizationLossReason,
+    ): Boolean {
+        val resolvedRoomId = roomId
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return false
+
+        val resolvedMatchId = matchId
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return false
+
+        val resolvedPlayerId = playerId
+            ?.takeIf { value ->
+                value.isNotBlank()
+            }
+            ?: return false
+
+        mutableActiveMatchParticipationAuthorizationLossEvents.tryEmit(
+            OnlineActiveMatchParticipationAuthorizationLoss(
+                roomId = resolvedRoomId,
+                matchId = resolvedMatchId,
+                playerId = resolvedPlayerId,
+                reason = reason,
             ),
         )
 
@@ -1760,6 +1876,20 @@ class RemoteOnlineRoomRepository(
                 return null
             }
 
+            if (isRemoteParticipationForbidden(error)) {
+                invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
+                    roomId = roomId,
+                    matchId = latestMatchId,
+                    playerId = resolvedPlayerId,
+                    reason =
+                        OnlineActiveMatchParticipationAuthorizationLossReason
+                            .ROOM_PARTICIPATION_FORBIDDEN,
+                    operation = "fetch_room_snapshot",
+                    trigger = trigger,
+                )
+                return null
+            }
+
             if (isRemoteResourceNotFound(error)) {
                 invalidateActiveMatchAfterRemoteResourceLoss(
                     roomId = roomId,
@@ -1888,6 +2018,20 @@ class RemoteOnlineRoomRepository(
                     roomId = roomId,
                     matchId = matchId,
                     playerId = playerId,
+                    operation = "fetch_match_snapshot",
+                    trigger = trigger,
+                )
+                return
+            }
+
+            if (isRemoteParticipationForbidden(error)) {
+                invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
+                    roomId = roomId,
+                    matchId = matchId,
+                    playerId = playerId,
+                    reason =
+                        OnlineActiveMatchParticipationAuthorizationLossReason
+                            .MATCH_PARTICIPATION_FORBIDDEN,
                     operation = "fetch_match_snapshot",
                     trigger = trigger,
                 )
@@ -2023,6 +2167,20 @@ class RemoteOnlineRoomRepository(
                     roomId = roomId,
                     matchId = matchId,
                     playerId = playerId,
+                    operation = "fetch_match_updates",
+                    trigger = trigger,
+                )
+                return
+            }
+
+            if (isRemoteParticipationForbidden(error)) {
+                invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
+                    roomId = roomId,
+                    matchId = matchId,
+                    playerId = playerId,
+                    reason =
+                        OnlineActiveMatchParticipationAuthorizationLossReason
+                            .MATCH_PARTICIPATION_FORBIDDEN,
                     operation = "fetch_match_updates",
                     trigger = trigger,
                 )

@@ -26,6 +26,19 @@ data class OnlineActiveMatchResourceLoss(
     val reason: OnlineActiveMatchResourceLossReason,
 )
 
+enum class OnlineActiveMatchParticipationAuthorizationLossReason {
+    ROOM_PARTICIPATION_FORBIDDEN,
+    MATCH_PARTICIPATION_FORBIDDEN,
+    ACTION_IDENTITY_FORBIDDEN,
+}
+
+data class OnlineActiveMatchParticipationAuthorizationLoss(
+    val roomId: String,
+    val matchId: String,
+    val playerId: String,
+    val reason: OnlineActiveMatchParticipationAuthorizationLossReason,
+)
+
 interface OnlineRoomRepository {
     val roomSnapshot: StateFlow<OnlineRoomSnapshotDto?>
 
@@ -44,6 +57,10 @@ interface OnlineRoomRepository {
 
     val activeMatchResourceLossEvents:
         Flow<OnlineActiveMatchResourceLoss>
+        get() = emptyFlow()
+
+    val activeMatchParticipationAuthorizationLossEvents:
+        Flow<OnlineActiveMatchParticipationAuthorizationLoss>
         get() = emptyFlow()
 
     suspend fun createRoom(
