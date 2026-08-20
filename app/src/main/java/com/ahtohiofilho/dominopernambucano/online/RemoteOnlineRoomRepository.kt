@@ -91,6 +91,16 @@ class RemoteOnlineRoomRepository(
     private var activePlayerId: String? = null
     private var activeSessionCredential: OnlineSessionCredential? = null
 
+private var consecutiveReadRateLimits: Int = 0
+private var readRateLimitBackoffMillis: Long? = null
+
+private enum class ActiveReadRefreshOutcome {
+    SUCCESS,
+    RATE_LIMITED,
+    OTHER_FAILURE,
+    TERMINAL,
+}
+
     private data class PreparedRoomParticipant(
         val playerId: String,
         val sessionCredential: OnlineSessionCredential? = null,
@@ -414,6 +424,8 @@ class RemoteOnlineRoomRepository(
                         isRemoteSessionRejected(error)
                     val remoteParticipationForbidden =
                         isRemoteParticipationForbidden(error)
+                    val remoteRateLimited =
+                        isRemoteRateLimited(error)
 
                     when {
                         remoteSessionRejected -> {
@@ -438,6 +450,8 @@ class RemoteOnlineRoomRepository(
                                 trigger = "action",
                             )
                         }
+
+                        remoteRateLimited -> Unit
 
                         else -> {
                             traceTransportFailure(
@@ -471,6 +485,9 @@ class RemoteOnlineRoomRepository(
 
                                 remoteParticipationForbidden ->
                                     "remote_participation_forbidden"
+
+                                remoteRateLimited ->
+                                    "remote_rate_limited"
 
                                 else ->
                                     "transport_failure"
@@ -1471,6 +1488,7 @@ class RemoteOnlineRoomRepository(
             reason = "replaced",
         )
 
+        resetReadRateLimitBackoff()
         pollingRoomId = roomId
 
         trace(
@@ -1484,7 +1502,7 @@ class RemoteOnlineRoomRepository(
 
         pollingJob = repositoryScope.launch {
             while (isActive) {
-                delay(pollingPolicy.intervalMillis)
+                delayBeforePollingRefresh()
 
                 refreshMutex.withLock {
                     val playerId = activePlayerId
@@ -1547,6 +1565,132 @@ class RemoteOnlineRoomRepository(
             }
         }
     }
+
+private suspend fun delayBeforePollingRefresh() {
+    val baseDelayMillis = pollingPolicy.intervalMillis
+        .coerceAtLeast(0L)
+
+    delay(baseDelayMillis)
+
+    val cooperativeDelayMillis =
+        readRateLimitBackoffMillis
+            ?: return
+
+    val additionalDelayMillis =
+        (cooperativeDelayMillis - baseDelayMillis)
+            .coerceAtLeast(0L)
+
+    if (additionalDelayMillis > 0L) {
+        delay(additionalDelayMillis)
+    }
+}
+
+private fun isRemoteRateLimited(
+    error: Throwable,
+): Boolean {
+    return error is io.ktor.client.plugins.ClientRequestException &&
+            error.response.status ==
+            io.ktor.http.HttpStatusCode.TooManyRequests
+}
+
+private fun handleRemoteReadRateLimit(
+    error: Throwable,
+    roomId: String?,
+    matchId: String?,
+    playerId: String?,
+    operation: String,
+    trigger: String,
+    durationMillis: Long,
+): Boolean {
+    if (!isRemoteRateLimited(error)) {
+        return false
+    }
+
+    consecutiveReadRateLimits =
+        (consecutiveReadRateLimits + 1)
+            .coerceAtMost(30)
+
+    val retryAfterMillis =
+        retryAfterMillisOrNull(
+            error = error,
+        )
+
+    val backoffMillis =
+        pollingPolicy.calculateRateLimitBackoffMillis(
+            consecutiveRateLimits = consecutiveReadRateLimits,
+            retryAfterMillis = retryAfterMillis,
+        )
+
+    readRateLimitBackoffMillis = backoffMillis
+
+    val attributes = mapOf(
+        "operation" to operation,
+        "trigger" to trigger,
+        "source" to "remote_rate_limited",
+        "reason" to "remote_http_429",
+        "consecutiveRateLimits" to
+                consecutiveReadRateLimits.toString(),
+        "retryAfterMillis" to
+                (retryAfterMillis?.toString() ?: "null"),
+        "backoffMillis" to backoffMillis.toString(),
+        "durationMillis" to durationMillis.toString(),
+    )
+
+    trace(
+        level = OnlineTraceLevel.WARN,
+        type = OnlineTraceType.TRANSPORT_FAILURE,
+        roomId = roomId,
+        matchId = matchId,
+        playerId = playerId,
+        attributes = attributes,
+    )
+
+    if (trigger == "polling") {
+        trace(
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.POLLING_FAILED,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            attributes = attributes,
+        )
+    }
+
+    return true
+}
+
+private fun retryAfterMillisOrNull(
+    error: Throwable,
+): Long? {
+    val response = (
+        error as? io.ktor.client.plugins.ClientRequestException
+    )?.response ?: return null
+
+    val rawValue = response.headers[
+        io.ktor.http.HttpHeaders.RetryAfter
+    ]
+        ?.trim()
+        ?.takeIf { value ->
+            value.isNotBlank()
+        }
+        ?: return null
+
+    val seconds = rawValue
+        .toLongOrNull()
+        ?.takeIf { value ->
+            value >= 0L
+        }
+        ?: return null
+
+    return seconds
+        .coerceAtMost(Long.MAX_VALUE / 1_000L) *
+            1_000L
+}
+
+private fun resetReadRateLimitBackoff() {
+    consecutiveReadRateLimits = 0
+    readRateLimitBackoffMillis = null
+}
 
     private fun isRemoteSessionRejected(
         error: Throwable,
@@ -1814,179 +1958,359 @@ class RemoteOnlineRoomRepository(
         }
     }
 
-    private suspend fun refreshSnapshots(
-        client: RemoteOnlineApiClient,
-        roomId: String,
-        fallbackMatchId: String?,
-        trigger: String,
-        playerId: String?,
-    ): OnlineRoomStatusDto? {
-        val resolvedPlayerId = playerId ?: activePlayerId
+private suspend fun refreshSnapshots(
+    client: RemoteOnlineApiClient,
+    roomId: String,
+    fallbackMatchId: String?,
+    trigger: String,
+    playerId: String?,
+): OnlineRoomStatusDto? {
+    val resolvedPlayerId = playerId ?: activePlayerId
 
-        var latestMatchId =
-            fallbackMatchId
-                ?: mutableMatchSnapshot.value?.matchId
-                ?: mutableRoomSnapshot.value?.matchId
-        var latestRoomStatus: OnlineRoomStatusDto? = null
+    var latestMatchId =
+        fallbackMatchId
+            ?: mutableMatchSnapshot.value?.matchId
+            ?: mutableRoomSnapshot.value?.matchId
+    var latestRoomStatus: OnlineRoomStatusDto? = null
+    var roomReadSucceeded = false
 
-        val roomRequestStartedAtEpochMillis = nowEpochMillis()
+    val roomRequestStartedAtEpochMillis = nowEpochMillis()
+
+    trace(
+        level = OnlineTraceLevel.DEBUG,
+        type = OnlineTraceType.SNAPSHOT_REQUESTED,
+        roomId = roomId,
+        matchId = fallbackMatchId,
+        playerId = resolvedPlayerId,
+        attributes = mapOf(
+            "snapshotKind" to "room",
+            "trigger" to trigger,
+        ),
+    )
+
+    try {
+        val room = client.fetchRoomSnapshot(roomId)
+
+        mutableRoomSnapshot.value = room
+        latestRoomStatus = room.status
+        latestMatchId = room.matchId ?: latestMatchId
+        roomReadSucceeded = true
 
         trace(
             level = OnlineTraceLevel.DEBUG,
-            type = OnlineTraceType.SNAPSHOT_REQUESTED,
-            roomId = roomId,
-            matchId = fallbackMatchId,
+            type = OnlineTraceType.SNAPSHOT_RECEIVED,
+            roomId = room.roomId,
+            matchId = room.matchId ?: latestMatchId,
             playerId = resolvedPlayerId,
-            attributes = mapOf(
-                "snapshotKind" to "room",
-                "trigger" to trigger,
+            attributes = room.traceAttributes(
+                trigger = trigger,
+            ) + mapOf(
+                "durationMillis" to elapsedMillisSince(
+                    startedAtEpochMillis =
+                        roomRequestStartedAtEpochMillis,
+                ).toString(),
             ),
         )
-
-        try {
-            val room = client.fetchRoomSnapshot(roomId)
-
-            mutableRoomSnapshot.value = room
-            latestRoomStatus = room.status
-            latestMatchId = room.matchId ?: latestMatchId
-
-            trace(
-                level = OnlineTraceLevel.DEBUG,
-                type = OnlineTraceType.SNAPSHOT_RECEIVED,
-                roomId = room.roomId,
-                matchId = room.matchId ?: latestMatchId,
+    } catch (error: Throwable) {
+        if (isRemoteSessionRejected(error)) {
+            invalidateActiveMatchAfterRemoteSessionRejected(
+                roomId = roomId,
+                matchId = latestMatchId,
                 playerId = resolvedPlayerId,
-                attributes = room.traceAttributes(
-                    trigger = trigger,
-                ) + mapOf(
-                    "durationMillis" to elapsedMillisSince(
-                        startedAtEpochMillis = roomRequestStartedAtEpochMillis,
-                    ).toString(),
-                ),
-            )
-        } catch (error: Throwable) {
-            if (isRemoteSessionRejected(error)) {
-                invalidateActiveMatchAfterRemoteSessionRejected(
-                    roomId = roomId,
-                    matchId = latestMatchId,
-                    playerId = resolvedPlayerId,
-                    operation = "fetch_room_snapshot",
-                    trigger = trigger,
-                )
-                return null
-            }
-
-            if (isRemoteParticipationForbidden(error)) {
-                invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
-                    roomId = roomId,
-                    matchId = latestMatchId,
-                    playerId = resolvedPlayerId,
-                    reason =
-                        OnlineActiveMatchParticipationAuthorizationLossReason
-                            .ROOM_PARTICIPATION_FORBIDDEN,
-                    operation = "fetch_room_snapshot",
-                    trigger = trigger,
-                )
-                return null
-            }
-
-            if (isRemoteResourceNotFound(error)) {
-                invalidateActiveMatchAfterRemoteResourceLoss(
-                    roomId = roomId,
-                    matchId = latestMatchId,
-                    playerId = resolvedPlayerId,
-                    reason =
-                        OnlineActiveMatchResourceLossReason.ROOM_NOT_FOUND,
-                    operation = "fetch_room_snapshot",
-                    trigger = trigger,
-                )
-                return null
-            }
-
-            traceTransportFailure(
                 operation = "fetch_room_snapshot",
+                trigger = trigger,
+            )
+            return null
+        }
+
+        if (isRemoteParticipationForbidden(error)) {
+            invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
+                roomId = roomId,
+                matchId = latestMatchId,
+                playerId = resolvedPlayerId,
+                reason =
+                    OnlineActiveMatchParticipationAuthorizationLossReason
+                        .ROOM_PARTICIPATION_FORBIDDEN,
+                operation = "fetch_room_snapshot",
+                trigger = trigger,
+            )
+            return null
+        }
+
+        if (isRemoteResourceNotFound(error)) {
+            invalidateActiveMatchAfterRemoteResourceLoss(
+                roomId = roomId,
+                matchId = latestMatchId,
+                playerId = resolvedPlayerId,
+                reason =
+                    OnlineActiveMatchResourceLossReason.ROOM_NOT_FOUND,
+                operation = "fetch_room_snapshot",
+                trigger = trigger,
+            )
+            return null
+        }
+
+        if (
+            handleRemoteReadRateLimit(
                 error = error,
                 roomId = roomId,
                 matchId = latestMatchId,
                 playerId = resolvedPlayerId,
+                operation = "fetch_room_snapshot",
+                trigger = trigger,
                 durationMillis = elapsedMillisSince(
-                    startedAtEpochMillis = roomRequestStartedAtEpochMillis,
+                    startedAtEpochMillis =
+                        roomRequestStartedAtEpochMillis,
                 ),
-                trigger = trigger,
             )
+        ) {
+            return null
         }
 
-        val matchId = latestMatchId
-        if (matchId != null) {
-            fetchAndPublishMatchSnapshot(
-                client = client,
-                roomId = roomId,
-                matchId = matchId,
-                trigger = trigger,
-                playerId = resolvedPlayerId,
-            )
-        }
-
-        return latestRoomStatus
+        traceTransportFailure(
+            operation = "fetch_room_snapshot",
+            error = error,
+            roomId = roomId,
+            matchId = latestMatchId,
+            playerId = resolvedPlayerId,
+            durationMillis = elapsedMillisSince(
+                startedAtEpochMillis =
+                    roomRequestStartedAtEpochMillis,
+            ),
+            trigger = trigger,
+        )
     }
 
-    private suspend fun fetchAndPublishMatchSnapshot(
-        client: RemoteOnlineApiClient,
-        roomId: String,
-        matchId: String,
-        trigger: String,
-        playerId: String?,
-    ) {
-        val currentSnapshot = mutableMatchSnapshot.value
-
-        if (
-            currentSnapshot == null ||
-            currentSnapshot.matchId != matchId
-        ) {
-            fetchAndPublishLatestMatchSnapshot(
-                client = client,
-                roomId = roomId,
-                matchId = matchId,
-                trigger = trigger,
-                playerId = playerId,
-            )
-            return
-        }
-
-        fetchAndPublishMatchSnapshotsAfter(
+    val matchId = latestMatchId
+    val matchReadOutcome = if (matchId != null) {
+        fetchAndPublishMatchSnapshot(
             client = client,
             roomId = roomId,
             matchId = matchId,
-            afterRevision = currentSnapshot.revision,
+            trigger = trigger,
+            playerId = resolvedPlayerId,
+        )
+    } else {
+        ActiveReadRefreshOutcome.SUCCESS
+    }
+
+    if (
+        roomReadSucceeded &&
+        matchReadOutcome == ActiveReadRefreshOutcome.SUCCESS
+    ) {
+        resetReadRateLimitBackoff()
+    }
+
+    return latestRoomStatus
+}
+
+private suspend fun fetchAndPublishMatchSnapshot(
+    client: RemoteOnlineApiClient,
+    roomId: String,
+    matchId: String,
+    trigger: String,
+    playerId: String?,
+): ActiveReadRefreshOutcome {
+    val currentSnapshot = mutableMatchSnapshot.value
+
+    if (
+        currentSnapshot == null ||
+        currentSnapshot.matchId != matchId
+    ) {
+        return fetchAndPublishLatestMatchSnapshot(
+            client = client,
+            roomId = roomId,
+            matchId = matchId,
             trigger = trigger,
             playerId = playerId,
         )
     }
 
-    private suspend fun fetchAndPublishLatestMatchSnapshot(
-        client: RemoteOnlineApiClient,
-        roomId: String,
-        matchId: String,
-        trigger: String,
-        playerId: String?,
-    ) {
-        val startedAtEpochMillis = nowEpochMillis()
+    return fetchAndPublishMatchSnapshotsAfter(
+        client = client,
+        roomId = roomId,
+        matchId = matchId,
+        afterRevision = currentSnapshot.revision,
+        trigger = trigger,
+        playerId = playerId,
+    )
+}
+
+private suspend fun fetchAndPublishLatestMatchSnapshot(
+    client: RemoteOnlineApiClient,
+    roomId: String,
+    matchId: String,
+    trigger: String,
+    playerId: String?,
+): ActiveReadRefreshOutcome {
+    val startedAtEpochMillis = nowEpochMillis()
+
+    trace(
+        level = OnlineTraceLevel.DEBUG,
+        type = OnlineTraceType.SNAPSHOT_REQUESTED,
+        roomId = roomId,
+        matchId = matchId,
+        playerId = playerId,
+        attributes = mapOf(
+            "snapshotKind" to "match",
+            "trigger" to trigger,
+        ),
+    )
+
+    try {
+        val match = client.fetchMatchSnapshot(matchId)
 
         trace(
             level = OnlineTraceLevel.DEBUG,
-            type = OnlineTraceType.SNAPSHOT_REQUESTED,
+            type = OnlineTraceType.SNAPSHOT_RECEIVED,
             roomId = roomId,
-            matchId = matchId,
+            matchId = match.matchId,
             playerId = playerId,
-            attributes = mapOf(
-                "snapshotKind" to "match",
-                "trigger" to trigger,
+            snapshotRevision = match.revision,
+            attributes = match.traceAttributes(
+                trigger = trigger,
+            ) + mapOf(
+                "durationMillis" to elapsedMillisSince(
+                    startedAtEpochMillis = startedAtEpochMillis,
+                ).toString(),
             ),
         )
 
-        try {
-            val match = client.fetchMatchSnapshot(matchId)
+        publishMatchSnapshotIfNewer(
+            snapshot = match,
+            trigger = trigger,
+            playerId = playerId,
+        )
 
+        return ActiveReadRefreshOutcome.SUCCESS
+    } catch (error: Throwable) {
+        if (error is CancellationException) {
+            throw error
+        }
+
+        if (isRemoteSessionRejected(error)) {
+            invalidateActiveMatchAfterRemoteSessionRejected(
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                operation = "fetch_match_snapshot",
+                trigger = trigger,
+            )
+            return ActiveReadRefreshOutcome.TERMINAL
+        }
+
+        if (isRemoteParticipationForbidden(error)) {
+            invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                reason =
+                    OnlineActiveMatchParticipationAuthorizationLossReason
+                        .MATCH_PARTICIPATION_FORBIDDEN,
+                operation = "fetch_match_snapshot",
+                trigger = trigger,
+            )
+            return ActiveReadRefreshOutcome.TERMINAL
+        }
+
+        if (isRemoteResourceNotFound(error)) {
+            invalidateActiveMatchAfterRemoteResourceLoss(
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                reason =
+                    OnlineActiveMatchResourceLossReason.MATCH_NOT_FOUND,
+                operation = "fetch_match_snapshot",
+                trigger = trigger,
+            )
+            return ActiveReadRefreshOutcome.TERMINAL
+        }
+
+        if (
+            handleRemoteReadRateLimit(
+                error = error,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                operation = "fetch_match_snapshot",
+                trigger = trigger,
+                durationMillis = elapsedMillisSince(
+                    startedAtEpochMillis = startedAtEpochMillis,
+                ),
+            )
+        ) {
+            return ActiveReadRefreshOutcome.RATE_LIMITED
+        }
+
+        traceTransportFailure(
+            operation = "fetch_match_snapshot",
+            error = error,
+            roomId = roomId,
+            matchId = matchId,
+            playerId = playerId,
+            durationMillis = elapsedMillisSince(
+                startedAtEpochMillis = startedAtEpochMillis,
+            ),
+            trigger = trigger,
+        )
+
+        return ActiveReadRefreshOutcome.OTHER_FAILURE
+    }
+}
+
+private suspend fun fetchAndPublishMatchSnapshotsAfter(
+    client: RemoteOnlineApiClient,
+    roomId: String,
+    matchId: String,
+    afterRevision: Long,
+    trigger: String,
+    playerId: String?,
+): ActiveReadRefreshOutcome {
+    val startedAtEpochMillis = nowEpochMillis()
+
+    trace(
+        level = OnlineTraceLevel.DEBUG,
+        type = OnlineTraceType.SNAPSHOT_REQUESTED,
+        roomId = roomId,
+        matchId = matchId,
+        playerId = playerId,
+        attributes = mapOf(
+            "snapshotKind" to "match_updates",
+            "trigger" to trigger,
+            "afterRevision" to afterRevision.toString(),
+        ),
+    )
+
+    try {
+        val snapshots = client.fetchMatchSnapshotsAfter(
+            matchId = matchId,
+            afterRevision = afterRevision,
+        ).sortedBy { snapshot ->
+            snapshot.revision
+        }
+
+        val firstRevision = snapshots.firstOrNull()?.revision
+        if (
+            firstRevision != null &&
+            firstRevision != afterRevision + 1L
+        ) {
+            trace(
+                level = OnlineTraceLevel.WARN,
+                type = OnlineTraceType.INVARIANT_VIOLATION,
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                snapshotRevision = firstRevision,
+                attributes = mapOf(
+                    "reason" to "revision_gap_in_match_updates",
+                    "afterRevision" to afterRevision.toString(),
+                    "firstReceivedRevision" to
+                            firstRevision.toString(),
+                ),
+            )
+        }
+
+        snapshots.forEach { match ->
             trace(
                 level = OnlineTraceLevel.DEBUG,
                 type = OnlineTraceType.SNAPSHOT_RECEIVED,
@@ -1997,222 +2321,112 @@ class RemoteOnlineRoomRepository(
                 attributes = match.traceAttributes(
                     trigger = trigger,
                 ) + mapOf(
+                    "snapshotKind" to "match_updates",
+                    "afterRevision" to afterRevision.toString(),
+                    "batchSize" to snapshots.size.toString(),
                     "durationMillis" to elapsedMillisSince(
                         startedAtEpochMillis = startedAtEpochMillis,
                     ).toString(),
                 ),
             )
+        }
 
+        /*
+         * Um lote contínuo é histórico autoritativo recuperável, não
+         * desync. Preserve cada revisão no SharedFlow para que o
+         * coordenador decida, a partir da dívida visual real, entre
+         * replay FIFO, compactação da cauda ou ressincronização dura.
+         *
+         * O StateFlow ainda converge para a última revisão porque cada
+         * publicação atualiza o estado autoritativo mais recente.
+         */
+        snapshots.forEach { snapshot ->
             publishMatchSnapshotIfNewer(
-                snapshot = match,
-                trigger = trigger,
+                snapshot = snapshot,
+                trigger = if (snapshots.size > 1) {
+                    "$trigger:incremental_history_batch"
+                } else {
+                    trigger
+                },
                 playerId = playerId,
             )
-        } catch (error: Throwable) {
-            if (error is CancellationException) {
-                throw error
-            }
+        }
 
-            if (isRemoteSessionRejected(error)) {
-                invalidateActiveMatchAfterRemoteSessionRejected(
-                    roomId = roomId,
-                    matchId = matchId,
-                    playerId = playerId,
-                    operation = "fetch_match_snapshot",
-                    trigger = trigger,
-                )
-                return
-            }
+        return ActiveReadRefreshOutcome.SUCCESS
+    } catch (error: Throwable) {
+        if (error is CancellationException) {
+            throw error
+        }
 
-            if (isRemoteParticipationForbidden(error)) {
-                invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
-                    roomId = roomId,
-                    matchId = matchId,
-                    playerId = playerId,
-                    reason =
-                        OnlineActiveMatchParticipationAuthorizationLossReason
-                            .MATCH_PARTICIPATION_FORBIDDEN,
-                    operation = "fetch_match_snapshot",
-                    trigger = trigger,
-                )
-                return
-            }
+        if (isRemoteSessionRejected(error)) {
+            invalidateActiveMatchAfterRemoteSessionRejected(
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                operation = "fetch_match_updates",
+                trigger = trigger,
+            )
+            return ActiveReadRefreshOutcome.TERMINAL
+        }
 
-            if (isRemoteResourceNotFound(error)) {
-                invalidateActiveMatchAfterRemoteResourceLoss(
-                    roomId = roomId,
-                    matchId = matchId,
-                    playerId = playerId,
-                    reason =
-                        OnlineActiveMatchResourceLossReason.MATCH_NOT_FOUND,
-                    operation = "fetch_match_snapshot",
-                    trigger = trigger,
-                )
-                return
-            }
+        if (isRemoteParticipationForbidden(error)) {
+            invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                reason =
+                    OnlineActiveMatchParticipationAuthorizationLossReason
+                        .MATCH_PARTICIPATION_FORBIDDEN,
+                operation = "fetch_match_updates",
+                trigger = trigger,
+            )
+            return ActiveReadRefreshOutcome.TERMINAL
+        }
 
-            traceTransportFailure(
-                operation = "fetch_match_snapshot",
+        if (isRemoteResourceNotFound(error)) {
+            invalidateActiveMatchAfterRemoteResourceLoss(
+                roomId = roomId,
+                matchId = matchId,
+                playerId = playerId,
+                reason =
+                    OnlineActiveMatchResourceLossReason.MATCH_NOT_FOUND,
+                operation = "fetch_match_updates",
+                trigger = trigger,
+            )
+            return ActiveReadRefreshOutcome.TERMINAL
+        }
+
+        if (
+            handleRemoteReadRateLimit(
                 error = error,
                 roomId = roomId,
                 matchId = matchId,
                 playerId = playerId,
+                operation = "fetch_match_updates",
+                trigger = trigger,
                 durationMillis = elapsedMillisSince(
                     startedAtEpochMillis = startedAtEpochMillis,
                 ),
-                trigger = trigger,
             )
+        ) {
+            return ActiveReadRefreshOutcome.RATE_LIMITED
         }
-    }
 
-    private suspend fun fetchAndPublishMatchSnapshotsAfter(
-        client: RemoteOnlineApiClient,
-        roomId: String,
-        matchId: String,
-        afterRevision: Long,
-        trigger: String,
-        playerId: String?,
-    ) {
-        val startedAtEpochMillis = nowEpochMillis()
-
-        trace(
-            level = OnlineTraceLevel.DEBUG,
-            type = OnlineTraceType.SNAPSHOT_REQUESTED,
+        traceTransportFailure(
+            operation = "fetch_match_updates",
+            error = error,
             roomId = roomId,
             matchId = matchId,
             playerId = playerId,
-            attributes = mapOf(
-                "snapshotKind" to "match_updates",
-                "trigger" to trigger,
-                "afterRevision" to afterRevision.toString(),
+            durationMillis = elapsedMillisSince(
+                startedAtEpochMillis = startedAtEpochMillis,
             ),
+            trigger = trigger,
         )
 
-        try {
-            val snapshots = client.fetchMatchSnapshotsAfter(
-                matchId = matchId,
-                afterRevision = afterRevision,
-            ).sortedBy { snapshot ->
-                snapshot.revision
-            }
-
-            val firstRevision = snapshots.firstOrNull()?.revision
-            if (
-                firstRevision != null &&
-                firstRevision != afterRevision + 1L
-            ) {
-                trace(
-                    level = OnlineTraceLevel.WARN,
-                    type = OnlineTraceType.INVARIANT_VIOLATION,
-                    roomId = roomId,
-                    matchId = matchId,
-                    playerId = playerId,
-                    snapshotRevision = firstRevision,
-                    attributes = mapOf(
-                        "reason" to "revision_gap_in_match_updates",
-                        "afterRevision" to afterRevision.toString(),
-                        "firstReceivedRevision" to firstRevision.toString(),
-                    ),
-                )
-            }
-
-            snapshots.forEach { match ->
-                trace(
-                    level = OnlineTraceLevel.DEBUG,
-                    type = OnlineTraceType.SNAPSHOT_RECEIVED,
-                    roomId = roomId,
-                    matchId = match.matchId,
-                    playerId = playerId,
-                    snapshotRevision = match.revision,
-                    attributes = match.traceAttributes(
-                        trigger = trigger,
-                    ) + mapOf(
-                        "snapshotKind" to "match_updates",
-                        "afterRevision" to afterRevision.toString(),
-                        "batchSize" to snapshots.size.toString(),
-                        "durationMillis" to elapsedMillisSince(
-                            startedAtEpochMillis = startedAtEpochMillis,
-                        ).toString(),
-                    ),
-                )
-            }
-
-            /*
-             * Um lote contínuo é histórico autoritativo recuperável, não
-             * desync. Preserve cada revisão no SharedFlow para que o
-             * coordenador decida, a partir da dívida visual real, entre
-             * replay FIFO, compactação da cauda ou ressincronização dura.
-             *
-             * O StateFlow ainda converge para a última revisão porque cada
-             * publicação atualiza o estado autoritativo mais recente.
-             */
-            snapshots.forEach { snapshot ->
-                publishMatchSnapshotIfNewer(
-                    snapshot = snapshot,
-                    trigger = if (snapshots.size > 1) {
-                        "$trigger:incremental_history_batch"
-                    } else {
-                        trigger
-                    },
-                    playerId = playerId,
-                )
-            }
-        } catch (error: Throwable) {
-            if (error is CancellationException) {
-                throw error
-            }
-
-            if (isRemoteSessionRejected(error)) {
-                invalidateActiveMatchAfterRemoteSessionRejected(
-                    roomId = roomId,
-                    matchId = matchId,
-                    playerId = playerId,
-                    operation = "fetch_match_updates",
-                    trigger = trigger,
-                )
-                return
-            }
-
-            if (isRemoteParticipationForbidden(error)) {
-                invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
-                    roomId = roomId,
-                    matchId = matchId,
-                    playerId = playerId,
-                    reason =
-                        OnlineActiveMatchParticipationAuthorizationLossReason
-                            .MATCH_PARTICIPATION_FORBIDDEN,
-                    operation = "fetch_match_updates",
-                    trigger = trigger,
-                )
-                return
-            }
-
-            if (isRemoteResourceNotFound(error)) {
-                invalidateActiveMatchAfterRemoteResourceLoss(
-                    roomId = roomId,
-                    matchId = matchId,
-                    playerId = playerId,
-                    reason =
-                        OnlineActiveMatchResourceLossReason.MATCH_NOT_FOUND,
-                    operation = "fetch_match_updates",
-                    trigger = trigger,
-                )
-                return
-            }
-
-            traceTransportFailure(
-                operation = "fetch_match_updates",
-                error = error,
-                roomId = roomId,
-                matchId = matchId,
-                playerId = playerId,
-                durationMillis = elapsedMillisSince(
-                    startedAtEpochMillis = startedAtEpochMillis,
-                ),
-                trigger = trigger,
-            )
-        }
+        return ActiveReadRefreshOutcome.OTHER_FAILURE
     }
+}
 
     private fun shouldRefreshAfterRejectedAction(
         action: OnlinePlayerActionDto,

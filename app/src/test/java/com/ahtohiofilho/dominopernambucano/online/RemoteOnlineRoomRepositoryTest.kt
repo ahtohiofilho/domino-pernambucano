@@ -19,7 +19,9 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.request.get
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -4861,6 +4863,730 @@ class RemoteOnlineRoomRepositoryTest {
             )
         }
 
+@Test
+fun polling_room_snapshot_remote_429_aborts_remaining_refresh_cycle_and_arms_backoff() =
+    runBlocking {
+        val room = createInMatchRoomSnapshot()
+        val match = createMatchSnapshot(
+            revision = 1L,
+        )
+        val session = createAnonymousSession(
+            playerId = "player-1",
+        )
+        val traceBuffer = InMemoryOnlineTraceBuffer()
+        val apiClient = FakeRemoteOnlineApiClient(
+            createRoomResult = OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = room,
+                localSeatIndex = 0,
+            ),
+            fetchRoomSnapshotFailure =
+                createTooManyRequestsClientRequestException(),
+            matchSnapshotsById = mutableMapOf(
+                match.matchId to match,
+            ),
+        )
+        val repository = createRepository(
+            apiClient = apiClient,
+            pollingPolicy = OnlineRemotePollingPolicy(
+                enabled = true,
+                intervalMillis = 100L,
+            ),
+            coroutineDispatcher = Dispatchers.Default,
+            traceLogger = createTraceLogger(traceBuffer),
+            anonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    session = session,
+                ),
+        )
+
+        repository.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = session.playerId,
+                playerName = "Jogador 1",
+            ),
+        )
+
+        val sessionInvalidationDeferred = async(
+            start = CoroutineStart.UNDISPATCHED,
+        ) {
+            repository.activeMatchSessionInvalidationEvents.first()
+        }
+        val authorizationLossDeferred = async(
+            start = CoroutineStart.UNDISPATCHED,
+        ) {
+            repository
+                .activeMatchParticipationAuthorizationLossEvents
+                .first()
+        }
+        val resourceLossDeferred = async(
+            start = CoroutineStart.UNDISPATCHED,
+        ) {
+            repository.activeMatchResourceLossEvents.first()
+        }
+
+        val rateLimitEntry = withTimeout(2_000L) {
+            while (true) {
+                traceBuffer.snapshot().firstOrNull { entry ->
+                    entry.event.type ==
+                        OnlineTraceType.TRANSPORT_FAILURE &&
+                            entry.event.attributes["source"] ==
+                            "remote_rate_limited" &&
+                            entry.event.attributes["operation"] ==
+                            "fetch_room_snapshot"
+                }?.let { entry ->
+                    return@withTimeout entry
+                }
+                delay(10L)
+            }
+            error("unreachable")
+        }
+
+        assertEquals(
+            "1",
+            rateLimitEntry.event.attributes[
+                "consecutiveRateLimits"
+            ],
+        )
+        assertEquals(
+            "200",
+            rateLimitEntry.event.attributes["backoffMillis"],
+        )
+        assertEquals(
+            emptyList<Pair<String, Long>>(),
+            apiClient.fetchMatchSnapshotsAfterRequests,
+        )
+
+        val requestsAtRateLimit =
+            apiClient.fetchRoomSnapshotRequests.size
+
+        delay(80L)
+
+        assertEquals(
+            requestsAtRateLimit,
+            apiClient.fetchRoomSnapshotRequests.size,
+        )
+        assertEquals(false, sessionInvalidationDeferred.isCompleted)
+        assertEquals(false, authorizationLossDeferred.isCompleted)
+        assertEquals(false, resourceLossDeferred.isCompleted)
+
+        sessionInvalidationDeferred.cancel()
+        authorizationLossDeferred.cancel()
+        resourceLossDeferred.cancel()
+        repository.leaveRoom()
+    }
+
+@Test
+fun polling_match_snapshot_remote_429_arms_backoff_without_terminal_events() =
+    runBlocking {
+        val waitingRoom = createWaitingRoomSnapshot()
+        val activeRoom = createInMatchRoomSnapshot()
+        val session = createAnonymousSession(
+            playerId = "player-1",
+        )
+        val traceBuffer = InMemoryOnlineTraceBuffer()
+        val apiClient = FakeRemoteOnlineApiClient(
+            createRoomResult = OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = waitingRoom,
+                localSeatIndex = 0,
+            ),
+            fetchMatchSnapshotFailure =
+                createTooManyRequestsClientRequestException(),
+            roomSnapshotsById = mutableMapOf(
+                waitingRoom.roomId to activeRoom,
+            ),
+        )
+        val repository = createRepository(
+            apiClient = apiClient,
+            pollingPolicy = OnlineRemotePollingPolicy(
+                enabled = true,
+                intervalMillis = 50L,
+            ),
+            coroutineDispatcher = Dispatchers.Default,
+            traceLogger = createTraceLogger(traceBuffer),
+            anonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    session = session,
+                ),
+        )
+
+        repository.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = session.playerId,
+                playerName = "Jogador 1",
+            ),
+        )
+
+        val rateLimitEntry = withTimeout(2_000L) {
+            while (true) {
+                traceBuffer.snapshot().firstOrNull { entry ->
+                    entry.event.type ==
+                        OnlineTraceType.TRANSPORT_FAILURE &&
+                            entry.event.attributes["source"] ==
+                            "remote_rate_limited" &&
+                            entry.event.attributes["operation"] ==
+                            "fetch_match_snapshot"
+                }?.let { entry ->
+                    return@withTimeout entry
+                }
+                delay(10L)
+            }
+            error("unreachable")
+        }
+
+        assertEquals(
+            "100",
+            rateLimitEntry.event.attributes["backoffMillis"],
+        )
+        assertTrue(
+            traceBuffer.snapshot().none { entry ->
+                entry.event.type == OnlineTraceType.POLLING_STOPPED
+            },
+        )
+
+        repository.leaveRoom()
+    }
+
+@Test
+fun polling_match_updates_remote_429_arms_backoff_without_terminal_events() =
+    runBlocking {
+        val room = createInMatchRoomSnapshot()
+        val match = createMatchSnapshot(
+            revision = 1L,
+        )
+        val session = createAnonymousSession(
+            playerId = "player-1",
+        )
+        val traceBuffer = InMemoryOnlineTraceBuffer()
+        val apiClient = FakeRemoteOnlineApiClient(
+            createRoomResult = OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = room,
+                localSeatIndex = 0,
+            ),
+            fetchMatchSnapshotsAfterFailure =
+                createTooManyRequestsClientRequestException(),
+            roomSnapshotsById = mutableMapOf(
+                room.roomId to room,
+            ),
+            matchSnapshotsById = mutableMapOf(
+                match.matchId to match,
+            ),
+        )
+        val repository = createRepository(
+            apiClient = apiClient,
+            pollingPolicy = OnlineRemotePollingPolicy(
+                enabled = true,
+                intervalMillis = 50L,
+            ),
+            coroutineDispatcher = Dispatchers.Default,
+            traceLogger = createTraceLogger(traceBuffer),
+            anonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    session = session,
+                ),
+        )
+
+        repository.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = session.playerId,
+                playerName = "Jogador 1",
+            ),
+        )
+
+        val rateLimitEntry = withTimeout(2_000L) {
+            while (true) {
+                traceBuffer.snapshot().firstOrNull { entry ->
+                    entry.event.type ==
+                        OnlineTraceType.TRANSPORT_FAILURE &&
+                            entry.event.attributes["source"] ==
+                            "remote_rate_limited" &&
+                            entry.event.attributes["operation"] ==
+                            "fetch_match_updates"
+                }?.let { entry ->
+                    return@withTimeout entry
+                }
+                delay(10L)
+            }
+            error("unreachable")
+        }
+
+        assertEquals(
+            "100",
+            rateLimitEntry.event.attributes["backoffMillis"],
+        )
+        assertTrue(
+            traceBuffer.snapshot().none { entry ->
+                entry.event.type == OnlineTraceType.POLLING_STOPPED
+            },
+        )
+
+        repository.leaveRoom()
+    }
+
+@Test
+fun valid_retry_after_seconds_is_honored_up_to_60000ms() =
+    runBlocking {
+        val room = createInMatchRoomSnapshot()
+        val match = createMatchSnapshot(
+            revision = 1L,
+        )
+        val session = createAnonymousSession(
+            playerId = "player-1",
+        )
+        val traceBuffer = InMemoryOnlineTraceBuffer()
+        val apiClient = FakeRemoteOnlineApiClient(
+            createRoomResult = OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = room,
+                localSeatIndex = 0,
+            ),
+            fetchRoomSnapshotFailure =
+                createTooManyRequestsClientRequestException(
+                    retryAfterSeconds = "120",
+                ),
+            matchSnapshotsById = mutableMapOf(
+                match.matchId to match,
+            ),
+        )
+        val repository = createRepository(
+            apiClient = apiClient,
+            pollingPolicy = OnlineRemotePollingPolicy(
+                enabled = true,
+                intervalMillis = 50L,
+            ),
+            coroutineDispatcher = Dispatchers.Default,
+            traceLogger = createTraceLogger(traceBuffer),
+            anonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    session = session,
+                ),
+        )
+
+        repository.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = session.playerId,
+                playerName = "Jogador 1",
+            ),
+        )
+
+        val rateLimitEntry = withTimeout(2_000L) {
+            while (true) {
+                traceBuffer.snapshot().firstOrNull { entry ->
+                    entry.event.type ==
+                        OnlineTraceType.TRANSPORT_FAILURE &&
+                            entry.event.attributes["source"] ==
+                            "remote_rate_limited"
+                }?.let { entry ->
+                    return@withTimeout entry
+                }
+                delay(10L)
+            }
+            error("unreachable")
+        }
+
+        assertEquals(
+            "120000",
+            rateLimitEntry.event.attributes["retryAfterMillis"],
+        )
+        assertEquals(
+            "60000",
+            rateLimitEntry.event.attributes["backoffMillis"],
+        )
+
+        repository.leaveRoom()
+    }
+
+@Test
+fun missing_or_invalid_retry_after_uses_2x_4x_8x_exponential_fallback_capped_60000ms() =
+    runBlocking {
+        val policy = OnlineRemotePollingPolicy(
+            enabled = true,
+            intervalMillis = 1_000L,
+        )
+
+        assertEquals(
+            2_000L,
+            policy.calculateRateLimitBackoffMillis(
+                consecutiveRateLimits = 1,
+                retryAfterMillis = null,
+            ),
+        )
+        assertEquals(
+            4_000L,
+            policy.calculateRateLimitBackoffMillis(
+                consecutiveRateLimits = 2,
+                retryAfterMillis = null,
+            ),
+        )
+        assertEquals(
+            8_000L,
+            policy.calculateRateLimitBackoffMillis(
+                consecutiveRateLimits = 3,
+                retryAfterMillis = null,
+            ),
+        )
+        assertEquals(
+            60_000L,
+            policy.calculateRateLimitBackoffMillis(
+                consecutiveRateLimits = 30,
+                retryAfterMillis = null,
+            ),
+        )
+
+        val room = createInMatchRoomSnapshot()
+        val match = createMatchSnapshot(
+            revision = 1L,
+        )
+        val session = createAnonymousSession(
+            playerId = "player-1",
+        )
+        val traceBuffer = InMemoryOnlineTraceBuffer()
+        val apiClient = FakeRemoteOnlineApiClient(
+            createRoomResult = OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = room,
+                localSeatIndex = 0,
+            ),
+            fetchRoomSnapshotFailure =
+                createTooManyRequestsClientRequestException(
+                    retryAfterSeconds = "invalid",
+                ),
+            matchSnapshotsById = mutableMapOf(
+                match.matchId to match,
+            ),
+        )
+        val repository = createRepository(
+            apiClient = apiClient,
+            pollingPolicy = OnlineRemotePollingPolicy(
+                enabled = true,
+                intervalMillis = 50L,
+            ),
+            coroutineDispatcher = Dispatchers.Default,
+            traceLogger = createTraceLogger(traceBuffer),
+            anonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    session = session,
+                ),
+        )
+
+        repository.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = session.playerId,
+                playerName = "Jogador 1",
+            ),
+        )
+
+        val rateLimitEntry = withTimeout(2_000L) {
+            while (true) {
+                traceBuffer.snapshot().firstOrNull { entry ->
+                    entry.event.type ==
+                        OnlineTraceType.TRANSPORT_FAILURE &&
+                            entry.event.attributes["source"] ==
+                            "remote_rate_limited"
+                }?.let { entry ->
+                    return@withTimeout entry
+                }
+                delay(10L)
+            }
+            error("unreachable")
+        }
+
+        assertEquals(
+            "null",
+            rateLimitEntry.event.attributes["retryAfterMillis"],
+        )
+        assertEquals(
+            "100",
+            rateLimitEntry.event.attributes["backoffMillis"],
+        )
+
+        repository.leaveRoom()
+    }
+
+@Test
+fun complete_successful_read_refresh_cycle_resets_consecutive_429_backoff() =
+    runBlocking {
+        val room = createInMatchRoomSnapshot()
+        val match = createMatchSnapshot(
+            revision = 1L,
+        )
+        val session = createAnonymousSession(
+            playerId = "player-1",
+        )
+        val traceBuffer = InMemoryOnlineTraceBuffer()
+        val apiClient = FakeRemoteOnlineApiClient(
+            createRoomResult = OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = room,
+                localSeatIndex = 0,
+            ),
+            fetchRoomSnapshotFailures = mutableListOf(
+                createTooManyRequestsClientRequestException(),
+                null,
+                createTooManyRequestsClientRequestException(),
+            ),
+            roomSnapshotsById = mutableMapOf(
+                room.roomId to room,
+            ),
+            matchSnapshotsById = mutableMapOf(
+                match.matchId to match,
+            ),
+            matchSnapshotsAfterById = mutableMapOf(
+                match.matchId to emptyList(),
+            ),
+        )
+        val repository = createRepository(
+            apiClient = apiClient,
+            pollingPolicy = OnlineRemotePollingPolicy(
+                enabled = true,
+                intervalMillis = 20L,
+            ),
+            coroutineDispatcher = Dispatchers.Default,
+            traceLogger = createTraceLogger(traceBuffer),
+            anonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    session = session,
+                ),
+        )
+
+        repository.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = session.playerId,
+                playerName = "Jogador 1",
+            ),
+        )
+
+        val rateLimitEntries = withTimeout(2_000L) {
+            while (true) {
+                val entries = traceBuffer.snapshot().filter { entry ->
+                    entry.event.type ==
+                        OnlineTraceType.TRANSPORT_FAILURE &&
+                            entry.event.attributes["source"] ==
+                            "remote_rate_limited" &&
+                            entry.event.attributes["operation"] ==
+                            "fetch_room_snapshot"
+                }
+
+                if (entries.size >= 2) {
+                    return@withTimeout entries
+                }
+
+                delay(10L)
+            }
+            error("unreachable")
+        }
+
+        assertEquals(
+            listOf("1", "1"),
+            rateLimitEntries.take(2).map { entry ->
+                entry.event.attributes["consecutiveRateLimits"]
+            },
+        )
+        assertEquals(
+            listOf("40", "40"),
+            rateLimitEntries.take(2).map { entry ->
+                entry.event.attributes["backoffMillis"]
+            },
+        )
+
+        repository.leaveRoom()
+    }
+
+@Test
+fun action_refresh_read_429_arms_read_backoff_without_terminal_event() =
+    runBlocking {
+        val room = createInMatchRoomSnapshot()
+        val match = createMatchSnapshot(
+            revision = 1L,
+        )
+        val session = createAnonymousSession(
+            playerId = "player-1",
+        )
+        val traceBuffer = InMemoryOnlineTraceBuffer()
+        val apiClient = FakeRemoteOnlineApiClient(
+            createRoomResult = OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = room,
+                localSeatIndex = 0,
+            ),
+            submitActionResult = OnlineActionResultDto(
+                accepted = true,
+                revision = 2L,
+                actionId = "rate-limited-refresh-action",
+            ),
+            fetchRoomSnapshotFailure =
+                createTooManyRequestsClientRequestException(),
+            matchSnapshotsById = mutableMapOf(
+                match.matchId to match,
+            ),
+        )
+        val repository = createRepository(
+            apiClient = apiClient,
+            pollingPolicy = OnlineRemotePollingPolicy(
+                enabled = true,
+                intervalMillis = 60_000L,
+            ),
+            coroutineDispatcher = Dispatchers.Default,
+            traceLogger = createTraceLogger(traceBuffer),
+            anonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    session = session,
+                ),
+        )
+
+        repository.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = session.playerId,
+                playerName = "Jogador 1",
+            ),
+        )
+
+        val action = createOnlinePassTurnAction(
+            roomId = room.roomId,
+            matchId = match.matchId,
+            playerId = session.playerId,
+            revision = match.revision,
+            actionId = "rate-limited-refresh-action",
+        )
+
+        val result = repository.submitAction(
+            action = action,
+        )
+
+        assertEquals(true, result.accepted)
+
+        val rateLimitEntry = traceBuffer.snapshot().single { entry ->
+            entry.event.type ==
+                OnlineTraceType.TRANSPORT_FAILURE &&
+                    entry.event.attributes["source"] ==
+                    "remote_rate_limited"
+        }
+
+        assertEquals(
+            "action_refresh",
+            rateLimitEntry.event.attributes["trigger"],
+        )
+        assertEquals(
+            "60000",
+            rateLimitEntry.event.attributes["backoffMillis"],
+        )
+        assertTrue(
+            traceBuffer.snapshot().none { entry ->
+                entry.event.type == OnlineTraceType.POLLING_STOPPED
+            },
+        )
+
+        repository.leaveRoom()
+    }
+
+@Test
+fun submit_action_429_is_transient_not_retried_and_does_not_arm_read_backoff() =
+    runBlocking {
+        val room = createInMatchRoomSnapshot()
+        val match = createMatchSnapshot(
+            revision = 1L,
+        )
+        val session = createAnonymousSession(
+            playerId = "player-1",
+        )
+        val traceBuffer = InMemoryOnlineTraceBuffer()
+        val apiClient = FakeRemoteOnlineApiClient(
+            createRoomResult = OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = room,
+                localSeatIndex = 0,
+            ),
+            submitActionFailure =
+                createTooManyRequestsClientRequestException(
+                    retryAfterSeconds = "60",
+                ),
+            matchSnapshotsById = mutableMapOf(
+                match.matchId to match,
+            ),
+        )
+        val repository = createRepository(
+            apiClient = apiClient,
+            pollingPolicy = OnlineRemotePollingPolicy(
+                enabled = true,
+                intervalMillis = 60_000L,
+            ),
+            coroutineDispatcher = Dispatchers.Default,
+            traceLogger = createTraceLogger(traceBuffer),
+            anonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    session = session,
+                ),
+        )
+
+        repository.createRoom(
+            CreateOnlineRoomRequestDto(
+                localPlayerId = session.playerId,
+                playerName = "Jogador 1",
+            ),
+        )
+
+        val sessionInvalidationDeferred = async(
+            start = CoroutineStart.UNDISPATCHED,
+        ) {
+            repository.activeMatchSessionInvalidationEvents.first()
+        }
+        val authorizationLossDeferred = async(
+            start = CoroutineStart.UNDISPATCHED,
+        ) {
+            repository
+                .activeMatchParticipationAuthorizationLossEvents
+                .first()
+        }
+        val resourceLossDeferred = async(
+            start = CoroutineStart.UNDISPATCHED,
+        ) {
+            repository.activeMatchResourceLossEvents.first()
+        }
+
+        val action = createOnlinePassTurnAction(
+            roomId = room.roomId,
+            matchId = match.matchId,
+            playerId = session.playerId,
+            revision = match.revision,
+            actionId = "remote-429-action",
+        )
+
+        val result = repository.submitAction(
+            action = action,
+        )
+
+        assertEquals(false, result.accepted)
+        assertEquals(
+            listOf(action),
+            apiClient.submitActionRequests,
+        )
+        assertTrue(
+            traceBuffer.snapshot().any { entry ->
+                entry.event.type == OnlineTraceType.ACTION_REJECTED &&
+                        entry.event.attributes["source"] ==
+                        "remote_rate_limited"
+            },
+        )
+        assertTrue(
+            traceBuffer.snapshot().none { entry ->
+                entry.event.type ==
+                    OnlineTraceType.POLLING_FAILED &&
+                        entry.event.attributes["source"] ==
+                        "remote_rate_limited"
+            },
+        )
+        assertEquals(false, sessionInvalidationDeferred.isCompleted)
+        assertEquals(false, authorizationLossDeferred.isCompleted)
+        assertEquals(false, resourceLossDeferred.isCompleted)
+
+        sessionInvalidationDeferred.cancel()
+        authorizationLossDeferred.cancel()
+        resourceLossDeferred.cancel()
+        repository.leaveRoom()
+    }
+
     private fun createPendingParticipationBinding(
         matchId: String? = null,
         localSeatIndex: Int = 0,
@@ -4872,6 +5598,43 @@ class RemoteOnlineRoomRepositoryTest {
             localSeatIndex = localSeatIndex,
         )
     }
+
+private suspend fun createTooManyRequestsClientRequestException(
+    retryAfterSeconds: String? = null,
+): ClientRequestException {
+    val httpClient = HttpClient(
+        MockEngine {
+            if (retryAfterSeconds == null) {
+                respond(
+                    content = "",
+                    status = HttpStatusCode.TooManyRequests,
+                )
+            } else {
+                respond(
+                    content = "",
+                    status = HttpStatusCode.TooManyRequests,
+                    headers = headersOf(
+                        HttpHeaders.RetryAfter,
+                        retryAfterSeconds,
+                    ),
+                )
+            }
+        },
+    ) {
+        expectSuccess = true
+    }
+
+    return try {
+        httpClient.get(
+            urlString = "http://localhost/too-many-requests",
+        )
+        error("Expected HTTP 429 to throw ClientRequestException.")
+    } catch (error: ClientRequestException) {
+        error
+    } finally {
+        httpClient.close()
+    }
+}
 
     private suspend fun createNotFoundClientRequestException(): ClientRequestException {
         val httpClient = HttpClient(
@@ -5170,6 +5933,8 @@ class RemoteOnlineRoomRepositoryTest {
         private val submitActionFailure: Throwable? = null,
         private val submitTraceBatchFailure: Throwable? = null,
         private val fetchRoomSnapshotFailure: Throwable? = null,
+        private val fetchRoomSnapshotFailures: MutableList<Throwable?> =
+            mutableListOf(),
         private val fetchMatchSnapshotFailure: Throwable? = null,
         private val fetchMatchSnapshotsAfterFailure: Throwable? = null,
         private val roomSnapshotsById: MutableMap<String, OnlineRoomSnapshotDto> =
@@ -5266,7 +6031,14 @@ class RemoteOnlineRoomRepositoryTest {
         ): OnlineRoomSnapshotDto {
             fetchRoomSnapshotRequests += roomId
 
-            fetchRoomSnapshotFailure?.let { error ->
+            val configuredFailure =
+                if (fetchRoomSnapshotFailures.isNotEmpty()) {
+                    fetchRoomSnapshotFailures.removeAt(0)
+                } else {
+                    fetchRoomSnapshotFailure
+                }
+
+            configuredFailure?.let { error ->
                 throw error
             }
 
