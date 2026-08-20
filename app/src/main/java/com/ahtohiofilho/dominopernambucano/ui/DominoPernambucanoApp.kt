@@ -11,6 +11,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import com.ahtohiofilho.dominopernambucano.BuildConfig
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.AndroidGoogleIdTokenProvider
 import com.ahtohiofilho.dominopernambucano.online.GoogleSignInConfig
@@ -21,6 +22,11 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileRemoteClie
 import com.ahtohiofilho.dominopernambucano.online.OnlineAppEnvironment
 import com.ahtohiofilho.dominopernambucano.online.OnlineBackendMode
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailAccountActionResult
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailAccountFailureReason
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailAccountIntent
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailAccountManager
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailIdentityRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountActionResult
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountManager
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
@@ -145,6 +151,42 @@ fun DominoPernambucanoApp(
     val accountConnectedSuccess = stringResource(
         R.string.account_connected_success,
     )
+    val accountEmailCodeSent = stringResource(
+        R.string.account_email_code_sent,
+    )
+    val accountEmailLinkedSuccess = stringResource(
+        R.string.account_email_linked_success,
+    )
+    val accountEmailInvalidAddress = stringResource(
+        R.string.account_email_invalid_address,
+    )
+    val accountEmailInvalidCode = stringResource(
+        R.string.account_email_invalid_code,
+    )
+    val accountEmailAccountNotFound = stringResource(
+        R.string.account_email_account_not_found,
+    )
+    val accountEmailIdentityConflict = stringResource(
+        R.string.account_email_identity_conflict,
+    )
+    val accountEmailRateLimited = stringResource(
+        R.string.account_email_rate_limited,
+    )
+    val accountEmailServiceUnavailable = stringResource(
+        R.string.account_email_service_unavailable,
+    )
+    val accountEmailSessionConflict = stringResource(
+        R.string.account_email_session_conflict,
+    )
+    val accountEmailSessionExpired = stringResource(
+        R.string.account_email_session_expired,
+    )
+    val accountEmailLocalPersistence = stringResource(
+        R.string.account_email_local_persistence,
+    )
+    val accountEmailUnknownFailure = stringResource(
+        R.string.account_email_unknown_failure,
+    )
 
     var settingsVisible by rememberSaveable {
         mutableStateOf(false)
@@ -211,6 +253,30 @@ fun DominoPernambucanoApp(
         } else {
             null
         }
+    }
+
+    val onlineEmailAccountManager = remember(
+        googleIdentityApiClient,
+        onlineSessionCredentialRepository,
+    ) {
+        val emailIdentityRepository = googleIdentityApiClient?.let {
+                apiClient ->
+            OnlineEmailIdentityRepository(
+                apiClient = apiClient,
+                sessionCredentialRepository =
+                    onlineSessionCredentialRepository,
+            )
+        }
+
+        OnlineEmailAccountManager(
+            available =
+                BuildConfig.DEBUG &&
+                    googleIdentityApiClient != null,
+            apiClient = googleIdentityApiClient,
+            emailIdentityRepository = emailIdentityRepository,
+            sessionCredentialRepository =
+                onlineSessionCredentialRepository,
+        )
     }
 
     val onlineGoogleAccountManager = remember(
@@ -405,6 +471,30 @@ fun DominoPernambucanoApp(
         mutableStateOf<String?>(null)
     }
 
+    var onlineEmailAddress by remember {
+        mutableStateOf("")
+    }
+
+    var onlineEmailCode by remember {
+        mutableStateOf("")
+    }
+
+    var onlineEmailIntent by remember {
+        mutableStateOf<OnlineEmailAccountIntent?>(null)
+    }
+
+    var onlineEmailCodeRequested by remember {
+        mutableStateOf(false)
+    }
+
+    var onlineEmailActionInProgress by remember {
+        mutableStateOf(false)
+    }
+
+    var onlineEmailFeedbackMessage by remember {
+        mutableStateOf<String?>(null)
+    }
+
     var onlineAccountProfileUiState by remember {
         mutableStateOf<OnlineAccountProfileUiState>(
             OnlineAccountProfileUiState.NotAvailable,
@@ -412,7 +502,11 @@ fun DominoPernambucanoApp(
     }
 
     val onlineGoogleAccountStatus =
-        onlineGoogleAccountManager.currentStatus()
+        if (onlineEmailAccountManager.isAvailable) {
+            onlineEmailAccountManager.currentStatus()
+        } else {
+            onlineGoogleAccountManager.currentStatus()
+        }
 
     val onlineAccountConnected =
         onlineGoogleAccountStatus ==
@@ -507,6 +601,163 @@ fun DominoPernambucanoApp(
             }
         }
     }
+
+    fun onlineEmailFailureMessage(
+        reason: OnlineEmailAccountFailureReason,
+    ): String {
+        return when (reason) {
+            OnlineEmailAccountFailureReason.INVALID_EMAIL ->
+                accountEmailInvalidAddress
+            OnlineEmailAccountFailureReason.INVALID_CODE ->
+                accountEmailInvalidCode
+            OnlineEmailAccountFailureReason.ACCOUNT_NOT_FOUND ->
+                accountEmailAccountNotFound
+            OnlineEmailAccountFailureReason.IDENTITY_CONFLICT ->
+                accountEmailIdentityConflict
+            OnlineEmailAccountFailureReason.RATE_LIMITED ->
+                accountEmailRateLimited
+            OnlineEmailAccountFailureReason.SERVICE_UNAVAILABLE ->
+                accountEmailServiceUnavailable
+            OnlineEmailAccountFailureReason.SESSION_CONFLICT ->
+                accountEmailSessionConflict
+            OnlineEmailAccountFailureReason.SESSION_EXPIRED ->
+                accountEmailSessionExpired
+            OnlineEmailAccountFailureReason.LOCAL_PERSISTENCE ->
+                accountEmailLocalPersistence
+            OnlineEmailAccountFailureReason.UNKNOWN ->
+                accountEmailUnknownFailure
+        }
+    }
+
+    fun resetOnlineEmailFlow(
+        clearAddress: Boolean,
+    ) {
+        if (clearAddress) {
+            onlineEmailAddress = ""
+        }
+        onlineEmailCode = ""
+        onlineEmailIntent = null
+        onlineEmailCodeRequested = false
+        onlineEmailFeedbackMessage = null
+    }
+
+    fun requestOnlineEmailCode(
+        intent: OnlineEmailAccountIntent,
+    ) {
+        if (onlineEmailActionInProgress) {
+            return
+        }
+
+        onlineEmailActionInProgress = true
+        onlineEmailFeedbackMessage = null
+
+        menuCoroutineScope.launch {
+            try {
+                when (
+                    val result = onlineEmailAccountManager.requestCode(
+                        rawEmail = onlineEmailAddress,
+                        intent = intent,
+                    )
+                ) {
+                    is OnlineEmailAccountActionResult.CodeRequested -> {
+                        onlineEmailAddress = result.email
+                        onlineEmailIntent = result.intent
+                        onlineEmailCode = ""
+                        onlineEmailCodeRequested = true
+                        onlineEmailFeedbackMessage =
+                            accountEmailCodeSent
+                    }
+
+                    is OnlineEmailAccountActionResult.Failure -> {
+                        onlineEmailFeedbackMessage =
+                            onlineEmailFailureMessage(result.reason)
+                    }
+
+                    is OnlineEmailAccountActionResult.Success -> Unit
+                }
+            } finally {
+                onlineEmailActionInProgress = false
+            }
+        }
+    }
+
+    fun confirmOnlineEmailCode() {
+        val intent = onlineEmailIntent ?: return
+        if (onlineEmailActionInProgress) {
+            return
+        }
+
+        onlineEmailActionInProgress = true
+        onlineEmailFeedbackMessage = null
+
+        menuCoroutineScope.launch {
+            try {
+                when (
+                    val result = onlineEmailAccountManager.submitCode(
+                        rawEmail = onlineEmailAddress,
+                        rawCode = onlineEmailCode,
+                        intent = intent,
+                    )
+                ) {
+                    is OnlineEmailAccountActionResult.Success -> {
+                        onlineEmailFeedbackMessage =
+                            if (
+                                result.intent ==
+                                    OnlineEmailAccountIntent.LINK &&
+                                onlineGoogleAccountStatus ==
+                                    OnlineGoogleAccountStatus.CONNECTED
+                            ) {
+                                accountEmailLinkedSuccess
+                            } else {
+                                accountConnectedSuccess
+                            }
+
+                        onlineEmailCode = ""
+                        onlineEmailIntent = null
+                        onlineEmailCodeRequested = false
+
+                        val coordinator =
+                            onlineAccountProfileUiCoordinator
+
+                        if (coordinator != null) {
+                            onlineAccountProfileUiState =
+                                OnlineAccountProfileUiState.Loading
+
+                            val outcome = coordinator.load(
+                                fallbackIdentity =
+                                    onlinePlayerIdentity,
+                            )
+
+                            onlineAccountProfileUiState =
+                                outcome.state
+
+                            outcome.synchronizedIdentity?.let {
+                                    synchronizedIdentity ->
+                                onlinePlayerIdentity =
+                                    synchronizedIdentity
+                            }
+                        }
+                    }
+
+                    is OnlineEmailAccountActionResult.Failure -> {
+                        onlineEmailFeedbackMessage =
+                            onlineEmailFailureMessage(result.reason)
+
+                        if (result.requiresNewCode) {
+                            onlineEmailCode = ""
+                            onlineEmailIntent = null
+                            onlineEmailCodeRequested = false
+                        }
+                    }
+
+                    is OnlineEmailAccountActionResult.CodeRequested -> Unit
+                }
+            } finally {
+                onlineEmailActionInProgress = false
+            }
+        }
+    }
+
     if (settingsVisible) {
         SettingsScreen(
             currentSelection =
@@ -546,6 +797,20 @@ fun DominoPernambucanoApp(
                     onlineGoogleAccountActionInProgress,
                 onlineGoogleAccountFeedbackMessage =
                     onlineGoogleAccountFeedbackMessage,
+                onlineGoogleAvailable =
+                    googleSignInConfig.isConfigured &&
+                        googleIdentityApiClient != null,
+                onlineEmailAvailable =
+                    onlineEmailAccountManager.isAvailable,
+                onlineEmailAddress = onlineEmailAddress,
+                onlineEmailCode = onlineEmailCode,
+                onlineEmailIntent = onlineEmailIntent,
+                onlineEmailCodeRequested =
+                    onlineEmailCodeRequested,
+                onlineEmailActionInProgress =
+                    onlineEmailActionInProgress,
+                onlineEmailFeedbackMessage =
+                    onlineEmailFeedbackMessage,
                 onlineAccountDisplayName =
                     onlinePlayerIdentity.displayName,
                 onlineAccountTableName =
@@ -620,6 +885,41 @@ fun DominoPernambucanoApp(
                 },
                 onAccountProfileRetryClick = {
                     requestOnlineAccountProfile()
+                },
+                onEmailAddressChange = { value ->
+                    onlineEmailAddress = value.take(254)
+                    onlineEmailFeedbackMessage = null
+                },
+                onEmailCodeChange = { value ->
+                    onlineEmailCode = value
+                        .filter { character ->
+                            character.isDigit()
+                        }
+                        .take(6)
+                    onlineEmailFeedbackMessage = null
+                },
+                onEmailStartLinkClick = {
+                    requestOnlineEmailCode(
+                        OnlineEmailAccountIntent.LINK,
+                    )
+                },
+                onEmailStartRecoverClick = {
+                    requestOnlineEmailCode(
+                        OnlineEmailAccountIntent.RECOVER,
+                    )
+                },
+                onEmailConfirmCodeClick = {
+                    confirmOnlineEmailCode()
+                },
+                onEmailResetClick = {
+                    resetOnlineEmailFlow(
+                        clearAddress = true,
+                    )
+                },
+                onAccountDialogDismissed = {
+                    resetOnlineEmailFlow(
+                        clearAddress = true,
+                    )
                 },
                 onPlayClick = {
                     if (

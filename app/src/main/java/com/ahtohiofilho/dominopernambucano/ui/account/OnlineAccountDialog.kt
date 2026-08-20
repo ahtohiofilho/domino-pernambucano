@@ -19,10 +19,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.ONLINE_ACCOUNT_TABLE_CODE_LENGTH
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailAccountIntent
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 import com.ahtohiofilho.dominopernambucano.online.isValidOnlineAccountTableCode
 import com.ahtohiofilho.dominopernambucano.ui.components.DominoOutlinedTextField
@@ -45,6 +47,39 @@ internal const val OnlineAccountTableNameFieldTag =
     "online_account_table_name_field"
 internal const val OnlineAccountProfileStatusTag =
     "online_account_profile_status"
+internal const val OnlineAccountEmailFieldTag =
+    "online_account_email_field"
+internal const val OnlineAccountEmailCodeFieldTag =
+    "online_account_email_code_field"
+internal const val OnlineAccountEmailPrimaryActionTag =
+    "online_account_email_primary_action"
+
+internal fun onlineEmailAccountAvailableIntents(
+    status: OnlineGoogleAccountStatus,
+    emailAvailable: Boolean,
+): List<OnlineEmailAccountIntent> {
+    if (!emailAvailable) {
+        return emptyList()
+    }
+
+    return when (status) {
+        OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL ->
+            listOf(
+                OnlineEmailAccountIntent.LINK,
+                OnlineEmailAccountIntent.RECOVER,
+            )
+
+        OnlineGoogleAccountStatus.VISITOR,
+        OnlineGoogleAccountStatus.CONNECTED ->
+            listOf(OnlineEmailAccountIntent.LINK)
+
+        OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
+            listOf(OnlineEmailAccountIntent.RECOVER)
+
+        OnlineGoogleAccountStatus.UNAVAILABLE ->
+            emptyList()
+    }
+}
 
 internal fun onlineAccountDialogVisibleFeedback(
     status: OnlineGoogleAccountStatus,
@@ -60,11 +95,25 @@ fun OnlineAccountDialog(
     status: OnlineGoogleAccountStatus,
     actionInProgress: Boolean,
     feedbackMessage: String?,
+    googleAvailable: Boolean = true,
+    emailAvailable: Boolean = false,
+    emailAddress: String = "",
+    emailCode: String = "",
+    emailIntent: OnlineEmailAccountIntent? = null,
+    emailCodeRequested: Boolean = false,
+    emailActionInProgress: Boolean = false,
+    emailFeedbackMessage: String? = null,
     profileState: OnlineAccountProfileUiState,
     onPublicDisplayNameChange: (String) -> Unit,
     onTableNameChange: (String) -> Unit,
     onSaveProfileClick: () -> Unit,
     onRetryProfileClick: () -> Unit,
+    onEmailAddressChange: (String) -> Unit = {},
+    onEmailCodeChange: (String) -> Unit = {},
+    onEmailStartLinkClick: () -> Unit = {},
+    onEmailStartRecoverClick: () -> Unit = {},
+    onEmailConfirmCodeClick: () -> Unit = {},
+    onEmailResetClick: () -> Unit = {},
     onConnectGoogleClick: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -101,7 +150,9 @@ fun OnlineAccountDialog(
     val profileActionInProgress =
         editor?.actionInProgress == true
     val anyActionInProgress =
-        actionInProgress || profileActionInProgress
+        actionInProgress ||
+            emailActionInProgress ||
+            profileActionInProgress
     val visibleFeedbackMessage =
         onlineAccountDialogVisibleFeedback(
             status = status,
@@ -166,6 +217,46 @@ fun OnlineAccountDialog(
                     )
                 }
 
+                emailFeedbackMessage?.let { message ->
+                    Text(
+                        modifier = Modifier.semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                        text = message,
+                    )
+                }
+
+                OnlineEmailAccountContent(
+                    status = status,
+                    emailAvailable = emailAvailable,
+                    emailAddress = emailAddress,
+                    emailCode = emailCode,
+                    emailIntent = emailIntent,
+                    emailCodeRequested = emailCodeRequested,
+                    actionInProgress = emailActionInProgress,
+                    onEmailAddressChange = onEmailAddressChange,
+                    onEmailCodeChange = onEmailCodeChange,
+                    onEmailStartLinkClick = onEmailStartLinkClick,
+                    onEmailStartRecoverClick =
+                        onEmailStartRecoverClick,
+                    onEmailConfirmCodeClick =
+                        onEmailConfirmCodeClick,
+                    onEmailResetClick = onEmailResetClick,
+                )
+
+                if (
+                    googleAvailable &&
+                    emailAvailable &&
+                    !emailCodeRequested &&
+                    status != OnlineGoogleAccountStatus.CONNECTED
+                ) {
+                    Text(
+                        text = stringResource(
+                            R.string.account_email_or_google,
+                        ),
+                    )
+                }
+
                 if (
                     status == OnlineGoogleAccountStatus.CONNECTED
                 ) {
@@ -180,7 +271,9 @@ fun OnlineAccountDialog(
         },
         confirmButton = {
             when {
-                status != OnlineGoogleAccountStatus.CONNECTED -> {
+                googleAvailable &&
+                    status != OnlineGoogleAccountStatus.CONNECTED &&
+                    !emailCodeRequested -> {
                     presentation.actionLabel?.let { actionLabel ->
                         DominoPrimaryButton(
                             modifier = Modifier.testTag(
@@ -286,6 +379,185 @@ fun OnlineAccountDialog(
         titleContentColor = DominoSemanticColors.dialogTitle,
         textContentColor = DominoSemanticColors.dialogBody,
     )
+}
+
+@Composable
+private fun OnlineEmailAccountContent(
+    status: OnlineGoogleAccountStatus,
+    emailAvailable: Boolean,
+    emailAddress: String,
+    emailCode: String,
+    emailIntent: OnlineEmailAccountIntent?,
+    emailCodeRequested: Boolean,
+    actionInProgress: Boolean,
+    onEmailAddressChange: (String) -> Unit,
+    onEmailCodeChange: (String) -> Unit,
+    onEmailStartLinkClick: () -> Unit,
+    onEmailStartRecoverClick: () -> Unit,
+    onEmailConfirmCodeClick: () -> Unit,
+    onEmailResetClick: () -> Unit,
+) {
+    val intents = onlineEmailAccountAvailableIntents(
+        status = status,
+        emailAvailable = emailAvailable,
+    )
+    if (intents.isEmpty()) {
+        return
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(
+            MaterialTheme.dominoSpacing.xs,
+        ),
+    ) {
+        Text(
+            text = stringResource(R.string.account_email_section),
+            fontWeight = FontWeight.SemiBold,
+        )
+
+        if (emailCodeRequested && emailIntent != null) {
+            Text(
+                text = stringResource(
+                    R.string.account_email_code_prompt,
+                ),
+            )
+
+            DominoOutlinedTextField(
+                value = emailCode,
+                onValueChange = onEmailCodeChange,
+                modifier = Modifier.testTag(
+                    OnlineAccountEmailCodeFieldTag,
+                ),
+                enabled = !actionInProgress,
+                label = stringResource(
+                    R.string.account_email_code,
+                ),
+                supportingText = stringResource(
+                    R.string.account_email_code_hint,
+                ),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                ),
+                tone = DominoTextFieldTone.OnLight,
+            )
+
+            DominoPrimaryButton(
+                modifier = Modifier.testTag(
+                    OnlineAccountEmailPrimaryActionTag,
+                ),
+                text = if (actionInProgress) {
+                    stringResource(
+                        R.string.account_email_verifying,
+                    )
+                } else {
+                    stringResource(
+                        R.string.account_email_confirm,
+                    )
+                },
+                onClick = onEmailConfirmCodeClick,
+                enabled =
+                    !actionInProgress &&
+                        emailCode.length == 6,
+                loading = actionInProgress,
+                containerColor =
+                    DominoSemanticColors.dialogAction,
+                contentColor =
+                    DominoSemanticColors.dialogActionContent,
+                disabledContainerColor =
+                    DominoSemanticColors.dialogDisabledAction,
+                disabledContentColor =
+                    DominoSemanticColors
+                        .dialogDisabledActionContent,
+            )
+
+            DominoTextAction(
+                text = stringResource(
+                    R.string.account_email_use_another,
+                ),
+                onClick = onEmailResetClick,
+                enabled = !actionInProgress,
+                contentColor =
+                    DominoSemanticColors.dialogDismissAction,
+                disabledContentColor =
+                    DominoSemanticColors.dialogDisabledDismissAction,
+            )
+
+            return@Column
+        }
+
+        DominoOutlinedTextField(
+            value = emailAddress,
+            onValueChange = onEmailAddressChange,
+            modifier = Modifier.testTag(
+                OnlineAccountEmailFieldTag,
+            ),
+            enabled = !actionInProgress,
+            label = stringResource(
+                R.string.account_email_address,
+            ),
+            supportingText = stringResource(
+                R.string.account_email_privacy_hint,
+            ),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Email,
+            ),
+            tone = DominoTextFieldTone.OnLight,
+        )
+
+        if (OnlineEmailAccountIntent.LINK in intents) {
+            DominoPrimaryButton(
+                modifier = Modifier.testTag(
+                    OnlineAccountEmailPrimaryActionTag,
+                ),
+                text = if (actionInProgress) {
+                    stringResource(
+                        R.string.account_email_sending_code,
+                    )
+                } else if (
+                    status ==
+                        OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL
+                ) {
+                    stringResource(
+                        R.string.account_email_create,
+                    )
+                } else {
+                    stringResource(
+                        R.string.account_email_link,
+                    )
+                },
+                onClick = onEmailStartLinkClick,
+                enabled =
+                    !actionInProgress &&
+                        emailAddress.isNotBlank(),
+                loading = actionInProgress,
+                containerColor =
+                    DominoSemanticColors.dialogAction,
+                contentColor =
+                    DominoSemanticColors.dialogActionContent,
+                disabledContainerColor =
+                    DominoSemanticColors.dialogDisabledAction,
+                disabledContentColor =
+                    DominoSemanticColors
+                        .dialogDisabledActionContent,
+            )
+        }
+
+        if (OnlineEmailAccountIntent.RECOVER in intents) {
+            DominoTextAction(
+                text = stringResource(
+                    R.string.account_email_recover,
+                ),
+                onClick = onEmailStartRecoverClick,
+                enabled =
+                    !actionInProgress &&
+                        emailAddress.isNotBlank(),
+                contentColor =
+                    DominoSemanticColors.dialogDismissAction,
+                disabledContentColor =
+                    DominoSemanticColors.dialogDisabledDismissAction,
+            )
+        }
+    }
 }
 
 @Composable

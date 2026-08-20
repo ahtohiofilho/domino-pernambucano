@@ -52,6 +52,31 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun requestEmailCode(
+        request: OnlineEmailCodeRequestDto,
+    ): OnlineEmailCodeRequestResponseDto {
+        throw UnsupportedOperationException(
+            "Solicitação de código por e-mail não configurada para este cliente remoto.",
+        )
+    }
+
+    suspend fun linkEmailIdentity(
+        request: OnlineEmailIdentityRequestDto,
+        accessToken: String,
+    ): OnlineAccountSessionDto {
+        throw UnsupportedOperationException(
+            "Vinculação por e-mail não configurada para este cliente remoto.",
+        )
+    }
+
+    suspend fun recoverEmailAccount(
+        request: OnlineEmailIdentityRequestDto,
+    ): OnlineAccountSessionDto {
+        throw UnsupportedOperationException(
+            "Recuperação por e-mail não configurada para este cliente remoto.",
+        )
+    }
+
     suspend fun enqueuePublicRankedQueue(
         request: PublicRankedQueueEnterRequestDto,
     ): PublicRankedQueueHttpResponseDto {

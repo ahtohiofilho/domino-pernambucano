@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailAccountIntent
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
@@ -77,6 +78,14 @@ fun MainMenuScreen(
         OnlineGoogleAccountStatus.UNAVAILABLE,
     onlineGoogleAccountActionInProgress: Boolean = false,
     onlineGoogleAccountFeedbackMessage: String? = null,
+    onlineGoogleAvailable: Boolean = true,
+    onlineEmailAvailable: Boolean = false,
+    onlineEmailAddress: String = "",
+    onlineEmailCode: String = "",
+    onlineEmailIntent: OnlineEmailAccountIntent? = null,
+    onlineEmailCodeRequested: Boolean = false,
+    onlineEmailActionInProgress: Boolean = false,
+    onlineEmailFeedbackMessage: String? = null,
     onlineAccountDisplayName: String? = null,
     onlineAccountTableName: String? = null,
     onlineAccountProfileUiState: OnlineAccountProfileUiState =
@@ -89,6 +98,13 @@ fun MainMenuScreen(
     onAccountProfileTableNameChange: (String) -> Unit = {},
     onAccountProfileSaveClick: () -> Unit = {},
     onAccountProfileRetryClick: () -> Unit = {},
+    onEmailAddressChange: (String) -> Unit = {},
+    onEmailCodeChange: (String) -> Unit = {},
+    onEmailStartLinkClick: () -> Unit = {},
+    onEmailStartRecoverClick: () -> Unit = {},
+    onEmailConfirmCodeClick: () -> Unit = {},
+    onEmailResetClick: () -> Unit = {},
+    onAccountDialogDismissed: () -> Unit = {},
     onPlayClick: () -> Unit,
     onRankingClick: () -> Unit,
     onInspectPendingOnlineParticipationClick: () -> Unit,
@@ -462,6 +478,14 @@ fun MainMenuScreen(
             status = onlineGoogleAccountStatus,
             actionInProgress = onlineGoogleAccountActionInProgress,
             feedbackMessage = onlineGoogleAccountFeedbackMessage,
+            googleAvailable = onlineGoogleAvailable,
+            emailAvailable = onlineEmailAvailable,
+            emailAddress = onlineEmailAddress,
+            emailCode = onlineEmailCode,
+            emailIntent = onlineEmailIntent,
+            emailCodeRequested = onlineEmailCodeRequested,
+            emailActionInProgress = onlineEmailActionInProgress,
+            emailFeedbackMessage = onlineEmailFeedbackMessage,
             profileState = onlineAccountProfileUiState,
             onPublicDisplayNameChange =
                 onAccountProfilePublicDisplayNameChange,
@@ -471,6 +495,14 @@ fun MainMenuScreen(
                 onAccountProfileSaveClick,
             onRetryProfileClick =
                 onAccountProfileRetryClick,
+            onEmailAddressChange = onEmailAddressChange,
+            onEmailCodeChange = onEmailCodeChange,
+            onEmailStartLinkClick = onEmailStartLinkClick,
+            onEmailStartRecoverClick =
+                onEmailStartRecoverClick,
+            onEmailConfirmCodeClick =
+                onEmailConfirmCodeClick,
+            onEmailResetClick = onEmailResetClick,
             onConnectGoogleClick = {
                 reopenAccountAfterGoogleAction = true
                 accountDialogVisible = false
@@ -478,6 +510,7 @@ fun MainMenuScreen(
             },
             onDismissRequest = {
                 accountDialogVisible = false
+                onAccountDialogDismissed()
             },
         )
     }

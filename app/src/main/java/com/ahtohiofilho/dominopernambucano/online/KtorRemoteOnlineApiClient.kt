@@ -129,6 +129,64 @@ class KtorRemoteOnlineApiClient(
         }
     }
 
+    override suspend fun requestEmailCode(
+        request: OnlineEmailCodeRequestDto,
+    ): OnlineEmailCodeRequestResponseDto {
+        return executeEmailIdentityRequest {
+            httpClient.post(
+                urlString = endpoint(
+                    OnlineEmailIdentityRoutes.REQUEST_CODE,
+                ),
+            ) {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
+    }
+
+    override suspend fun linkEmailIdentity(
+        request: OnlineEmailIdentityRequestDto,
+        accessToken: String,
+    ): OnlineAccountSessionDto {
+        val normalizedAccessToken = accessToken.trim()
+        require(normalizedAccessToken.isNotBlank()) {
+            "A vinculação por e-mail exige uma credencial online válida."
+        }
+
+        return executeEmailIdentityRequest {
+            httpClient.post(
+                urlString = endpoint(
+                    OnlineEmailIdentityRoutes.LINK_IDENTITY,
+                ),
+            ) {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                header(
+                    HttpHeaders.Authorization,
+                    "Bearer $normalizedAccessToken",
+                )
+                setBody(request)
+            }.body()
+        }
+    }
+
+    override suspend fun recoverEmailAccount(
+        request: OnlineEmailIdentityRequestDto,
+    ): OnlineAccountSessionDto {
+        return executeEmailIdentityRequest {
+            httpClient.post(
+                urlString = endpoint(
+                    OnlineEmailIdentityRoutes.RECOVER_ACCOUNT,
+                ),
+            ) {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                setBody(request)
+            }.body()
+        }
+    }
+
     override suspend fun enqueuePublicRankedQueue(
         request: PublicRankedQueueEnterRequestDto,
     ): PublicRankedQueueHttpResponseDto {
@@ -549,6 +607,16 @@ class KtorRemoteOnlineApiClient(
             request()
         } catch (error: ResponseException) {
             throw error.toOnlineGoogleIdentityExceptionOrSelf()
+        }
+    }
+
+    private suspend fun <T> executeEmailIdentityRequest(
+        request: suspend () -> T,
+    ): T {
+        return try {
+            request()
+        } catch (error: ResponseException) {
+            throw error.toOnlineEmailIdentityExceptionOrSelf()
         }
     }
 
