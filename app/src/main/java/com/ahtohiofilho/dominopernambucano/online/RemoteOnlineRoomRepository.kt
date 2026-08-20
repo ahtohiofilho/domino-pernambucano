@@ -362,143 +362,283 @@ private enum class ActiveReadRefreshOutcome {
                 level = OnlineTraceLevel.INFO,
                 type = OnlineTraceType.ACTION_SUBMITTED,
                 action = action,
-                attributes = action.traceAttributes(),
+                attributes = action.traceAttributes() + mapOf(
+                    "submitAttempt" to "1",
+                ),
             )
 
             val startedAtEpochMillis = nowEpochMillis()
-
-            runCatching {
-                client.submitAction(action)
-            }.fold(
-                onSuccess = { result ->
-                    val resolvedResult = result.copy(
-                        actionId = result.actionId ?: action.actionId,
+            val firstAttempt = submitActionAttempt(
+                client = client,
+                action = action,
+            )
+            val firstFailure = firstAttempt.exceptionOrNull()
+            val replayAttempted =
+                firstFailure != null &&
+                    isAmbiguousSubmitActionTransportFailure(
+                        error = firstFailure,
                     )
 
-                    if (resolvedResult.accepted) {
-                        trace(
-                            level = OnlineTraceLevel.INFO,
-                            type = OnlineTraceType.ACTION_ACCEPTED,
-                            action = action,
-                            snapshotRevision = resolvedResult.revision,
-                            attributes = action.traceAttributes() + mapOf(
-                                "durationMillis" to elapsedMillisSince(
-                                    startedAtEpochMillis = startedAtEpochMillis,
-                                ).toString(),
-                            ),
-                        )
-                    } else {
-                        trace(
-                            level = OnlineTraceLevel.WARN,
-                            type = OnlineTraceType.ACTION_REJECTED,
-                            action = action,
-                            snapshotRevision = resolvedResult.revision,
-                            attributes = action.traceAttributes() + mapOf(
-                                "durationMillis" to elapsedMillisSince(
-                                    startedAtEpochMillis = startedAtEpochMillis,
-                                ).toString(),
-                                "reason" to resolvedResult.reason
-                                    .orEmpty()
-                                    .take(180),
-                            ),
-                        )
-                    }
+            val finalAttempt = if (replayAttempted) {
+                traceTransportFailure(
+                    operation = "submit_action",
+                    error = requireNotNull(firstFailure),
+                    action = action,
+                    durationMillis = elapsedMillisSince(
+                        startedAtEpochMillis = startedAtEpochMillis,
+                    ),
+                )
 
-                    if (
-                        resolvedResult.accepted ||
-                        shouldRefreshAfterRejectedAction(
-                            action = action,
-                            result = resolvedResult,
-                        )
-                    ) {
-                        refreshSnapshotsAfterAction(
-                            client = client,
-                            action = action,
-                        )
-                    }
+                trace(
+                    level = OnlineTraceLevel.INFO,
+                    type = OnlineTraceType.ACTION_SUBMITTED,
+                    action = action,
+                    attributes = action.traceAttributes() + mapOf(
+                        "submitAttempt" to "2",
+                        "replay" to "true",
+                        "replayReason" to
+                            "ambiguous_transport_outcome",
+                    ),
+                )
 
-                    resolvedResult
+                submitActionAttempt(
+                    client = client,
+                    action = action,
+                )
+            } else {
+                firstAttempt
+            }
+
+            finalAttempt.fold(
+                onSuccess = { result ->
+                    handleSubmittedActionResult(
+                        client = client,
+                        action = action,
+                        result = result,
+                        startedAtEpochMillis =
+                            startedAtEpochMillis,
+                        replayAttempted = replayAttempted,
+                    )
                 },
                 onFailure = { error ->
-                    val remoteSessionRejected =
-                        isRemoteSessionRejected(error)
-                    val remoteParticipationForbidden =
-                        isRemoteParticipationForbidden(error)
-                    val remoteRateLimited =
-                        isRemoteRateLimited(error)
-
-                    when {
-                        remoteSessionRejected -> {
-                            invalidateActiveMatchAfterRemoteSessionRejected(
-                                roomId = action.roomId,
-                                matchId = action.matchId,
-                                playerId = action.playerId,
-                                operation = "submit_action",
-                                trigger = "action",
-                            )
-                        }
-
-                        remoteParticipationForbidden -> {
-                            invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
-                                roomId = action.roomId,
-                                matchId = action.matchId,
-                                playerId = action.playerId,
-                                reason =
-                                    OnlineActiveMatchParticipationAuthorizationLossReason
-                                        .ACTION_IDENTITY_FORBIDDEN,
-                                operation = "submit_action",
-                                trigger = "action",
-                            )
-                        }
-
-                        remoteRateLimited -> Unit
-
-                        else -> {
-                            traceTransportFailure(
-                                operation = "submit_action",
-                                error = error,
-                                action = action,
-                                durationMillis = elapsedMillisSince(
-                                    startedAtEpochMillis = startedAtEpochMillis,
-                                ),
-                            )
-                        }
-                    }
-
-                    val rejectedResult = rejectedAction(
+                    handleSubmitActionFailure(
+                        client = client,
                         action = action,
-                        reason = error.toOnlineFailureReason(
-                            fallback = "Falha ao enviar ação online remota.",
-                        ),
+                        error = error,
+                        startedAtEpochMillis =
+                            startedAtEpochMillis,
+                        replayAttempted = replayAttempted,
                     )
-
-                    trace(
-                        level = OnlineTraceLevel.WARN,
-                        type = OnlineTraceType.ACTION_REJECTED,
-                        action = action,
-                        snapshotRevision = rejectedResult.revision,
-                        attributes = action.traceAttributes() + mapOf(
-                            "reason" to rejectedResult.reason.orEmpty().take(180),
-                            "source" to when {
-                                remoteSessionRejected ->
-                                    "remote_session_rejected"
-
-                                remoteParticipationForbidden ->
-                                    "remote_participation_forbidden"
-
-                                remoteRateLimited ->
-                                    "remote_rate_limited"
-
-                                else ->
-                                    "transport_failure"
-                            },
-                        ),
-                    )
-
-                    rejectedResult
                 },
             )
         }
+    }
+
+    private suspend fun submitActionAttempt(
+        client: RemoteOnlineApiClient,
+        action: OnlinePlayerActionDto,
+    ): Result<OnlineActionResultDto> {
+        return try {
+            Result.success(
+                client.submitAction(action),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            Result.failure(error)
+        }
+    }
+
+    private fun isAmbiguousSubmitActionTransportFailure(
+        error: Throwable,
+    ): Boolean {
+        if (error is CancellationException) {
+            return false
+        }
+
+        if (error is io.ktor.client.plugins.ResponseException) {
+            return false
+        }
+
+        return error is java.io.IOException ||
+                error is io.ktor.client.plugins.HttpRequestTimeoutException
+    }
+
+    private suspend fun handleSubmittedActionResult(
+        client: RemoteOnlineApiClient,
+        action: OnlinePlayerActionDto,
+        result: OnlineActionResultDto,
+        startedAtEpochMillis: Long,
+        replayAttempted: Boolean,
+    ): OnlineActionResultDto {
+        val resolvedResult = result.copy(
+            actionId = result.actionId ?: action.actionId,
+        )
+        val submitAttempt = if (replayAttempted) {
+            "2"
+        } else {
+            "1"
+        }
+
+        if (resolvedResult.accepted) {
+            trace(
+                level = OnlineTraceLevel.INFO,
+                type = OnlineTraceType.ACTION_ACCEPTED,
+                action = action,
+                snapshotRevision = resolvedResult.revision,
+                attributes = action.traceAttributes() + mapOf(
+                    "durationMillis" to elapsedMillisSince(
+                        startedAtEpochMillis = startedAtEpochMillis,
+                    ).toString(),
+                    "submitAttempt" to submitAttempt,
+                    "recoveredAfterAmbiguousTransport" to
+                        replayAttempted.toString(),
+                ),
+            )
+        } else {
+            trace(
+                level = OnlineTraceLevel.WARN,
+                type = OnlineTraceType.ACTION_REJECTED,
+                action = action,
+                snapshotRevision = resolvedResult.revision,
+                attributes = action.traceAttributes() + mapOf(
+                    "durationMillis" to elapsedMillisSince(
+                        startedAtEpochMillis = startedAtEpochMillis,
+                    ).toString(),
+                    "reason" to resolvedResult.reason
+                        .orEmpty()
+                        .take(180),
+                    "submitAttempt" to submitAttempt,
+                    "recoveredAfterAmbiguousTransport" to
+                        replayAttempted.toString(),
+                ),
+            )
+        }
+
+        if (
+            resolvedResult.accepted ||
+            shouldRefreshAfterRejectedAction(
+                action = action,
+                result = resolvedResult,
+            )
+        ) {
+            refreshSnapshotsAfterAction(
+                client = client,
+                action = action,
+            )
+        }
+
+        return resolvedResult
+    }
+
+    private suspend fun handleSubmitActionFailure(
+        client: RemoteOnlineApiClient,
+        action: OnlinePlayerActionDto,
+        error: Throwable,
+        startedAtEpochMillis: Long,
+        replayAttempted: Boolean,
+    ): OnlineActionResultDto {
+        if (error is CancellationException) {
+            throw error
+        }
+
+        val remoteSessionRejected =
+            isRemoteSessionRejected(error)
+        val remoteParticipationForbidden =
+            isRemoteParticipationForbidden(error)
+        val remoteRateLimited =
+            isRemoteRateLimited(error)
+
+        when {
+            remoteSessionRejected -> {
+                invalidateActiveMatchAfterRemoteSessionRejected(
+                    roomId = action.roomId,
+                    matchId = action.matchId,
+                    playerId = action.playerId,
+                    operation = "submit_action",
+                    trigger = "action",
+                )
+            }
+
+            remoteParticipationForbidden -> {
+                invalidateActiveMatchAfterRemoteParticipationAuthorizationLoss(
+                    roomId = action.roomId,
+                    matchId = action.matchId,
+                    playerId = action.playerId,
+                    reason =
+                        OnlineActiveMatchParticipationAuthorizationLossReason
+                            .ACTION_IDENTITY_FORBIDDEN,
+                    operation = "submit_action",
+                    trigger = "action",
+                )
+            }
+
+            remoteRateLimited -> Unit
+
+            else -> {
+                traceTransportFailure(
+                    operation = "submit_action",
+                    error = error,
+                    action = action,
+                    durationMillis = elapsedMillisSince(
+                        startedAtEpochMillis = startedAtEpochMillis,
+                    ),
+                )
+            }
+        }
+
+        val shouldReconcileAmbiguousOutcome =
+            replayAttempted &&
+                !remoteSessionRejected &&
+                !remoteParticipationForbidden
+
+        if (shouldReconcileAmbiguousOutcome) {
+            refreshSnapshotsAfterAction(
+                client = client,
+                action = action,
+            )
+        }
+
+        val rejectedResult = rejectedAction(
+            action = action,
+            reason = error.toOnlineFailureReason(
+                fallback = "Falha ao enviar ação online remota.",
+            ),
+        )
+
+        trace(
+            level = OnlineTraceLevel.WARN,
+            type = OnlineTraceType.ACTION_REJECTED,
+            action = action,
+            snapshotRevision = rejectedResult.revision,
+            attributes = action.traceAttributes() + mapOf(
+                "reason" to rejectedResult.reason.orEmpty().take(180),
+                "source" to when {
+                    remoteSessionRejected ->
+                        "remote_session_rejected"
+
+                    remoteParticipationForbidden ->
+                        "remote_participation_forbidden"
+
+                    remoteRateLimited ->
+                        "remote_rate_limited"
+
+                    else ->
+                        "transport_failure"
+                },
+                "submitAttempt" to if (replayAttempted) {
+                    "2"
+                } else {
+                    "1"
+                },
+                "ambiguousReplayAttempted" to
+                    replayAttempted.toString(),
+                "authoritativeReadReconciliation" to
+                    shouldReconcileAmbiguousOutcome.toString(),
+            ),
+        )
+
+        return rejectedResult
     }
 
     override suspend fun submitTraceBatch(

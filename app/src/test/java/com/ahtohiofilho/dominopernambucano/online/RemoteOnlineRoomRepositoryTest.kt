@@ -5587,6 +5587,441 @@ fun submit_action_429_is_transient_not_retried_and_does_not_arm_read_backoff() =
         repository.leaveRoom()
     }
 
+
+    @Test
+    fun ambiguous_submit_action_transport_failure_replays_same_action_once_and_accepts_canonical_result() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 2L,
+            )
+            val action = createOnlinePassTurnAction(
+                roomId = room.roomId,
+                matchId = match.matchId,
+                playerId = "player-1",
+                revision = 1L,
+                actionId = "ambiguous-accepted-action",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionFailures = mutableListOf(
+                    java.io.IOException("lost first response"),
+                    null,
+                ),
+                submitActionResults = mutableListOf(
+                    OnlineActionResultDto(
+                        accepted = true,
+                        revision = 2L,
+                        actionId = action.actionId,
+                    ),
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            val result = repository.submitAction(action)
+
+            assertEquals(true, result.accepted)
+            assertEquals(action.actionId, result.actionId)
+            assertEquals(
+                listOf(action, action),
+                apiClient.submitActionRequests,
+            )
+            assertEquals(
+                listOf(room.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                listOf(match.matchId),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(room, repository.roomSnapshot.value)
+            assertEquals(match, repository.matchSnapshot.value)
+        }
+
+    @Test
+    fun ambiguous_submit_action_transport_failure_replay_returns_canonical_rejection() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 2L,
+            )
+            val action = createOnlinePassTurnAction(
+                roomId = room.roomId,
+                matchId = match.matchId,
+                playerId = "player-1",
+                revision = 1L,
+                actionId = "ambiguous-rejected-action",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionFailures = mutableListOf(
+                    java.io.IOException("lost first response"),
+                    null,
+                ),
+                submitActionResults = mutableListOf(
+                    OnlineActionResultDto(
+                        accepted = false,
+                        revision = 2L,
+                        actionId = action.actionId,
+                        reason = "authoritative rejection",
+                    ),
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            val result = repository.submitAction(action)
+
+            assertEquals(false, result.accepted)
+            assertEquals(action.actionId, result.actionId)
+            assertEquals(
+                "authoritative rejection",
+                result.reason,
+            )
+            assertEquals(
+                listOf(action, action),
+                apiClient.submitActionRequests,
+            )
+            assertEquals(
+                listOf(room.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(match, repository.matchSnapshot.value)
+        }
+
+    @Test
+    fun two_ambiguous_submit_action_transport_failures_reconcile_once_without_third_submit() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 2L,
+            )
+            val action = createOnlinePassTurnAction(
+                roomId = room.roomId,
+                matchId = match.matchId,
+                playerId = "player-1",
+                revision = 1L,
+                actionId = "ambiguous-twice-action",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionFailures = mutableListOf(
+                    java.io.IOException("lost first response"),
+                    java.io.IOException("lost replay response"),
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            val result = repository.submitAction(action)
+
+            assertEquals(false, result.accepted)
+            assertEquals(action.actionId, result.actionId)
+            assertTrue(
+                result.reason.orEmpty().contains(
+                    "lost replay response",
+                ),
+            )
+            assertEquals(2, apiClient.submitActionRequests.size)
+            assertEquals(
+                listOf(room.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                listOf(match.matchId),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(match, repository.matchSnapshot.value)
+            assertEquals(2L, result.revision)
+        }
+
+    @Test
+    fun ambiguous_submit_action_then_429_reconciles_once_without_third_submit() =
+        runBlocking {
+            val room = createInMatchRoomSnapshot()
+            val match = createMatchSnapshot(
+                revision = 2L,
+            )
+            val action = createOnlinePassTurnAction(
+                roomId = room.roomId,
+                matchId = match.matchId,
+                playerId = "player-1",
+                revision = 1L,
+                actionId = "ambiguous-then-429-action",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionFailures = mutableListOf(
+                    java.io.IOException("lost first response"),
+                    createTooManyRequestsClientRequestException(),
+                ),
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            val result = repository.submitAction(action)
+
+            assertEquals(false, result.accepted)
+            assertEquals(2, apiClient.submitActionRequests.size)
+            assertEquals(
+                listOf(room.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                listOf(match.matchId),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(match, repository.matchSnapshot.value)
+        }
+
+    @Test
+    fun ambiguous_submit_action_then_401_invalidates_session_without_third_submit() =
+        runBlocking {
+            val action = createOnlinePassTurnAction(
+                roomId = "room-1",
+                matchId = "match-1",
+                playerId = "player-1",
+                revision = 1L,
+                actionId = "ambiguous-then-401-action",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionFailures = mutableListOf(
+                    java.io.IOException("lost first response"),
+                    createUnauthorizedClientRequestException(),
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+            val invalidationDeferred = async(
+                start = CoroutineStart.UNDISPATCHED,
+            ) {
+                repository.activeMatchSessionInvalidationEvents.first()
+            }
+
+            val result = repository.submitAction(action)
+            val invalidation = withTimeout(2_000L) {
+                invalidationDeferred.await()
+            }
+
+            assertEquals(false, result.accepted)
+            assertEquals(2, apiClient.submitActionRequests.size)
+            assertEquals(action.roomId, invalidation.roomId)
+            assertEquals(action.matchId, invalidation.matchId)
+            assertEquals(action.playerId, invalidation.playerId)
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+        }
+
+    @Test
+    fun ambiguous_submit_action_then_403_invalidates_participation_without_third_submit() =
+        runBlocking {
+            val action = createOnlinePassTurnAction(
+                roomId = "room-1",
+                matchId = "match-1",
+                playerId = "player-1",
+                revision = 1L,
+                actionId = "ambiguous-then-403-action",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionFailures = mutableListOf(
+                    java.io.IOException("lost first response"),
+                    createForbiddenClientRequestException(),
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+            val authorizationLossDeferred = async(
+                start = CoroutineStart.UNDISPATCHED,
+            ) {
+                repository
+                    .activeMatchParticipationAuthorizationLossEvents
+                    .first()
+            }
+
+            val result = repository.submitAction(action)
+            val authorizationLoss = withTimeout(2_000L) {
+                authorizationLossDeferred.await()
+            }
+
+            assertEquals(false, result.accepted)
+            assertEquals(2, apiClient.submitActionRequests.size)
+            assertEquals(action.roomId, authorizationLoss.roomId)
+            assertEquals(action.matchId, authorizationLoss.matchId)
+            assertEquals(action.playerId, authorizationLoss.playerId)
+            assertEquals(
+                OnlineActiveMatchParticipationAuthorizationLossReason
+                    .ACTION_IDENTITY_FORBIDDEN,
+                authorizationLoss.reason,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+        }
+
+    @Test
+    fun initial_submit_action_cancellation_is_rethrown_without_replay() =
+        runBlocking {
+            val action = createOnlinePassTurnAction(
+                roomId = "room-1",
+                matchId = "match-1",
+                playerId = "player-1",
+                revision = 1L,
+                actionId = "initial-cancellation-action",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionFailures = mutableListOf(
+                    kotlinx.coroutines.CancellationException(
+                        "initial cancellation",
+                    ),
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            try {
+                repository.submitAction(action)
+                error("CancellationException deveria ser propagada.")
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                assertEquals(
+                    "initial cancellation",
+                    error.message,
+                )
+            }
+
+            assertEquals(1, apiClient.submitActionRequests.size)
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+        }
+
+    @Test
+    fun replayed_submit_action_cancellation_is_rethrown_without_third_submit() =
+        runBlocking {
+            val action = createOnlinePassTurnAction(
+                roomId = "room-1",
+                matchId = "match-1",
+                playerId = "player-1",
+                revision = 1L,
+                actionId = "replay-cancellation-action",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionFailures = mutableListOf(
+                    java.io.IOException("lost first response"),
+                    kotlinx.coroutines.CancellationException(
+                        "replay cancellation",
+                    ),
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            try {
+                repository.submitAction(action)
+                error("CancellationException do replay deveria ser propagada.")
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                assertEquals(
+                    "replay cancellation",
+                    error.message,
+                )
+            }
+
+            assertEquals(2, apiClient.submitActionRequests.size)
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+        }
+
+    @Test
+    fun ambiguous_submit_action_replay_reuses_exact_same_action_instance_and_action_id() =
+        runBlocking {
+            val action = createOnlinePassTurnAction(
+                roomId = "room-1",
+                matchId = "match-1",
+                playerId = "player-1",
+                revision = 1L,
+                actionId = "exact-replay-action",
+            )
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionFailures = mutableListOf(
+                    java.io.IOException("lost first response"),
+                    null,
+                ),
+                submitActionResults = mutableListOf(
+                    OnlineActionResultDto(
+                        accepted = false,
+                        revision = 1L,
+                        actionId = action.actionId,
+                        reason = "same revision rejection",
+                    ),
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+            )
+
+            val result = repository.submitAction(action)
+
+            assertEquals(false, result.accepted)
+            assertEquals(2, apiClient.submitActionRequests.size)
+            assertTrue(
+                apiClient.submitActionRequests[0] ===
+                    apiClient.submitActionRequests[1],
+            )
+            assertTrue(
+                apiClient.submitActionRequests[0] === action,
+            )
+            assertEquals(
+                action.actionId,
+                apiClient.submitActionRequests[1].actionId,
+            )
+            assertEquals(
+                emptyList<String>(),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+        }
+
     private fun createPendingParticipationBinding(
         matchId: String? = null,
         localSeatIndex: Int = 0,
@@ -5931,6 +6366,10 @@ private suspend fun createTooManyRequestsClientRequestException(
         private val createRoomFailure: Throwable? = null,
         private val joinRoomFailure: Throwable? = null,
         private val submitActionFailure: Throwable? = null,
+        private val submitActionFailures: MutableList<Throwable?> =
+            mutableListOf(),
+        private val submitActionResults: MutableList<OnlineActionResultDto> =
+            mutableListOf(),
         private val submitTraceBatchFailure: Throwable? = null,
         private val fetchRoomSnapshotFailure: Throwable? = null,
         private val fetchRoomSnapshotFailures: MutableList<Throwable?> =
@@ -6007,13 +6446,23 @@ private suspend fun createTooManyRequestsClientRequestException(
         ): OnlineActionResultDto {
             submitActionRequests += action
 
-            submitActionFailure?.let { error ->
+            val configuredFailure =
+                if (submitActionFailures.isNotEmpty()) {
+                    submitActionFailures.removeAt(0)
+                } else {
+                    submitActionFailure
+                }
+
+            configuredFailure?.let { error ->
                 throw error
+            }
+
+            if (submitActionResults.isNotEmpty()) {
+                return submitActionResults.removeAt(0)
             }
 
             return submitActionResult
         }
-
         override suspend fun submitTraceBatch(
             batch: OnlineTraceBatchDto,
         ): OnlineTraceBatchResultDto {
