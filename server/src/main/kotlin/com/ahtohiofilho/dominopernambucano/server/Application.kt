@@ -123,6 +123,7 @@ internal fun Application.module(
         ),
     googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier =
         createDefaultOnlineGoogleIdentityTokenVerifier(),
+    emailVerificationService: OnlineEmailVerificationService? = null,
     rankingPublicationPolicy: RankingPublicationPolicy =
         serverEnvironment.rankingPublicationPolicy,
     syntheticProvisioningPolicy: SyntheticProvisioningPolicy =
@@ -138,6 +139,13 @@ internal fun Application.module(
     authoritativeTickIntervalMillis: Long =
         AUTHORITATIVE_TICK_INTERVAL_MILLIS,
 ) {
+    require(
+        emailVerificationService == null ||
+            serverEnvironment.allowsPhaseAEmailIdentityRoutes
+    ) {
+        "A autenticação por e-mail da Phase A só pode ser instalada em TEST."
+    }
+
     installAuthoritativeMatchTicker(
         store = store,
         serverTraceSink = serverTraceSink,
@@ -199,6 +207,7 @@ internal fun Application.module(
             sessionTokenService = sessionTokenService,
             identityResolver = identityResolver,
             googleIdentityTokenVerifier = googleIdentityTokenVerifier,
+            emailVerificationService = emailVerificationService,
             rankingPublicationPolicy = rankingPublicationPolicy,
             syntheticProvisioningPolicy = syntheticProvisioningPolicy,
             nowEpochMillis = nowEpochMillis,

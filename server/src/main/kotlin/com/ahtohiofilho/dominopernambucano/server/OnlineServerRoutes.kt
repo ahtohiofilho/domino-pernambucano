@@ -4,6 +4,10 @@ import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileResponseDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileUpdateRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailCodeRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailCodeRequestResponseDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailIdentityRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineEmailIdentityRoutes
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
@@ -28,6 +32,7 @@ internal fun Route.onlineServerRoutes(
     sessionTokenService: OnlineSessionTokenService,
     identityResolver: OnlineRequestIdentityResolver,
     googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier,
+    emailVerificationService: OnlineEmailVerificationService? = null,
     rankingPublicationPolicy: RankingPublicationPolicy =
         DEFAULT_RANKING_PUBLICATION_POLICY,
     syntheticProvisioningPolicy: SyntheticProvisioningPolicy =
@@ -42,6 +47,61 @@ internal fun Route.onlineServerRoutes(
                 HttpStatusCode.Created,
                 sessionTokenService.issueAnonymousSession(),
             )
+        }
+
+        emailVerificationService?.let { service ->
+            post("/${OnlineEmailIdentityRoutes.REQUEST_CODE}") {
+                val request = call.receive<OnlineEmailCodeRequestDto>()
+
+                try {
+                    service.requestCode(
+                        rawEmail = request.email,
+                    )
+                } catch (_: OnlineEmailVerificationDeliveryException) {
+                    call.respond(HttpStatusCode.ServiceUnavailable)
+                    return@post
+                }
+
+                call.respond(
+                    HttpStatusCode.Accepted,
+                    OnlineEmailCodeRequestResponseDto(),
+                )
+            }
+
+            post("/${OnlineEmailIdentityRoutes.RECOVER_ACCOUNT}") {
+                val request = call.receive<OnlineEmailIdentityRequestDto>()
+                val subject = when (
+                    val verification = service.verifyCode(
+                        rawEmail = request.email,
+                        rawCode = request.code,
+                    )
+                ) {
+                    is OnlineEmailVerificationResult.Verified -> {
+                        verification.subject
+                    }
+
+                    OnlineEmailVerificationResult.Rejected -> {
+                        call.respond(HttpStatusCode.Unauthorized)
+                        return@post
+                    }
+                }
+                val account = store.findAccountByExternalIdentity(
+                    provider = OnlineExternalIdentityProvider.EMAIL,
+                    subject = subject,
+                )
+
+                if (account == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@post
+                }
+
+                call.respond(
+                    sessionTokenService.issueAccountSession(
+                        playerId = account.playerId,
+                        accountId = account.accountId,
+                    ),
+                )
+            }
         }
 
         post("/${OnlineRemoteRoutes.RECOVER_GOOGLE_ACCOUNT}") {
@@ -156,6 +216,52 @@ internal fun Route.onlineServerRoutes(
                     accountId = account.accountId,
                 ),
             )
+        }
+
+        emailVerificationService?.let { service ->
+            post("/${OnlineEmailIdentityRoutes.LINK_IDENTITY}") {
+                val identity = call.requireOnlineIdentity(
+                    identityResolver = identityResolver,
+                ) ?: return@post
+                val request = call.receive<OnlineEmailIdentityRequestDto>()
+                val subject = when (
+                    val verification = service.verifyCode(
+                        rawEmail = request.email,
+                        rawCode = request.code,
+                    )
+                ) {
+                    is OnlineEmailVerificationResult.Verified -> {
+                        verification.subject
+                    }
+
+                    OnlineEmailVerificationResult.Rejected -> {
+                        call.respond(HttpStatusCode.Unauthorized)
+                        return@post
+                    }
+                }
+
+                when (
+                    val result = store.linkExternalIdentity(
+                        playerId = identity.playerId,
+                        expectedAccountId = identity.accountId,
+                        provider = OnlineExternalIdentityProvider.EMAIL,
+                        subject = subject,
+                    )
+                ) {
+                    is OnlineExternalIdentityLinkResult.Linked -> {
+                        call.respond(
+                            sessionTokenService.issueAccountSession(
+                                playerId = result.account.playerId,
+                                accountId = result.account.accountId,
+                            ),
+                        )
+                    }
+
+                    OnlineExternalIdentityLinkResult.Conflict -> {
+                        call.respond(HttpStatusCode.Conflict)
+                    }
+                }
+            }
         }
 
         post("/${OnlineRemoteRoutes.LINK_GOOGLE_IDENTITY}") {

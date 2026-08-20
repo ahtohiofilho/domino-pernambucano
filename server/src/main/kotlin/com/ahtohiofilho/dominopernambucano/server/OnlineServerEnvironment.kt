@@ -26,6 +26,9 @@ internal val OnlineServerEnvironment.allowsDevelopmentIdentityHeader: Boolean
 internal val OnlineServerEnvironment.allowsDevelopmentBots: Boolean
     get() = this == OnlineServerEnvironment.DEVELOPMENT
 
+internal val OnlineServerEnvironment.allowsPhaseAEmailIdentityRoutes: Boolean
+    get() = this == OnlineServerEnvironment.TEST
+
 internal val OnlineServerEnvironment.requiresPersistentState: Boolean
     get() = this == OnlineServerEnvironment.MINIPRODUCTION ||
         this == OnlineServerEnvironment.PRODUCTION
