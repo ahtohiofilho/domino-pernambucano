@@ -76,6 +76,10 @@ private fun Application.module(
     val traceLogger = OnlineTraceLogger(
         sink = serverTraceSink,
     )
+    val emailVerificationService =
+        createDefaultOnlineEmailVerificationService(
+            serverEnvironment = serverEnvironment,
+        )
     val store = createDefaultOnlineServerStore(
         serverEnvironment = serverEnvironment,
         autoFillDevelopmentBotsAfterTwoHumanPlayers =
@@ -96,6 +100,7 @@ private fun Application.module(
             traceIngestionPolicy = traceIngestionPolicy,
             traceArchive = traceArchive,
             serverTraceSink = serverTraceSink,
+            emailVerificationService = emailVerificationService,
         )
     } catch (error: Exception) {
         store.close()
@@ -141,9 +146,9 @@ internal fun Application.module(
 ) {
     require(
         emailVerificationService == null ||
-            serverEnvironment.allowsPhaseAEmailIdentityRoutes
+            serverEnvironment.allowsConfiguredEmailIdentityRoutes
     ) {
-        "A autenticação por e-mail da Phase A só pode ser instalada em TEST."
+        "O ambiente atual não permite ativar autenticação por e-mail."
     }
 
     installAuthoritativeMatchTicker(

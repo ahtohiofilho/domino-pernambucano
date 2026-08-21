@@ -172,26 +172,26 @@ class OnlineEmailVerificationServiceTest {
     }
 
     @Test
-    fun phase_a_routes_are_test_only() {
-        assertTrue(
-            OnlineServerEnvironment.TEST
-                .allowsPhaseAEmailIdentityRoutes,
-        )
+    fun configured_email_routes_are_allowed_only_in_controlled_environments() {
         assertFalse(
             OnlineServerEnvironment.DEVELOPMENT
-                .allowsPhaseAEmailIdentityRoutes,
+                .allowsConfiguredEmailIdentityRoutes,
         )
-        assertFalse(
+        assertTrue(
             OnlineServerEnvironment.HOMOLOGATION
-                .allowsPhaseAEmailIdentityRoutes,
+                .allowsConfiguredEmailIdentityRoutes,
         )
-        assertFalse(
+        assertTrue(
             OnlineServerEnvironment.MINIPRODUCTION
-                .allowsPhaseAEmailIdentityRoutes,
+                .allowsConfiguredEmailIdentityRoutes,
         )
-        assertFalse(
+        assertTrue(
+            OnlineServerEnvironment.TEST
+                .allowsConfiguredEmailIdentityRoutes,
+        )
+        assertTrue(
             OnlineServerEnvironment.PRODUCTION
-                .allowsPhaseAEmailIdentityRoutes,
+                .allowsConfiguredEmailIdentityRoutes,
         )
     }
 
