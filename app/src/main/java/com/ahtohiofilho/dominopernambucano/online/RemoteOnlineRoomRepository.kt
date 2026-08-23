@@ -303,6 +303,122 @@ private enum class ActiveReadRefreshOutcome {
         )
     }
 
+    override suspend fun movePrivateRoomSeat(
+        targetSeatIndex: Int,
+    ): OnlineRoomOperationResultDto {
+        if (targetSeatIndex !in 0..3) {
+            return rejectedRoomOperation(
+                reason = "Posição de mesa inválida.",
+            )
+        }
+
+        return executePrivateLobbyOperation(
+            operation = "move_private_room_seat",
+        ) { client, roomId, playerId ->
+            client.movePrivateRoomSeat(
+                request = PrivateRoomSeatChangeRequestDto(
+                    roomId = roomId,
+                    localPlayerId = playerId,
+                    targetSeatIndex = targetSeatIndex,
+                ),
+            )
+        }
+    }
+
+    override suspend fun startPrivateRoom():
+        OnlineRoomOperationResultDto {
+        return executePrivateLobbyOperation(
+            operation = "start_private_room",
+        ) { client, roomId, playerId ->
+            client.startPrivateRoom(
+                request = PrivateRoomStartRequestDto(
+                    roomId = roomId,
+                    localPlayerId = playerId,
+                ),
+            )
+        }
+    }
+
+    private suspend fun executePrivateLobbyOperation(
+        operation: String,
+        remoteOperation:
+            suspend (
+                RemoteOnlineApiClient,
+                String,
+                String,
+            ) -> OnlineRoomOperationResultDto,
+    ): OnlineRoomOperationResultDto {
+        val client = apiClient
+            ?: return rejectedRoomOperation(
+                reason = getUnavailableBackendReason(),
+            )
+        val room = mutableRoomSnapshot.value
+            ?: return rejectedRoomOperation(
+                reason = "Nenhuma sala privada ativa.",
+            )
+        val playerId = activePlayerId
+            ?: return rejectedRoomOperation(
+                reason = "Nenhum participante local ativo.",
+            )
+
+        if (
+            room.matchMode !=
+                com.ahtohiofilho.dominopernambucano.match
+                    .DominoMatchMode.PRIVATE_UNRANKED ||
+            room.status != OnlineRoomStatusDto.WAITING_FOR_PLAYERS
+        ) {
+            return rejectedRoomOperation(
+                reason = "A operação exige um lobby privado aguardando início.",
+            )
+        }
+
+        val authenticationFailure =
+            configureActiveParticipantAuthentication(
+                client = client,
+                playerId = playerId,
+            )
+
+        if (authenticationFailure != null) {
+            return rejectedRoomOperation(
+                reason = authenticationFailure,
+            )
+        }
+
+        return try {
+            val result = remoteOperation(
+                client,
+                room.roomId,
+                playerId,
+            )
+
+            traceRoomOperationResult(
+                operation = operation,
+                result = result,
+                playerId = playerId,
+            )
+
+            applyRoomOperationResult(
+                result = result,
+                client = client,
+                operation = operation,
+                playerId = playerId,
+                sessionCredential = activeSessionCredential,
+                activateParticipant = true,
+            )
+
+            result
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            rejectedRoomOperation(
+                reason = error.toOnlineFailureReason(
+                    fallback =
+                        "Falha na operação do lobby privado.",
+                ),
+            )
+        }
+    }
+
     override suspend fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto {
@@ -1081,7 +1197,10 @@ private enum class ActiveReadRefreshOutcome {
 
         if (
             normalizedMatchId.isBlank() ||
-            localSeatIndex !in 0..3
+            (
+                localSeatIndex != -1 &&
+                localSeatIndex !in 0..3
+            )
         ) {
             return OnlinePublicRankedMatchActivation.Failure(
                 kind =
@@ -1131,9 +1250,7 @@ private enum class ActiveReadRefreshOutcome {
                 if (
                     matchSnapshot.matchId != normalizedMatchId ||
                     matchSnapshot.roomId.isBlank() ||
-                    matchSnapshot.gameState.players.size != 4 ||
-                    localSeatIndex !in
-                        matchSnapshot.gameState.players.indices
+                    matchSnapshot.gameState.players.size != 4
                 ) {
                     return@withLock OnlinePublicRankedMatchActivation.Failure(
                             kind =
@@ -1148,14 +1265,22 @@ private enum class ActiveReadRefreshOutcome {
 
                 val localParticipant =
                     roomSnapshot.players.singleOrNull { player ->
-                        player.seatIndex == localSeatIndex
+                        player.playerId == session.playerId
                     }
+                val resolvedLocalSeatIndex =
+                    localParticipant?.seatIndex
 
                 if (
                     roomSnapshot.roomId != matchSnapshot.roomId ||
                     roomSnapshot.matchId != normalizedMatchId ||
                     roomSnapshot.status != OnlineRoomStatusDto.IN_MATCH ||
-                    localParticipant?.playerId != session.playerId
+                    resolvedLocalSeatIndex == null ||
+                    resolvedLocalSeatIndex !in
+                        matchSnapshot.gameState.players.indices ||
+                    (
+                        localSeatIndex in 0..3 &&
+                        localSeatIndex != resolvedLocalSeatIndex
+                    )
                 ) {
                     return@withLock OnlinePublicRankedMatchActivation.Failure(
                             kind =
@@ -1169,7 +1294,7 @@ private enum class ActiveReadRefreshOutcome {
                         roomId = roomSnapshot.roomId,
                         matchId = normalizedMatchId,
                         playerId = session.playerId,
-                        localSeatIndex = localSeatIndex,
+                        localSeatIndex = resolvedLocalSeatIndex,
                     ),
                 )
 
@@ -1192,7 +1317,7 @@ private enum class ActiveReadRefreshOutcome {
                     playerId = session.playerId,
                     roomId = roomSnapshot.roomId,
                     matchId = normalizedMatchId,
-                    localSeatIndex = localSeatIndex,
+                    localSeatIndex = resolvedLocalSeatIndex,
                     initialSnapshot = matchSnapshot,
                 )
             } catch (error: CancellationException) {

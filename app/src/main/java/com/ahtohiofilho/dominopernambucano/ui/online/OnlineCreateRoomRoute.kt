@@ -91,6 +91,10 @@ fun OnlineCreateRoomRoute(
         stringResource(R.string.online_room_complete_failed)
     val fillAppPlayersDisabledMessage =
         stringResource(R.string.room_fill_app_players_disabled)
+    val seatChangeFailedMessage =
+        stringResource(R.string.private_room_seat_change_failed)
+    val startPrivateRoomFailedMessage =
+        stringResource(R.string.private_room_start_failed)
 
     var feedbackMessage by remember(
         resumedParticipationBinding,
@@ -221,9 +225,32 @@ fun OnlineCreateRoomRoute(
         roomSnapshot = roomSnapshot,
         matchRevision = matchSnapshot?.revision,
         feedbackMessage = feedbackMessage,
+        localPlayerId = participationPlayerId,
         isFakeBackend = debugOptions.allowDemoRoomCreation,
         allowFakePlayerCompletion =
             allowApplicationParticipantCompletion,
+        onSeatClick = { targetSeatIndex ->
+            coroutineScope.launch {
+                val result = roomRepository.movePrivateRoomSeat(
+                    targetSeatIndex = targetSeatIndex,
+                )
+                feedbackMessage = if (result.accepted) {
+                    null
+                } else {
+                    result.reason ?: seatChangeFailedMessage
+                }
+            }
+        },
+        onStartPrivateRoomClick = {
+            coroutineScope.launch {
+                val result = roomRepository.startPrivateRoom()
+                feedbackMessage = if (result.accepted) {
+                    null
+                } else {
+                    result.reason ?: startPrivateRoomFailedMessage
+                }
+            }
+        },
         onCompleteWithFakePlayersClick = {
             val participantCompletion =
                 developmentParticipantCompletion
@@ -295,8 +322,11 @@ private fun OnlineLobbyScreen(
     roomSnapshot: OnlineRoomSnapshotDto?,
     matchRevision: Long?,
     feedbackMessage: String?,
+    localPlayerId: String?,
     isFakeBackend: Boolean,
     allowFakePlayerCompletion: Boolean,
+    onSeatClick: (Int) -> Unit,
+    onStartPrivateRoomClick: () -> Unit,
     onCompleteWithFakePlayersClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
@@ -349,8 +379,10 @@ private fun OnlineLobbyScreen(
                 matchRevision = matchRevision,
             )
 
-            PlayerListCard(
-                players = roomSnapshot.players,
+            PrivateRoomSeatListCard(
+                roomSnapshot = roomSnapshot,
+                localPlayerId = localPlayerId,
+                onSeatClick = onSeatClick,
             )
 
             feedbackMessage?.let { message ->
@@ -359,37 +391,14 @@ private fun OnlineLobbyScreen(
                 )
             }
 
-            if (
-                roomSnapshot.status ==
-                OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
-                allowFakePlayerCompletion
-            ) {
-                PrimaryMenuButton(
-                    text = stringResource(R.string.private_room_complete_table),
-                    onClick = onCompleteWithFakePlayersClick,
-                )
-            } else if (
-                roomSnapshot.status ==
-                OnlineRoomStatusDto.WAITING_FOR_PLAYERS
-            ) {
-                Text(
-                    text = stringResource(R.string.private_room_waiting_players),
-                    color = DominoSemanticColors.primaryTextOnDark.copy(
-                        alpha = 0.72f,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                )
-            } else {
-                Text(
-                    text = stringResource(R.string.private_room_opening_match),
-                    color = DominoSemanticColors.playableMove,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center,
-                )
-            }
+            PrivateRoomWaitingActions(
+                roomSnapshot = roomSnapshot,
+                localPlayerId = localPlayerId,
+                allowFakePlayerCompletion = allowFakePlayerCompletion,
+                onCompleteWithFakePlayersClick =
+                    onCompleteWithFakePlayersClick,
+                onStartPrivateRoomClick = onStartPrivateRoomClick,
+            )
         }
 
         SecondaryMenuButton(

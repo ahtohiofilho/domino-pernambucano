@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
@@ -6,6 +6,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.createOnlinePlayMoveAction
@@ -413,7 +414,7 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
             },
         )
 
-        return requireNotNull(
+        val joinedRoom = requireNotNull(
             if (matchMode == DominoMatchMode.PRIVATE_UNRANKED) {
                 store.joinRoom(finalRequest)
             } else {
@@ -435,6 +436,19 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
                 )
             }.roomSnapshot,
         )
+
+        if (matchMode == DominoMatchMode.PRIVATE_UNRANKED) {
+            return requireNotNull(
+                store.startPrivateRoom(
+                    PrivateRoomStartRequestDto(
+                        roomId = joinedRoom.roomId,
+                        localPlayerId = "player-1",
+                    ),
+                ).roomSnapshot,
+            )
+        }
+
+        return joinedRoom
     }
 
     private fun rankedTableCode(

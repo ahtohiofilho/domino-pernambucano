@@ -181,7 +181,8 @@ class OnlineRankedQueueController(
         mutableState.value = when (
             val activation = activateMatch(
                 matched.matchId,
-                matched.localSeatIndex,
+                matched.localSeatIndex
+                    ?: UNREVEALED_RANKED_SEAT_INDEX,
             )
         ) {
             is OnlinePublicRankedMatchActivation.Ready -> {
@@ -196,6 +197,8 @@ class OnlineRankedQueueController(
         }
     }
 }
+
+private const val UNREVEALED_RANKED_SEAT_INDEX = -1
 
 private fun OnlineRankedQueueClientResult.Failure.toUiFailure():
     OnlineRankedQueueUiState.Failure {

@@ -41,8 +41,7 @@ class KtorRemoteOnlineApiClientRankedQueueTest {
                         HttpMethod.Get -> """
                             {
                               "status": "MATCHED",
-                              "matchId": "match-1",
-                              "localSeatIndex": 3
+                              "matchId": "match-1"
                             }
                         """.trimIndent()
 
@@ -89,7 +88,7 @@ class KtorRemoteOnlineApiClientRankedQueueTest {
             assertEquals(2, entered.queuePosition)
             assertEquals(PublicRankedQueueHttpStatus.MATCHED, resumed.status)
             assertEquals("match-1", resumed.matchId)
-            assertEquals(3, resumed.localSeatIndex)
+            assertNull(resumed.localSeatIndex)
             assertEquals(PublicRankedQueueHttpStatus.NOT_QUEUED, cancelled.status)
 
             assertEquals(
@@ -121,8 +120,7 @@ class KtorRemoteOnlineApiClientRankedQueueTest {
                         content = """
                             {
                               "status": "MATCHED",
-                              "matchId": "match-409",
-                              "localSeatIndex": 1
+                              "matchId": "match-409"
                             }
                         """.trimIndent(),
                         status = HttpStatusCode.Conflict,
@@ -151,7 +149,7 @@ class KtorRemoteOnlineApiClientRankedQueueTest {
 
             assertEquals(PublicRankedQueueHttpStatus.MATCHED, result.status)
             assertEquals("match-409", result.matchId)
-            assertEquals(1, result.localSeatIndex)
+            assertNull(result.localSeatIndex)
             assertNull(result.queuePosition)
 
             httpClient.close()

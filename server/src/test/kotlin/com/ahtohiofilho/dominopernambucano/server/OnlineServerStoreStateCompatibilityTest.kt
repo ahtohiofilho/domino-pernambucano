@@ -4,6 +4,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.Json
@@ -121,6 +122,13 @@ class OnlineServerStoreStateCompatibilityTest {
             assertTrue(result.accepted)
         }
 
-        requireNotNull(store.getRoomSnapshot(room.roomId))
+        requireNotNull(
+            store.startPrivateRoom(
+                PrivateRoomStartRequestDto(
+                    roomId = room.roomId,
+                    localPlayerId = "player-1",
+                ),
+            ).roomSnapshot,
+        )
     }
 }

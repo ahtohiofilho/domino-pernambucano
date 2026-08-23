@@ -112,6 +112,10 @@ fun OnlineJoinRoomRoute(
         stringResource(R.string.online_room_join_failed)
     val completeFailedMessage =
         stringResource(R.string.online_room_complete_failed)
+    val seatChangeFailedMessage =
+        stringResource(R.string.private_room_seat_change_failed)
+    val startPrivateRoomFailedMessage =
+        stringResource(R.string.private_room_start_failed)
 
     LaunchedEffect(roomSnapshot?.roomCode) {
         val currentRoomCode = roomSnapshot?.roomCode
@@ -171,6 +175,7 @@ fun OnlineJoinRoomRoute(
         roomCodeInput = roomCodeInput,
         hasJoinedRoom = hasJoinedRoom,
         feedbackMessage = feedbackMessage,
+        localPlayerId = participationPlayerId,
         allowDemoRoomCreation = debugOptions.allowDemoRoomCreation,
         allowFakePlayerCompletion =
             allowApplicationParticipantCompletion,
@@ -244,6 +249,28 @@ fun OnlineJoinRoomRoute(
                 } else {
                     feedbackMessage = result.reason
                         ?: joinFailedMessage
+                }
+            }
+        },
+        onSeatClick = { targetSeatIndex ->
+            coroutineScope.launch {
+                val result = roomRepository.movePrivateRoomSeat(
+                    targetSeatIndex = targetSeatIndex,
+                )
+                feedbackMessage = if (result.accepted) {
+                    null
+                } else {
+                    result.reason ?: seatChangeFailedMessage
+                }
+            }
+        },
+        onStartPrivateRoomClick = {
+            coroutineScope.launch {
+                val result = roomRepository.startPrivateRoom()
+                feedbackMessage = if (result.accepted) {
+                    null
+                } else {
+                    result.reason ?: startPrivateRoomFailedMessage
                 }
             }
         },
@@ -322,11 +349,14 @@ private fun OnlineJoinRoomScreen(
     roomCodeInput: String,
     hasJoinedRoom: Boolean,
     feedbackMessage: String?,
+    localPlayerId: String?,
     allowDemoRoomCreation: Boolean,
     allowFakePlayerCompletion: Boolean,
     onRoomCodeChange: (String) -> Unit,
     onCreateDemoRoomClick: () -> Unit,
     onJoinClick: () -> Unit,
+    onSeatClick: (Int) -> Unit,
+    onStartPrivateRoomClick: () -> Unit,
     onCompleteWithFakePlayersClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
@@ -380,8 +410,10 @@ private fun OnlineJoinRoomScreen(
                     roomSnapshot = roomSnapshot,
                 )
 
-                JoinPlayerListCard(
-                    players = roomSnapshot.players,
+                PrivateRoomSeatListCard(
+                    roomSnapshot = roomSnapshot,
+                    localPlayerId = localPlayerId,
+                    onSeatClick = onSeatClick,
                 )
 
                 feedbackMessage?.let { message ->
@@ -390,37 +422,16 @@ private fun OnlineJoinRoomScreen(
                     )
                 }
 
-                if (
-                    roomSnapshot.status ==
-                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
-                    allowFakePlayerCompletion
-                ) {
-                    PrimaryMenuButton(
-                        text = stringResource(R.string.private_room_complete_table),
-                        onClick = onCompleteWithFakePlayersClick,
-                    )
-                } else if (
-                    roomSnapshot.status ==
-                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS
-                ) {
-                    Text(
-                        text = stringResource(R.string.private_room_waiting_players),
-                        color = DominoSemanticColors.primaryTextOnDark.copy(
-                            alpha = 0.72f,
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.private_room_opening_match),
-                        color = DominoSemanticColors.playableMove,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                PrivateRoomWaitingActions(
+                    roomSnapshot = roomSnapshot,
+                    localPlayerId = localPlayerId,
+                    allowFakePlayerCompletion =
+                        allowFakePlayerCompletion,
+                    onCompleteWithFakePlayersClick =
+                        onCompleteWithFakePlayersClick,
+                    onStartPrivateRoomClick =
+                        onStartPrivateRoomClick,
+                )
             }
         } else {
             JoinRoomFormCard(

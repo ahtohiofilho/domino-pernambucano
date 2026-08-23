@@ -240,7 +240,7 @@ class PublicRankedQueueHttpRouteTest {
                 matched.status,
             )
             assertNotNull(matched.matchId)
-            assertNotNull(matched.localSeatIndex)
+            assertEquals(null, matched.localSeatIndex)
             assertSafeResponseBody(matchedBody)
 
             (1..4).forEach { playerNumber ->
@@ -266,7 +266,7 @@ class PublicRankedQueueHttpRouteTest {
                     polling.status,
                 )
                 assertNotNull(polling.matchId)
-                assertNotNull(polling.localSeatIndex)
+                assertEquals(null, polling.localSeatIndex)
                 assertSafeResponseBody(pollingBody)
             }
 

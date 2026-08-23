@@ -1,7 +1,9 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomSeatChangeRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileResponseDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileUpdateRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineEmailCodeRequestDto
@@ -422,6 +424,44 @@ internal fun Route.onlineServerRoutes(
 
             call.respond(
                 store.joinRoom(
+                    request = request,
+                ),
+            )
+        }
+
+        post("/${OnlineRemoteRoutes.PRIVATE_ROOM_SEAT}") {
+            val identity = call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@post
+            val request =
+                call.receive<PrivateRoomSeatChangeRequestDto>()
+
+            if (identity.playerId != request.localPlayerId) {
+                call.respond(HttpStatusCode.Forbidden)
+                return@post
+            }
+
+            call.respond(
+                store.movePrivateRoomSeat(
+                    request = request,
+                ),
+            )
+        }
+
+        post("/${OnlineRemoteRoutes.PRIVATE_ROOM_START}") {
+            val identity = call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@post
+            val request =
+                call.receive<PrivateRoomStartRequestDto>()
+
+            if (identity.playerId != request.localPlayerId) {
+                call.respond(HttpStatusCode.Forbidden)
+                return@post
+            }
+
+            call.respond(
+                store.startPrivateRoom(
                     request = request,
                 ),
             )

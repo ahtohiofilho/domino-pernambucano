@@ -1,8 +1,9 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
@@ -516,7 +517,12 @@ class PersistentOnlineServerStoreTest {
         }
 
         return requireNotNull(
-            store.getRoomSnapshot(waitingRoom.roomId),
+            store.startPrivateRoom(
+                PrivateRoomStartRequestDto(
+                    roomId = waitingRoom.roomId,
+                    localPlayerId = "player-1",
+                ),
+            ).roomSnapshot,
         )
     }
 

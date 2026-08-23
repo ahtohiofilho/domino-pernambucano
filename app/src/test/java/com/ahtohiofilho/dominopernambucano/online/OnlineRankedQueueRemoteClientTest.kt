@@ -92,7 +92,6 @@ class OnlineRankedQueueRemoteClientTest {
                     PublicRankedQueueHttpResponseDto(
                         status = PublicRankedQueueHttpStatus.MATCHED,
                         matchId = "match-recovered",
-                        localSeatIndex = 2,
                     ),
                 )
             }
@@ -107,7 +106,6 @@ class OnlineRankedQueueRemoteClientTest {
                 OnlineRankedQueueClientResult.Success(
                     state = OnlineRankedQueueState.Matched(
                         matchId = "match-recovered",
-                        localSeatIndex = 2,
                     ),
                 ),
                 result,
@@ -131,7 +129,6 @@ class OnlineRankedQueueRemoteClientTest {
                     PublicRankedQueueHttpResponseDto(
                         status = PublicRankedQueueHttpStatus.MATCHED,
                         matchId = "match-1",
-                        localSeatIndex = 0,
                     ),
                 )
             }
@@ -159,7 +156,6 @@ class OnlineRankedQueueRemoteClientTest {
             assertEquals(
                 OnlineRankedQueueState.Matched(
                     matchId = "match-1",
-                    localSeatIndex = 0,
                 ),
                 (results.last() as
                     OnlineRankedQueueClientResult.Success).state,
@@ -282,7 +278,6 @@ class OnlineRankedQueueRemoteClientTest {
                     PublicRankedQueueHttpResponseDto(
                         status = PublicRankedQueueHttpStatus.MATCHED,
                         matchId = "match-conflict",
-                        localSeatIndex = 1,
                     ),
                 )
             }
@@ -297,7 +292,6 @@ class OnlineRankedQueueRemoteClientTest {
                 OnlineRankedQueueClientResult.Success(
                     state = OnlineRankedQueueState.Matched(
                         matchId = "match-conflict",
-                        localSeatIndex = 1,
                     ),
                 ),
                 result,

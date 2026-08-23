@@ -71,6 +71,22 @@ interface OnlineRoomRepository {
         request: JoinOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto
 
+    suspend fun movePrivateRoomSeat(
+        targetSeatIndex: Int,
+    ): OnlineRoomOperationResultDto {
+        return OnlineRoomOperationResultDto(
+            accepted = false,
+            reason = "Alteração de posição não disponível neste repositório.",
+        )
+    }
+
+    suspend fun startPrivateRoom(): OnlineRoomOperationResultDto {
+        return OnlineRoomOperationResultDto(
+            accepted = false,
+            reason = "Início explícito não disponível neste repositório.",
+        )
+    }
+
     suspend fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto

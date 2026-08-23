@@ -4,6 +4,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -193,7 +194,14 @@ class PrivateOnlineRoomNonCompetitiveInvariantTest {
             assertTrue(result.accepted)
         }
 
-        return requireNotNull(store.getRoomSnapshot(room.roomId))
+        return requireNotNull(
+            store.startPrivateRoom(
+                PrivateRoomStartRequestDto(
+                    roomId = room.roomId,
+                    localPlayerId = "private-player-1",
+                ),
+            ).roomSnapshot,
+        )
     }
 
     private fun startFourHumanServerManagedMatch(

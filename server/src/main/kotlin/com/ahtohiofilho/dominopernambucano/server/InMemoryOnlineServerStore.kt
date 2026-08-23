@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCyclePeriod
@@ -30,6 +30,8 @@ import com.ahtohiofilho.dominopernambucano.match.findRandomPlayableMove
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomSeatChangeRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
 import com.ahtohiofilho.dominopernambucano.online.createLegacyCompatibleOnlineAccountProfile
 import com.ahtohiofilho.dominopernambucano.online.createOnlineAccountProfile
@@ -1345,7 +1347,12 @@ class InMemoryOnlineServerStore(
                     )
                 }
 
-            val shouldStartMatch = updatedPlayers.size == 4
+            val shouldStartMatch =
+                updatedPlayers.size == 4 &&
+                    (
+                        expectedMatchMode != DominoMatchMode.PRIVATE_UNRANKED ||
+                            autoFillDevelopmentBotsAfterTwoHumanPlayers
+                    )
             val nextMatchId = if (shouldStartMatch) {
                 "server-match-${nextMatchSequence++}"
             } else {
@@ -1391,6 +1398,244 @@ class InMemoryOnlineServerStore(
                 accepted = true,
                 roomSnapshot = updatedRoom,
                 localSeatIndex = nextSeatIndex,
+            )
+        }
+    }
+
+    override fun movePrivateRoomSeat(
+        request: PrivateRoomSeatChangeRequestDto,
+    ): OnlineRoomOperationResultDto {
+        return synchronized(lock) {
+            val normalizedRoomId = request.roomId.trim()
+            val normalizedPlayerId = request.localPlayerId.trim()
+
+            if (
+                normalizedRoomId.isBlank() ||
+                normalizedRoomId.length > MAX_SERVER_IDENTIFIER_CHARACTERS
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "move_private_room_seat",
+                    playerId = normalizedPlayerId,
+                    reason = "Identificador de sala inválido.",
+                )
+            }
+
+            if (
+                normalizedPlayerId.isBlank() ||
+                normalizedPlayerId.length > MAX_SERVER_IDENTIFIER_CHARACTERS
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "move_private_room_seat",
+                    roomId = normalizedRoomId,
+                    playerId = normalizedPlayerId,
+                    reason = "Identificador do jogador inválido.",
+                )
+            }
+
+            if (request.targetSeatIndex !in 0..3) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "move_private_room_seat",
+                    roomId = normalizedRoomId,
+                    playerId = normalizedPlayerId,
+                    reason = "Posição de mesa inválida.",
+                )
+            }
+
+            val currentRoom = roomsById[normalizedRoomId]
+                ?: return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "move_private_room_seat",
+                    roomId = normalizedRoomId,
+                    playerId = normalizedPlayerId,
+                    reason = "Sala não encontrada.",
+                )
+
+            if (
+                currentRoom.matchMode != DominoMatchMode.PRIVATE_UNRANKED ||
+                currentRoom.status != OnlineRoomStatusDto.WAITING_FOR_PLAYERS ||
+                currentRoom.matchId != null
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "move_private_room_seat",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = normalizedPlayerId,
+                    reason = "A posição só pode ser alterada no lobby privado antes da partida.",
+                )
+            }
+
+            val movingPlayer = currentRoom.players.firstOrNull { player ->
+                player.playerId == normalizedPlayerId
+            } ?: return@synchronized rejectedRoomOperationWithTrace(
+                operation = "move_private_room_seat",
+                roomId = currentRoom.roomId,
+                playerId = normalizedPlayerId,
+                reason = "Jogador não pertence à sala.",
+            )
+
+            val sourceSeatIndex = movingPlayer.seatIndex
+                ?: return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "move_private_room_seat",
+                    roomId = currentRoom.roomId,
+                    playerId = normalizedPlayerId,
+                    reason = "Jogador sem posição válida.",
+                )
+
+            if (sourceSeatIndex == request.targetSeatIndex) {
+                return@synchronized OnlineRoomOperationResultDto(
+                    accepted = true,
+                    roomSnapshot = currentRoom,
+                    localSeatIndex = sourceSeatIndex,
+                )
+            }
+
+            val targetPlayer = currentRoom.players.firstOrNull { player ->
+                player.seatIndex == request.targetSeatIndex
+            }
+
+            val updatedPlayers = currentRoom.players.map { player ->
+                when {
+                    player.playerId == movingPlayer.playerId ->
+                        player.copy(
+                            seatIndex = request.targetSeatIndex,
+                        )
+
+                    targetPlayer != null &&
+                        player.playerId == targetPlayer.playerId ->
+                        player.copy(
+                            seatIndex = sourceSeatIndex,
+                        )
+
+                    else -> player
+                }
+            }
+
+            val updatedSeatIndexes = updatedPlayers.mapNotNull { player ->
+                player.seatIndex
+            }
+            if (
+                updatedSeatIndexes.size != updatedPlayers.size ||
+                updatedSeatIndexes.any { seatIndex -> seatIndex !in 0..3 } ||
+                updatedSeatIndexes.distinct().size != updatedSeatIndexes.size
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "move_private_room_seat",
+                    roomId = currentRoom.roomId,
+                    playerId = normalizedPlayerId,
+                    reason = "A troca de posições produziria uma mesa inválida.",
+                )
+            }
+
+            val updatedRoom = currentRoom.copy(
+                players = updatedPlayers,
+                updatedAtEpochMillis = nowEpochMillis(),
+            )
+            roomsById[updatedRoom.roomId] = updatedRoom
+
+            OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = updatedRoom,
+                localSeatIndex = request.targetSeatIndex,
+            )
+        }
+    }
+
+    override fun startPrivateRoom(
+        request: PrivateRoomStartRequestDto,
+    ): OnlineRoomOperationResultDto {
+        return synchronized(lock) {
+            val normalizedRoomId = request.roomId.trim()
+            val normalizedPlayerId = request.localPlayerId.trim()
+
+            if (
+                normalizedRoomId.isBlank() ||
+                normalizedPlayerId.isBlank()
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "start_private_room",
+                    roomId = normalizedRoomId.takeIf { value ->
+                        value.isNotBlank()
+                    },
+                    playerId = normalizedPlayerId.takeIf { value ->
+                        value.isNotBlank()
+                    },
+                    reason = "Sala ou jogador inválido.",
+                )
+            }
+
+            val currentRoom = roomsById[normalizedRoomId]
+                ?: return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "start_private_room",
+                    roomId = normalizedRoomId,
+                    playerId = normalizedPlayerId,
+                    reason = "Sala não encontrada.",
+                )
+
+            if (
+                currentRoom.matchMode != DominoMatchMode.PRIVATE_UNRANKED ||
+                currentRoom.status != OnlineRoomStatusDto.WAITING_FOR_PLAYERS ||
+                currentRoom.matchId != null
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "start_private_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = normalizedPlayerId,
+                    reason = "A sala privada não está aguardando início.",
+                )
+            }
+
+            if (currentRoom.hostPlayerId != normalizedPlayerId) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "start_private_room",
+                    roomId = currentRoom.roomId,
+                    playerId = normalizedPlayerId,
+                    reason = "Somente o anfitrião pode iniciar a partida.",
+                )
+            }
+
+            val localPlayer = currentRoom.players.firstOrNull { player ->
+                player.playerId == normalizedPlayerId
+            } ?: return@synchronized rejectedRoomOperationWithTrace(
+                operation = "start_private_room",
+                roomId = currentRoom.roomId,
+                playerId = normalizedPlayerId,
+                reason = "Anfitrião não pertence à sala.",
+            )
+
+            val seatIndexes = currentRoom.players.mapNotNull { player ->
+                player.seatIndex
+            }.sorted()
+
+            if (
+                currentRoom.players.size != 4 ||
+                currentRoom.players.any { player -> !player.connected } ||
+                seatIndexes != listOf(0, 1, 2, 3)
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "start_private_room",
+                    roomId = currentRoom.roomId,
+                    playerId = normalizedPlayerId,
+                    reason = "A partida exige quatro participantes conectados em posições válidas.",
+                )
+            }
+
+            val matchId = "server-match-${nextMatchSequence++}"
+            val updatedRoom = currentRoom.copy(
+                status = OnlineRoomStatusDto.IN_MATCH,
+                matchId = matchId,
+                updatedAtEpochMillis = nowEpochMillis(),
+            )
+
+            roomsById[updatedRoom.roomId] = updatedRoom
+            createMatch(
+                room = updatedRoom,
+                matchId = matchId,
+            )
+
+            OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = updatedRoom,
+                localSeatIndex = localPlayer.seatIndex,
             )
         }
     }

@@ -5,6 +5,8 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomSeatChangeRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
@@ -139,6 +141,23 @@ interface OnlineServerStore : AutoCloseable {
 
     fun joinRoom(
         request: JoinOnlineRoomRequestDto,
+    ): OnlineRoomOperationResultDto
+
+    /**
+     * Moves only the authenticated/requesting participant in a waiting
+     * PRIVATE_UNRANKED room. If the destination is occupied, the two seats
+     * are swapped atomically by the authoritative store.
+     */
+    fun movePrivateRoomSeat(
+        request: PrivateRoomSeatChangeRequestDto,
+    ): OnlineRoomOperationResultDto
+
+    /**
+     * Starts a waiting PRIVATE_UNRANKED room only when the requesting
+     * participant is the room host and all four connected seats exist.
+     */
+    fun startPrivateRoom(
+        request: PrivateRoomStartRequestDto,
     ): OnlineRoomOperationResultDto
 
     fun submitAction(

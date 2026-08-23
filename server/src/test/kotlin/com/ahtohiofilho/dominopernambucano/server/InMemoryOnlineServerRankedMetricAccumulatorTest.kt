@@ -4,6 +4,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.createOnlinePlayMoveAction
@@ -231,12 +232,21 @@ class InMemoryOnlineServerRankedMetricAccumulatorTest {
             assertTrue(result.accepted)
         }
 
-        return requireNotNull(
+        val fullWaitingRoom = requireNotNull(
             store.joinRoom(
                 JoinOnlineRoomRequestDto(
                     roomCode = room.roomCode,
                     localPlayerId = "player-4",
                     playerName = "Jogador 4",
+                ),
+            ).roomSnapshot,
+        )
+
+        return requireNotNull(
+            store.startPrivateRoom(
+                PrivateRoomStartRequestDto(
+                    roomId = fullWaitingRoom.roomId,
+                    localPlayerId = "player-1",
                 ),
             ).roomSnapshot,
         )

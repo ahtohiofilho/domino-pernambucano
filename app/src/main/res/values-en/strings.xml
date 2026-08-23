@@ -49,6 +49,15 @@
     <string name="private_room_code_label">Room code</string>
     <string name="private_room_player_count">Players %1$d/4</string>
     <string name="private_room_seat_number">Seat %1$d</string>
+    <string name="private_room_seat_selection_hint">Tap another seat to change your position.</string>
+    <string name="private_room_seat_you">You</string>
+    <string name="private_room_seat_choose">Choose</string>
+    <string name="private_room_seat_swap">Swap</string>
+    <string name="private_room_start_match">Start match</string>
+    <string name="private_room_waiting_host_start">Waiting for the host to start the match...</string>
+    <string name="private_room_seat_change_failed">Could not change your position.</string>
+    <string name="private_room_start_failed">Could not start the match.</string>
+    <string name="online_seat_online">online</string>
     <string name="private_room_loading">Loading room...</string>
     <string name="private_room_join_action">Join room</string>
     <string name="private_room_code_required">Enter the room code.</string>

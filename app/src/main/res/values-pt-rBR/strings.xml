@@ -49,6 +49,15 @@
     <string name="private_room_code_label">Código da sala</string>
     <string name="private_room_player_count">Jogadores %1$d/4</string>
     <string name="private_room_seat_number">Lugar %1$d</string>
+    <string name="private_room_seat_selection_hint">Toque em outro lugar para mudar sua posição.</string>
+    <string name="private_room_seat_you">Você</string>
+    <string name="private_room_seat_choose">Escolher</string>
+    <string name="private_room_seat_swap">Trocar</string>
+    <string name="private_room_start_match">Iniciar partida</string>
+    <string name="private_room_waiting_host_start">Aguardando o anfitrião iniciar a partida...</string>
+    <string name="private_room_seat_change_failed">Não foi possível mudar sua posição.</string>
+    <string name="private_room_start_failed">Não foi possível iniciar a partida.</string>
+    <string name="online_seat_online">online</string>
     <string name="private_room_loading">Carregando sala...</string>
     <string name="private_room_join_action">Entrar na sala</string>
     <string name="private_room_code_required">Informe o código da sala.</string>

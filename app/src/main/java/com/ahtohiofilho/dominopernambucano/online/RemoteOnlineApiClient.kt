@@ -168,6 +168,22 @@ interface RemoteOnlineApiClient {
         request: JoinOnlineRoomRequestDto,
     ): OnlineRoomOperationResultDto
 
+    suspend fun movePrivateRoomSeat(
+        request: PrivateRoomSeatChangeRequestDto,
+    ): OnlineRoomOperationResultDto {
+        throw UnsupportedOperationException(
+            "Alteração de posição da sala privada não configurada.",
+        )
+    }
+
+    suspend fun startPrivateRoom(
+        request: PrivateRoomStartRequestDto,
+    ): OnlineRoomOperationResultDto {
+        throw UnsupportedOperationException(
+            "Início explícito da sala privada não configurado.",
+        )
+    }
+
     suspend fun submitAction(
         action: OnlinePlayerActionDto,
     ): OnlineActionResultDto

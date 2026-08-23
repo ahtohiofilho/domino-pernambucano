@@ -36,7 +36,9 @@ sealed interface OnlineRankedQueueState {
 
     data class Matched(
         val matchId: String,
-        val localSeatIndex: Int,
+        // Compatibilidade local/testes. O contrato HTTP de produção não
+        // revela assento antes da ativação da partida.
+        val localSeatIndex: Int? = null,
     ) : OnlineRankedQueueState
 
     data object NotQueued : OnlineRankedQueueState
@@ -244,14 +246,12 @@ private fun PublicRankedQueueHttpResponseDto.toClientState():
 
         PublicRankedQueueHttpStatus.MATCHED -> {
             val requiredMatchId = requireNotNull(matchId)
-            val requiredSeatIndex = requireNotNull(localSeatIndex)
             require(requiredMatchId.isNotBlank())
-            require(requiredSeatIndex in 0..3)
+            require(localSeatIndex == null)
             require(queuePosition == null)
 
             OnlineRankedQueueState.Matched(
                 matchId = requiredMatchId,
-                localSeatIndex = requiredSeatIndex,
             )
         }
 

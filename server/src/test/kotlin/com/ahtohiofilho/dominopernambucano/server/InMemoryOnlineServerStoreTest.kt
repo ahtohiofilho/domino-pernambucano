@@ -4,6 +4,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
@@ -164,7 +165,7 @@ class InMemoryOnlineServerStoreTest {
     }
 
     @Test
-    fun fourth_player_starts_authoritative_match() {
+    fun fourth_player_waits_until_host_starts_authoritative_match() {
         val store = InMemoryOnlineServerStore(
             nowEpochMillis = { 1_000L },
         )
@@ -205,15 +206,31 @@ class InMemoryOnlineServerStoreTest {
 
         assertTrue(fourthPlayerResult.accepted)
 
-        val startedRoom = requireNotNull(
+        val fullWaitingRoom = requireNotNull(
             fourthPlayerResult.roomSnapshot,
         )
 
         assertEquals(
             4,
-            startedRoom.players.size,
+            fullWaitingRoom.players.size,
         )
+        assertEquals(
+            OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+            fullWaitingRoom.status,
+        )
+        assertEquals(null, fullWaitingRoom.matchId)
 
+        val startResult = store.startPrivateRoom(
+            PrivateRoomStartRequestDto(
+                roomId = fullWaitingRoom.roomId,
+                localPlayerId = "player-1",
+            ),
+        )
+        assertTrue(startResult.accepted)
+
+        val startedRoom = requireNotNull(
+            startResult.roomSnapshot,
+        )
         assertNotNull(startedRoom.matchId)
 
         val matchSnapshot = requireNotNull(
@@ -509,12 +526,20 @@ class InMemoryOnlineServerStoreTest {
             playerName = "Humano no assento 3",
         )
 
-        val startedRoom = requireNotNull(
+        val fullWaitingRoom = requireNotNull(
             joinPlayer(
                 store = store,
                 roomCode = waitingRoom.roomCode,
                 playerId = "player-4",
                 playerName = "Jogador 4",
+            ).roomSnapshot,
+        )
+        val startedRoom = requireNotNull(
+            store.startPrivateRoom(
+                PrivateRoomStartRequestDto(
+                    roomId = fullWaitingRoom.roomId,
+                    localPlayerId = "player-1",
+                ),
             ).roomSnapshot,
         )
 
@@ -874,12 +899,26 @@ class InMemoryOnlineServerStoreTest {
             playerName = "Jogador 3",
         )
 
-        val startedRoom = requireNotNull(
+        val fullWaitingRoom = requireNotNull(
             joinPlayer(
                 store = store,
                 roomCode = room.roomCode,
                 playerId = "player-4",
                 playerName = "Jogador 4",
+            ).roomSnapshot,
+        )
+        assertEquals(
+            OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+            fullWaitingRoom.status,
+        )
+        assertEquals(null, fullWaitingRoom.matchId)
+
+        val startedRoom = requireNotNull(
+            store.startPrivateRoom(
+                PrivateRoomStartRequestDto(
+                    roomId = fullWaitingRoom.roomId,
+                    localPlayerId = "player-1",
+                ),
             ).roomSnapshot,
         )
 
@@ -1290,12 +1329,21 @@ class InMemoryOnlineServerStoreTest {
             playerName = "Jogador 3",
         )
 
-        return requireNotNull(
+        val fullWaitingRoom = requireNotNull(
             joinPlayer(
                 store = store,
                 roomCode = room.roomCode,
                 playerId = "player-4",
                 playerName = "Jogador 4",
+            ).roomSnapshot,
+        )
+
+        return requireNotNull(
+            store.startPrivateRoom(
+                PrivateRoomStartRequestDto(
+                    roomId = fullWaitingRoom.roomId,
+                    localPlayerId = "player-1",
+                ),
             ).roomSnapshot,
         )
     }

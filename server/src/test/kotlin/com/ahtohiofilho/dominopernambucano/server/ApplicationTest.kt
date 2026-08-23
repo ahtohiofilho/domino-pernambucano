@@ -1,7 +1,8 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
@@ -207,7 +208,7 @@ class ApplicationTest {
         }
 
     @Test
-    fun fourth_player_starts_match_and_http_snapshot_is_projected_for_requesting_player() =
+    fun fourth_player_waits_for_host_start_and_http_snapshot_is_projected_for_requesting_player() =
         testApplication {
             application {
                 module(
@@ -276,8 +277,24 @@ class ApplicationTest {
                 fourthPlayerResult.localSeatIndex,
             )
 
-            val startedRoom = requireNotNull(
+            val fullWaitingRoom = requireNotNull(
                 fourthPlayerResult.roomSnapshot,
+            )
+
+            assertEquals(
+                OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+                fullWaitingRoom.status,
+            )
+            assertEquals(null, fullWaitingRoom.matchId)
+
+            val startResult = startPrivateRoomThroughHttp(
+                roomId = fullWaitingRoom.roomId,
+                playerId = "player-1",
+            )
+            assertTrue(startResult.accepted)
+
+            val startedRoom = requireNotNull(
+                startResult.roomSnapshot,
             )
 
             assertEquals(
@@ -528,6 +545,32 @@ class ApplicationTest {
         return json.decodeFromString(
             response.bodyAsText(),
         )
+    }
+
+    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.startPrivateRoomThroughHttp(
+        roomId: String,
+        playerId: String,
+    ): OnlineRoomOperationResultDto {
+        val response = client.post(
+            urlString = "/${OnlineRemoteRoutes.PRIVATE_ROOM_START}",
+        ) {
+            header(
+                OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                playerId,
+            )
+            contentType(ContentType.Application.Json)
+            setBody(
+                json.encodeToString(
+                    PrivateRoomStartRequestDto(
+                        roomId = roomId,
+                        localPlayerId = playerId,
+                    ),
+                ),
+            )
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        return json.decodeFromString(response.bodyAsText())
     }
 
     private suspend fun io.ktor.server.testing.ApplicationTestBuilder.submitActionThroughHttp(

@@ -27,12 +27,8 @@ internal suspend fun ApplicationCall.respondPublicRankedQueueResult(
 
         PublicRankedQueueStatus.MATCHED -> {
             val matchId = result.roomSnapshot?.matchId
-            val localSeatIndex = result.localSeatIndex
 
-            if (
-                matchId.isNullOrBlank() ||
-                localSeatIndex == null
-            ) {
+            if (matchId.isNullOrBlank()) {
                 respond(HttpStatusCode.ServiceUnavailable)
                 return
             }
@@ -46,7 +42,7 @@ internal suspend fun ApplicationCall.respondPublicRankedQueueResult(
                 PublicRankedQueueHttpResponseDto(
                     status = PublicRankedQueueHttpStatus.MATCHED,
                     matchId = matchId,
-                    localSeatIndex = localSeatIndex,
+                    localSeatIndex = null,
                 ),
             )
         }
