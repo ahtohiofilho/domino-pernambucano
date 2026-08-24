@@ -5,14 +5,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.ahtohiofilho.dominopernambucano.advertising.AndroidAdvertisingController
 import com.ahtohiofilho.dominopernambucano.ui.DominoPernambucanoApp
 import com.ahtohiofilho.dominopernambucano.ui.settings.AndroidAppLanguageManager
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
 
 class MainActivity : ComponentActivity() {
+    private lateinit var advertisingController: AndroidAdvertisingController
+
     override fun attachBaseContext(
         newBase: Context,
     ) {
@@ -28,14 +33,41 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onCreate(savedInstanceState)
 
+        advertisingController = AndroidAdvertisingController(
+            context = applicationContext,
+        )
+
         enableEdgeToEdge()
         enableImmersiveMode()
 
         setContent {
+            val privacyOptionsRequired by
+                advertisingController.privacyOptionsRequired.collectAsState()
+
             DominoPernambucanoTheme {
-                DominoPernambucanoApp()
+                DominoPernambucanoApp(
+                    onMatchFinished = {
+                        advertisingController.recordMatchFinished()
+                    },
+                    onMatchFinishedTransition = { continuation ->
+                        advertisingController.runAfterMatchFinishedTransition(
+                            activity = this@MainActivity,
+                            continuation = continuation,
+                        )
+                    },
+                    privacyOptionsRequired = privacyOptionsRequired,
+                    onPrivacyOptionsClick = {
+                        advertisingController.showPrivacyOptions(
+                            activity = this@MainActivity,
+                        )
+                    },
+                )
             }
         }
+
+        advertisingController.start(
+            activity = this,
+        )
     }
 
     override fun onWindowFocusChanged(

@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.ahtohiofilho.dominopernambucano.domain.getPlayableMoves
@@ -14,11 +15,23 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineUiTraceContext
 fun DominoGameRoute(
     matchCoordinator: DominoMatchCoordinator,
     onBackToMenuClick: () -> Unit,
+    onMatchFinished: () -> Unit = {},
+    onMatchFinishedTransition: ((() -> Unit) -> Unit) = { continuation ->
+        continuation()
+    },
     onlineUiTraceReporter: OnlineGameUiTraceReporter? = null,
 ) {
     val runtimeState by matchCoordinator.state.collectAsState()
     val gameState = runtimeState.gameState
     val onlineUiTraceContext = onlineUiTraceReporter?.currentUiTraceContext()
+
+    LaunchedEffect(
+        runtimeState.phase,
+    ) {
+        if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
+            onMatchFinished()
+        }
+    }
 
     val localPlayer = gameState.players.getOrNull(
         runtimeState.localPlayerIndex,
@@ -55,7 +68,15 @@ fun DominoGameRoute(
             onlinePresentationId = onlineUiTraceContext?.presentationId,
             onlineSnapshotRevision = onlineUiTraceContext?.snapshotRevision,
         ),
-        onBackToMenuClick = onBackToMenuClick,
+        onBackToMenuClick = {
+            if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
+                onMatchFinishedTransition(
+                    onBackToMenuClick,
+                )
+            } else {
+                onBackToMenuClick()
+            }
+        },
         onOnlineTrace = { type, presentationId, snapshotRevision, attributes ->
             onlineUiTraceReporter?.traceUiEvent(
                 type = type,
@@ -101,9 +122,11 @@ fun DominoGameRoute(
             )
         },
         onStartNewMatch = {
-            matchCoordinator.dispatch(
-                DominoMatchCommand.StartNewMatch,
-            )
+            onMatchFinishedTransition {
+                matchCoordinator.dispatch(
+                    DominoMatchCommand.StartNewMatch,
+                )
+            }
         },
     )
 }

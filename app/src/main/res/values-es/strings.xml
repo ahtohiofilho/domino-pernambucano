@@ -130,6 +130,8 @@
     <string name="account_email_unknown_failure">No se pudo completar el acceso por correo. Solicita un nuevo código e inténtalo de nuevo.</string>
     <string name="main_menu_settings_content_description">Configuración</string>
     <string name="settings_title">Configuración</string>
+    <string name="settings_privacy_options_title">Opciones de privacidad</string>
+    <string name="settings_privacy_options_description">Administra tus opciones de privacidad.</string>
     <string name="settings_language_title">Idioma</string>
     <string name="settings_language_description">Elige el idioma de la interfaz. El idioma del dispositivo se usa solo para definir la opción inicial; los idiomas no compatibles comienzan en inglés.</string>
     <string name="settings_language_portuguese_brazil">Português (Brasil)</string>

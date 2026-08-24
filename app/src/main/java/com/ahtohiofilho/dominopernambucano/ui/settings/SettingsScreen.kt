@@ -33,12 +33,16 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 internal const val SettingsScreenTag = "settings_screen"
 internal const val SettingsLanguageGroupTag =
     "settings_language_group"
+internal const val SettingsPrivacyOptionsTag =
+    "settings_privacy_options"
 
 @Composable
 fun SettingsScreen(
     currentSelection: AppLanguageSelection,
     onSelectionChange: (AppLanguageSelection) -> Unit,
     onBackClick: () -> Unit,
+    privacyOptionsRequired: Boolean = false,
+    onPrivacyOptionsClick: () -> Unit = {},
 ) {
     DominoScreenScaffold(
         title = stringResource(R.string.settings_title),
@@ -99,6 +103,33 @@ fun SettingsScreen(
                     currentSelection = currentSelection,
                     onSelectionChange = onSelectionChange,
                 )
+            }
+
+            if (privacyOptionsRequired) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(SettingsPrivacyOptionsTag),
+                ) {
+                    DominoSecondaryActionCard(
+                        title = stringResource(
+                            R.string.settings_privacy_options_title,
+                        ),
+                        supportingText = stringResource(
+                            R.string.settings_privacy_options_description,
+                        ),
+                        accent = DominoBrandAccent.Blue,
+                        onClick = onPrivacyOptionsClick,
+                        leadingContent = {
+                            Text(
+                                text = "◉",
+                                color = DominoSemanticColors.brandText,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Black,
+                            )
+                        },
+                    )
+                }
             }
 
             DominoSecondaryActionCard(

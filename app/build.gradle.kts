@@ -33,6 +33,14 @@ val googleWebClientId = providers
     )
     .orElse("")
     .get()
+val testAdMobAppId = "ca-app-pub-3940256099942544~3347511713"
+val testInterstitialAdUnitId = "ca-app-pub-3940256099942544/1033173712"
+val releaseAdMobAppId = providers
+    .environmentVariable("DOMINO_ADMOB_APP_ID")
+    .orNull
+val releaseInterstitialAdUnitId = providers
+    .environmentVariable("DOMINO_ADMOB_INTERSTITIAL_UNIT_ID")
+    .orNull
 val releaseSigningConfigured = listOf(
     releaseStoreFile,
     releaseStorePassword,
@@ -47,6 +55,18 @@ if (releaseBuildRequested) {
     check(googleWebClientId.isNotBlank()) {
         "Release Google sign-in requires DOMINO_GOOGLE_WEB_CLIENT_ID " +
             "or -PgoogleWebClientId."
+    }
+    check(!releaseAdMobAppId.isNullOrBlank()) {
+        "Release advertising requires DOMINO_ADMOB_APP_ID."
+    }
+    check(!releaseInterstitialAdUnitId.isNullOrBlank()) {
+        "Release advertising requires DOMINO_ADMOB_INTERSTITIAL_UNIT_ID."
+    }
+    check(releaseAdMobAppId != testAdMobAppId) {
+        "Release advertising cannot use the Google test AdMob App ID."
+    }
+    check(releaseInterstitialAdUnitId != testInterstitialAdUnitId) {
+        "Release advertising cannot use the Google test interstitial unit ID."
     }
 }
 
@@ -107,6 +127,26 @@ android {
                 name = "ONLINE_BACKEND_BASE_URL",
                 value = onlineBackendBaseUrl.toBuildConfigString(),
             )
+
+            manifestPlaceholders["admobAppId"] = testAdMobAppId
+
+            buildConfigField(
+                type = "String",
+                name = "ADMOB_APP_ID",
+                value = testAdMobAppId.toBuildConfigString(),
+            )
+
+            buildConfigField(
+                type = "String",
+                name = "ADMOB_INTERSTITIAL_UNIT_ID",
+                value = testInterstitialAdUnitId.toBuildConfigString(),
+            )
+
+            buildConfigField(
+                type = "boolean",
+                name = "ADS_TEST_MODE",
+                value = "true",
+            )
         }
 
         release {
@@ -124,6 +164,29 @@ android {
                 type = "String",
                 name = "ONLINE_BACKEND_BASE_URL",
                 value = "https://api.dominope.com.br".toBuildConfigString(),
+            )
+
+            manifestPlaceholders["admobAppId"] =
+                releaseAdMobAppId.orEmpty()
+
+            buildConfigField(
+                type = "String",
+                name = "ADMOB_APP_ID",
+                value = releaseAdMobAppId.orEmpty().toBuildConfigString(),
+            )
+
+            buildConfigField(
+                type = "String",
+                name = "ADMOB_INTERSTITIAL_UNIT_ID",
+                value = releaseInterstitialAdUnitId
+                    .orEmpty()
+                    .toBuildConfigString(),
+            )
+
+            buildConfigField(
+                type = "boolean",
+                name = "ADS_TEST_MODE",
+                value = "false",
             )
 
             optimization {
@@ -161,6 +224,8 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.google.id)
+    implementation(libs.google.mobile.ads.nextgen)
+    implementation(libs.google.user.messaging.platform)
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.ktor.client.core)

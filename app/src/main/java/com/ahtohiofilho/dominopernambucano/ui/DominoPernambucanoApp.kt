@@ -75,6 +75,12 @@ fun DominoPernambucanoApp(
     onlineAppConfig: OnlineAppConfig = OnlineAppEnvironment.Current,
     googleSignInConfig: GoogleSignInConfig =
         GoogleSignInEnvironment.Current,
+    onMatchFinished: () -> Unit = {},
+    onMatchFinishedTransition: ((() -> Unit) -> Unit) = { continuation ->
+        continuation()
+    },
+    privacyOptionsRequired: Boolean = false,
+    onPrivacyOptionsClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val accountProfileStrings = OnlineAccountProfileStrings(
@@ -773,6 +779,8 @@ fun DominoPernambucanoApp(
             onBackClick = {
                 settingsVisible = false
             },
+            privacyOptionsRequired = privacyOptionsRequired,
+            onPrivacyOptionsClick = onPrivacyOptionsClick,
         )
 
         return
@@ -1237,6 +1245,8 @@ fun DominoPernambucanoApp(
                         DominoSessionCommand.BackToPlayModeSelection,
                     )
                 },
+                onMatchFinished = onMatchFinished,
+                onMatchFinishedTransition = onMatchFinishedTransition,
             )
         }
 
@@ -1446,6 +1456,8 @@ fun DominoPernambucanoApp(
                         DominoSessionCommand.BackToPlayModeSelection,
                     )
                 },
+                onMatchFinished = onMatchFinished,
+                onMatchFinishedTransition = onMatchFinishedTransition,
                 onlineUiTraceReporter = state.matchCoordinator,
             )
         }
