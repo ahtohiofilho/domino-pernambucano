@@ -5,6 +5,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomLeaveRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomSeatChangeRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
@@ -150,6 +151,15 @@ interface OnlineServerStore : AutoCloseable {
      */
     fun movePrivateRoomSeat(
         request: PrivateRoomSeatChangeRequestDto,
+    ): OnlineRoomOperationResultDto
+
+    /**
+     * Removes the requesting participant from a waiting PRIVATE_UNRANKED
+     * lobby. A host departure closes the lobby instead of transferring host
+     * authority.
+     */
+    fun leavePrivateRoom(
+        request: PrivateRoomLeaveRequestDto,
     ): OnlineRoomOperationResultDto
 
     /**

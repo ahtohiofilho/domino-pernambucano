@@ -30,6 +30,7 @@ import com.ahtohiofilho.dominopernambucano.match.findRandomPlayableMove
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomLeaveRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomSeatChangeRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
@@ -1535,6 +1536,82 @@ class InMemoryOnlineServerStore(
                 accepted = true,
                 roomSnapshot = updatedRoom,
                 localSeatIndex = request.targetSeatIndex,
+            )
+        }
+    }
+
+    override fun leavePrivateRoom(
+        request: PrivateRoomLeaveRequestDto,
+    ): OnlineRoomOperationResultDto {
+        return synchronized(lock) {
+            val normalizedRoomId = request.roomId.trim()
+            val normalizedPlayerId = request.localPlayerId.trim()
+
+            if (
+                normalizedRoomId.isBlank() ||
+                normalizedRoomId.length > MAX_SERVER_IDENTIFIER_CHARACTERS ||
+                normalizedPlayerId.isBlank() ||
+                normalizedPlayerId.length > MAX_SERVER_IDENTIFIER_CHARACTERS
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "leave_private_room",
+                    roomId = normalizedRoomId.takeIf { value ->
+                        value.isNotBlank()
+                    },
+                    playerId = normalizedPlayerId.takeIf { value ->
+                        value.isNotBlank()
+                    },
+                    reason = "Sala ou jogador inválido.",
+                )
+            }
+
+            val currentRoom = roomsById[normalizedRoomId]
+                ?: return@synchronized OnlineRoomOperationResultDto(
+                    accepted = true,
+                )
+
+            if (
+                currentRoom.matchMode != DominoMatchMode.PRIVATE_UNRANKED ||
+                currentRoom.status != OnlineRoomStatusDto.WAITING_FOR_PLAYERS ||
+                currentRoom.matchId != null
+            ) {
+                return@synchronized rejectedRoomOperationWithTrace(
+                    operation = "leave_private_room",
+                    roomId = currentRoom.roomId,
+                    matchId = currentRoom.matchId,
+                    playerId = normalizedPlayerId,
+                    reason = "A saída do lobby privado só é permitida antes da partida.",
+                )
+            }
+
+            val leavingPlayer = currentRoom.players.firstOrNull { player ->
+                player.playerId == normalizedPlayerId
+            } ?: return@synchronized OnlineRoomOperationResultDto(
+                accepted = true,
+            )
+
+            if (currentRoom.hostPlayerId == normalizedPlayerId) {
+                roomsById.remove(currentRoom.roomId)
+                roomIdsByCode.remove(currentRoom.roomCode)
+
+                return@synchronized OnlineRoomOperationResultDto(
+                    accepted = true,
+                    localSeatIndex = leavingPlayer.seatIndex,
+                )
+            }
+
+            val updatedRoom = currentRoom.copy(
+                players = currentRoom.players.filterNot { player ->
+                    player.playerId == normalizedPlayerId
+                },
+                updatedAtEpochMillis = nowEpochMillis(),
+            )
+            roomsById[updatedRoom.roomId] = updatedRoom
+
+            OnlineRoomOperationResultDto(
+                accepted = true,
+                roomSnapshot = updatedRoom,
+                localSeatIndex = leavingPlayer.seatIndex,
             )
         }
     }

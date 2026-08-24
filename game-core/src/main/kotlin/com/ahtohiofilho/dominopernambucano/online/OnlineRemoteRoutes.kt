@@ -15,6 +15,7 @@ object OnlineRemoteRoutes {
     const val JOIN_ROOM = "rooms/join"
     const val PRIVATE_ROOM_SEAT = "rooms/private/seat"
     const val PRIVATE_ROOM_START = "rooms/private/start"
+    const val PRIVATE_ROOM_LEAVE = "rooms/private/leave"
     const val SUBMIT_ACTION = "matches/actions"
     const val SUBMIT_TRACE_BATCH = "traces"
 

@@ -14,3 +14,9 @@ data class PrivateRoomStartRequestDto(
     val roomId: String,
     val localPlayerId: String,
 )
+
+@Serializable
+data class PrivateRoomLeaveRequestDto(
+    val roomId: String,
+    val localPlayerId: String,
+)

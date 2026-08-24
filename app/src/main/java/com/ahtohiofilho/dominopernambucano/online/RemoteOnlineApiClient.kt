@@ -176,6 +176,14 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun leavePrivateRoom(
+        request: PrivateRoomLeaveRequestDto,
+    ): OnlineRoomOperationResultDto {
+        throw UnsupportedOperationException(
+            "Saída do lobby privado não configurada.",
+        )
+    }
+
     suspend fun startPrivateRoom(
         request: PrivateRoomStartRequestDto,
     ): OnlineRoomOperationResultDto {

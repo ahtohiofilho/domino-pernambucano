@@ -1399,6 +1399,36 @@ private enum class ActiveReadRefreshOutcome {
 
         if (
             client != null &&
+            currentSnapshot == null &&
+            currentRoom != null &&
+            localPlayerId != null &&
+            currentRoom.matchMode ==
+                com.ahtohiofilho.dominopernambucano.match
+                    .DominoMatchMode.PRIVATE_UNRANKED &&
+            currentRoom.status ==
+                OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
+            currentRoom.matchId == null
+        ) {
+            val authenticationFailure =
+                configureActiveParticipantAuthentication(
+                    client = client,
+                    playerId = localPlayerId,
+                )
+
+            if (authenticationFailure == null) {
+                runCatching {
+                    client.leavePrivateRoom(
+                        PrivateRoomLeaveRequestDto(
+                            roomId = currentRoom.roomId,
+                            localPlayerId = localPlayerId,
+                        ),
+                    )
+                }
+            }
+        }
+
+        if (
+            client != null &&
             currentSnapshot != null &&
             currentRoom != null &&
             localPlayerId != null

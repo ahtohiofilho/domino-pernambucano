@@ -497,6 +497,27 @@ class KtorRemoteOnlineApiClient(
         }.body()
     }
 
+    override suspend fun leavePrivateRoom(
+        request: PrivateRoomLeaveRequestDto,
+    ): OnlineRoomOperationResultDto {
+        setDevelopmentPlayerId(
+            playerId = request.localPlayerId,
+        )
+
+        return httpClient.post(
+            urlString = endpoint(
+                OnlineRemoteRoutes.PRIVATE_ROOM_LEAVE,
+            ),
+        ) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            applyProtectedAuthentication(
+                developmentPlayerId = request.localPlayerId,
+            )
+            setBody(request)
+        }.body()
+    }
+
     override suspend fun startPrivateRoom(
         request: PrivateRoomStartRequestDto,
     ): OnlineRoomOperationResultDto {
