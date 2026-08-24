@@ -36,6 +36,41 @@ class PrivateRoomLobbyUiPolicyTest {
     }
 
     @Test
+    fun full_room_readiness_requires_waiting_four_connected_valid_seats() {
+        val fullRoom = waitingRoom(
+            players = listOf(
+                player("host", 0),
+                player("p2", 1),
+                player("p3", 2),
+                player("p4", 3),
+            ),
+        )
+        assertTrue(isPrivateRoomFullAndReady(fullRoom))
+
+        val onlyThree = waitingRoom(
+            players = fullRoom.players.take(3),
+        )
+        assertFalse(isPrivateRoomFullAndReady(onlyThree))
+
+        val disconnected = fullRoom.copy(
+            players = fullRoom.players.map { player ->
+                if (player.playerId == "p4") {
+                    player.copy(connected = false)
+                } else {
+                    player
+                }
+            },
+        )
+        assertFalse(isPrivateRoomFullAndReady(disconnected))
+
+        val inMatch = fullRoom.copy(
+            status = OnlineRoomStatusDto.IN_MATCH,
+            matchId = "match-1",
+        )
+        assertFalse(isPrivateRoomFullAndReady(inMatch))
+    }
+
+    @Test
     fun host_cannot_start_until_four_connected_valid_seats_exist() {
         val onlyThree = waitingRoom(
             players = listOf(

@@ -45,6 +45,7 @@
     <string name="private_room_creating">Creating room...</string>
     <string name="private_room_complete_table">Fill the table with app players</string>
     <string name="private_room_waiting_players">Waiting for players...</string>
+    <string name="private_room_complete_status">Room full</string>
     <string name="private_room_opening_match">Opening online match...</string>
     <string name="private_room_code_label">Room code</string>
     <string name="private_room_player_count">Players %1$d/4</string>
@@ -54,7 +55,7 @@
     <string name="private_room_seat_choose">Choose</string>
     <string name="private_room_seat_swap">Swap</string>
     <string name="private_room_start_match">Start match</string>
-    <string name="private_room_waiting_host_start">Waiting for the host to start the match...</string>
+    <string name="private_room_waiting_host_start">Room full. Wait for the host to start the match.</string>
     <string name="private_room_seat_change_failed">Could not change your position.</string>
     <string name="private_room_start_failed">Could not start the match.</string>
     <string name="online_seat_online">online</string>
@@ -218,8 +219,9 @@
     <string name="online_room_create_failed">Could not create the room.</string>
     <string name="online_room_join_failed">Could not join the room.</string>
     <string name="online_room_complete_failed">Could not complete the table.</string>
-    <string name="online_room_waiting_others">Room connected to the remote backend. Wait for the other players to start the match.</string>
-    <string name="online_room_joined_waiting">You joined the room. Wait for the other players to start the match.</string>
+    <string name="online_room_waiting_others">Share the room code to invite other players.</string>
+    <string name="online_room_ready_to_start">All players are in the room. You can start the match.</string>
+    <string name="online_room_joined_waiting">You joined the room. Wait for the other players.</string>
     <string name="online_room_enter_code_hint">Enter the room code to join the online match.</string>
     <string name="online_room_shared_code_hint">Use the code shared by the online room creator.</string>
     <string name="online_seat_available">Available</string>

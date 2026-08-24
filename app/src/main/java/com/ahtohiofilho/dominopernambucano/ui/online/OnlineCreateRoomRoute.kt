@@ -350,7 +350,13 @@ private fun OnlineLobbyScreen(
                 }
 
                 else -> {
-                    stringResource(R.string.online_room_waiting_others)
+                    if (
+                        roomSnapshot?.let(::isPrivateRoomFullAndReady) == true
+                    ) {
+                        stringResource(R.string.online_room_ready_to_start)
+                    } else {
+                        stringResource(R.string.online_room_waiting_others)
+                    }
                 }
             },
             color = DominoSemanticColors.primaryTextOnDark.copy(
@@ -452,7 +458,7 @@ private fun RoomCodeCard(
 
             Text(
                 text = roomStatusLabel(
-                    status = roomSnapshot.status,
+                    roomSnapshot = roomSnapshot,
                     matchRevision = matchRevision,
                 ),
                 style = MaterialTheme.typography.bodyMedium,
@@ -627,12 +633,16 @@ private fun resolveNextFakePlayerNumber(
 
 @Composable
 private fun roomStatusLabel(
-    status: OnlineRoomStatusDto,
+    roomSnapshot: OnlineRoomSnapshotDto,
     matchRevision: Long?,
 ): String {
-    return when (status) {
+    return when (roomSnapshot.status) {
         OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
-            stringResource(R.string.online_waiting_players)
+            if (isPrivateRoomFullAndReady(roomSnapshot)) {
+                stringResource(R.string.private_room_complete_status)
+            } else {
+                stringResource(R.string.online_waiting_players)
+            }
         }
 
         OnlineRoomStatusDto.IN_MATCH -> {

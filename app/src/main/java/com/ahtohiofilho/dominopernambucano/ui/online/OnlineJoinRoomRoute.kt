@@ -375,7 +375,13 @@ private fun OnlineJoinRoomScreen(
                     "Você entrou na sala. Complete a mesa com jogadores controlados " +
                             "pelo aplicativo para validar o fluxo ponta a ponta."
                 } else {
-                    stringResource(R.string.online_room_joined_waiting)
+                    if (
+                        roomSnapshot?.let(::isPrivateRoomFullAndReady) == true
+                    ) {
+                        stringResource(R.string.private_room_waiting_host_start)
+                    } else {
+                        stringResource(R.string.online_room_joined_waiting)
+                    }
                 }
             } else {
                 if (allowDemoRoomCreation) {
@@ -590,7 +596,7 @@ private fun JoinRoomCodeCard(
 
             Text(
                 text = joinRoomStatusLabel(
-                    status = roomSnapshot.status,
+                    roomSnapshot = roomSnapshot,
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
@@ -764,11 +770,15 @@ private fun resolveNextFakePlayerNumber(
 
 @Composable
 private fun joinRoomStatusLabel(
-    status: OnlineRoomStatusDto,
+    roomSnapshot: OnlineRoomSnapshotDto,
 ): String {
-    return when (status) {
+    return when (roomSnapshot.status) {
         OnlineRoomStatusDto.WAITING_FOR_PLAYERS -> {
-            stringResource(R.string.online_waiting_players)
+            if (isPrivateRoomFullAndReady(roomSnapshot)) {
+                stringResource(R.string.private_room_complete_status)
+            } else {
+                stringResource(R.string.online_waiting_players)
+            }
         }
 
         OnlineRoomStatusDto.IN_MATCH -> {

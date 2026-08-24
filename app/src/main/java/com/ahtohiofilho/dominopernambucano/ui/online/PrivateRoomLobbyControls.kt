@@ -70,16 +70,13 @@ internal fun privateRoomSeatUiAction(
     }
 }
 
-internal fun canStartPrivateRoomFromLobby(
+internal fun isPrivateRoomFullAndReady(
     roomSnapshot: OnlineRoomSnapshotDto,
-    localPlayerId: String?,
 ): Boolean {
     if (
         roomSnapshot.matchMode != DominoMatchMode.PRIVATE_UNRANKED ||
         roomSnapshot.status != OnlineRoomStatusDto.WAITING_FOR_PLAYERS ||
         roomSnapshot.matchId != null ||
-        localPlayerId.isNullOrBlank() ||
-        roomSnapshot.hostPlayerId != localPlayerId ||
         roomSnapshot.players.size != 4 ||
         roomSnapshot.players.any { player -> !player.connected }
     ) {
@@ -91,6 +88,21 @@ internal fun canStartPrivateRoomFromLobby(
     }.sorted()
 
     return seats == listOf(0, 1, 2, 3)
+}
+
+internal fun canStartPrivateRoomFromLobby(
+    roomSnapshot: OnlineRoomSnapshotDto,
+    localPlayerId: String?,
+): Boolean {
+    if (
+        localPlayerId.isNullOrBlank() ||
+        roomSnapshot.hostPlayerId != localPlayerId ||
+        !isPrivateRoomFullAndReady(roomSnapshot)
+    ) {
+        return false
+    }
+
+    return true
 }
 
 internal fun isPrivateRoomHost(

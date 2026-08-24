@@ -45,6 +45,7 @@
     <string name="private_room_creating">Creando sala...</string>
     <string name="private_room_complete_table">Completar la mesa con jugadores de la aplicación</string>
     <string name="private_room_waiting_players">Esperando jugadores...</string>
+    <string name="private_room_complete_status">Sala completa</string>
     <string name="private_room_opening_match">Abriendo partida en línea...</string>
     <string name="private_room_code_label">Código de la sala</string>
     <string name="private_room_player_count">Jugadores %1$d/4</string>
@@ -54,7 +55,7 @@
     <string name="private_room_seat_choose">Elegir</string>
     <string name="private_room_seat_swap">Intercambiar</string>
     <string name="private_room_start_match">Iniciar partida</string>
-    <string name="private_room_waiting_host_start">Esperando a que el anfitrión inicie la partida...</string>
+    <string name="private_room_waiting_host_start">Sala completa. Espera a que el anfitrión inicie la partida.</string>
     <string name="private_room_seat_change_failed">No se pudo cambiar tu posición.</string>
     <string name="private_room_start_failed">No se pudo iniciar la partida.</string>
     <string name="online_seat_online">en línea</string>
@@ -218,8 +219,9 @@
     <string name="online_room_create_failed">No se pudo crear la sala.</string>
     <string name="online_room_join_failed">No se pudo entrar en la sala.</string>
     <string name="online_room_complete_failed">No se pudo completar la mesa.</string>
-    <string name="online_room_waiting_others">Sala conectada al backend remoto. Espera a los demás jugadores para iniciar la partida.</string>
-    <string name="online_room_joined_waiting">Entraste en la sala. Espera a los demás jugadores para iniciar la partida.</string>
+    <string name="online_room_waiting_others">Comparte el código de la sala para invitar a otros jugadores.</string>
+    <string name="online_room_ready_to_start">Todos los jugadores están en la sala. Ya puedes iniciar la partida.</string>
+    <string name="online_room_joined_waiting">Entraste en la sala. Espera a los demás jugadores.</string>
     <string name="online_room_enter_code_hint">Introduce el código de la sala para entrar en la partida en línea.</string>
     <string name="online_room_shared_code_hint">Usa el código compartido por quien creó la sala en línea.</string>
     <string name="online_seat_available">Libre</string>
