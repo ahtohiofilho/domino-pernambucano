@@ -1,16 +1,9 @@
 package com.ahtohiofilho.dominopernambucano.advertising
 
-internal const val FirstInterstitialOpportunityMatch = 3
-internal const val InterstitialOpportunityIntervalMatches = 3
-
 internal fun isInterstitialOpportunity(
     completedMatchCount: Int,
 ): Boolean {
-    if (completedMatchCount < FirstInterstitialOpportunityMatch) {
-        return false
-    }
-
-    return completedMatchCount % InterstitialOpportunityIntervalMatches == 0
+    return completedMatchCount >= 1
 }
 
 internal class AdvertisingFrequencyGate(
@@ -22,7 +15,7 @@ internal class AdvertisingFrequencyGate(
             .coerceAtLeast(0)
 
         val nextCount = if (currentCount == Int.MAX_VALUE) {
-            FirstInterstitialOpportunityMatch
+            1
         } else {
             currentCount + 1
         }

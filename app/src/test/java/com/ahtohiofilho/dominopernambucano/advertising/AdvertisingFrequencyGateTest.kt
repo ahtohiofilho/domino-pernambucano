@@ -2,70 +2,85 @@ package com.ahtohiofilho.dominopernambucano.advertising
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class AdvertisingFrequencyGateTest {
     @Test
-    fun first_two_matches_have_no_interstitial_opportunity() {
+    fun first_completed_match_is_an_interstitial_opportunity() {
         var completedMatches = 0
         val gate = gateFor(
             read = { completedMatches },
             write = { completedMatches = it },
         )
 
-        assertFalse(gate.recordCompletedMatch())
-        assertFalse(gate.recordCompletedMatch())
+        assertTrue(gate.recordCompletedMatch())
+        assertEquals(1, completedMatches)
     }
 
     @Test
-    fun third_and_sixth_matches_are_opportunities() {
+    fun every_completed_match_is_an_interstitial_opportunity() {
         var completedMatches = 0
         val gate = gateFor(
             read = { completedMatches },
             write = { completedMatches = it },
         )
 
-        assertFalse(gate.recordCompletedMatch())
-        assertFalse(gate.recordCompletedMatch())
-        assertTrue(gate.recordCompletedMatch())
-        assertFalse(gate.recordCompletedMatch())
-        assertFalse(gate.recordCompletedMatch())
-        assertTrue(gate.recordCompletedMatch())
+        repeat(12) {
+            assertTrue(gate.recordCompletedMatch())
+        }
+
+        assertEquals(12, completedMatches)
     }
 
     @Test
-    fun missed_opportunity_does_not_accumulate() {
-        assertTrue(
+    fun zero_and_negative_counts_are_not_standalone_opportunities() {
+        assertFalse(
             isInterstitialOpportunity(
-                completedMatchCount = 3,
+                completedMatchCount = 0,
             ),
         )
         assertFalse(
             isInterstitialOpportunity(
-                completedMatchCount = 4,
-            ),
-        )
-        assertFalse(
-            isInterstitialOpportunity(
-                completedMatchCount = 5,
-            ),
-        )
-        assertTrue(
-            isInterstitialOpportunity(
-                completedMatchCount = 6,
+                completedMatchCount = -1,
             ),
         )
     }
 
     @Test
-    fun persisted_count_continues_frequency_window() {
-        var completedMatches = 5
+    fun persisted_count_still_allows_the_next_completed_match() {
+        var completedMatches = 37
         val gate = gateFor(
             read = { completedMatches },
             write = { completedMatches = it },
         )
 
         assertTrue(gate.recordCompletedMatch())
+        assertEquals(38, completedMatches)
+    }
+
+    @Test
+    fun corrupted_negative_persisted_count_recovers_to_first_completion() {
+        var completedMatches = -50
+        val gate = gateFor(
+            read = { completedMatches },
+            write = { completedMatches = it },
+        )
+
+        assertTrue(gate.recordCompletedMatch())
+        assertEquals(1, completedMatches)
+    }
+
+    @Test
+    fun max_value_rolls_over_to_one_without_suppressing_the_opportunity() {
+        var completedMatches = Int.MAX_VALUE
+        val gate = gateFor(
+            read = { completedMatches },
+            write = { completedMatches = it },
+        )
+
+        assertTrue(gate.recordCompletedMatch())
+        assertEquals(1, completedMatches)
     }
 
     private fun gateFor(
