@@ -55,15 +55,50 @@ class BearerOnlineRequestIdentityResolver(
     }
 }
 
+class StoreValidatedAccountIdentityResolver(
+    private val delegate: OnlineRequestIdentityResolver,
+    private val store: OnlineServerStore,
+) : OnlineRequestIdentityResolver {
+    override fun resolve(
+        call: ApplicationCall,
+    ): OnlineRequestIdentity? {
+        val identity = delegate.resolve(call)
+            ?: return null
+
+        if (identity.kind != OnlinePrincipalKind.ACCOUNT) {
+            return identity
+        }
+
+        val accountId = identity.accountId
+            ?.takeIf { value -> value.isNotBlank() }
+            ?: return null
+
+        return identity.takeIf {
+            store.isAccountIdentityActive(
+                accountId = accountId,
+                playerId = identity.playerId,
+            )
+        }
+    }
+}
+
 internal fun createDefaultOnlineRequestIdentityResolver(
     sessionTokenService: OnlineSessionTokenService,
     serverEnvironment: OnlineServerEnvironment,
+    store: OnlineServerStore? = null,
 ): OnlineRequestIdentityResolver {
     val resolvers = buildList {
+        val bearerResolver = BearerOnlineRequestIdentityResolver(
+            sessionTokenService = sessionTokenService,
+        )
+
         add(
-            BearerOnlineRequestIdentityResolver(
-                sessionTokenService = sessionTokenService,
-            ),
+            store?.let { authoritativeStore ->
+                StoreValidatedAccountIdentityResolver(
+                    delegate = bearerResolver,
+                    store = authoritativeStore,
+                )
+            } ?: bearerResolver,
         )
 
         if (serverEnvironment.allowsDevelopmentIdentityHeader) {

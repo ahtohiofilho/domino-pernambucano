@@ -28,6 +28,13 @@ sealed interface OnlineExternalIdentityLinkResult {
     data object Conflict : OnlineExternalIdentityLinkResult
 }
 
+enum class OnlineAccountDeletionResult {
+    DELETED,
+    NOT_FOUND,
+    FORBIDDEN,
+    ACTIVE_PARTICIPATION,
+}
+
 interface OnlineServerStore : AutoCloseable {
     /**
      * Promove um player autenticado para uma única conta persistente.
@@ -75,6 +82,16 @@ interface OnlineServerStore : AutoCloseable {
     fun findSyntheticAccount(
         accountId: String,
     ): OnlineServerAccount?
+
+    fun isAccountIdentityActive(
+        accountId: String,
+        playerId: String,
+    ): Boolean
+
+    fun deleteHumanAccount(
+        accountId: String,
+        playerId: String,
+    ): OnlineAccountDeletionResult
 
     fun getAccountProfile(
         accountId: String,

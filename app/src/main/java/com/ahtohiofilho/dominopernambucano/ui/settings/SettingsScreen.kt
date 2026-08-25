@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -35,6 +36,15 @@ internal const val SettingsLanguageGroupTag =
     "settings_language_group"
 internal const val SettingsPrivacyOptionsTag =
     "settings_privacy_options"
+internal const val SettingsPrivacyPolicyTag =
+    "settings_privacy_policy"
+internal const val SettingsAccountDeletionTag =
+    "settings_account_deletion"
+
+private const val PrivacyPolicyUrl =
+    "https://api.dominope.com.br/privacy"
+private const val AccountDeletionUrl =
+    "https://api.dominope.com.br/account-deletion"
 
 @Composable
 fun SettingsScreen(
@@ -44,6 +54,8 @@ fun SettingsScreen(
     privacyOptionsRequired: Boolean = false,
     onPrivacyOptionsClick: () -> Unit = {},
 ) {
+    val uriHandler = LocalUriHandler.current
+
     DominoScreenScaffold(
         title = stringResource(R.string.settings_title),
         layout = DominoScreenLayout.Top,
@@ -132,6 +144,59 @@ fun SettingsScreen(
                 }
             }
 
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(SettingsPrivacyPolicyTag),
+            ) {
+                DominoSecondaryActionCard(
+                    title = stringResource(
+                        R.string.settings_privacy_policy_title,
+                    ),
+                    supportingText = stringResource(
+                        R.string.settings_privacy_policy_description,
+                    ),
+                    accent = DominoBrandAccent.Blue,
+                    onClick = {
+                        uriHandler.openUri(PrivacyPolicyUrl)
+                    },
+                    leadingContent = {
+                        Text(
+                            text = "◎",
+                            color = DominoSemanticColors.brandText,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                        )
+                    },
+                )
+            }
+
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(SettingsAccountDeletionTag),
+            ) {
+                DominoSecondaryActionCard(
+                    title = stringResource(
+                        R.string.settings_account_deletion_title,
+                    ),
+                    supportingText = stringResource(
+                        R.string.settings_account_deletion_description,
+                    ),
+                    accent = DominoBrandAccent.Blue,
+                    onClick = {
+                        uriHandler.openUri(AccountDeletionUrl)
+                    },
+                    leadingContent = {
+                        Text(
+                            text = "×",
+                            color = DominoSemanticColors.brandText,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                        )
+                    },
+                )
+            }
             DominoSecondaryActionCard(
                 title = stringResource(R.string.common_back),
                 supportingText = null,

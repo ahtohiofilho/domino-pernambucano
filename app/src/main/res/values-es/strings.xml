@@ -264,4 +264,9 @@
     <string name="account_connected_success">Cuenta conectada correctamente.</string>
     <string name="ranked_queue_unavailable">La cola clasificatoria no está disponible en este entorno.</string>
     <string name="online_join_create_demo_room">Crear sala ficticia de prueba</string>
+
+    <string name="settings_privacy_policy_title">Política de Privacidad</string>
+    <string name="settings_privacy_policy_description">Consulta cómo Dominó PE trata los datos y la privacidad.</string>
+    <string name="settings_account_deletion_title">Eliminar cuenta y datos</string>
+    <string name="settings_account_deletion_description">Solicita la eliminación de tu cuenta y de los datos asociados.</string>
 </resources>

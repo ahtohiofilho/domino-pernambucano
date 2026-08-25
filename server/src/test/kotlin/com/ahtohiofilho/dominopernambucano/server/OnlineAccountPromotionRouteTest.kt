@@ -105,7 +105,9 @@ class OnlineAccountPromotionRouteTest {
                 accessToken = conflictingAccountSession.accessToken,
             )
 
-            assertEquals(HttpStatusCode.Forbidden, conflictingRetry.status)
+            // Store-aware bearer validation rejects an ACCOUNT token whose
+            // canonical account is not active before the mutation route.
+            assertEquals(HttpStatusCode.Unauthorized, conflictingRetry.status)
             assertEquals(1, store.snapshotPersistentState().accounts.size)
         }
 

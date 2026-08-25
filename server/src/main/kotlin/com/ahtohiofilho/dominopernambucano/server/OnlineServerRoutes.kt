@@ -314,6 +314,48 @@ internal fun Route.onlineServerRoutes(
             }
         }
 
+        delete("/${OnlineRemoteRoutes.DELETE_ACCOUNT}") {
+            val identity = call.requirePublicRankedAccountIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@delete
+            val accountId = identity.accountId
+                ?: run {
+                    call.respond(HttpStatusCode.Forbidden)
+                    return@delete
+                }
+
+            val deletionResult = try {
+                store.deleteHumanAccount(
+                    accountId = accountId,
+                    playerId = identity.playerId,
+                )
+            } catch (_: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@delete
+            }
+
+            when (deletionResult) {
+                OnlineAccountDeletionResult.DELETED -> {
+                    traceArchive.purgePlayerData(
+                        playerId = identity.playerId,
+                    )
+                    call.respond(HttpStatusCode.NoContent)
+                }
+
+                OnlineAccountDeletionResult.NOT_FOUND -> {
+                    call.respond(HttpStatusCode.NotFound)
+                }
+
+                OnlineAccountDeletionResult.FORBIDDEN -> {
+                    call.respond(HttpStatusCode.Forbidden)
+                }
+
+                OnlineAccountDeletionResult.ACTIVE_PARTICIPATION -> {
+                    call.respond(HttpStatusCode.Conflict)
+                }
+            }
+        }
+
         put("/${OnlineRemoteRoutes.ACCOUNT_PROFILE}") {
             val identity = call.requirePublicRankedAccountIdentity(
                 identityResolver = identityResolver,

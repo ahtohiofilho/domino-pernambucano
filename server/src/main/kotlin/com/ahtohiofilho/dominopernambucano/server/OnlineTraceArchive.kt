@@ -628,6 +628,91 @@ class OnlineTraceArchive(
     }
 
     @Synchronized
+    fun purgePlayerData(
+        playerId: String,
+    ): Int {
+        val normalizedPlayerId = playerId.trim()
+        require(normalizedPlayerId.isNotBlank())
+
+        val matchingMatchIds = journalsByMatchId.values
+            .filter { journal ->
+                journal.entries.any { entry ->
+                    entry.event.context.playerId ==
+                        normalizedPlayerId
+                }
+            }
+            .map { journal -> journal.matchId }
+            .toMutableSet()
+
+        pendingEntriesByRoomId.entries.forEach { (_, entries) ->
+            entries.removeAll { entry ->
+                entry.event.context.playerId == normalizedPlayerId
+            }
+        }
+        pendingEntriesByRoomId.entries.removeAll { (_, entries) ->
+            entries.isEmpty()
+        }
+
+        val encodedPlayerId =
+            json.encodeToString(normalizedPlayerId)
+        val timelineMarker =
+            "\"playerId\":$encodedPlayerId"
+
+        val diskDirectories = outputDirectory
+            .listFiles()
+            .orEmpty()
+            .filter { directory -> directory.isDirectory }
+            .filter { directory ->
+                val timeline = File(
+                    directory,
+                    TIMELINE_FILE_NAME,
+                )
+
+                timeline.isFile &&
+                    runCatching {
+                        timeline.readText(
+                            StandardCharsets.UTF_8,
+                        ).contains(timelineMarker)
+                    }.getOrDefault(false)
+            }
+
+        matchingMatchIds.forEach { matchId ->
+            val journal = journalsByMatchId.remove(matchId)
+            journal?.roomId?.let { roomId ->
+                if (matchIdsByRoomId[roomId] == matchId) {
+                    matchIdsByRoomId.remove(roomId)
+                }
+            }
+        }
+
+        matchIdsByRoomId.entries.removeAll { (_, matchId) ->
+            matchId in matchingMatchIds
+        }
+
+        receivedClientEntryKeys.clear()
+
+        var deletedDirectoryCount = 0
+        diskDirectories.forEach { directory ->
+            if (directory.deleteRecursively()) {
+                deletedDirectoryCount += 1
+            }
+        }
+
+        matchingMatchIds.forEach { matchId ->
+            val directory = directoryForMatch(matchId)
+            if (
+                directory.exists() &&
+                directory !in diskDirectories &&
+                directory.deleteRecursively()
+            ) {
+                deletedDirectoryCount += 1
+            }
+        }
+
+        return deletedDirectoryCount
+    }
+
+    @Synchronized
     fun snapshotMemoryHealth(): OnlineTraceArchiveMemoryHealth {
         return OnlineTraceArchiveMemoryHealth(
             journalCount = journalsByMatchId.size,

@@ -532,6 +532,157 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    override fun isAccountIdentityActive(
+        accountId: String,
+        playerId: String,
+    ): Boolean {
+        return synchronized(lock) {
+            val normalizedAccountId = runCatching {
+                requireStoreIdentifier(
+                    value = accountId,
+                    fieldName = "accountId",
+                )
+            }.getOrNull() ?: return@synchronized false
+            val normalizedPlayerId = runCatching {
+                requireStoreIdentifier(
+                    value = playerId,
+                    fieldName = "playerId",
+                )
+            }.getOrNull() ?: return@synchronized false
+
+            accountsByPlayerId[normalizedPlayerId]
+                ?.accountId == normalizedAccountId
+        }
+    }
+
+    override fun deleteHumanAccount(
+        accountId: String,
+        playerId: String,
+    ): OnlineAccountDeletionResult {
+        return synchronized(lock) {
+            val normalizedAccountId = requireStoreIdentifier(
+                value = accountId,
+                fieldName = "accountId",
+            )
+            val normalizedPlayerId = requireStoreIdentifier(
+                value = playerId,
+                fieldName = "playerId",
+            )
+            val account = accountsByPlayerId[normalizedPlayerId]
+                ?: return@synchronized OnlineAccountDeletionResult.NOT_FOUND
+
+            if (account.accountId != normalizedAccountId) {
+                return@synchronized OnlineAccountDeletionResult.NOT_FOUND
+            }
+
+            if (
+                account.participantType !=
+                OnlineParticipantTypeDto.HUMAN
+            ) {
+                return@synchronized OnlineAccountDeletionResult.FORBIDDEN
+            }
+
+            val hasActiveParticipation = roomsById.values.any { room ->
+                room.status in setOf(
+                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
+                    OnlineRoomStatusDto.IN_MATCH,
+                ) &&
+                    room.players.any { player ->
+                        player.playerId == normalizedPlayerId
+                    }
+            }
+
+            if (hasActiveParticipation) {
+                return@synchronized OnlineAccountDeletionResult.ACTIVE_PARTICIPATION
+            }
+
+            publicRankedQueueByAccountId.remove(normalizedAccountId)
+
+            externalIdentitiesByKey.entries.removeAll { (_, identity) ->
+                identity.accountId == normalizedAccountId
+            }
+
+            publicRankedFormationHistory.removeAll { entry ->
+                normalizedAccountId in
+                    entry.selectedAccountIdsInQueueOrder ||
+                    normalizedAccountId in entry.accountIdsBySeat
+            }
+
+            val removedRoomIds = roomsById.values
+                .filter { room ->
+                    room.players.any { player ->
+                        player.playerId == normalizedPlayerId
+                    }
+                }
+                .map { room -> room.roomId }
+                .toSet()
+
+            val removedMatchIds = matchesById.values
+                .filter { matchRecord ->
+                    matchRecord.roomId in removedRoomIds ||
+                        matchRecord.rankedPlayerIdentitiesBySeat.any {
+                                identity ->
+                            identity.playerId == normalizedPlayerId ||
+                                identity.accountId ==
+                                    normalizedAccountId
+                        }
+                }
+                .map { matchRecord -> matchRecord.matchId }
+                .toSet()
+
+            roomIdsByCode.entries.removeAll { (_, roomId) ->
+                roomId in removedRoomIds
+            }
+            removedRoomIds.forEach(roomsById::remove)
+            removedMatchIds.forEach(matchesById::remove)
+
+            actionResultsByKey.keys.removeAll { key ->
+                key.playerId == normalizedPlayerId ||
+                    key.matchId in removedMatchIds
+            }
+
+            rankedResultsById.entries.removeAll { (_, result) ->
+                result.players.any { player ->
+                    player.playerId == normalizedPlayerId ||
+                        player.accountId == normalizedAccountId
+                }
+            }
+
+            rankedCycleSnapshotsById.entries.forEach { mapEntry ->
+                val snapshot = mapEntry.value
+                if (
+                    snapshot.standings.none { standing ->
+                        standing.accountId == normalizedAccountId
+                    }
+                ) {
+                    return@forEach
+                }
+
+                val retainedStandings = snapshot.standings
+                    .filterNot { standing ->
+                        standing.accountId == normalizedAccountId
+                    }
+                    .mapIndexed { index, standing ->
+                        standing.copy(rank = index + 1)
+                    }
+
+                mapEntry.setValue(
+                    snapshot.copy(
+                        standings = retainedStandings,
+                        totalEligiblePlayers = (
+                            snapshot.totalEligiblePlayers - 1
+                        ).coerceAtLeast(retainedStandings.size),
+                        retainedRankingSize = retainedStandings.size,
+                    ),
+                )
+            }
+
+            accountsByPlayerId.remove(normalizedPlayerId)
+
+            OnlineAccountDeletionResult.DELETED
+        }
+    }
+
     override fun getAccountProfile(
         accountId: String,
     ): OnlineAccountProfile? {

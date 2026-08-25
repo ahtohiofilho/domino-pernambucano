@@ -96,6 +96,26 @@ class PersistentOnlineServerStore private constructor(
         delegate.findSyntheticAccount(accountId = accountId)
     }
 
+    override fun isAccountIdentityActive(
+        accountId: String,
+        playerId: String,
+    ): Boolean = read {
+        delegate.isAccountIdentityActive(
+            accountId = accountId,
+            playerId = playerId,
+        )
+    }
+
+    override fun deleteHumanAccount(
+        accountId: String,
+        playerId: String,
+    ): OnlineAccountDeletionResult = mutate {
+        delegate.deleteHumanAccount(
+            accountId = accountId,
+            playerId = playerId,
+        )
+    }
+
     override fun getAccountProfile(
         accountId: String,
     ): OnlineAccountProfile? = read {

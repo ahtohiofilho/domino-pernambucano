@@ -264,4 +264,9 @@
     <string name="account_connected_success">Account connected successfully.</string>
     <string name="ranked_queue_unavailable">The ranked queue is not available in this environment.</string>
     <string name="online_join_create_demo_room">Create fake test room</string>
+
+    <string name="settings_privacy_policy_title">Privacy Policy</string>
+    <string name="settings_privacy_policy_description">See how Dominó PE handles data and privacy.</string>
+    <string name="settings_account_deletion_title">Delete account and data</string>
+    <string name="settings_account_deletion_description">Request deletion of your account and associated data.</string>
 </resources>

@@ -11,6 +11,7 @@ object OnlineRemoteRoutes {
     const val RANKING = "ranking"
     const val RANKING_CYCLES = "ranking/cycles"
     const val ACCOUNT_PROFILE = "accounts/profile"
+    const val DELETE_ACCOUNT = "accounts/self"
     const val CREATE_ROOM = "rooms"
     const val JOIN_ROOM = "rooms/join"
     const val PRIVATE_ROOM_SEAT = "rooms/private/seat"

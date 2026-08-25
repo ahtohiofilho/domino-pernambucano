@@ -125,6 +125,7 @@ internal fun Application.module(
         createDefaultOnlineRequestIdentityResolver(
             sessionTokenService = sessionTokenService,
             serverEnvironment = serverEnvironment,
+            store = store,
         ),
     googleIdentityTokenVerifier: OnlineGoogleIdentityTokenVerifier =
         createDefaultOnlineGoogleIdentityTokenVerifier(),
@@ -179,6 +180,8 @@ internal fun Application.module(
     }
 
     routing {
+        legalPolicyRoutes()
+
         get("/health") {
             call.respond(
                 ServerHealthResponse(

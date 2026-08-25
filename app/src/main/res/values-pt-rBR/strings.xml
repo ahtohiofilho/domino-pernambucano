@@ -264,4 +264,9 @@
     <string name="account_connected_success">Conta conectada com sucesso.</string>
     <string name="ranked_queue_unavailable">A fila rankeada não está disponível neste ambiente.</string>
     <string name="online_join_create_demo_room">Criar sala fake de teste</string>
+
+    <string name="settings_privacy_policy_title">Política de Privacidade</string>
+    <string name="settings_privacy_policy_description">Veja como o Dominó PE trata dados e privacidade.</string>
+    <string name="settings_account_deletion_title">Excluir conta e dados</string>
+    <string name="settings_account_deletion_description">Solicite a exclusão da sua conta e dos dados associados.</string>
 </resources>
