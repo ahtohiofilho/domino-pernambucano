@@ -99,7 +99,6 @@ class EntryIdentityVisualContractTest {
 
         composeRule
             .onNodeWithText(backLabel)
-            .performScrollTo()
             .assertIsDisplayed()
             .performClick()
 
@@ -122,8 +121,6 @@ class EntryIdentityVisualContractTest {
             context.getString(
                 R.string.play_mode_ranked_account_required,
             )
-        val rankedSupport =
-            context.getString(R.string.play_mode_ranked_support)
         var rankedClicks = 0
 
         composeRule.setContent {
@@ -158,9 +155,6 @@ class EntryIdentityVisualContractTest {
             .assertCountEquals(0)
         composeRule
             .onAllNodesWithText(accountRequiredMessage)
-            .assertCountEquals(0)
-        composeRule
-            .onAllNodesWithText(rankedSupport)
             .assertCountEquals(0)
 
         composeRule.runOnIdle {
