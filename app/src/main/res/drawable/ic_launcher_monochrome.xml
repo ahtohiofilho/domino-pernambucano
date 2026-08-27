@@ -20,8 +20,8 @@
                     android:fillColor="#FFFFFF"
                     android:fillType="evenOdd"
                     android:pathData="M290,108h444v448h-444z M372,206m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0 M652,206m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0 M512,341m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0 M372,476m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0 M652,476m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0" />
-                <path android:fillColor="#FFFFFF" android:pathData="M372,657m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0" />
-                <path android:fillColor="#FFFFFF" android:pathData="M652,823m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0" />
+                <path android:fillColor="#FFFFFF" android:pathData="M512,736m-44,0a44,44 0,1 0,88 0a44,44 0,1 0,-88 0" />
+
             </group>
         </group>
     </group>
