@@ -4,7 +4,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import kotlin.math.abs
 import kotlin.math.sqrt
+
+private const val DROP_SIDE_TIE_EPSILON_PX = 0.5f
 
 fun isPositionInsideRect(
     positionInWindow: Offset,
@@ -17,10 +20,10 @@ fun findHighlightedDropSideOrNull(
     positionInWindow: Offset,
     playableMoves: List<PlayableMove>,
     dropTargets: List<DominoDropTargetInWindow>,
-    localHandBoundsInWindow: Rect?,
-    maxDistancePx: Float,
+    tableBoundsInWindow: Rect?,
+    previousHighlightedSide: BoardSide? = null,
 ): BoardSide? {
-    if (isPositionInsideRect(positionInWindow, localHandBoundsInWindow)) {
+    if (!isPositionInsideRect(positionInWindow, tableBoundsInWindow)) {
         return null
     }
 
@@ -28,7 +31,7 @@ fun findHighlightedDropSideOrNull(
         positionInWindow = positionInWindow,
         playableMoves = playableMoves,
         dropTargets = dropTargets,
-        maxDistancePx = maxDistancePx,
+        preferredSideOnTie = previousHighlightedSide,
     )
 }
 
@@ -50,10 +53,9 @@ fun findNearestDropSide(
     playableMoves: List<PlayableMove>,
     dropTargets: List<DominoDropTargetInWindow>,
     maxDistancePx: Float? = null,
+    preferredSideOnTie: BoardSide? = null,
 ): BoardSide? {
-    val playableSides = playableMoves
-        .map { move -> move.side }
-        .toSet()
+    val playableSides = playableMoves.map { move -> move.side }.toSet()
 
     if (playableSides.isEmpty()) {
         return null
@@ -63,27 +65,48 @@ fun findNearestDropSide(
         return playableSides.first()
     }
 
-    val nearestTarget = dropTargets
+    val nearestDistanceBySide = dropTargets
         .asSequence()
         .filter { target -> target.side in playableSides }
-        .map { target ->
-            target to getDistance(
-                first = positionInWindow,
-                second = target.positionInWindow,
-            )
+        .groupBy { target -> target.side }
+        .mapValues { (_, targets) ->
+            targets.minOf { target ->
+                getDistance(
+                    first = positionInWindow,
+                    second = target.positionInWindow,
+                )
+            }
         }
-        .minByOrNull { (_, distance) ->
-            distance
-        }
-        ?: return null
 
-    val distance = nearestTarget.second
-
-    if (maxDistancePx != null && distance > maxDistancePx) {
+    if (nearestDistanceBySide.isEmpty()) {
         return null
     }
 
-    return nearestTarget.first.side
+    val minimumDistance = nearestDistanceBySide.values.minOrNull()
+        ?: return null
+
+    if (maxDistancePx != null && minimumDistance > maxDistancePx) {
+        return null
+    }
+
+    val tiedSides = nearestDistanceBySide
+        .filterValues { distance ->
+            abs(distance - minimumDistance) <= DROP_SIDE_TIE_EPSILON_PX
+        }
+        .keys
+
+    if (
+        preferredSideOnTie != null &&
+        preferredSideOnTie in tiedSides
+    ) {
+        return preferredSideOnTie
+    }
+
+    return when {
+        BoardSide.LEFT in tiedSides -> BoardSide.LEFT
+        BoardSide.RIGHT in tiedSides -> BoardSide.RIGHT
+        else -> null
+    }
 }
 
 private fun getDistance(

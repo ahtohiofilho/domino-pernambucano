@@ -471,19 +471,32 @@ fun DominoSecondaryActionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    elevated: Boolean = false,
     leadingContent: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     val shape = DominoBrandShapes.card
     val accentColor = accent.color()
+    val containerColor = if (elevated) {
+        DominoSemanticColors.brandSurfaceElevated
+    } else {
+        DominoSemanticColors.brandSurface
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(
+                elevation = if (elevated) 4.dp else 0.dp,
+                shape = shape,
+                clip = false,
+            )
             .clip(shape)
-            .background(DominoSemanticColors.brandSurface)
+            .background(containerColor)
             .border(
                 width = 1.dp,
-                color = accentColor.copy(alpha = 0.72f),
+                color = accentColor.copy(
+                    alpha = if (elevated) 0.82f else 0.72f,
+                ),
                 shape = shape,
             )
             .clickable(

@@ -304,6 +304,9 @@ fun MainMenuScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(
+                        top = MaterialTheme.dominoSpacing.lg,
+                    )
                     .testTag(MainMenuActionsGroupTag),
                 verticalArrangement = Arrangement.spacedBy(
                     MaterialTheme.dominoSpacing.md,
@@ -422,6 +425,7 @@ fun MainMenuScreen(
                     accent = DominoBrandAccent.Red,
                     onClick = onRankingClick,
                     enabled = !menuActionInProgress,
+                    elevated = true,
                     leadingContent = {
                         BrandGlyph("★")
                     },
@@ -439,6 +443,7 @@ fun MainMenuScreen(
                         onAccountDialogOpened()
                     },
                     enabled = !menuActionInProgress,
+                    elevated = true,
                     leadingContent = {
                         AccountSilhouetteGlyph()
                     },

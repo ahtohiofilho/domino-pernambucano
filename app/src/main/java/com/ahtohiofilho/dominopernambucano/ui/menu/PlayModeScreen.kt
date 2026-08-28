@@ -1,5 +1,8 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +45,12 @@ fun PlayModeScreen(
         statusMessage = onlineFeedbackMessage,
         statusModifier = Modifier.testTag(PlayModeStatusTag),
     ) {
+        Spacer(
+            modifier = Modifier.height(
+                MaterialTheme.dominoSpacing.xl,
+            ),
+        )
+
         DominoPrimaryActionCard(
             title = stringResource(R.string.play_mode_ranked),
             supportingText = if (onlineActionInProgress) {

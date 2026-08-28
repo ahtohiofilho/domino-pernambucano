@@ -1,5 +1,8 @@
 package com.ahtohiofilho.dominopernambucano.ui
 
+import com.ahtohiofilho.dominopernambucano.ui.menu.OfflineIdentityDialog
+import com.ahtohiofilho.dominopernambucano.offline.buildOfflinePlayerTableCodes
+import com.ahtohiofilho.dominopernambucano.offline.SharedPreferencesOfflinePlayerIdentityStore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -375,10 +378,19 @@ fun DominoPernambucanoApp(
         )
     }
 
+    val offlineIdentityStore = remember(
+        context.applicationContext,
+    ) {
+        SharedPreferencesOfflinePlayerIdentityStore(
+            context = context.applicationContext,
+        )
+    }
+
     val sessionCoordinator = remember(
         onlineParticipationBindingRepository,
         onlineSessionCredentialRepository,
         onlineRoomRepository,
+        offlineIdentityStore,
     ) {
         LocalDominoSessionCoordinator(
             onlineParticipationBindingRepository =
@@ -386,6 +398,11 @@ fun DominoPernambucanoApp(
             onlineSessionCredentialRepository =
                 onlineSessionCredentialRepository,
             onlineRoomRepository = onlineRoomRepository,
+            localPlayerNamesProvider = {
+                offlineIdentityStore.read()?.let(
+                    ::buildOfflinePlayerTableCodes,
+                )
+            },
         )
     }
 
@@ -458,6 +475,10 @@ fun DominoPernambucanoApp(
     val onlineDebugOptions = onlineAppConfig.debugOptions
 
     val sessionState by sessionCoordinator.state.collectAsState()
+
+    var offlineIdentityDialogVisible by remember {
+        mutableStateOf(false)
+    }
 
     val menuCoroutineScope = rememberCoroutineScope()
 
@@ -1220,9 +1241,13 @@ fun DominoPernambucanoApp(
                     }
                 },
                 onLocalGameClick = {
-                    sessionCoordinator.dispatch(
-                        DominoSessionCommand.StartLocalMatch,
-                    )
+                    if (offlineIdentityStore.read() == null) {
+                        offlineIdentityDialogVisible = true
+                    } else {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.StartLocalMatch,
+                        )
+                    }
                 },
                 onCreateOnlineRoomClick = {
                     sessionCoordinator.dispatch(
@@ -1235,6 +1260,21 @@ fun DominoPernambucanoApp(
                     )
                 },
             )
+
+            if (offlineIdentityDialogVisible) {
+                OfflineIdentityDialog(
+                    onDismiss = {
+                        offlineIdentityDialogVisible = false
+                    },
+                    onConfirm = { identity ->
+                        offlineIdentityStore.save(identity)
+                        offlineIdentityDialogVisible = false
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.StartLocalMatch,
+                        )
+                    },
+                )
+            }
         }
 
         is DominoSessionState.LocalMatch -> {

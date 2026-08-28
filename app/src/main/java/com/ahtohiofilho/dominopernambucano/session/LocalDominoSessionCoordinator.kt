@@ -28,6 +28,7 @@ class LocalDominoSessionCoordinator(
     private val onlineSessionCredentialRepository:
         OnlineSessionCredentialRepository? = null,
     private val onlineRoomRepository: OnlineRoomRepository? = null,
+    private val localPlayerNamesProvider: (() -> List<String>?)? = null,
 ) : DominoSessionCoordinator {
     private val pendingOnlineParticipationOnInitialization =
         resolvePendingOnlineParticipation()
@@ -69,7 +70,9 @@ class LocalDominoSessionCoordinator(
                 disposeCurrentOnlineCoordinatorIfNeeded()
 
                 mutableState.value = DominoSessionState.LocalMatch(
-                    matchCoordinator = createLocalMatchCoordinator(),
+                    matchCoordinator = createLocalMatchCoordinator(
+                        playerNames = localPlayerNamesProvider?.invoke(),
+                    ),
                 )
             }
 
@@ -538,7 +541,9 @@ private fun OnlinePendingParticipationRemoteInspection
     }
 }
 
-private fun createLocalMatchCoordinator(): LocalDominoMatchCoordinator {
+private fun createLocalMatchCoordinator(
+    playerNames: List<String>? = null,
+): LocalDominoMatchCoordinator {
     val clockPolicy = if (ENABLE_OFFLINE_CLOCK_DEBUG) {
         DominoMatchClockPolicy.OnlinePerPlayerRound
     } else {
@@ -547,5 +552,6 @@ private fun createLocalMatchCoordinator(): LocalDominoMatchCoordinator {
 
     return LocalDominoMatchCoordinator(
         clockPolicy = clockPolicy,
+        playerNames = playerNames,
     )
 }

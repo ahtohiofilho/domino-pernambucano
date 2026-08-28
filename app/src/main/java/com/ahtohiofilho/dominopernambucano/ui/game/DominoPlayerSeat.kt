@@ -5,21 +5,27 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
@@ -29,7 +35,10 @@ enum class DominoPlayerSeatOrientation {
     VERTICAL,
 }
 
-private val NonLocalIdentitySize = 32.dp
+enum class DominoPlayerIdentityPlacement {
+    BEFORE_HAND,
+    AFTER_HAND,
+}
 
 @Composable
 fun DominoPlayerSeat(
@@ -39,11 +48,159 @@ fun DominoPlayerSeat(
     pieces: List<DominoPiece>,
     isCurrent: Boolean,
     orientation: DominoPlayerSeatOrientation,
+    identityPlacement: DominoPlayerIdentityPlacement =
+        DominoPlayerIdentityPlacement.BEFORE_HAND,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     faceUp: Boolean = false,
     isWinner: Boolean = false,
     onBoundsChanged: (Rect?) -> Unit = {},
+) {
+    val winnerAttention = rememberWinnerAttentionMotion(
+        isWinner = isWinner,
+    )
+
+    val animatedModifier = modifier.graphicsLayer {
+        scaleX = winnerAttention.scale
+        scaleY = winnerAttention.scale
+    }
+
+
+    Box(
+        modifier = animatedModifier.fillMaxSize(),
+    ) {
+        val handAlignment = when (orientation) {
+            DominoPlayerSeatOrientation.HORIZONTAL -> Alignment.TopCenter
+            DominoPlayerSeatOrientation.VERTICAL -> {
+                if (identityPlacement == DominoPlayerIdentityPlacement.BEFORE_HAND) {
+                    Alignment.CenterStart
+                } else {
+                    Alignment.CenterEnd
+                }
+            }
+        }
+
+        OpponentHandSurface(
+            pieces = pieces,
+            faceUp = faceUp,
+            compact = compact,
+            isCurrent = isCurrent,
+            isWinner = isWinner,
+            orientation = orientation,
+            onBoundsChanged = onBoundsChanged,
+            modifier = Modifier.align(handAlignment),
+        )
+
+        val codeModifier = when (orientation) {
+            DominoPlayerSeatOrientation.HORIZONTAL -> {
+                val fixedOffset = if (compact) {
+                    DominoGameVisualTokens.TopPlayerCodeAnchorOffsetCompact
+                } else {
+                    DominoGameVisualTokens.TopPlayerCodeAnchorOffset
+                }
+
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(
+                        x = if (identityPlacement == DominoPlayerIdentityPlacement.AFTER_HAND) {
+                            -fixedOffset
+                        } else {
+                            fixedOffset
+                        },
+                    )
+            }
+
+            DominoPlayerSeatOrientation.VERTICAL -> {
+                Modifier
+                    .align(
+                        if (identityPlacement == DominoPlayerIdentityPlacement.BEFORE_HAND) {
+                            Alignment.CenterStart
+                        } else {
+                            Alignment.CenterEnd
+                        },
+                    )
+                    .offset(
+                        y = if (identityPlacement == DominoPlayerIdentityPlacement.BEFORE_HAND) {
+                            DominoGameVisualTokens.SidePlayerCodeAnchorOffsetCompact
+                        } else {
+                            -DominoGameVisualTokens.SidePlayerCodeAnchorOffsetCompact
+                        },
+                    )
+            }
+        }
+
+        DominoPlayerCodeLabel(
+            name = name,
+            isCurrent = isCurrent,
+            isWinner = isWinner,
+            compact = compact,
+            modifier = codeModifier,
+        )
+    }
+}
+
+@Composable
+internal fun DominoPlayerCodeLabel(
+    name: String,
+    isCurrent: Boolean,
+    isWinner: Boolean,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val visibleCode = resolveDominoVisiblePlayerCode(
+        name = name,
+    )
+
+    Column(
+        modifier = modifier.widthIn(
+            min = DominoGameVisualTokens.PlayerCodeMinWidth,
+        ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = visibleCode,
+            color = DominoSemanticColors.primaryTextOnDark,
+            fontSize = 21.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+        )
+
+        when {
+            isWinner -> {
+                WinnerStatusPill(
+                    compact = true,
+                )
+            }
+
+            isCurrent -> {
+                Box(
+                    modifier = Modifier
+                        .size(
+                            DominoGameVisualTokens.PlayerCodeCurrentIndicatorSize,
+                        )
+                        .background(
+                            color = DominoSemanticColors.playableMove,
+                            shape = CircleShape,
+                        ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpponentHandSurface(
+    pieces: List<DominoPiece>,
+    faceUp: Boolean,
+    compact: Boolean,
+    isCurrent: Boolean,
+    isWinner: Boolean,
+    orientation: DominoPlayerSeatOrientation,
+    onBoundsChanged: (Rect?) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val handPadding = if (compact) {
         DominoGameVisualTokens.OpponentHandPaddingCompact
@@ -51,68 +208,62 @@ fun DominoPlayerSeat(
         DominoGameVisualTokens.OpponentHandPadding
     }
 
-    val highlightShape = RoundedCornerShape(
-        DominoGameVisualTokens.OpponentHandHighlightCornerRadius,
+    val handShape = RoundedCornerShape(
+        DominoGameVisualTokens.OpponentHandSurfaceCornerRadius,
     )
-
-    val shouldHighlight = isCurrent || isWinner
 
     val winnerAttention = rememberWinnerAttentionMotion(
         isWinner = isWinner,
     )
 
-    val highlightModifier = if (shouldHighlight) {
-        Modifier
-            .background(
-                color = DominoSemanticColors.scoreHighlight.copy(
-                    alpha = if (isWinner) {
-                        winnerAttention.containerAlpha
-                    } else {
-                        0.22f
-                    },
-                ),
-                shape = highlightShape,
-            )
-            .border(
-                width = DominoGameVisualTokens.OpponentHandHighlightBorderWidth,
-                color = DominoSemanticColors.scoreHighlight.copy(
-                    alpha = if (isWinner) {
-                        winnerAttention.borderAlpha
-                    } else {
-                        0.88f
-                    },
-                ),
-                shape = highlightShape,
-            )
-    } else {
-        Modifier
-    }
+    val shouldHighlight = isCurrent || isWinner
 
-    Column(
+    Box(
         modifier = modifier
-            .graphicsLayer {
-                scaleX = winnerAttention.scale
-                scaleY = winnerAttention.scale
-            }
             .onGloballyPositioned { coordinates ->
                 onBoundsChanged(coordinates.boundsInWindow())
             }
-            .then(highlightModifier)
+            .shadow(
+                elevation = DominoGameVisualTokens.OpponentHandSurfaceElevation,
+                shape = handShape,
+                clip = false,
+            )
+            .background(
+                color = if (shouldHighlight) {
+                    DominoSemanticColors.scoreHighlight.copy(
+                        alpha = if (isWinner) {
+                            winnerAttention.containerAlpha
+                        } else {
+                            0.18f
+                        },
+                    )
+                } else {
+                    DominoSemanticColors.brandSurface.copy(alpha = 0.14f)
+                },
+                shape = handShape,
+            )
+            .border(
+                width = if (shouldHighlight) {
+                    DominoGameVisualTokens.OpponentHandHighlightBorderWidth
+                } else {
+                    DominoGameVisualTokens.OpponentHandSurfaceBorderWidth
+                },
+                color = if (shouldHighlight) {
+                    DominoSemanticColors.scoreHighlight.copy(
+                        alpha = if (isWinner) {
+                            winnerAttention.borderAlpha
+                        } else {
+                            0.86f
+                        },
+                    )
+                } else {
+                    DominoSemanticColors.brandBorder.copy(alpha = 0.52f)
+                },
+                shape = handShape,
+            )
             .padding(handPadding),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(
-            if (compact) 3.dp else 5.dp,
-        ),
+        contentAlignment = Alignment.Center,
     ) {
-        PlayerStatusIndicatorSlot(
-            name = name,
-            participantType = participantType,
-            isCurrent = isCurrent,
-            isWinner = isWinner,
-            orientation = orientation,
-            compact = compact,
-        )
-
         when (orientation) {
             DominoPlayerSeatOrientation.HORIZONTAL -> {
                 OpponentHorizontalPieces(
@@ -127,78 +278,6 @@ fun DominoPlayerSeat(
                     pieces = pieces,
                     faceUp = faceUp,
                     compact = compact,
-                )
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun PlayerStatusIndicatorSlot(
-    name: String,
-    participantType: DominoParticipantType,
-    isCurrent: Boolean,
-    isWinner: Boolean,
-    orientation: DominoPlayerSeatOrientation,
-    compact: Boolean,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(
-                DominoGameVisualTokens.OpponentStatusIndicatorSlotHeight,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (
-            orientation ==
-            DominoPlayerSeatOrientation.HORIZONTAL
-        ) {
-            DominoPlayerIdentityDisc(
-                name = name,
-                participantType = participantType,
-                isCurrent = isCurrent,
-                isWinner = isWinner,
-                identitySize = NonLocalIdentitySize,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(
-                        y = if (compact) (-5).dp else (-4).dp,
-                    ),
-            )
-
-            if (isWinner) {
-                Box(
-                    modifier = Modifier.align(
-                        Alignment.CenterEnd,
-                    ),
-                ) {
-                    WinnerStatusPill(
-                        compact = compact,
-                    )
-                }
-            }
-
-            return@Box
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            DominoPlayerIdentityDisc(
-                name = name,
-                participantType = participantType,
-                isCurrent = isCurrent,
-                isWinner = isWinner,
-                identitySize = NonLocalIdentitySize,
-                modifier = Modifier.offset(y = (-3).dp),
-            )
-
-            if (isWinner) {
-                WinnerStatusPill(
-                    compact = true,
                 )
             }
         }

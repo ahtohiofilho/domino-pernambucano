@@ -9,6 +9,16 @@ object DominoGameVisualTokens {
      */
 
     val HeaderSlotHeight = 70.dp
+    val HeaderCornerRadius = 22.dp
+    val HeaderHorizontalPadding = 12.dp
+    val HeaderVerticalPadding = 8.dp
+    val HeaderElevation = 6.dp
+    val HeaderBorderWidth = 1.dp
+    val HeaderBrandDiscSize = 34.dp
+    val HeaderRoundBadgeCornerRadius = 12.dp
+    val HeaderRoundBadgeHorizontalPadding = 9.dp
+    val HeaderRoundBadgeVerticalPadding = 5.dp
+
     val LocalHandSlotHeight = 126.dp
 
     val TableStageHorizontalPadding = 6.dp
@@ -18,6 +28,13 @@ object DominoGameVisualTokens {
     val OpponentTopSeatSlotHeight = 116.dp
     val OpponentSideSeatSlotWidth = 70.dp
     val OpponentStatusIndicatorSlotHeight = 16.dp
+
+    val TopPlayerCodeAnchorOffset = 137.dp
+    val TopPlayerCodeAnchorOffsetCompact = 117.dp
+    val SidePlayerCodeAnchorOffsetCompact = 155.dp
+    val LocalPlayerCodeLift = 72.dp
+    val PlayerCodeMinWidth = 36.dp
+    val PlayerCodeCurrentIndicatorSize = 7.dp
 
     val TurnCountdownHudEdgePadding = 10.dp
     val TurnCountdownHudLateralOffset = 100.dp
@@ -34,7 +51,9 @@ object DominoGameVisualTokens {
     val LocalHandPieceSlotWidth = 58.dp
     val LocalHandPieceSlotHeight = 98.dp
 
-    val LocalHandCardCornerRadius = 18.dp
+    val LocalHandCardCornerRadius = 22.dp
+    val LocalHandCardElevation = 6.dp
+    val LocalHandCardBorderWidth = 1.dp
     val LocalHandCardPadding = 8.dp
     val LocalHandHeaderBottomGap = 6.dp
     val LocalHandPieceSpacing = 5.dp
@@ -79,6 +98,7 @@ object DominoGameVisualTokens {
     val TablePieceGap = 0.dp
 
     val TableAreaCornerRadius = 30.dp
+    val TableAreaShadowElevation = 4.dp
     val TableAreaContentPadding = 6.dp
     val TableAreaBorderWidth = 1.dp
 
@@ -101,6 +121,9 @@ object DominoGameVisualTokens {
     const val OpponentVerticalPieceRotationDegrees = 90f
 
     val OpponentHandPieceSpacing = 2.dp
+    val OpponentHandSurfaceCornerRadius = 14.dp
+    val OpponentHandSurfaceElevation = 2.dp
+    val OpponentHandSurfaceBorderWidth = 1.dp
     val OpponentHandPadding = 6.dp
     val OpponentHandPaddingCompact = 4.dp
     val OpponentHandHighlightCornerRadius = 12.dp

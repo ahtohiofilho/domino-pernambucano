@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -112,24 +113,32 @@ fun DominoMatchHeader(
         localPlayerIndex = uiState.localPlayerIndex,
     )
 
+    val headerShape = RoundedCornerShape(
+        DominoGameVisualTokens.HeaderCornerRadius,
+    )
+
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = headerShape,
+        border = BorderStroke(
+            width = DominoGameVisualTokens.HeaderBorderWidth,
+            color = DominoSemanticColors.brandBorder.copy(alpha = 0.72f),
+        ),
         colors = CardDefaults.cardColors(
             containerColor =
-                DominoColorTokens.PernambucoBlueDark.copy(alpha = 0.98f),
+                DominoSemanticColors.brandSurfaceElevated.copy(alpha = 0.96f),
             contentColor = DominoSemanticColors.primaryTextOnDark,
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 3.dp,
+            defaultElevation = DominoGameVisualTokens.HeaderElevation,
         ),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    horizontal = 10.dp,
-                    vertical = 7.dp,
+                    horizontal = DominoGameVisualTokens.HeaderHorizontalPadding,
+                    vertical = DominoGameVisualTokens.HeaderVerticalPadding,
                 ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -146,20 +155,11 @@ fun DominoMatchHeader(
                 modifier = Modifier.weight(2.46f),
             )
 
-            Text(
-                text = "#${uiState.roundNumber}",
+            DominoRoundBadge(
+                roundNumber = uiState.roundNumber,
                 modifier = Modifier
                     .weight(0.38f)
                     .widthIn(min = 48.dp),
-                color = DominoSemanticColors.primaryTextOnDark.copy(
-                    alpha = 0.76f,
-                ),
-                fontSize = 20.sp,
-                lineHeight = 22.sp,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.End,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -175,7 +175,7 @@ private fun DominoMatchBrand(
     ) {
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(DominoGameVisualTokens.HeaderBrandDiscSize)
                 .shadow(
                     elevation = 5.dp,
                     shape = CircleShape,
@@ -201,9 +201,48 @@ private fun DominoMatchBrand(
                     id = R.drawable.ic_launcher_foreground,
                 ),
                 contentDescription = null,
-                modifier = Modifier.size(29.dp),
+                modifier = Modifier.size(31.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun DominoRoundBadge(
+    roundNumber: Int,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(
+        DominoGameVisualTokens.HeaderRoundBadgeCornerRadius,
+    )
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(
+                DominoColorTokens.PureWhite.copy(alpha = 0.08f),
+            )
+            .border(
+                width = 1.dp,
+                color = DominoSemanticColors.brandBorder.copy(alpha = 0.70f),
+                shape = shape,
+            )
+            .padding(
+                horizontal = DominoGameVisualTokens.HeaderRoundBadgeHorizontalPadding,
+                vertical = DominoGameVisualTokens.HeaderRoundBadgeVerticalPadding,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "#$roundNumber",
+            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.90f),
+            fontSize = 21.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

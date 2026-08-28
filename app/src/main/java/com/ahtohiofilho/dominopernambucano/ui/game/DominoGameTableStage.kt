@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
@@ -37,6 +39,7 @@ fun DominoGameTableStage(
     roundWinnerPlayerIndex: Int?,
     visualPiecesForPlayer: (Int) -> List<DominoPiece>,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit,
+    onTableBoundsChanged: (Rect?) -> Unit = {},
     onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow) -> Unit,
     onPlayerSeatBoundsChanged: (Int, Rect?) -> Unit,
     modifier: Modifier = Modifier,
@@ -81,6 +84,8 @@ fun DominoGameTableStage(
                     isCurrent = !revealOpponentHands &&
                             gameState.currentPlayerIndex == topPlayerIndex,
                     orientation = DominoPlayerSeatOrientation.HORIZONTAL,
+                    identityPlacement = DominoPlayerIdentityPlacement.AFTER_HAND,
+                    modifier = Modifier.fillMaxSize(),
                     compact = compact,
                     faceUp = revealOpponentHands,
                     isWinner = roundWinnerPlayerIndex == topPlayerIndex,
@@ -118,6 +123,8 @@ fun DominoGameTableStage(
                         isCurrent = !revealOpponentHands &&
                                 gameState.currentPlayerIndex == leftPlayerIndex,
                         orientation = DominoPlayerSeatOrientation.VERTICAL,
+                        identityPlacement = DominoPlayerIdentityPlacement.BEFORE_HAND,
+                        modifier = Modifier.fillMaxSize(),
                         compact = true,
                         faceUp = revealOpponentHands,
                         isWinner = roundWinnerPlayerIndex == leftPlayerIndex,
@@ -144,7 +151,12 @@ fun DominoGameTableStage(
                         .fillMaxHeight()
                         .padding(
                             horizontal = DominoGameVisualTokens.TableStageInnerHorizontalPadding,
-                        ),
+                        )
+                        .onGloballyPositioned { coordinates ->
+                            onTableBoundsChanged(
+                                coordinates.boundsInWindow(),
+                            )
+                        },
                 )
 
                 Box(
@@ -166,6 +178,8 @@ fun DominoGameTableStage(
                         isCurrent = !revealOpponentHands &&
                                 gameState.currentPlayerIndex == rightPlayerIndex,
                         orientation = DominoPlayerSeatOrientation.VERTICAL,
+                        identityPlacement = DominoPlayerIdentityPlacement.AFTER_HAND,
+                        modifier = Modifier.fillMaxSize(),
                         compact = true,
                         faceUp = revealOpponentHands,
                         isWinner = roundWinnerPlayerIndex == rightPlayerIndex,

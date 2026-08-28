@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -45,20 +46,25 @@ fun DominoPlayerIdentityDisc(
     }
 
     val identityBackground = if (isApplication) {
-        DominoColorTokens.AccentGreen.copy(alpha = 0.82f)
+        DominoColorTokens.AccentGreen.copy(alpha = 0.88f)
     } else {
-        DominoColorTokens.PernambucoBlue.copy(alpha = 0.84f)
+        DominoSemanticColors.brandSurfaceElevated.copy(alpha = 0.94f)
     }
 
     val identityBorder = if (isCurrent || isWinner) {
         DominoSemanticColors.scoreHighlight
     } else {
-        DominoColorTokens.PureWhite.copy(alpha = 0.30f)
+        DominoColorTokens.PureWhite.copy(alpha = 0.38f)
     }
 
     Box(
         modifier = modifier
             .requiredSize(identitySize)
+            .shadow(
+                elevation = if (isCurrent || isWinner) 5.dp else 2.dp,
+                shape = CircleShape,
+                clip = false,
+            )
             .clip(CircleShape)
             .background(identityBackground)
             .border(

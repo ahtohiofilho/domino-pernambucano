@@ -481,6 +481,8 @@ class MainMenuScreenTest {
                 32.dp.toPx()
             val actionBalanceTolerancePx =
                 8.dp.toPx()
+            val titleToFirstActionGapMinimumPx =
+                32.dp.toPx()
             val playCenterPx =
                 (playBounds.top.toPx() + playBounds.bottom.toPx()) / 2f
             val rankingCenterPx =
@@ -508,6 +510,10 @@ class MainMenuScreenTest {
                     rootBounds.height.toPx() * 0.55f,
             )
             assertTrue(titleBounds.bottom <= actionsGroupBounds.top)
+            assertTrue(
+                playBounds.top.toPx() - titleBounds.bottom.toPx() >=
+                    titleToFirstActionGapMinimumPx,
+            )
             assertTrue(playCenterPx < rankingCenterPx)
             assertTrue(rankingCenterPx < accountCenterPx)
             assertEquals(

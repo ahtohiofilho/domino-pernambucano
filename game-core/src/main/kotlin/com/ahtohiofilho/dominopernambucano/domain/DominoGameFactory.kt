@@ -1,8 +1,13 @@
 package com.ahtohiofilho.dominopernambucano.domain
 
-fun createInitialDominoGameState(): DominoGameState {
+fun createInitialDominoGameState(
+    playerNames: List<String>? = null,
+): DominoGameState {
     val shuffledPieces = createDoubleSixDominoSet().shuffled()
-    val players = createRoundPlayers(shuffledPieces)
+    val players = createRoundPlayers(
+        shuffledPieces = shuffledPieces,
+        playerNames = playerNames,
+    )
     val openingRule = findOpeningRule(players)
 
     return DominoGameState(
@@ -35,7 +40,10 @@ fun createNextRoundDominoGameState(
     previousState: DominoGameState,
 ): DominoGameState {
     val shuffledPieces = createDoubleSixDominoSet().shuffled()
-    val players = createRoundPlayers(shuffledPieces)
+    val players = createRoundPlayers(
+        shuffledPieces = shuffledPieces,
+        playerNames = previousState.players.map { player -> player.name },
+    )
 
     val previousRoundWasClosedTie =
         previousState.roundWinKind == RoundWinKind.CLOSED_TIE
@@ -88,26 +96,38 @@ fun createNextRoundDominoGameState(
 
 private fun createRoundPlayers(
     shuffledPieces: List<DominoPiece>,
+    playerNames: List<String>? = null,
 ): List<DominoPlayer> {
+    val resolvedPlayerNames = playerNames
+        ?.takeIf { names ->
+            names.size == 4 && names.all { name -> name.isNotBlank() }
+        }
+        ?: listOf(
+            "VocÃª",
+            "Jogador 2",
+            "Jogador 3",
+            "Jogador 4",
+        )
+
     return listOf(
         DominoPlayer(
             id = 0,
-            name = "Você",
+            name = resolvedPlayerNames[0],
             hand = shuffledPieces.take(6),
         ),
         DominoPlayer(
             id = 1,
-            name = "Jogador 2",
+            name = resolvedPlayerNames[1],
             hand = shuffledPieces.drop(6).take(6),
         ),
         DominoPlayer(
             id = 2,
-            name = "Jogador 3",
+            name = resolvedPlayerNames[2],
             hand = shuffledPieces.drop(12).take(6),
         ),
         DominoPlayer(
             id = 3,
-            name = "Jogador 4",
+            name = resolvedPlayerNames[3],
             hand = shuffledPieces.drop(18).take(6),
         ),
     )

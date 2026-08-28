@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
@@ -63,6 +64,10 @@ fun DominoGameScreen(
     }
 
     var localHandBoundsInWindow by remember {
+        mutableStateOf<Rect?>(null)
+    }
+
+    var tableBoundsInWindow by remember {
         mutableStateOf<Rect?>(null)
     }
 
@@ -240,13 +245,16 @@ fun DominoGameScreen(
         piece: DominoPiece,
         positionInWindow: Offset,
         playableMoves: List<PlayableMove>,
+        dropTargets: List<DominoDropTargetInWindow> = dropTargetsInWindow,
+        tableBounds: Rect? = tableBoundsInWindow,
+        previousHighlightedSide: BoardSide? = null,
     ): LocalDraggedPieceState {
         val highlightedSide = findHighlightedDropSideOrNull(
             positionInWindow = positionInWindow,
             playableMoves = playableMoves,
-            dropTargets = dropTargetsInWindow,
-            localHandBoundsInWindow = localHandBoundsInWindow,
-            maxDistancePx = dropTargetHitRadiusPx,
+            dropTargets = dropTargets,
+            tableBoundsInWindow = tableBounds,
+            previousHighlightedSide = previousHighlightedSide,
         )
 
         return LocalDraggedPieceState(
@@ -338,7 +346,9 @@ fun DominoGameScreen(
             DominoGameTableStage(
                 gameState = gameState,
                 localPlayerIndex = uiState.localPlayerIndex,
-                localPlayableMoves = uiState.localPlayableMoves,
+                localPlayableMoves = draggedPieceState
+                    ?.playableMoves
+                    ?: uiState.localPlayableMoves,
                 showDropTargets = draggedPieceState != null &&
                         !isRoundIntroPhase &&
                         !isRoundSummaryPhase &&
@@ -359,6 +369,29 @@ fun DominoGameScreen(
                 },
                 onDropTargetsChanged = { targets ->
                     dropTargetsInWindow = targets
+                    val current = draggedPieceState
+                    if (current != null) {
+                        draggedPieceState = buildDraggedPieceState(
+                            piece = current.piece,
+                            positionInWindow = current.positionInWindow,
+                            playableMoves = current.playableMoves,
+                            dropTargets = targets,
+                            previousHighlightedSide = current.highlightedSide,
+                        )
+                    }
+                },
+                onTableBoundsChanged = { bounds ->
+                    tableBoundsInWindow = bounds
+                    val current = draggedPieceState
+                    if (current != null) {
+                        draggedPieceState = buildDraggedPieceState(
+                            piece = current.piece,
+                            positionInWindow = current.positionInWindow,
+                            playableMoves = current.playableMoves,
+                            tableBounds = bounds,
+                            previousHighlightedSide = current.highlightedSide,
+                        )
+                    }
                 },
                 onAnimatedMoveTargetChanged = { target ->
                     if (
@@ -429,18 +462,6 @@ fun DominoGameScreen(
 
                         val playableMoves = getPlayableMovesForPiece(piece)
 
-                        if (playableMoves.isEmpty()) {
-                            traceUi(
-                                OnlineTraceType.UI_MOVE_INTENT_REJECTED,
-                                mapOf(
-                                    "inputMethod" to "drag",
-                                    "reason" to "not_playable",
-                                    "piece" to "${piece.left}-${piece.right}",
-                                ),
-                            )
-                            clearDragState()
-                            return@DominoLocalHand
-                        }
 
                         draggedPieceState = buildDraggedPieceState(
                             piece = piece,
@@ -459,27 +480,24 @@ fun DominoGameScreen(
                             piece = currentDragState.piece,
                             positionInWindow = updatedPosition,
                             playableMoves = currentDragState.playableMoves,
+                            previousHighlightedSide =
+                                currentDragState.highlightedSide,
                         )
                     },
                     onPieceDragEnd = {
                         val currentDragState = draggedPieceState
                             ?: return@DominoLocalHand
 
-                        val shouldCancelMove = currentDragState.isOverLocalHand ||
-                                isPositionInsideRect(
-                                    positionInWindow = currentDragState.positionInWindow,
-                                    rect = localHandBoundsInWindow,
-                                )
+                        val isInsideTable = isPositionInsideRect(
+                            positionInWindow =
+                                currentDragState.positionInWindow,
+                            rect = tableBoundsInWindow,
+                        )
 
-                        val selectedSide = if (shouldCancelMove) {
-                            null
-                        } else {
+                        val selectedSide = if (isInsideTable) {
                             currentDragState.highlightedSide
-                                ?: findNearestDropSide(
-                                    positionInWindow = currentDragState.positionInWindow,
-                                    playableMoves = currentDragState.playableMoves,
-                                    dropTargets = dropTargetsInWindow,
-                                )
+                        } else {
+                            null
                         }
 
                         val selectedMove = findPlayableMoveForDropSide(
@@ -504,10 +522,13 @@ fun DominoGameScreen(
                                 OnlineTraceType.UI_MOVE_INTENT_REJECTED,
                                 mapOf(
                                     "inputMethod" to "drag",
-                                    "reason" to if (shouldCancelMove) {
-                                        "drag_cancelled_over_local_hand"
-                                    } else {
-                                        "drag_no_target"
+                                    "reason" to when {
+                                        !isInsideTable ->
+                                            "drag_cancelled_outside_table"
+                                        currentDragState.playableMoves.isEmpty() ->
+                                            "drag_piece_not_playable"
+                                        else ->
+                                            "drag_no_target"
                                     },
                                     "piece" to
                                             "${currentDragState.piece.left}-${currentDragState.piece.right}",

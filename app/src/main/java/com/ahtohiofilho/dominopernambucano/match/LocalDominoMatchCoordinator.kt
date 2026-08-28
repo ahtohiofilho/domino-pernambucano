@@ -15,11 +15,13 @@ import kotlinx.coroutines.flow.asStateFlow
 class LocalDominoMatchCoordinator(
     private val localPlayerIndex: Int = 0,
     private val clockPolicy: DominoMatchClockPolicy = DominoMatchClockPolicy.Disabled,
+    private val playerNames: List<String>? = null,
 ) : DominoMatchCoordinator {
     private val mutableState = MutableStateFlow(
         createInitialRuntimeState(
             localPlayerIndex = localPlayerIndex,
             clockPolicy = clockPolicy,
+            playerNames = playerNames,
         )
     )
 
@@ -318,6 +320,7 @@ class LocalDominoMatchCoordinator(
         mutableState.value = createInitialRuntimeState(
             localPlayerIndex = runtimeState.localPlayerIndex,
             clockPolicy = runtimeState.clockPolicy,
+            playerNames = playerNames,
         )
     }
 
@@ -403,8 +406,11 @@ class LocalDominoMatchCoordinator(
 private fun createInitialRuntimeState(
     localPlayerIndex: Int,
     clockPolicy: DominoMatchClockPolicy,
+    playerNames: List<String>? = null,
 ): DominoMatchRuntimeState {
-    val gameState = createInitialDominoGameState()
+    val gameState = createInitialDominoGameState(
+        playerNames = playerNames,
+    )
 
     return DominoMatchRuntimeState(
         gameState = gameState,

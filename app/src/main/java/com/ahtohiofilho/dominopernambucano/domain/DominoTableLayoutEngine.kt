@@ -448,11 +448,11 @@ private fun shouldTurnBeforePlacement(
 
     return when (cursor.phase) {
         DominoTableRoutePhase.CENTER_TO_EDGE -> {
-            !wouldLeaveRoomForMinimumNextPiece(
-                candidate = candidate,
-                direction = cursor.direction,
-                metrics = metrics,
-            )
+            /*
+             * Use the full vertical corridor. The next piece turns only when
+             * its own candidate no longer fits the safe table bounds.
+             */
+            false
         }
 
         DominoTableRoutePhase.LATERAL_ESCAPE -> {

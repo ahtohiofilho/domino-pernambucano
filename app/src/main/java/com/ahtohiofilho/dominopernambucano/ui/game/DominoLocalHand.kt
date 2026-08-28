@@ -2,18 +2,16 @@ package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -34,11 +31,11 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
-import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
+
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
+import com.ahtohiofilho.dominopernambucano.online.createDefaultOnlineTableName
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
 @Composable
@@ -60,9 +57,16 @@ fun DominoLocalHand(
     val localPlayerName = localPlayer?.name
         ?: stringResource(R.string.game_local_player_fallback)
 
+    val localPlayerCode = createDefaultOnlineTableName(
+        displayName = localPlayerName,
+    )
+
+    val isCurrent =
+        gameState.currentPlayerIndex == uiState.localPlayerIndex
+
     val canInteractWithHand =
         uiState.phase == DominoMatchPhase.WaitingForLocalMove &&
-                gameState.currentPlayerIndex == uiState.localPlayerIndex
+                isCurrent
 
     val playableMovesByPiece = uiState.localPlayableMoves.groupBy { move ->
         move.piece
@@ -76,75 +80,53 @@ fun DominoLocalHand(
         DominoGameVisualTokens.LocalHandCardCornerRadius,
     )
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = winnerAttention.scale
-                scaleY = winnerAttention.scale
-            }
-            .onGloballyPositioned { coordinates ->
-                onLocalHandBoundsChanged(coordinates.boundsInWindow())
-            },
-        shape = handShape,
-        border = if (isWinner) {
-            BorderStroke(
-                width = 2.dp,
-                color = DominoSemanticColors.scoreHighlight.copy(
-                    alpha = winnerAttention.borderAlpha,
-                ),
-            )
-        } else {
-            null
-        },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isWinner) {
-                DominoSemanticColors.scoreHighlight.copy(
-                    alpha = winnerAttention.containerAlpha,
+    Box(
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = winnerAttention.scale
+                    scaleY = winnerAttention.scale
+                }
+                .onGloballyPositioned { coordinates ->
+                    onLocalHandBoundsChanged(coordinates.boundsInWindow())
+                },
+            shape = handShape,
+            border = if (isWinner) {
+                BorderStroke(
+                    width = 2.dp,
+                    color = DominoSemanticColors.scoreHighlight.copy(
+                        alpha = winnerAttention.borderAlpha,
+                    ),
                 )
             } else {
-                DominoColorTokens.PureWhite.copy(alpha = 0.10f)
+                BorderStroke(
+                    width = DominoGameVisualTokens.LocalHandCardBorderWidth,
+                    color = DominoSemanticColors.brandBorder.copy(alpha = 0.72f),
+                )
             },
-            contentColor = DominoSemanticColors.primaryTextOnDark,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(
-                DominoGameVisualTokens.LocalHandCardPadding,
+            colors = CardDefaults.cardColors(
+                containerColor = if (isWinner) {
+                    DominoSemanticColors.scoreHighlight.copy(
+                        alpha = winnerAttention.containerAlpha,
+                    )
+                } else {
+                    DominoSemanticColors.brandSurfaceElevated.copy(alpha = 0.92f)
+                },
+                contentColor = DominoSemanticColors.primaryTextOnDark,
             ),
-            verticalArrangement = Arrangement.spacedBy(
-                DominoGameVisualTokens.LocalHandHeaderBottomGap,
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = DominoGameVisualTokens.LocalHandCardElevation,
             ),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier.size(20.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    DominoPlayerIdentityDisc(
-                        name = localPlayerName,
-                        participantType = localPlayer?.participantType
-                            ?: DominoParticipantType.HUMAN,
-                        isCurrent = gameState.currentPlayerIndex ==
-                                uiState.localPlayerIndex,
-                        isWinner = isWinner,
-                        identitySize = 32.dp,
-                    )
-                }
-
-                LocalHandStatusIndicator(
-                    isCurrent = gameState.currentPlayerIndex == uiState.localPlayerIndex,
-                    isWinner = isWinner,
-                )
-            }
-
-            Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(
+                        DominoGameVisualTokens.LocalHandCardPadding,
+                    )
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(
                     space = DominoGameVisualTokens.LocalHandPieceSpacing,
@@ -164,6 +146,7 @@ fun DominoLocalHand(
                     LocalHandPiece(
                         piece = piece,
                         isPlayable = playableMoves.isNotEmpty(),
+                        isDraggable = canInteractWithHand,
                         playableMove = playableMove,
                         onLocalMoveSelected = onLocalMoveSelected,
                         onPieceDragStart = onPieceDragStart,
@@ -174,6 +157,17 @@ fun DominoLocalHand(
                 }
             }
         }
+
+
+        DominoPlayerCodeLabel(
+            name = localPlayerCode,
+            isCurrent = isCurrent,
+            isWinner = isWinner,
+            compact = false,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(y = -DominoGameVisualTokens.LocalPlayerCodeLift),
+        )
     }
 }
 
@@ -181,6 +175,7 @@ fun DominoLocalHand(
 private fun LocalHandPiece(
     piece: DominoPiece,
     isPlayable: Boolean,
+    isDraggable: Boolean,
     playableMove: PlayableMove?,
     onLocalMoveSelected: (PlayableMove) -> Unit,
     onPieceDragStart: (DominoPiece, Offset) -> Unit,
@@ -212,7 +207,7 @@ private fun LocalHandPiece(
         label = "localHandPieceScale",
     )
 
-    val dragModifier = if (isPlayable) {
+    val dragModifier = if (isDraggable) {
         Modifier.pointerInput(piece) {
             detectDragGestures(
                 onDragStart = { startOffset ->
@@ -281,45 +276,4 @@ private fun LocalHandPiece(
             )
         }
     }
-}
-
-@Composable
-private fun LocalHandStatusIndicator(
-    isCurrent: Boolean,
-    isWinner: Boolean,
-) {
-    if (isWinner) {
-        WinnerStatusPill(
-            compact = false,
-        )
-        return
-    }
-
-    CurrentPlayerBadge(
-        isCurrent = isCurrent,
-    )
-}
-
-@Composable
-private fun CurrentPlayerBadge(
-    isCurrent: Boolean,
-) {
-    Box(
-        modifier = Modifier
-            .size(
-                size = if (isCurrent) {
-                    DominoGameVisualTokens.LocalCurrentTurnIndicatorSize
-                } else {
-                    DominoGameVisualTokens.LocalWaitingTurnIndicatorSize
-                },
-            )
-            .clip(CircleShape)
-            .background(
-                color = if (isCurrent) {
-                    DominoSemanticColors.playableMove
-                } else {
-                    DominoColorTokens.PureWhite.copy(alpha = 0.28f)
-                },
-            ),
-    )
 }

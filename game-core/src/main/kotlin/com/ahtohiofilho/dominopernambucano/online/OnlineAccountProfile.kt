@@ -26,7 +26,11 @@ data class OnlineAccountProfile(
 fun normalizeOnlinePublicDisplayName(
     rawName: String,
 ): String {
-    val normalizedName = rawName
+    val normalizedName = Normalizer
+        .normalize(
+            rawName,
+            Normalizer.Form.NFC,
+        )
         .trim()
         .replace(
             regex = onlinePublicNameWhitespaceRegex,
