@@ -70,7 +70,7 @@
     <string name="game_round_number">Ronda %1$d</string>
     <string name="game_round_intro_number">RONDA %1$d</string>
     <string name="game_pass_content_description">Paso</string>
-    <string name="game_blocked_label">BLOQUEO</string>
+    <string name="game_blocked_label">POZO</string>
     <string name="game_winner_label">GANÓ</string>
     <string name="play_mode_lists_and_rankings">Listas y clasificaciones: %1$s</string>
     <string name="play_mode_table_name">En la mesa: %1$s</string>
@@ -180,10 +180,10 @@
     <string name="game_victory_label">VICTORIA</string>
     <string name="game_defeat_label">DERROTA</string>
     <string name="game_round_winner_format">%1$s GANÓ</string>
-    <string name="game_round_common">CIERRE SIMPLE</string>
-    <string name="game_round_double">CIERRE CON DOBLE</string>
-    <string name="game_round_la_e_lo">LÁ E LÔ</string>
-    <string name="game_round_crossed">CRUZADA</string>
+    <string name="game_round_common">FINAL SIMPLE</string>
+    <string name="game_round_double">FINAL CON DOBLE</string>
+    <string name="game_round_la_e_lo">CAPICÚA</string>
+    <string name="game_round_crossed">DOBLE A DOS PUNTAS</string>
     <string name="game_round_points">CONTEO DE PUNTOS</string>
     <string name="game_round_tie">EMPATE</string>
     <string name="game_round_label">RONDA</string>
@@ -269,4 +269,58 @@
     <string name="settings_privacy_policy_description">Consulta cómo Dominó PE trata los datos y la privacidad.</string>
     <string name="settings_account_deletion_title">Eliminar cuenta y datos</string>
     <string name="settings_account_deletion_description">Solicita la eliminación de tu cuenta y de los datos asociados.</string>
+    <string name="main_menu_rules_content_description">Reglas y ayuda</string>
+    <string name="settings_rules_title">Reglas y ayuda</string>
+    <string name="settings_rules_description">Consulta cómo jugar y las orientaciones de la partida.</string>
+    <string name="settings_terms_title">Términos de Uso</string>
+    <string name="settings_terms_description">Lee las condiciones de uso de Dominó PE.</string>
+    <string name="settings_support_title">Soporte</string>
+    <string name="settings_support_description">dominopernambucano@gmail.com</string>
+    <string name="settings_about_title">Acerca de</string>
+    <string name="settings_version_format">Versión %1$s</string>
+    <string name="rules_help_title">Reglas y ayuda</string>
+    <string name="rules_help_intro">Reglas completas de la partida y orientación sobre las principales pantallas de Dominó PE.</string>
+    <string name="rules_help_match_title">Objetivo y parejas</string>
+    <string name="rules_help_match_body">La partida se juega entre 4 jugadores divididos en 2 parejas, con los compañeros sentados en posiciones opuestas. La primera pareja que alcance 6 puntos o más gana la partida.</string>
+    <string name="rules_help_deal_title">Reparto y pozo</string>
+    <string name="rules_help_deal_body">Se usa un juego doble-seis de 28 fichas. Cada jugador recibe 6 fichas. Las 4 restantes quedan en el pozo, fuera de juego, y no se roban durante la ronda. Un doble es una ficha con el mismo valor en ambas mitades, como 6–6 o 3–3.</string>
+    <string name="rules_help_opening_title">Salida</string>
+    <string name="rules_help_opening_body">La primera jugada de una ronda es la salida. En la primera ronda, y después de un empate de conteo entre parejas adversarias, sale quien tenga el doble más alto disponible, obligatoriamente en este orden: 6–6, 5–5, 4–4, 3–3, 2–2. Ese doble debe ser la primera ficha jugada. Como hay 5 dobles candidatos y solo 4 fichas en el pozo, al menos uno de ellos siempre estará en juego.
+
+Después de una ronda con un único ganador individual, ese jugador realiza la salida siguiente y puede abrir con cualquier ficha. Si los 2 compañeros de la pareja ganadora empatan con el menor conteo, el jugador de salida siguiente se elige al azar entre ambos, con una probabilidad de 50/50, y también puede abrir con cualquier ficha.</string>
+    <string name="rules_help_turn_title">Orden de juego</string>
+    <string name="rules_help_turn_body">Los turnos avanzan en sentido antihorario. En cada turno se juega una sola ficha cuyo valor coincida con uno de los extremos abiertos. Si el jugador de turno no tiene ninguna ficha jugable, el turno pasa automáticamente al siguiente jugador.</string>
+    <string name="rules_help_scoring_title">Finales y puntuación</string>
+    <string name="rules_help_scoring_body">El final ocurre cuando un jugador coloca la última ficha de su mano y gana la ronda para su pareja.
+
+• Final simple — 1 punto: ficha que no es doble y solo puede jugarse en uno de los extremos.
+• Final con doble — 2 puntos: doble que solo puede jugarse en uno de los extremos.
+• Capicúa — 3 puntos: ficha que no es doble y podría jugarse en cualquiera de los dos extremos.
+• Doble a dos puntas — 4 puntos: doble que podría jugarse en cualquiera de los dos extremos.</string>
+    <string name="rules_help_blocked_title">Ronda bloqueada, conteo y empate</string>
+    <string name="rules_help_blocked_body">La ronda queda bloqueada cuando ningún jugador tiene una ficha jugable. Cada jugador suma los puntos de las fichas que conserva; gana la pareja que tenga al jugador con el menor conteo individual. La victoria por conteo vale 1 punto.
+
+Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana normalmente y el jugador de salida siguiente se sortea 50/50 entre ambos. Si el menor conteo está empatado entre jugadores de parejas adversarias, nadie puntúa y la siguiente ronda vale 2×. Si el empate se repite, la ronda posterior vale 3×, luego 4× y así sucesivamente hasta que haya un ganador. El multiplicador se aplica al valor del tipo de victoria obtenido en esa ronda.</string>
+    <string name="rules_help_clock_title">Tiempo de jugada</string>
+    <string name="rules_help_clock_body">Las partidas con reloj muestran el tiempo disponible junto al jugador. Haz tu jugada antes de que se agote; la interfaz indica cuando sea necesaria una acción automática.</string>
+    <string name="rules_help_online_title">Juego en línea</string>
+    <string name="rules_help_online_body">Las partidas públicas clasificatorias requieren una cuenta conectada. Las salas privadas y partidas locales siguen las opciones mostradas en el menú de juego y no entran en la clasificación pública.</string>
+    <string name="rules_help_ranking_title">Clasificación</string>
+    <string name="rules_help_ranking_body">La clasificación pública muestra ciclos actuales y cerrados. Las posiciones y los detalles de la pantalla se actualizan conforme el servicio registra resultados elegibles.</string>
+    <string name="terms_title">Términos de Uso</string>
+    <string name="terms_intro">Al usar Dominó PE, aceptas estas condiciones de uso y las políticas aplicables presentadas en la aplicación.</string>
+    <string name="terms_use_title">1. Uso de la aplicación</string>
+    <string name="terms_use_body">Dominó PE se ofrece para entretenimiento. Debes usar la aplicación de forma lícita, respetar a otros jugadores y no intentar interferir con el juego, los servicios o los mecanismos de clasificación.</string>
+    <string name="terms_account_title">2. Cuenta y acceso en línea</string>
+    <string name="terms_account_body">Algunos recursos en línea pueden exigir autenticación. Eres responsable de mantener bajo tu control los medios de acceso a tu cuenta y de proporcionar información correcta cuando sea necesaria para el servicio.</string>
+    <string name="terms_ads_title">3. Publicidad</string>
+    <string name="terms_ads_body">La aplicación puede mostrar publicidad en pantallas específicas. La disponibilidad, el formato y la frecuencia pueden variar según el consentimiento, la región, la conexión y la configuración del servicio de anuncios.</string>
+    <string name="terms_privacy_title">4. Privacidad</string>
+    <string name="terms_privacy_body">El tratamiento de datos se describe en la Política de Privacidad disponible en Configuración. Las opciones de privacidad de publicidad, cuando sean necesarias, también pueden gestionarse en la aplicación.</string>
+    <string name="terms_availability_title">5. Disponibilidad</string>
+    <string name="terms_availability_body">Los recursos en línea pueden quedar temporalmente no disponibles por mantenimiento, fallos de red, actualizaciones o eventos fuera del control del servicio. No se garantiza disponibilidad ininterrumpida.</string>
+    <string name="terms_changes_title">6. Actualizaciones</string>
+    <string name="terms_changes_body">La aplicación y estos términos pueden actualizarse para reflejar cambios de producto, seguridad, operación o requisitos legales. La versión vigente es la presentada en la aplicación o en los canales oficiales.</string>
+    <string name="terms_contact_title">7. Contacto</string>
+    <string name="terms_contact_body">Las dudas sobre la aplicación pueden enviarse a dominopernambucano@gmail.com.</string>
 </resources>

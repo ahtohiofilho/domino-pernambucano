@@ -1,5 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.domain
 
+import kotlin.random.Random
+
 fun getHandPipScore(
     hand: List<DominoPiece>,
 ): Int {
@@ -33,39 +35,52 @@ fun isClosedGame(
 fun findClosedGameWinnerPlayerIndexOrNull(
     state: DominoGameState,
 ): Int? {
-    val playerScores = state.players.indices.map { playerIndex ->
-        playerIndex to getHandPipScore(state.players[playerIndex].hand)
-    }
+    val lowestPlayers = findClosedGameLowestPlayerIndexes(state)
 
-    val lowestScore = playerScores.minOfOrNull { (_, score) ->
-        score
-    } ?: return null
-
-    val playersWithLowestScore = playerScores
-        .filter { (_, score) -> score == lowestScore }
-        .map { (playerIndex, _) -> playerIndex }
-
-    val teamsWithLowestScore = playersWithLowestScore
-        .map { playerIndex -> getTeamIndexForPlayer(playerIndex) }
-        .toSet()
-
-    if (teamsWithLowestScore.size > 1) {
+    if (lowestPlayers.isEmpty()) {
         return null
     }
 
-    return playersWithLowestScore.firstOrNull()
+    val teamsWithLowestScore = lowestPlayers
+        .map { playerIndex -> getTeamIndexForPlayer(playerIndex) }
+        .toSet()
+
+    if (teamsWithLowestScore.size != 1) {
+        return null
+    }
+
+    return lowestPlayers.singleOrNull()
 }
 
 fun finishRoundByClosedGame(
     state: DominoGameState,
+    tiedPartnerStarterSelector: (List<Int>) -> Int =
+        ::selectRandomTiedPartnerStarter,
 ): DominoGameState {
-    val winnerPlayerIndex = findClosedGameWinnerPlayerIndexOrNull(state)
+    val lowestPlayers = findClosedGameLowestPlayerIndexes(state)
 
-    if (winnerPlayerIndex == null) {
+    if (lowestPlayers.isEmpty()) {
         return finishRoundByClosedTie(state)
     }
 
-    val winnerTeamIndex = getTeamIndexForPlayer(winnerPlayerIndex)
+    val teamsWithLowestScore = lowestPlayers
+        .map { playerIndex -> getTeamIndexForPlayer(playerIndex) }
+        .toSet()
+
+    if (teamsWithLowestScore.size != 1) {
+        return finishRoundByClosedTie(state)
+    }
+
+    val winnerTeamIndex = teamsWithLowestScore.single()
+    val uniqueWinnerPlayerIndex = lowestPlayers.singleOrNull()
+
+    val nextRoundStarterPlayerIndex = uniqueWinnerPlayerIndex
+        ?: tiedPartnerStarterSelector(lowestPlayers).also { selectedPlayerIndex ->
+            require(selectedPlayerIndex in lowestPlayers) {
+                "O saidor sorteado precisa ser um dos parceiros empatados."
+            }
+        }
+
     val winKind = RoundWinKind.CLOSED
 
     val roundPoints = getRoundPoints(
@@ -87,13 +102,41 @@ fun finishRoundByClosedGame(
 
     return state.copy(
         teamScores = updatedTeamScores,
-        lastRoundWinnerIndex = winnerPlayerIndex,
-        roundWinnerPlayerIndex = winnerPlayerIndex,
+        lastRoundWinnerIndex = nextRoundStarterPlayerIndex,
+        roundWinnerPlayerIndex = uniqueWinnerPlayerIndex,
         roundWinnerTeamIndex = winnerTeamIndex,
         roundWinKind = winKind,
         gameWinnerTeamIndex = gameWinnerTeamIndex,
-        currentPlayerIndex = winnerPlayerIndex,
+        currentPlayerIndex = nextRoundStarterPlayerIndex,
     )
+}
+
+private fun findClosedGameLowestPlayerIndexes(
+    state: DominoGameState,
+): List<Int> {
+    val playerScores = state.players.indices.map { playerIndex ->
+        playerIndex to getHandPipScore(state.players[playerIndex].hand)
+    }
+
+    val lowestScore = playerScores.minOfOrNull { (_, score) ->
+        score
+    } ?: return emptyList()
+
+    return playerScores
+        .filter { (_, score) -> score == lowestScore }
+        .map { (playerIndex, _) -> playerIndex }
+}
+
+private fun selectRandomTiedPartnerStarter(
+    tiedPartnerIndexes: List<Int>,
+): Int {
+    require(tiedPartnerIndexes.size >= 2) {
+        "O sorteio do saidor exige pelo menos dois parceiros empatados."
+    }
+
+    return tiedPartnerIndexes[
+        Random.nextInt(tiedPartnerIndexes.size)
+    ]
 }
 
 private fun finishRoundByClosedTie(

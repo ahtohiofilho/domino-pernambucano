@@ -43,6 +43,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val privacyOptionsRequired by
                 advertisingController.privacyOptionsRequired.collectAsState()
+            val adsReady by
+                advertisingController.adsReady.collectAsState()
 
             DominoPernambucanoTheme {
                 DominoPernambucanoApp(
@@ -56,6 +58,7 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     privacyOptionsRequired = privacyOptionsRequired,
+                    bannerAdsReady = adsReady,
                     onPrivacyOptionsClick = {
                         advertisingController.showPrivacyOptions(
                             activity = this@MainActivity,

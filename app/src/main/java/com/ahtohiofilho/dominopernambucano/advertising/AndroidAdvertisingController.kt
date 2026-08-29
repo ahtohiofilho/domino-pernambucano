@@ -57,6 +57,12 @@ class AndroidAdvertisingController(
     val privacyOptionsRequired: StateFlow<Boolean> =
         _privacyOptionsRequired.asStateFlow()
 
+    private val _adsReady =
+        MutableStateFlow(false)
+
+    val adsReady: StateFlow<Boolean> =
+        _adsReady.asStateFlow()
+
     private var initializationStarted = false
     private var initializationCompleted = false
     private var interstitialLoadInProgress = false
@@ -249,6 +255,7 @@ class AndroidAdvertisingController(
 
     private fun maybeInitializeAds() {
         if (!consentInformation.canRequestAds()) {
+            _adsReady.value = false
             return
         }
 
@@ -277,6 +284,7 @@ class AndroidAdvertisingController(
 
                     runOnMainThread {
                         initializationCompleted = true
+                        _adsReady.value = true
                         ensureInterstitialLoaded()
                     }
                 } catch (error: RuntimeException) {
@@ -289,6 +297,7 @@ class AndroidAdvertisingController(
                     runOnMainThread {
                         initializationStarted = false
                         initializationCompleted = false
+                        _adsReady.value = false
                     }
                 }
             },

@@ -62,6 +62,7 @@ internal const val MainMenuRankingActionTag = "main_menu_ranking_action"
 internal const val MainMenuAccountActionTag = "main_menu_account_action"
 internal const val MainMenuStatusTag = "main_menu_status"
 internal const val MainMenuSettingsActionTag = "main_menu_settings_action"
+internal const val MainMenuRulesActionTag = "main_menu_rules_action"
 
 @Composable
 fun MainMenuScreen(
@@ -112,6 +113,7 @@ fun MainMenuScreen(
     onResumePendingOnlineMatchClick: () -> Unit,
     onConnectGoogleAccountClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
+    onRulesClick: () -> Unit = {},
 ) {
     var accountDialogVisible by remember {
         mutableStateOf(false)
@@ -449,6 +451,32 @@ fun MainMenuScreen(
                     },
                 )
             }
+        }
+
+        val rulesDescription = stringResource(
+            R.string.main_menu_rules_content_description,
+        )
+
+        IconButton(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(
+                    top = MaterialTheme.dominoSpacing.md,
+                    start = MaterialTheme.dominoSpacing.lg,
+                )
+                .testTag(MainMenuRulesActionTag)
+                .semantics {
+                    contentDescription = rulesDescription
+                },
+            onClick = onRulesClick,
+        ) {
+            Text(
+                text = "?",
+                color = DominoSemanticColors.brandText,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black,
+            )
         }
 
         val settingsDescription = stringResource(

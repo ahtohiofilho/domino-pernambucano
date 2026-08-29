@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,13 +15,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import com.ahtohiofilho.dominopernambucano.BuildConfig
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandShapes
@@ -40,11 +42,21 @@ internal const val SettingsPrivacyPolicyTag =
     "settings_privacy_policy"
 internal const val SettingsAccountDeletionTag =
     "settings_account_deletion"
+internal const val SettingsRulesHelpTag =
+    "settings_rules_help"
+internal const val SettingsTermsTag =
+    "settings_terms"
+internal const val SettingsSupportTag =
+    "settings_support"
+internal const val SettingsAboutTag =
+    "settings_about"
 
 private const val PrivacyPolicyUrl =
     "https://api.dominope.com.br/privacy"
 private const val AccountDeletionUrl =
     "https://api.dominope.com.br/account-deletion"
+private const val SupportEmail =
+    "dominopernambucano@gmail.com"
 
 @Composable
 fun SettingsScreen(
@@ -53,6 +65,8 @@ fun SettingsScreen(
     onBackClick: () -> Unit,
     privacyOptionsRequired: Boolean = false,
     onPrivacyOptionsClick: () -> Unit = {},
+    onRulesHelpClick: () -> Unit = {},
+    onTermsClick: () -> Unit = {},
 ) {
     val uriHandler = LocalUriHandler.current
 
@@ -92,12 +106,10 @@ fun SettingsScreen(
                     title = stringResource(
                         R.string.settings_language_portuguese_brazil,
                     ),
-                    selection =
-                        AppLanguageSelection.PortugueseBrazil,
+                    selection = AppLanguageSelection.PortugueseBrazil,
                     currentSelection = currentSelection,
                     onSelectionChange = onSelectionChange,
                 )
-
                 LanguageOptionCard(
                     title = stringResource(
                         R.string.settings_language_spanish,
@@ -106,7 +118,6 @@ fun SettingsScreen(
                     currentSelection = currentSelection,
                     onSelectionChange = onSelectionChange,
                 )
-
                 LanguageOptionCard(
                     title = stringResource(
                         R.string.settings_language_english,
@@ -117,8 +128,64 @@ fun SettingsScreen(
                 )
             }
 
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(SettingsRulesHelpTag),
+            ) {
+                DominoSecondaryActionCard(
+                    title = stringResource(R.string.settings_rules_title),
+                    supportingText = stringResource(
+                        R.string.settings_rules_description,
+                    ),
+                    accent = DominoBrandAccent.Blue,
+                    onClick = onRulesHelpClick,
+                    leadingContent = {
+                        SettingsSymbol("?")
+                    },
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(SettingsTermsTag),
+            ) {
+                DominoSecondaryActionCard(
+                    title = stringResource(R.string.settings_terms_title),
+                    supportingText = stringResource(
+                        R.string.settings_terms_description,
+                    ),
+                    accent = DominoBrandAccent.Blue,
+                    onClick = onTermsClick,
+                    leadingContent = {
+                        SettingsSymbol("§")
+                    },
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(SettingsSupportTag),
+            ) {
+                DominoSecondaryActionCard(
+                    title = stringResource(R.string.settings_support_title),
+                    supportingText = stringResource(
+                        R.string.settings_support_description,
+                    ),
+                    accent = DominoBrandAccent.Blue,
+                    onClick = {
+                        uriHandler.openUri("mailto:$SupportEmail")
+                    },
+                    leadingContent = {
+                        SettingsSymbol("✉")
+                    },
+                )
+            }
+
             if (privacyOptionsRequired) {
-                androidx.compose.foundation.layout.Box(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(SettingsPrivacyOptionsTag),
@@ -133,18 +200,13 @@ fun SettingsScreen(
                         accent = DominoBrandAccent.Blue,
                         onClick = onPrivacyOptionsClick,
                         leadingContent = {
-                            Text(
-                                text = "◉",
-                                color = DominoSemanticColors.brandText,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Black,
-                            )
+                            SettingsSymbol("◉")
                         },
                     )
                 }
             }
 
-            androidx.compose.foundation.layout.Box(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(SettingsPrivacyPolicyTag),
@@ -161,17 +223,12 @@ fun SettingsScreen(
                         uriHandler.openUri(PrivacyPolicyUrl)
                     },
                     leadingContent = {
-                        Text(
-                            text = "◎",
-                            color = DominoSemanticColors.brandText,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black,
-                        )
+                        SettingsSymbol("◎")
                     },
                 )
             }
 
-            androidx.compose.foundation.layout.Box(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(SettingsAccountDeletionTag),
@@ -188,31 +245,61 @@ fun SettingsScreen(
                         uriHandler.openUri(AccountDeletionUrl)
                     },
                     leadingContent = {
-                        Text(
-                            text = "×",
-                            color = DominoSemanticColors.brandText,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black,
-                        )
+                        SettingsSymbol("×")
                     },
                 )
             }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(SettingsAboutTag),
+                verticalArrangement = Arrangement.spacedBy(
+                    MaterialTheme.dominoSpacing.xs,
+                ),
+            ) {
+                Text(
+                    modifier = Modifier.semantics {
+                        heading()
+                    },
+                    text = stringResource(R.string.settings_about_title),
+                    color = DominoSemanticColors.brandText,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.settings_version_format,
+                        BuildConfig.VERSION_NAME,
+                    ),
+                    color = DominoSemanticColors.brandSupportingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
             DominoSecondaryActionCard(
                 title = stringResource(R.string.common_back),
                 supportingText = null,
                 accent = DominoBrandAccent.Blue,
                 onClick = onBackClick,
                 leadingContent = {
-                    Text(
-                        text = "←",
-                        color = DominoSemanticColors.brandText,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black,
-                    )
+                    SettingsSymbol("←")
                 },
             )
         }
     }
+}
+
+@Composable
+private fun SettingsSymbol(
+    text: String,
+) {
+    Text(
+        text = text,
+        color = DominoSemanticColors.brandText,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Black,
+    )
 }
 
 @Composable
@@ -250,8 +337,7 @@ private fun LanguageOptionCard(
                 selected = selected,
                 onClick = null,
                 colors = RadioButtonDefaults.colors(
-                    selectedColor =
-                        DominoColorTokens.AccentYellow,
+                    selectedColor = DominoColorTokens.AccentYellow,
                     unselectedColor =
                         DominoSemanticColors.brandSupportingText,
                 ),

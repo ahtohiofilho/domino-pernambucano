@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.ui.ranking
+package com.ahtohiofilho.dominopernambucano.ui.ranking
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -49,6 +49,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.advertising.AdvertisingPlacement
+import com.ahtohiofilho.dominopernambucano.advertising.DominoBannerAd
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingClient
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingClientResult
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingCyclesClientResult
@@ -74,6 +76,7 @@ internal const val RankingPublicationPendingTag = "ranking_publication_pending"
 fun OnlinePublicRankingRoute(
     rankingClient: OnlinePublicRankingClient,
     onBackClick: () -> Unit,
+    bannerAdsReady: Boolean = false,
 ) {
     var selectedCycle by remember {
         mutableStateOf(PublicRankingCycleDto.DAILY)
@@ -286,6 +289,7 @@ fun OnlinePublicRankingRoute(
         latestResponse = latestResponse,
         failure = failure,
         loading = loading,
+        bannerAdsReady = bannerAdsReady,
         onCycleSelected = { cycle ->
             if (cycle != selectedCycle) {
                 selectedCycle = cycle
@@ -382,6 +386,7 @@ internal fun OnlinePublicRankingScreen(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     onBackClick: () -> Unit,
+    bannerAdsReady: Boolean = false,
 ) {
     val locale = LocalConfiguration.current.locales[0]
     val hasRankingSelection =
@@ -510,6 +515,17 @@ internal fun OnlinePublicRankingScreen(
                     )
                 }
             }
+
+            DominoBannerAd(
+                placement = if (
+                    selectedScope == PublicRankingScope.CLOSED
+                ) {
+                    AdvertisingPlacement.RANKING_HISTORY
+                } else {
+                    AdvertisingPlacement.RANKING_CURRENT
+                },
+                adsReady = bannerAdsReady,
+            )
         }
     }
 }

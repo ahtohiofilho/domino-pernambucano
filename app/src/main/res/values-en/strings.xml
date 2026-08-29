@@ -70,7 +70,7 @@
     <string name="game_round_number">Round %1$d</string>
     <string name="game_round_intro_number">ROUND %1$d</string>
     <string name="game_pass_content_description">Pass</string>
-    <string name="game_blocked_label">BLOCKED</string>
+    <string name="game_blocked_label">SLEEPERS</string>
     <string name="game_winner_label">WON</string>
     <string name="play_mode_lists_and_rankings">Lists and leaderboards: %1$s</string>
     <string name="play_mode_table_name">At the table: %1$s</string>
@@ -180,11 +180,11 @@
     <string name="game_victory_label">VICTORY</string>
     <string name="game_defeat_label">DEFEAT</string>
     <string name="game_round_winner_format">%1$s WON</string>
-    <string name="game_round_common">SIMPLE WIN</string>
-    <string name="game_round_double">DOUBLE WIN</string>
-    <string name="game_round_la_e_lo">LÁ E LÔ</string>
-    <string name="game_round_crossed">CROSSED WIN</string>
-    <string name="game_round_points">POINT COUNT</string>
+    <string name="game_round_common">STANDARD FINISH</string>
+    <string name="game_round_double">DOUBLE FINISH</string>
+    <string name="game_round_la_e_lo">TWO-WAY FINISH</string>
+    <string name="game_round_crossed">TWO-WAY DOUBLE FINISH</string>
+    <string name="game_round_points">PIP COUNT</string>
     <string name="game_round_tie">TIE</string>
     <string name="game_round_label">ROUND</string>
     <string name="game_next_multiplier_format">next ×%1$d</string>
@@ -269,4 +269,58 @@
     <string name="settings_privacy_policy_description">See how Dominó PE handles data and privacy.</string>
     <string name="settings_account_deletion_title">Delete account and data</string>
     <string name="settings_account_deletion_description">Request deletion of your account and associated data.</string>
+    <string name="main_menu_rules_content_description">Rules and help</string>
+    <string name="settings_rules_title">Rules and help</string>
+    <string name="settings_rules_description">See how to play and match guidance.</string>
+    <string name="settings_terms_title">Terms of Use</string>
+    <string name="settings_terms_description">Read the conditions for using Dominó PE.</string>
+    <string name="settings_support_title">Support</string>
+    <string name="settings_support_description">dominopernambucano@gmail.com</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_version_format">Version %1$s</string>
+    <string name="rules_help_title">Rules and help</string>
+    <string name="rules_help_intro">Complete match rules and guidance for the main Dominó PE surfaces.</string>
+    <string name="rules_help_match_title">Goal and partnerships</string>
+    <string name="rules_help_match_body">The match is played by 4 players in 2 partnerships, with partners seated opposite each other. The first team to reach 6 points or more wins the match.</string>
+    <string name="rules_help_deal_title">Deal and sleepers</string>
+    <string name="rules_help_deal_body">The game uses a 28-tile double-six set. Each player receives 6 tiles. The 4 remaining tiles are sleepers: they stay out of play and are never drawn. A double is a tile with the same value on both halves, such as 6–6 or 3–3.</string>
+    <string name="rules_help_opening_title">Opening play</string>
+    <string name="rules_help_opening_body">The first play of a round is the opening play. In the first round, and after a tied pip count between opposing teams, the starting player is the one holding the highest available double, in this mandatory order: 6–6, 5–5, 4–4, 3–3, 2–2. That double must be the opening tile. Because there are 5 candidate doubles and only 4 sleepers, at least one of them is always in play.
+
+After a round with one individual winner, that player starts the next round and may lead any tile. If both partners on the winning team tie for the lowest pip count, the next starting player is chosen at random between them with a 50/50 chance, and may also lead any tile.</string>
+    <string name="rules_help_turn_title">Turn order</string>
+    <string name="rules_help_turn_body">Turns move counterclockwise. On each turn, play one tile whose value matches one of the open ends. If the current player has no playable tile, the turn passes automatically to the next player.</string>
+    <string name="rules_help_scoring_title">Finishes and scoring</string>
+    <string name="rules_help_scoring_body">A finish happens when a player plays the last tile in hand, winning the round for the partnership.
+
+• Standard finish — 1 point: a non-double tile that can be played on only one open end.
+• Double finish — 2 points: a double that can be played on only one open end.
+• Two-way finish — 3 points: a non-double tile that could be played on either open end.
+• Two-way double finish — 4 points: a double that could be played on either open end.</string>
+    <string name="rules_help_blocked_title">Blocked round, pip count and ties</string>
+    <string name="rules_help_blocked_body">A round is blocked when no player has a playable tile. Each player totals the pips remaining in hand; the team containing the player with the lowest individual pip count wins. A pip-count win is worth 1 point.
+
+If the 2 players tied for the lowest count are partners, their team wins normally and the next starting player is chosen 50/50 between them. If the lowest count is tied between opposing teams, nobody scores and the next round is worth 2×. If another such tie occurs, the following round is worth 3×, then 4×, and so on until there is a winner. The multiplier applies to the value of the finish that wins that round.</string>
+    <string name="rules_help_clock_title">Turn time</string>
+    <string name="rules_help_clock_body">Matches with a clock show the available time next to the player. Make your move before time runs out; the interface indicates when an automatic action is required.</string>
+    <string name="rules_help_online_title">Online play</string>
+    <string name="rules_help_online_body">Public ranked matches require a connected account. Private rooms and local matches follow the options shown in the play menu and do not enter the public leaderboard.</string>
+    <string name="rules_help_ranking_title">Leaderboard</string>
+    <string name="rules_help_ranking_body">The public leaderboard shows current and closed cycles. Standings and details shown on screen are updated as eligible results are recorded by the service.</string>
+    <string name="terms_title">Terms of Use</string>
+    <string name="terms_intro">By using Dominó PE, you agree to these conditions of use and to the applicable policies presented in the app.</string>
+    <string name="terms_use_title">1. Use of the app</string>
+    <string name="terms_use_body">Dominó PE is provided for entertainment. You must use the app lawfully, respect other players, and not attempt to interfere with the game, services, or ranking mechanisms.</string>
+    <string name="terms_account_title">2. Account and online access</string>
+    <string name="terms_account_body">Some online features may require authentication. You are responsible for keeping the means of access to your account under your control and for providing accurate information when required by the service.</string>
+    <string name="terms_ads_title">3. Advertising</string>
+    <string name="terms_ads_body">The app may display advertising on specific surfaces. Availability, format, and frequency can vary based on consent, region, connectivity, and ad service configuration.</string>
+    <string name="terms_privacy_title">4. Privacy</string>
+    <string name="terms_privacy_body">Data handling is described in the Privacy Policy available in Settings. Advertising privacy options, when required, can also be managed in the app.</string>
+    <string name="terms_availability_title">5. Availability</string>
+    <string name="terms_availability_body">Online features may be temporarily unavailable because of maintenance, network failures, updates, or events outside the service control. Uninterrupted availability is not guaranteed.</string>
+    <string name="terms_changes_title">6. Updates</string>
+    <string name="terms_changes_body">The app and these terms may be updated to reflect product, security, operational, or legal changes. The current version is the one presented in the app or official channels.</string>
+    <string name="terms_contact_title">7. Contact</string>
+    <string name="terms_contact_body">Questions about the app can be sent to dominopernambucano@gmail.com.</string>
 </resources>

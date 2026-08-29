@@ -35,11 +35,15 @@ val googleWebClientId = providers
     .get()
 val testAdMobAppId = "ca-app-pub-3940256099942544~3347511713"
 val testInterstitialAdUnitId = "ca-app-pub-3940256099942544/1033173712"
+val testBannerAdUnitId = "ca-app-pub-3940256099942544/9214589741"
 val releaseAdMobAppId = providers
     .environmentVariable("DOMINO_ADMOB_APP_ID")
     .orNull
 val releaseInterstitialAdUnitId = providers
     .environmentVariable("DOMINO_ADMOB_INTERSTITIAL_UNIT_ID")
+    .orNull
+val releaseBannerAdUnitId = providers
+    .environmentVariable("DOMINO_ADMOB_BANNER_UNIT_ID")
     .orNull
 val releaseSigningConfigured = listOf(
     releaseStoreFile,
@@ -62,11 +66,17 @@ if (releaseBuildRequested) {
     check(!releaseInterstitialAdUnitId.isNullOrBlank()) {
         "Release advertising requires DOMINO_ADMOB_INTERSTITIAL_UNIT_ID."
     }
+    check(!releaseBannerAdUnitId.isNullOrBlank()) {
+        "Release advertising requires DOMINO_ADMOB_BANNER_UNIT_ID."
+    }
     check(releaseAdMobAppId != testAdMobAppId) {
         "Release advertising cannot use the Google test AdMob App ID."
     }
     check(releaseInterstitialAdUnitId != testInterstitialAdUnitId) {
         "Release advertising cannot use the Google test interstitial unit ID."
+    }
+    check(releaseBannerAdUnitId != testBannerAdUnitId) {
+        "Release advertising cannot use the Google test banner unit ID."
     }
 }
 
@@ -143,6 +153,12 @@ android {
             )
 
             buildConfigField(
+                type = "String",
+                name = "ADMOB_BANNER_UNIT_ID",
+                value = testBannerAdUnitId.toBuildConfigString(),
+            )
+
+            buildConfigField(
                 type = "boolean",
                 name = "ADS_TEST_MODE",
                 value = "true",
@@ -179,6 +195,14 @@ android {
                 type = "String",
                 name = "ADMOB_INTERSTITIAL_UNIT_ID",
                 value = releaseInterstitialAdUnitId
+                    .orEmpty()
+                    .toBuildConfigString(),
+            )
+
+            buildConfigField(
+                type = "String",
+                name = "ADMOB_BANNER_UNIT_ID",
+                value = releaseBannerAdUnitId
                     .orEmpty()
                     .toBuildConfigString(),
             )

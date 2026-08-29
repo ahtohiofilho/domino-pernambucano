@@ -60,6 +60,8 @@ import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiCoor
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileStrings
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
+import com.ahtohiofilho.dominopernambucano.ui.info.RulesHelpScreen
+import com.ahtohiofilho.dominopernambucano.ui.info.TermsOfUseScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.MenuPlaceholderScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.PlayModeScreen
@@ -84,6 +86,7 @@ fun DominoPernambucanoApp(
     },
     privacyOptionsRequired: Boolean = false,
     onPrivacyOptionsClick: () -> Unit = {},
+    bannerAdsReady: Boolean = false,
 ) {
     val context = LocalContext.current
     val accountProfileStrings = OnlineAccountProfileStrings(
@@ -198,6 +201,18 @@ fun DominoPernambucanoApp(
     )
 
     var settingsVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var rulesHelpVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var rulesHelpReturnToSettings by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var termsVisible by rememberSaveable {
         mutableStateOf(false)
     }
 
@@ -785,6 +800,32 @@ fun DominoPernambucanoApp(
         }
     }
 
+    if (rulesHelpVisible) {
+        RulesHelpScreen(
+            bannerAdsReady = bannerAdsReady,
+            onBackClick = {
+                rulesHelpVisible = false
+                if (rulesHelpReturnToSettings) {
+                    rulesHelpReturnToSettings = false
+                    settingsVisible = true
+                }
+            },
+        )
+
+        return
+    }
+
+    if (termsVisible) {
+        TermsOfUseScreen(
+            onBackClick = {
+                termsVisible = false
+                settingsVisible = true
+            },
+        )
+
+        return
+    }
+
     if (settingsVisible) {
         SettingsScreen(
             currentSelection =
@@ -802,6 +843,15 @@ fun DominoPernambucanoApp(
             },
             privacyOptionsRequired = privacyOptionsRequired,
             onPrivacyOptionsClick = onPrivacyOptionsClick,
+            onRulesHelpClick = {
+                settingsVisible = false
+                rulesHelpReturnToSettings = true
+                rulesHelpVisible = true
+            },
+            onTermsClick = {
+                settingsVisible = false
+                termsVisible = true
+            },
         )
 
         return
@@ -968,6 +1018,10 @@ fun DominoPernambucanoApp(
                             DominoSessionCommand.OpenPublicRanking,
                         )
                     }
+                },
+                onRulesClick = {
+                    rulesHelpReturnToSettings = false
+                    rulesHelpVisible = true
                 },
                 onSettingsClick = {
                     settingsVisible = true
@@ -1203,6 +1257,7 @@ fun DominoPernambucanoApp(
             } else {
                 OnlinePublicRankingRoute(
                     rankingClient = rankingClient,
+                    bannerAdsReady = bannerAdsReady,
                     onBackClick = {
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.BackToMainMenu,
