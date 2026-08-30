@@ -134,7 +134,7 @@
     <string name="settings_privacy_options_description">Administra tus opciones de privacidad.</string>
     <string name="settings_language_title">Idioma</string>
     <string name="settings_language_description">Elige el idioma de la interfaz. El idioma del dispositivo se usa solo para definir la opción inicial; los idiomas no compatibles comienzan en inglés.</string>
-    <string name="settings_language_portuguese_brazil">Português (Brasil)</string>
+    <string name="settings_language_portuguese_brazil">Português</string>
     <string name="settings_language_spanish">Español</string>
     <string name="settings_language_english">English</string>
 
