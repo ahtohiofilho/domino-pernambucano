@@ -269,4 +269,59 @@
     <string name="settings_privacy_policy_description">Veja como o Dominó PE trata dados e privacidade.</string>
     <string name="settings_account_deletion_title">Excluir conta e dados</string>
     <string name="settings_account_deletion_description">Solicite a exclusão da sua conta e dos dados associados.</string>
+
+    <string name="main_menu_rules_content_description">Regras e ajuda</string>
+    <string name="settings_rules_title">Regras e ajuda</string>
+    <string name="settings_rules_description">Consulte como jogar e orientações da partida.</string>
+    <string name="settings_terms_title">Termos de Uso</string>
+    <string name="settings_terms_description">Leia as condições de uso do Dominó PE.</string>
+    <string name="settings_support_title">Suporte</string>
+    <string name="settings_support_description">dominopernambucano@gmail.com</string>
+    <string name="settings_about_title">Sobre</string>
+    <string name="settings_version_format">Versão %1$s</string>
+    <string name="rules_help_title">Regras e ajuda</string>
+    <string name="rules_help_intro">Regras completas da partida e orientações das principais superfícies do Dominó PE.</string>
+    <string name="rules_help_match_title">Objetivo e duplas</string>
+    <string name="rules_help_match_body">A partida é disputada por 4 jogadores, divididos em 2 duplas, com os parceiros em posições opostas. A primeira dupla que atingir 6 pontos ou mais vence a partida.</string>
+    <string name="rules_help_deal_title">Distribuição e dorme</string>
+    <string name="rules_help_deal_body">O jogo usa as 28 peças do duplo-seis. Cada jogador recebe 6 peças e as 4 restantes ficam no dorme, fora da rodada: não há compra de peças. Carroça é a peça que possui o mesmo valor nas duas metades, como 6–6 ou 3–3.</string>
+    <string name="rules_help_opening_title">Saída da rodada</string>
+    <string name="rules_help_opening_body">A primeira jogada da rodada é a saída e quem a realiza é o saidor. Na primeira rodada, e depois de uma contagem empatada entre as duas duplas, começa quem tiver a maior carroça disponível, obrigatoriamente nesta ordem: 6–6, 5–5, 4–4, 3–3, 2–2. Essa carroça deve ser a primeira peça jogada; como existem 5 carroças candidatas e apenas 4 peças no dorme, sempre haverá pelo menos uma delas em jogo.
+
+Quando a rodada anterior tiver um único jogador vencedor, ele será o saidor seguinte e poderá abrir com qualquer peça da mão. Se os 2 parceiros da dupla vencedora empatarem com a menor contagem, o saidor seguinte será sorteado entre eles, com chance de 50/50, e também poderá abrir com qualquer peça.</string>
+    <string name="rules_help_turn_title">Ordem das jogadas</string>
+    <string name="rules_help_turn_body">Os turnos avançam em sentido anti-horário. Em cada turno, joga-se uma única peça cujo valor coincida com uma das extremidades abertas da mesa. Se o jogador da vez não tiver nenhuma peça jogável, a vez é passada automaticamente para o próximo jogador.</string>
+    <string name="rules_help_scoring_title">Batida e pontuação</string>
+    <string name="rules_help_scoring_body">Batida é a jogada em que o jogador coloca sua última peça e vence a rodada para sua dupla.
+
+• Batida simples — 1 ponto: peça com valores diferentes que só pode ser jogada em uma das extremidades.
+• Batida de carroça — 2 pontos: carroça que só pode ser jogada em uma das extremidades.
+• Lá e lô — 3 pontos: peça simples que poderia ser jogada em qualquer uma das duas extremidades.
+• Cruzada — 4 pontos: carroça que poderia ser jogada em qualquer uma das duas extremidades.</string>
+    <string name="rules_help_blocked_title">Jogo fechado, contagem e empate</string>
+    <string name="rules_help_blocked_body">O jogo fecha quando ninguém possui uma peça jogável. Cada jogador soma os pontos das peças que ainda tem na mão; vence a dupla que tiver o jogador com a menor soma individual. A vitória por contagem vale 1 ponto.
+
+Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence normalmente e o saidor seguinte é sorteado 50/50 entre eles. Se a menor contagem estiver empatada entre jogadores de duplas adversárias, ninguém pontua e a rodada seguinte vale 2×. Se o empate persistir, a rodada posterior vale 3×, depois 4× e assim por diante até haver vencedor. O multiplicador se aplica ao valor da forma de vitória obtida nessa rodada.</string>
+    <string name="rules_help_clock_title">Tempo de jogada</string>
+    <string name="rules_help_clock_body">Partidas com relógio mostram o tempo disponível junto ao jogador. Faça a jogada antes de o tempo se esgotar; a interface informa quando uma ação automática for necessária.</string>
+    <string name="rules_help_online_title">Jogo online</string>
+    <string name="rules_help_online_body">Partidas públicas rankeadas exigem uma conta conectada. Salas privadas e partidas locais seguem as opções apresentadas no menu de jogo e não entram no ranking público.</string>
+    <string name="rules_help_ranking_title">Ranking</string>
+    <string name="rules_help_ranking_body">O ranking público apresenta ciclos atuais e encerrados. A classificação e os detalhes exibidos na tela são atualizados conforme os resultados elegíveis registrados pelo serviço.</string>
+    <string name="terms_title">Termos de Uso</string>
+    <string name="terms_intro">Ao usar o Dominó PE, você concorda com estas condições de uso e com as políticas aplicáveis apresentadas no aplicativo.</string>
+    <string name="terms_use_title">1. Uso do aplicativo</string>
+    <string name="terms_use_body">O Dominó PE é disponibilizado para entretenimento. Você deve usar o aplicativo de forma lícita, respeitar outros jogadores e não tentar interferir no funcionamento do jogo, dos serviços ou dos mecanismos de classificação.</string>
+    <string name="terms_account_title">2. Conta e acesso online</string>
+    <string name="terms_account_body">Alguns recursos online podem exigir autenticação. Você é responsável por manter sob seu controle os meios de acesso à sua conta e por informar dados corretos quando forem necessários para o serviço.</string>
+    <string name="terms_ads_title">3. Publicidade</string>
+    <string name="terms_ads_body">O aplicativo pode exibir publicidade em superfícies específicas. A disponibilidade, o formato e a frequência dos anúncios podem variar conforme consentimento, região, conexão e configuração do serviço de anúncios.</string>
+    <string name="terms_privacy_title">4. Privacidade</string>
+    <string name="terms_privacy_body">O tratamento de dados é descrito na Política de Privacidade disponível nas Configurações. As opções de privacidade de publicidade, quando exigidas, também podem ser gerenciadas no aplicativo.</string>
+    <string name="terms_availability_title">5. Disponibilidade</string>
+    <string name="terms_availability_body">Recursos online podem ficar temporariamente indisponíveis por manutenção, falhas de rede, atualizações ou eventos fora do controle do serviço. Não há garantia de disponibilidade ininterrupta.</string>
+    <string name="terms_changes_title">6. Atualizações</string>
+    <string name="terms_changes_body">O aplicativo e estes termos podem ser atualizados para refletir mudanças de produto, segurança, operação ou requisitos legais. A versão vigente é a apresentada no aplicativo ou nos canais oficiais.</string>
+    <string name="terms_contact_title">7. Contato</string>
+    <string name="terms_contact_body">Dúvidas sobre o aplicativo podem ser enviadas para dominopernambucano@gmail.com.</string>
 </resources>
