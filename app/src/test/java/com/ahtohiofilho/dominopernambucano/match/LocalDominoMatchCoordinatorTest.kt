@@ -174,4 +174,99 @@ class LocalDominoMatchCoordinatorTest {
 
         throw AssertionError("A simulação não alcançou a batida vencedora.")
     }
+    @Test
+    fun duplicate_bot_decision_request_is_safe_after_first_progression() {
+        val coordinator = LocalDominoMatchCoordinator()
+
+        repeat(1_000) {
+            val runtimeState = coordinator.currentState
+
+            when (runtimeState.phase) {
+                DominoMatchPhase.RoundIntro -> {
+                    coordinator.dispatch(
+                        DominoMatchCommand.RoundIntroFinished,
+                    )
+                }
+
+                DominoMatchPhase.WaitingForLocalMove -> {
+                    val gameState = runtimeState.gameState
+
+                    if (
+                        gameState.currentPlayerIndex !=
+                        runtimeState.localPlayerIndex
+                    ) {
+                        coordinator.dispatch(
+                            DominoMatchCommand.BotDecisionReady,
+                        )
+
+                        val afterFirstRequest = coordinator.currentState
+
+                        assertTrue(
+                            afterFirstRequest.phase
+                                is DominoMatchPhase.PresentingMove ||
+                                    afterFirstRequest.phase
+                                    is DominoMatchPhase.PresentingPass,
+                        )
+
+                        coordinator.dispatch(
+                            DominoMatchCommand.BotDecisionReady,
+                        )
+
+                        assertEquals(
+                            afterFirstRequest,
+                            coordinator.currentState,
+                        )
+                        return
+                    }
+
+                    val currentPlayer =
+                        gameState.players[gameState.currentPlayerIndex]
+
+                    val move = currentPlayer.hand
+                        .asSequence()
+                        .flatMap { piece ->
+                            getPlayableMoves(
+                                board = gameState.board,
+                                piece = piece,
+                                openingPiece = gameState.openingPiece,
+                            ).asSequence()
+                        }
+                        .firstOrNull()
+
+                    requireNotNull(move) {
+                        "Jogador local aguardando sem jogada válida."
+                    }
+
+                    coordinator.dispatch(
+                        DominoMatchCommand.LocalMoveSelected(
+                            move = move,
+                        )
+                    )
+                }
+
+                is DominoMatchPhase.PresentingMove,
+                is DominoMatchPhase.PresentingPass -> {
+                    coordinator.dispatch(
+                        DominoMatchCommand.PresentationFinished,
+                    )
+                }
+
+                DominoMatchPhase.RoundSummary -> {
+                    coordinator.dispatch(
+                        DominoMatchCommand.StartNextRound,
+                    )
+                }
+
+                DominoMatchPhase.MatchFinished -> {
+                    coordinator.dispatch(
+                        DominoMatchCommand.StartNewMatch,
+                    )
+                }
+            }
+        }
+
+        throw AssertionError(
+            "A simulação não alcançou uma vez de bot aguardando decisão."
+        )
+    }
 }

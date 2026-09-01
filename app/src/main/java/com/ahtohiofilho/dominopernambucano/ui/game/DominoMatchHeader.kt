@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -157,9 +156,6 @@ fun DominoMatchHeader(
 
             DominoRoundBadge(
                 roundNumber = uiState.roundNumber,
-                modifier = Modifier
-                    .weight(0.38f)
-                    .widthIn(min = 48.dp),
             )
         }
     }
@@ -212,38 +208,17 @@ private fun DominoRoundBadge(
     roundNumber: Int,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(
-        DominoGameVisualTokens.HeaderRoundBadgeCornerRadius,
+    Text(
+        text = "#$roundNumber",
+        modifier = modifier,
+        color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.90f),
+        fontSize = 21.sp,
+        lineHeight = 22.sp,
+        fontWeight = FontWeight.Black,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        softWrap = false,
     )
-
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(
-                DominoColorTokens.PureWhite.copy(alpha = 0.08f),
-            )
-            .border(
-                width = 1.dp,
-                color = DominoSemanticColors.brandBorder.copy(alpha = 0.70f),
-                shape = shape,
-            )
-            .padding(
-                horizontal = DominoGameVisualTokens.HeaderRoundBadgeHorizontalPadding,
-                vertical = DominoGameVisualTokens.HeaderRoundBadgeVerticalPadding,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "#$roundNumber",
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.90f),
-            fontSize = 21.sp,
-            lineHeight = 22.sp,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
 }
 
 @Composable
@@ -265,8 +240,8 @@ private fun DominoMatchScoreboard(
             color = DominoSemanticColors.primaryTextOnDark.copy(
                 alpha = 0.82f,
             ),
-            fontSize = 13.sp,
-            lineHeight = 15.sp,
+            fontSize = 21.sp,
+            lineHeight = 22.sp,
             fontWeight = FontWeight.Black,
             textAlign = TextAlign.End,
             maxLines = 1,
@@ -292,8 +267,8 @@ private fun DominoMatchScoreboard(
             color = DominoSemanticColors.primaryTextOnDark.copy(
                 alpha = 0.82f,
             ),
-            fontSize = 13.sp,
-            lineHeight = 15.sp,
+            fontSize = 21.sp,
+            lineHeight = 22.sp,
             fontWeight = FontWeight.Black,
             textAlign = TextAlign.Start,
             maxLines = 1,

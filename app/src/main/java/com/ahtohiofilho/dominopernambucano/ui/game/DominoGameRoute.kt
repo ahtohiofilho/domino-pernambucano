@@ -8,8 +8,12 @@ import com.ahtohiofilho.dominopernambucano.domain.getPlayableMoves
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
+import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineGameUiTraceReporter
 import com.ahtohiofilho.dominopernambucano.online.OnlineUiTraceContext
+import kotlinx.coroutines.delay
 
 @Composable
 fun DominoGameRoute(
@@ -30,6 +34,48 @@ fun DominoGameRoute(
     ) {
         if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
             onMatchFinished()
+        }
+    }
+
+    /*
+     * O fluxo visual normal continua solicitando a decisão do bot após
+     * BotDecisionDelayMillis dentro de DominoGameScreen. Este watchdog é uma
+     * segunda linha de defesa exclusiva do coordenador local: se aquela entrega
+     * excepcionalmente não promover o estado, revalida o estado vivo do
+     * coordenador e tenta novamente após o dobro do atraso normal.
+     *
+     * A repetição é segura porque LocalDominoMatchCoordinator ignora
+     * BotDecisionReady assim que a fase deixa WaitingForLocalMove.
+     */
+    LaunchedEffect(
+        matchCoordinator,
+        runtimeState.phase,
+        gameState.currentPlayerIndex,
+        runtimeState.localPlayerIndex,
+        runtimeState.roundNumber,
+    ) {
+        if (matchCoordinator !is LocalDominoMatchCoordinator) {
+            return@LaunchedEffect
+        }
+
+        while (
+            shouldRecoverLocalBotTurn(
+                runtimeState = matchCoordinator.currentState,
+            )
+        ) {
+            delay(DominoMatchTiming.BotDecisionDelayMillis * 2)
+
+            if (
+                !shouldRecoverLocalBotTurn(
+                    runtimeState = matchCoordinator.currentState,
+                )
+            ) {
+                break
+            }
+
+            matchCoordinator.dispatch(
+                DominoMatchCommand.BotDecisionReady,
+            )
         }
     }
 
@@ -129,4 +175,11 @@ fun DominoGameRoute(
             }
         },
     )
+}
+internal fun shouldRecoverLocalBotTurn(
+    runtimeState: DominoMatchRuntimeState,
+): Boolean {
+    return runtimeState.phase == DominoMatchPhase.WaitingForLocalMove &&
+            runtimeState.gameState.currentPlayerIndex !=
+            runtimeState.localPlayerIndex
 }
