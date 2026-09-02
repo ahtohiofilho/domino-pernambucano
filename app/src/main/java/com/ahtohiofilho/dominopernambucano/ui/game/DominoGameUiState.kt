@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.ui.game
+﻿package com.ahtohiofilho.dominopernambucano.ui.game
 
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
@@ -16,4 +16,5 @@ data class DominoGameUiState(
     val turnClockTotalMillis: Long,
     val onlinePresentationId: String? = null,
     val onlineSnapshotRevision: Long? = null,
+    val postMatchStatistics: PostMatchStatistics? = null,
 )

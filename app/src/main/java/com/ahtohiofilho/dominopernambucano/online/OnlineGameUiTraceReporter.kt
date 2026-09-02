@@ -1,4 +1,5 @@
-package com.ahtohiofilho.dominopernambucano.online
+﻿package com.ahtohiofilho.dominopernambucano.online
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
 
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 
@@ -9,6 +10,8 @@ data class OnlineUiTraceContext(
 
 interface OnlineGameUiTraceReporter {
     fun currentUiTraceContext(): OnlineUiTraceContext
+
+    fun currentRankedMetricAccumulator(): RankedMatchMetricAccumulator? = null
 
     fun traceUiEvent(
         type: OnlineTraceType,

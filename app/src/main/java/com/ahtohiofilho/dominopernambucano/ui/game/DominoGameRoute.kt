@@ -1,9 +1,11 @@
-package com.ahtohiofilho.dominopernambucano.ui.game
+﻿package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import com.ahtohiofilho.dominopernambucano.domain.getPlayableMoves
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
@@ -14,6 +16,7 @@ import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineGameUiTraceReporter
 import com.ahtohiofilho.dominopernambucano.online.OnlineUiTraceContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 
 @Composable
 fun DominoGameRoute(
@@ -28,6 +31,31 @@ fun DominoGameRoute(
     val runtimeState by matchCoordinator.state.collectAsState()
     val gameState = runtimeState.gameState
     val onlineUiTraceContext = onlineUiTraceReporter?.currentUiTraceContext()
+    val postMatchStatisticsTracker = remember(matchCoordinator) {
+        PostMatchStatisticsTracker(
+            initialState = matchCoordinator.currentState.gameState,
+        )
+    }
+    val postMatchStatisticsState = remember(matchCoordinator) {
+        mutableStateOf(postMatchStatisticsTracker.snapshot())
+    }
+
+    LaunchedEffect(matchCoordinator) {
+        matchCoordinator.state.collect { state ->
+            val authoritativeAccumulator =
+                onlineUiTraceReporter?.currentRankedMetricAccumulator()
+
+            postMatchStatisticsState.value =
+                if (authoritativeAccumulator != null) {
+                    createPostMatchStatistics(
+                        accumulator = authoritativeAccumulator,
+                        finalOrCurrentState = state.gameState,
+                    )
+                } else {
+                    postMatchStatisticsTracker.accept(state.gameState)
+                }
+        }
+    }
 
     LaunchedEffect(
         runtimeState.phase,
@@ -113,6 +141,7 @@ fun DominoGameRoute(
             turnClockTotalMillis = runtimeState.clockPolicy.playerRoundTimeMillis,
             onlinePresentationId = onlineUiTraceContext?.presentationId,
             onlineSnapshotRevision = onlineUiTraceContext?.snapshotRevision,
+            postMatchStatistics = postMatchStatisticsState.value,
         ),
         onBackToMenuClick = {
             if (runtimeState.phase == DominoMatchPhase.MatchFinished) {

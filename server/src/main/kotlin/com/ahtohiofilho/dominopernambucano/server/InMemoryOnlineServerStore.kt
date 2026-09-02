@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.server
+﻿package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCyclePeriod
@@ -4194,6 +4194,7 @@ class InMemoryOnlineServerStore(
             revision = previousSnapshot.revision + 1L,
             serverEpochMillis = serverEpochMillis,
             automaticPlayerIndexes = matchRecord.automaticSeatIndexes.sorted(),
+            rankedMetricAccumulator = matchRecord.rankedMetricAccumulator,
         )
 
         matchRecord.snapshot = updatedSnapshot

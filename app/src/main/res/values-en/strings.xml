@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dominó PE</string>
     <string name="brand_subtitle">App dedicated to the Pernambuco domino variant</string>
@@ -323,4 +323,44 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="terms_changes_body">The app and these terms may be updated to reflect product, security, operational, or legal changes. The current version is the one presented in the app or official channels.</string>
     <string name="terms_contact_title">7. Contact</string>
     <string name="terms_contact_body">Questions about the app can be sent to dominopernambucano@gmail.com.</string>
+
+<string name="post_match_details_title">MATCH DETAILS</string>
+    <string name="post_match_complete">MATCH COMPLETE</string>
+    <string name="post_match_victory">VICTORY</string>
+    <string name="post_match_defeat">DEFEAT</string>
+    <string name="post_match_draw">DRAW</string>
+    <string name="post_match_local_rounds">Local match • %1$d rounds</string>
+    <string name="post_match_online_rounds">Online match • %1$d rounds</string>
+    <string name="post_match_your_team">YOUR TEAM</string>
+    <string name="post_match_opponents">OPPONENTS</string>
+    <string name="post_match_points_value">%1$d POINTS</string>
+    <string name="post_match_you">YOU</string>
+    <string name="post_match_tiles">TILES</string>
+    <string name="post_match_last_round">FINAL</string>
+    <string name="post_match_went_out">WENT OUT</string>
+    <string name="post_match_highlight">MATCH HIGHLIGHT</string>
+    <string name="post_match_simple_finish">Simple finish in the deciding round</string>
+    <string name="post_match_double_finish">Double finish in the deciding round</string>
+    <string name="post_match_la_e_lo_finish">Two-ended finish in the deciding round</string>
+    <string name="post_match_cross_finish">Crossed double in the deciding round</string>
+    <string name="post_match_closed_finish">Victory by pip count</string>
+    <string name="post_match_closed_tie">Tie in the final round</string>
+    <string name="post_match_decisive_player">Decisive player of the match</string>
+    <string name="post_match_ranking">RANKING</string>
+    <string name="post_match_unranked">UNRANKED</string>
+    <string name="post_match_unranked_explanation">This match does not change your position.</string>
+    <string name="post_match_play_again">Play again</string>
+    <string name="post_match_view_details">View details</string>
+    <string name="post_match_back_to_summary">Back to summary</string>
+    <string name="post_match_back_to_menu">Back to menu</string>
+    <string name="post_match_competitive_metrics">COMPETITIVE STATS</string>
+    <string name="post_match_points_scored">POINTS</string>
+    <string name="post_match_touches_given">PASSES FORCED</string>
+    <string name="post_match_touches_received">PASSES TAKEN</string>
+    <string name="post_match_action_details">View match details</string>
+    <string name="post_match_action_play_again">Play again</string>
+    <string name="post_match_action_home">Back to menu</string>
+    <string name="post_match_action_back_summary">Back to summary</string>
+    <string name="post_match_team_balance">BALANCE</string>
+    <string name="post_match_automatic_rounds">AUTO ROUNDS</string>    <string name="post_match_mvp">MVP</string>
 </resources>

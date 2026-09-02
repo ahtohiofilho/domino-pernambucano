@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.competitive
+﻿package com.ahtohiofilho.dominopernambucano.competitive
 
 import com.ahtohiofilho.dominopernambucano.domain.DominoBoardChain
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
@@ -52,9 +52,9 @@ class RankedMatchResultTest {
         )
         assertEquals(4, result.completedRounds)
 
-        assertEquals(6, result.players[0].teamBalanceDelta)
+        assertEquals(3, result.players[0].teamBalanceDelta)
         assertEquals(-3, result.players[1].teamBalanceDelta)
-        assertEquals(6, result.players[2].teamBalanceDelta)
+        assertEquals(3, result.players[2].teamBalanceDelta)
         assertEquals(-3, result.players[3].teamBalanceDelta)
         assertEquals(4, result.players[0].individualPointsScored)
         assertEquals(3, result.players[0].touchesGiven)

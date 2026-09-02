@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.ui.game
+﻿package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -232,6 +232,7 @@ private fun RoundSummaryScoreLine(
 
     val localScore = gameState.teamScores.getOrElse(localTeamIndex) { 0 }
     val opponentScore = gameState.teamScores.getOrElse(opponentTeamIndex) { 0 }
+    val scoringTeamIndex = gameState.roundWinnerTeamIndex
 
     Row(
         modifier = modifier,
@@ -240,7 +241,11 @@ private fun RoundSummaryScoreLine(
     ) {
         Text(
             text = "$localScore",
-            color = DominoSemanticColors.scoreHighlight,
+            color = if (scoringTeamIndex == localTeamIndex) {
+                DominoSemanticColors.scoreHighlight
+            } else {
+                DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.86f)
+            },
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Black,
         )
@@ -254,7 +259,11 @@ private fun RoundSummaryScoreLine(
 
         Text(
             text = "$opponentScore",
-            color = DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.86f),
+            color = if (scoringTeamIndex == opponentTeamIndex) {
+                DominoSemanticColors.scoreHighlight
+            } else {
+                DominoSemanticColors.primaryTextOnDark.copy(alpha = 0.86f)
+            },
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Black,
         )

@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.competitive
+﻿package com.ahtohiofilho.dominopernambucano.competitive
 
 import com.ahtohiofilho.dominopernambucano.domain.DominoBoardChain
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
@@ -140,9 +140,9 @@ class RankedMatchMetricRulesTest {
     }
 
     @Test
-    fun final_balance_uses_each_teams_own_final_score() {
+    fun final_balance_is_points_for_minus_points_against() {
         val finalState = gameState(
-            teamScores = listOf(6, 3),
+            teamScores = listOf(6, 4),
         ).copy(
             roundWinnerPlayerIndex = 0,
             roundWinnerTeamIndex = 0,
@@ -160,10 +160,10 @@ class RankedMatchMetricRulesTest {
             ),
         )
 
-        assertEquals(6, result[0].teamBalanceDelta)
-        assertEquals(-3, result[1].teamBalanceDelta)
-        assertEquals(6, result[2].teamBalanceDelta)
-        assertEquals(-3, result[3].teamBalanceDelta)
+        assertEquals(2, result[0].teamBalanceDelta)
+        assertEquals(-2, result[1].teamBalanceDelta)
+        assertEquals(2, result[2].teamBalanceDelta)
+        assertEquals(-2, result[3].teamBalanceDelta)
 
         assertEquals(4, result[0].individualPointsDelta)
         assertEquals(2, result[1].individualPointsDelta)

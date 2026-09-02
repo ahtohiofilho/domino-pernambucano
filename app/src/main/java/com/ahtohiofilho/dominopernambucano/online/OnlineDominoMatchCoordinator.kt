@@ -1,4 +1,5 @@
-package com.ahtohiofilho.dominopernambucano.online
+﻿package com.ahtohiofilho.dominopernambucano.online
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
 
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
@@ -104,6 +105,9 @@ class OnlineDominoMatchCoordinator(
     private var automaticPlayerIndexes: Set<Int> =
         initialSnapshot.automaticPlayerIndexes.toSet()
 
+    private var rankedMetricAccumulator: RankedMatchMetricAccumulator? =
+        initialSnapshot.rankedMetricAccumulator
+
     /*
      * Uma interação humana só pode gerar uma ação por vez. A UI permanece
      * orientada pelo snapshot autoritativo; a trava evita que múltiplos drags
@@ -139,6 +143,10 @@ class OnlineDominoMatchCoordinator(
 
     override val currentState: DominoMatchRuntimeState
         get() = mutableState.value
+    override fun currentRankedMetricAccumulator(): RankedMatchMetricAccumulator? {
+        return activePresentationRuntimeState?.rankedMetricAccumulator
+            ?: rankedMetricAccumulator
+    }
 
     override fun currentUiTraceContext(): OnlineUiTraceContext {
         val activeRuntimeState = activePresentationRuntimeState
@@ -251,6 +259,7 @@ class OnlineDominoMatchCoordinator(
                     remoteRuntimeState = remoteRuntimeState,
                     revision = snapshot.revision,
                     automaticPlayerIndexes = snapshot.automaticPlayerIndexes.toSet(),
+                    rankedMetricAccumulator = snapshot.rankedMetricAccumulator,
                     hasRevisionGap = hasRevisionGap,
                 )
             }
@@ -431,6 +440,7 @@ class OnlineDominoMatchCoordinator(
         remoteRuntimeState: DominoMatchRuntimeState,
         revision: Long,
         automaticPlayerIndexes: Set<Int>,
+        rankedMetricAccumulator: RankedMatchMetricAccumulator?,
         hasRevisionGap: Boolean,
     ) {
         clearInFlightActionIfConfirmed(
@@ -442,6 +452,7 @@ class OnlineDominoMatchCoordinator(
                 remoteRuntimeState = remoteRuntimeState,
                 revision = revision,
                 automaticPlayerIndexes = automaticPlayerIndexes,
+                rankedMetricAccumulator = rankedMetricAccumulator,
                 reason = "missing_revision_history",
             )
             return
@@ -452,6 +463,7 @@ class OnlineDominoMatchCoordinator(
                 runtimeState = remoteRuntimeState,
                 revision = revision,
                 automaticPlayerIndexes = automaticPlayerIndexes,
+                rankedMetricAccumulator = rankedMetricAccumulator,
             ),
         )
 
@@ -482,6 +494,7 @@ class OnlineDominoMatchCoordinator(
         remoteRuntimeState: DominoMatchRuntimeState,
         revision: Long,
         automaticPlayerIndexes: Set<Int>,
+        rankedMetricAccumulator: RankedMatchMetricAccumulator?,
         reason: String,
     ) {
         val discardedQueueDepth = pendingRemoteRuntimeStates.size
@@ -513,6 +526,7 @@ class OnlineDominoMatchCoordinator(
                 runtimeState = remoteRuntimeState,
                 revision = revision,
                 automaticPlayerIndexes = automaticPlayerIndexes,
+                rankedMetricAccumulator = rankedMetricAccumulator,
             ),
         )
     }
@@ -780,6 +794,7 @@ class OnlineDominoMatchCoordinator(
         stableRuntimeState = queuedRuntimeState.runtimeState
         stableRevision = queuedRuntimeState.revision
         automaticPlayerIndexes = queuedRuntimeState.automaticPlayerIndexes
+        rankedMetricAccumulator = queuedRuntimeState.rankedMetricAccumulator
         mutableState.value = queuedRuntimeState.runtimeState
             .toStableDisplayRuntimeState()
 
@@ -1432,6 +1447,7 @@ private data class QueuedOnlineRuntimeState(
     val runtimeState: DominoMatchRuntimeState,
     val revision: Long,
     val automaticPlayerIndexes: Set<Int>,
+    val rankedMetricAccumulator: RankedMatchMetricAccumulator?,
 )
 
 private data class OnlinePresentationBridge(

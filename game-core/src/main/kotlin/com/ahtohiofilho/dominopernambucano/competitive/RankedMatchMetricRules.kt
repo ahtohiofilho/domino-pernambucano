@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.competitive
+﻿package com.ahtohiofilho.dominopernambucano.competitive
 
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.RoundWinKind
@@ -158,10 +158,14 @@ fun buildRankedSeatResultDeltas(
     require(finalState.players.size == seatMetrics.size)
 
     val winnerTeamIndex = requireNotNull(finalState.gameWinnerTeamIndex)
+    require(finalState.teamScores.size == 2)
 
     return finalState.players.indices.map { seatIndex ->
         val teamIndex = getTeamIndexForPlayer(seatIndex)
-        val teamFinalScore = finalState.teamScores[teamIndex]
+        val opponentTeamIndex = if (teamIndex == 0) 1 else 0
+        val teamBalanceDelta =
+            finalState.teamScores[teamIndex] -
+                    finalState.teamScores[opponentTeamIndex]
         val won = teamIndex == winnerTeamIndex
         val metrics = seatMetrics[seatIndex]
 
@@ -171,11 +175,7 @@ fun buildRankedSeatResultDeltas(
             won = won,
             victoriesDelta = if (won) 1 else 0,
             gamesDelta = 1,
-            teamBalanceDelta = if (won) {
-                teamFinalScore
-            } else {
-                -teamFinalScore
-            },
+            teamBalanceDelta = teamBalanceDelta,
             individualPointsDelta = metrics.individualPoints,
             touchesGivenDelta = metrics.touchesGiven,
             automaticRoundsDelta = metrics.automaticRounds,

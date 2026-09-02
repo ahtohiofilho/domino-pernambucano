@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dominó PE</string>
     <string name="brand_subtitle">App dedicada a la modalidad pernambucana</string>
@@ -323,4 +323,44 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="terms_changes_body">La aplicación y estos términos pueden actualizarse para reflejar cambios de producto, seguridad, operación o requisitos legales. La versión vigente es la presentada en la aplicación o en los canales oficiales.</string>
     <string name="terms_contact_title">7. Contacto</string>
     <string name="terms_contact_body">Las dudas sobre la aplicación pueden enviarse a dominopernambucano@gmail.com.</string>
+
+<string name="post_match_details_title">DETALLES DE LA PARTIDA</string>
+    <string name="post_match_complete">PARTIDA FINALIZADA</string>
+    <string name="post_match_victory">VICTORIA</string>
+    <string name="post_match_defeat">DERROTA</string>
+    <string name="post_match_draw">EMPATE</string>
+    <string name="post_match_local_rounds">Partida local • %1$d rondas</string>
+    <string name="post_match_online_rounds">Partida en línea • %1$d rondas</string>
+    <string name="post_match_your_team">TU PAREJA</string>
+    <string name="post_match_opponents">RIVALES</string>
+    <string name="post_match_points_value">%1$d PUNTOS</string>
+    <string name="post_match_you">TÚ</string>
+    <string name="post_match_tiles">FICHAS</string>
+    <string name="post_match_last_round">ÚLTIMA</string>
+    <string name="post_match_went_out">CERRÓ</string>
+    <string name="post_match_highlight">DESTACADO DE LA PARTIDA</string>
+    <string name="post_match_simple_finish">Cierre simple en la ronda decisiva</string>
+    <string name="post_match_double_finish">Cierre con doble en la ronda decisiva</string>
+    <string name="post_match_la_e_lo_finish">La e lo en la ronda decisiva</string>
+    <string name="post_match_cross_finish">Cierre cruzado en la ronda decisiva</string>
+    <string name="post_match_closed_finish">Victoria por conteo de puntos</string>
+    <string name="post_match_closed_tie">Empate en la ronda final</string>
+    <string name="post_match_decisive_player">Jugador decisivo de la partida</string>
+    <string name="post_match_ranking">CLASIFICACIÓN</string>
+    <string name="post_match_unranked">NO CLASIFICATORIA</string>
+    <string name="post_match_unranked_explanation">Esta partida no cambia tu posición.</string>
+    <string name="post_match_play_again">Jugar de nuevo</string>
+    <string name="post_match_view_details">Ver detalles</string>
+    <string name="post_match_back_to_summary">Volver al resumen</string>
+    <string name="post_match_back_to_menu">Volver al menú</string>
+    <string name="post_match_competitive_metrics">MÉTRICAS COMPETITIVAS</string>
+    <string name="post_match_points_scored">PUNTOS</string>
+    <string name="post_match_touches_given">PASES FORZADOS</string>
+    <string name="post_match_touches_received">PASES RECIBIDOS</string>
+    <string name="post_match_action_details">Ver detalles de la partida</string>
+    <string name="post_match_action_play_again">Jugar de nuevo</string>
+    <string name="post_match_action_home">Volver al menú</string>
+    <string name="post_match_action_back_summary">Volver al resumen</string>
+    <string name="post_match_team_balance">SALDO</string>
+    <string name="post_match_automatic_rounds">RONDAS AUTO</string>    <string name="post_match_mvp">MVP</string>
 </resources>

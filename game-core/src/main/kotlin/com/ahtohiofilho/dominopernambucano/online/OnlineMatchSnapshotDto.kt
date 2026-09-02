@@ -1,4 +1,5 @@
-package com.ahtohiofilho.dominopernambucano.online
+﻿package com.ahtohiofilho.dominopernambucano.online
+import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
 
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
@@ -36,6 +37,15 @@ data class OnlineMatchSnapshotDto(
      * Esta lista é limpa ao iniciar uma nova rodada ou uma nova partida.
      */
     val automaticPlayerIndexes: List<Int> = emptyList(),
+
+    /*
+     * Acumulador competitivo autoritativo da partida.
+     *
+     * Quando fornecido pelo servidor, esta e a mesma estrutura usada para
+     * materializar o resultado ranqueado. O default null preserva
+     * compatibilidade com snapshots locais/fake e estados persistidos antigos.
+     */
+    val rankedMetricAccumulator: RankedMatchMetricAccumulator? = null,
 )
 
 fun DominoMatchClockPolicy.toOnlineDto(): OnlineMatchClockPolicyDto {
@@ -62,6 +72,7 @@ fun DominoMatchRuntimeState.toOnlineSnapshotDto(
     revision: Long,
     serverEpochMillis: Long? = null,
     automaticPlayerIndexes: List<Int> = emptyList(),
+    rankedMetricAccumulator: RankedMatchMetricAccumulator? = null,
 ): OnlineMatchSnapshotDto {
     return OnlineMatchSnapshotDto(
         roomId = roomId,
@@ -75,6 +86,7 @@ fun DominoMatchRuntimeState.toOnlineSnapshotDto(
         playerClockReserveMillis = playerClockReserveMillis,
         serverEpochMillis = serverEpochMillis,
         automaticPlayerIndexes = automaticPlayerIndexes,
+        rankedMetricAccumulator = rankedMetricAccumulator,
     )
 }
 
