@@ -1517,7 +1517,7 @@ class OnlineDominoMatchCoordinatorTest {
                 ),
                 playerClockReserveMillis =
                     List(4) {
-                        40_000L
+                        20_000L
                     },
             )
 
@@ -1610,7 +1610,7 @@ class OnlineDominoMatchCoordinatorTest {
                 ),
                 playerClockReserveMillis =
                     List(4) {
-                        40_000L
+                        20_000L
                     },
             )
 

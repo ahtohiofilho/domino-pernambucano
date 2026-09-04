@@ -37,12 +37,12 @@ class PublicRankedSyntheticFallbackAuthorityTest {
     }
 
     @Test
-    fun synthetic_fallback_unlocks_one_seat_at_15_seconds() {
+    fun synthetic_fallback_unlocks_one_seat_at_20_seconds() {
         assertNull(
             plan(
                 humanCount = 3,
                 syntheticCount = 1,
-                nowEpochMillis = 14_999L,
+                nowEpochMillis = 19_999L,
             ),
         )
 
@@ -50,7 +50,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             plan(
                 humanCount = 3,
                 syntheticCount = 1,
-                nowEpochMillis = 15_000L,
+                nowEpochMillis = 20_000L,
             ),
         )
 
@@ -59,12 +59,12 @@ class PublicRankedSyntheticFallbackAuthorityTest {
     }
 
     @Test
-    fun synthetic_fallback_unlocks_two_seats_at_20_seconds() {
+    fun synthetic_fallback_unlocks_two_seats_at_40_seconds() {
         assertNull(
             plan(
                 humanCount = 2,
                 syntheticCount = 2,
-                nowEpochMillis = 19_999L,
+                nowEpochMillis = 39_999L,
             ),
         )
 
@@ -72,7 +72,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             plan(
                 humanCount = 2,
                 syntheticCount = 2,
-                nowEpochMillis = 20_000L,
+                nowEpochMillis = 40_000L,
             ),
         )
 
@@ -81,12 +81,12 @@ class PublicRankedSyntheticFallbackAuthorityTest {
     }
 
     @Test
-    fun synthetic_fallback_unlocks_three_seats_at_25_seconds() {
+    fun synthetic_fallback_unlocks_three_seats_at_60_seconds() {
         assertNull(
             plan(
                 humanCount = 1,
                 syntheticCount = 3,
-                nowEpochMillis = 24_999L,
+                nowEpochMillis = 59_999L,
             ),
         )
 
@@ -94,7 +94,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             plan(
                 humanCount = 1,
                 syntheticCount = 3,
-                nowEpochMillis = 25_000L,
+                nowEpochMillis = 60_000L,
             ),
         )
 
@@ -205,16 +205,39 @@ class PublicRankedSyntheticFallbackAuthorityTest {
         assertEquals(PublicRankedQueueStatus.QUEUED, humanQueued.status)
         assertEquals(1, humanQueued.queuePosition)
 
-        now = 25_999L
-        assertFalse(store.advanceAuthoritativeTime())
         assertEquals(
-            PublicRankedQueueStatus.QUEUED,
-            store.getPublicRankedQueueStatus(
-                humanAccount.toRequestIdentity(),
-            ).status,
+            listOf("H01"),
+            humanQueued.participantCodes,
         )
 
-        now = 26_000L
+        now = 20_999L
+        assertFalse(store.advanceAuthoritativeTime())
+
+        now = 21_000L
+        assertTrue(store.advanceAuthoritativeTime())
+        assertEquals(
+            listOf("H01", "S01"),
+            store.getPublicRankedQueueStatus(
+                humanAccount.toRequestIdentity(),
+            ).participantCodes,
+        )
+
+        now = 40_999L
+        assertFalse(store.advanceAuthoritativeTime())
+
+        now = 41_000L
+        assertTrue(store.advanceAuthoritativeTime())
+        assertEquals(
+            listOf("H01", "S01", "S02"),
+            store.getPublicRankedQueueStatus(
+                humanAccount.toRequestIdentity(),
+            ).participantCodes,
+        )
+
+        now = 60_999L
+        assertFalse(store.advanceAuthoritativeTime())
+
+        now = 61_000L
         assertTrue(store.advanceAuthoritativeTime())
 
         val matched = store.getPublicRankedQueueStatus(
@@ -232,6 +255,136 @@ class PublicRankedSyntheticFallbackAuthorityTest {
         )
         assertEquals(
             3,
+            room.players.count { player ->
+                player.participantType ==
+                    OnlineParticipantTypeDto.SYNTHETIC
+            },
+        )
+    }
+
+    @Test
+    fun new_human_arrival_resets_next_synthetic_admission_window() {
+        var now = 1_000L
+        var accountSequence = 0
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+            resourcePolicy = fallbackPolicy(),
+            accountIdFactory = {
+                accountSequence += 1
+                "account-$accountSequence"
+            },
+            publicRankedFormationEntropy = ZeroEntropy(),
+        )
+
+        val syntheticAccounts = (1..3).map { number ->
+            requireNotNull(
+                store.promoteSyntheticAccount(
+                    playerId = "reset-synthetic-$number",
+                    expectedAccountId = null,
+                ),
+            )
+        }
+        syntheticAccounts.forEachIndexed { index, account ->
+            val code = "S0${index + 1}"
+            configureAccount(
+                store = store,
+                account = account,
+                tableCode = code,
+            )
+            assertEquals(
+                PublicRankedQueueStatus.QUEUED,
+                store.enqueuePublicRanked(
+                    request = request(
+                        playerId = account.playerId,
+                        tableCode = code,
+                    ),
+                    identity = account.toRequestIdentity(),
+                ).status,
+            )
+        }
+
+        val firstHuman = requireNotNull(
+            store.promoteAccount(playerId = "reset-human-1"),
+        )
+        configureAccount(
+            store = store,
+            account = firstHuman,
+            tableCode = "H01",
+        )
+        assertEquals(
+            PublicRankedQueueStatus.QUEUED,
+            store.enqueuePublicRanked(
+                request = request(
+                    playerId = firstHuman.playerId,
+                    tableCode = "H01",
+                ),
+                identity = firstHuman.toRequestIdentity(),
+            ).status,
+        )
+
+        now = 21_000L
+        assertTrue(store.advanceAuthoritativeTime())
+        assertEquals(
+            listOf("H01", "S01"),
+            store.getPublicRankedQueueStatus(
+                firstHuman.toRequestIdentity(),
+            ).participantCodes,
+        )
+
+        now = 25_000L
+        val secondHuman = requireNotNull(
+            store.promoteAccount(playerId = "reset-human-2"),
+        )
+        configureAccount(
+            store = store,
+            account = secondHuman,
+            tableCode = "H02",
+        )
+        val secondHumanQueued = store.enqueuePublicRanked(
+            request = request(
+                playerId = secondHuman.playerId,
+                tableCode = "H02",
+            ),
+            identity = secondHuman.toRequestIdentity(),
+        )
+        assertEquals(
+            PublicRankedQueueStatus.QUEUED,
+            secondHumanQueued.status,
+        )
+        assertEquals(
+            listOf("H01", "H02", "S01"),
+            secondHumanQueued.participantCodes,
+        )
+
+        now = 44_999L
+        assertFalse(store.advanceAuthoritativeTime())
+        assertEquals(
+            PublicRankedQueueStatus.QUEUED,
+            store.getPublicRankedQueueStatus(
+                firstHuman.toRequestIdentity(),
+            ).status,
+        )
+
+        now = 45_000L
+        assertTrue(store.advanceAuthoritativeTime())
+
+        val matched = store.getPublicRankedQueueStatus(
+            firstHuman.toRequestIdentity(),
+        )
+        assertEquals(
+            PublicRankedQueueStatus.MATCHED,
+            matched.status,
+        )
+        val room = requireNotNull(matched.roomSnapshot)
+        assertEquals(
+            2,
+            room.players.count { player ->
+                player.participantType ==
+                    OnlineParticipantTypeDto.HUMAN
+            },
+        )
+        assertEquals(
+            2,
             room.players.count { player ->
                 player.participantType ==
                     OnlineParticipantTypeDto.SYNTHETIC
@@ -289,8 +442,8 @@ class PublicRankedSyntheticFallbackAuthorityTest {
     )
 
     private fun fallbackPolicy() = OnlineServerStoreResourcePolicy(
-        publicRankedSyntheticFallbackInitialDelayMillis = 15_000L,
-        publicRankedSyntheticFallbackAdditionalSeatDelayMillis = 5_000L,
+        publicRankedSyntheticFallbackInitialDelayMillis = 20_000L,
+        publicRankedSyntheticFallbackAdditionalSeatDelayMillis = 20_000L,
         publicRankedExactCohortCooldownMillis = 0L,
         pruneIntervalMillis = 60_000L,
     )

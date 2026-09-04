@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
@@ -8,6 +9,7 @@ import com.ahtohiofilho.dominopernambucano.online.createOnlinePassTurnAction
 import com.ahtohiofilho.dominopernambucano.online.createOnlinePlayMoveAction
 import com.ahtohiofilho.dominopernambucano.online.toRuntimeState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -20,8 +22,8 @@ class SyntheticServerControlledTurnIntegrationTest {
         val store = InMemoryOnlineServerStore(
             nowEpochMillis = { now },
             resourcePolicy = OnlineServerStoreResourcePolicy(
-                publicRankedSyntheticFallbackInitialDelayMillis = 15_000L,
-                publicRankedSyntheticFallbackAdditionalSeatDelayMillis = 5_000L,
+                publicRankedSyntheticFallbackInitialDelayMillis = 20_000L,
+                publicRankedSyntheticFallbackAdditionalSeatDelayMillis = 20_000L,
                 publicRankedExactCohortCooldownMillis = 0L,
                 pruneIntervalMillis = 60_000L,
             ),
@@ -82,7 +84,25 @@ class SyntheticServerControlledTurnIntegrationTest {
             ).status,
         )
 
-        now = 26_000L
+        now = 21_000L
+        assertTrue(store.advanceAuthoritativeTime())
+        assertEquals(
+            PublicRankedQueueStatus.QUEUED,
+            store.getPublicRankedQueueStatus(
+                human.toRequestIdentity(),
+            ).status,
+        )
+
+        now = 41_000L
+        assertTrue(store.advanceAuthoritativeTime())
+        assertEquals(
+            PublicRankedQueueStatus.QUEUED,
+            store.getPublicRankedQueueStatus(
+                human.toRequestIdentity(),
+            ).status,
+        )
+
+        now = 61_000L
         assertTrue(store.advanceAuthoritativeTime())
 
         val matched = store.getPublicRankedQueueStatus(
@@ -129,8 +149,23 @@ class SyntheticServerControlledTurnIntegrationTest {
                     val beforeRevision = before.revision
                     val beforeGameState = before.gameState
 
+                    assertFalse(
+                        "Synthetic turn must not resolve immediately.",
+                        store.advanceAuthoritativeTime(),
+                    )
+
+                    now +=
+                        DominoMatchTiming.BotDecisionDelayMillis - 1L
+
+                    assertFalse(
+                        "Synthetic turn resolved before the local-bot cadence.",
+                        store.advanceAuthoritativeTime(),
+                    )
+
+                    now += 1L
+
                     assertTrue(
-                        "Synthetic turn was not advanced by the server.",
+                        "Synthetic turn was not advanced by the server after the natural cadence.",
                         store.advanceAuthoritativeTime(),
                     )
 
@@ -156,6 +191,10 @@ class SyntheticServerControlledTurnIntegrationTest {
                         roomId = room.roomId,
                         matchId = matchId,
                         roomPlayers = room.players,
+                        advanceSyntheticDecisionClock = {
+                            now +=
+                                DominoMatchTiming.BotDecisionDelayMillis
+                        },
                     )
 
                     val metrics = requireNotNull(
@@ -227,6 +266,7 @@ class SyntheticServerControlledTurnIntegrationTest {
         matchId: String,
         roomPlayers:
             List<com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto>,
+        advanceSyntheticDecisionClock: () -> Unit,
     ) {
         repeat(512) { step ->
             val accumulator = requireNotNull(
@@ -258,6 +298,7 @@ class SyntheticServerControlledTurnIntegrationTest {
                         player.participantType ==
                             OnlineParticipantTypeDto.SYNTHETIC
                     ) {
+                        advanceSyntheticDecisionClock()
                         assertTrue(
                             store.advanceAuthoritativeTime(),
                         )

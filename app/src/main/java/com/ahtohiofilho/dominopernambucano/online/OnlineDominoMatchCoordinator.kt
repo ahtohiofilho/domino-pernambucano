@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.online
+package com.ahtohiofilho.dominopernambucano.online
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
 
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
@@ -70,6 +70,13 @@ class OnlineDominoMatchCoordinator(
         OnlineTraceLogger(),
     private val catchUpPolicy: OnlinePresentationCatchUpPolicy =
         OnlinePresentationCatchUpPolicy(),
+    /*
+     * Production clock interpolation uses elapsed monotonic time instead of
+     * summing UI heartbeat intervals. Tests can inject a deterministic source.
+     */
+    private val monotonicNowMillis: () -> Long = {
+        System.nanoTime() / 1_000_000L
+    },
     private val onMatchFinished: () -> Unit = {},
 ) : DominoMatchCoordinator, OnlineGameUiTraceReporter {
     private val coordinatorScope = CoroutineScope(
@@ -88,6 +95,24 @@ class OnlineDominoMatchCoordinator(
 
     private var stableRuntimeState = initialRuntimeState
     private var stableRevision = initialSnapshot.revision
+
+    /*
+     * Every visible online countdown is derived from the last promoted
+     * authoritative snapshot. The UI heartbeat only asks for a re-projection;
+     * it is not itself the source of elapsed time.
+     */
+    private var stableClockAnchor =
+        OnlineAuthoritativeClockAnchor(
+            runtimeState = initialRuntimeState,
+            receivedAtMonotonicMillis = monotonicNowMillis(),
+        )
+
+    /*
+     * The fake repository has no autonomous server ticker, so its historical
+     * client-driven progression keeps a deterministic elapsed accumulator.
+     * Remote/production repositories never use this value.
+     */
+    private var fakeClientDrivenElapsedSinceAnchorMillis = 0L
 
     /*
      * Cada revisão remota precisa atravessar a camada de apresentação na mesma
@@ -261,6 +286,7 @@ class OnlineDominoMatchCoordinator(
                     automaticPlayerIndexes = snapshot.automaticPlayerIndexes.toSet(),
                     rankedMetricAccumulator = snapshot.rankedMetricAccumulator,
                     hasRevisionGap = hasRevisionGap,
+                    receivedAtMonotonicMillis = monotonicNowMillis(),
                 )
             }
         }
@@ -404,34 +430,35 @@ class OnlineDominoMatchCoordinator(
             return
         }
 
-        val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
-
-        if (
-            isPlayerClockExpired(
-                clocks = runtimeState.playerClockMillis,
-                playerIndex = currentPlayerIndex,
-            )
-        ) {
-            submitClientDrivenTimeoutProgression()
-            return
+        if (supportsClientDrivenFakeProgression()) {
+            fakeClientDrivenElapsedSinceAnchorMillis +=
+                command.elapsedMillis
         }
 
-        val updatedClocks = decrementPlayerClockMillis(
-            clocks = runtimeState.playerClockMillis,
-            playerIndex = currentPlayerIndex,
-            elapsedMillis = command.elapsedMillis,
-        )
+        /*
+         * Do not subtract command.elapsedMillis from the already displayed
+         * value. A delayed Compose coroutine would make fixed 250 ms ticks
+         * accumulate less elapsed time than the authoritative server clock.
+         * Recompute from the immutable authoritative snapshot baseline instead.
+         */
+        val projectedRuntimeState =
+            currentAuthoritativeDisplayRuntimeState()
 
-        mutableState.value = runtimeState.copy(
-            playerClockMillis = updatedClocks,
-        )
+        mutableState.value = projectedRuntimeState
+
+        val currentPlayerIndex =
+            projectedRuntimeState.gameState.currentPlayerIndex
 
         if (
             isPlayerClockExpired(
-                clocks = updatedClocks,
+                clocks = projectedRuntimeState.playerClockMillis,
                 playerIndex = currentPlayerIndex,
             )
         ) {
+            /*
+             * Remote production progression remains server-authoritative.
+             * This method submits only for OnlineClientDrivenFakeProgression.
+             */
             submitClientDrivenTimeoutProgression()
         }
     }
@@ -442,6 +469,7 @@ class OnlineDominoMatchCoordinator(
         automaticPlayerIndexes: Set<Int>,
         rankedMetricAccumulator: RankedMatchMetricAccumulator?,
         hasRevisionGap: Boolean,
+        receivedAtMonotonicMillis: Long,
     ) {
         clearInFlightActionIfConfirmed(
             revision = revision,
@@ -453,6 +481,7 @@ class OnlineDominoMatchCoordinator(
                 revision = revision,
                 automaticPlayerIndexes = automaticPlayerIndexes,
                 rankedMetricAccumulator = rankedMetricAccumulator,
+                receivedAtMonotonicMillis = receivedAtMonotonicMillis,
                 reason = "missing_revision_history",
             )
             return
@@ -464,6 +493,7 @@ class OnlineDominoMatchCoordinator(
                 revision = revision,
                 automaticPlayerIndexes = automaticPlayerIndexes,
                 rankedMetricAccumulator = rankedMetricAccumulator,
+                receivedAtMonotonicMillis = receivedAtMonotonicMillis,
             ),
         )
 
@@ -495,6 +525,7 @@ class OnlineDominoMatchCoordinator(
         revision: Long,
         automaticPlayerIndexes: Set<Int>,
         rankedMetricAccumulator: RankedMatchMetricAccumulator?,
+        receivedAtMonotonicMillis: Long,
         reason: String,
     ) {
         val discardedQueueDepth = pendingRemoteRuntimeStates.size
@@ -527,6 +558,7 @@ class OnlineDominoMatchCoordinator(
                 revision = revision,
                 automaticPlayerIndexes = automaticPlayerIndexes,
                 rankedMetricAccumulator = rankedMetricAccumulator,
+                receivedAtMonotonicMillis = receivedAtMonotonicMillis,
             ),
         )
     }
@@ -537,7 +569,7 @@ class OnlineDominoMatchCoordinator(
             return
         }
 
-        mutableState.value = stableRuntimeState.toStableDisplayRuntimeState()
+        mutableState.value = currentAuthoritativeDisplayRuntimeState()
 
         advancePresentationQueue()
         submitClientDrivenMandatoryPassProgression()
@@ -795,8 +827,16 @@ class OnlineDominoMatchCoordinator(
         stableRevision = queuedRuntimeState.revision
         automaticPlayerIndexes = queuedRuntimeState.automaticPlayerIndexes
         rankedMetricAccumulator = queuedRuntimeState.rankedMetricAccumulator
-        mutableState.value = queuedRuntimeState.runtimeState
-            .toStableDisplayRuntimeState()
+
+        stableClockAnchor =
+            OnlineAuthoritativeClockAnchor(
+                runtimeState = queuedRuntimeState.runtimeState,
+                receivedAtMonotonicMillis =
+                    queuedRuntimeState.receivedAtMonotonicMillis,
+            )
+        fakeClientDrivenElapsedSinceAnchorMillis = 0L
+
+        mutableState.value = currentAuthoritativeDisplayRuntimeState()
 
         if (
             !matchFinishedCallbackDispatched &&
@@ -828,6 +868,47 @@ class OnlineDominoMatchCoordinator(
         return phase == DominoMatchPhase.RoundIntro ||
                 phase is DominoMatchPhase.PresentingMove ||
                 phase is DominoMatchPhase.PresentingPass
+    }
+
+    private fun currentAuthoritativeDisplayRuntimeState():
+        DominoMatchRuntimeState {
+        val stableDisplayState =
+            stableRuntimeState.toStableDisplayRuntimeState()
+
+        if (!stableDisplayState.clockPolicy.enabled) {
+            return stableDisplayState
+        }
+
+        if (
+            stableDisplayState.phase !=
+            DominoMatchPhase.WaitingForLocalMove
+        ) {
+            return stableDisplayState
+        }
+
+        val monotonicElapsedMillis = (
+            monotonicNowMillis() -
+                stableClockAnchor.receivedAtMonotonicMillis
+        ).coerceAtLeast(0L)
+
+        val elapsedSinceAnchorMillis =
+            if (supportsClientDrivenFakeProgression()) {
+                maxOf(
+                    monotonicElapsedMillis,
+                    fakeClientDrivenElapsedSinceAnchorMillis,
+                )
+            } else {
+                monotonicElapsedMillis
+            }
+
+        return projectOnlineAuthoritativeClock(
+            runtimeState = stableDisplayState.copy(
+                playerClockMillis =
+                    stableClockAnchor.runtimeState.playerClockMillis,
+            ),
+            elapsedSinceSnapshotMillis =
+                elapsedSinceAnchorMillis,
+        )
     }
 
     private fun submitClientDrivenApplicationTurnProgression() {
@@ -1443,12 +1524,48 @@ class OnlineDominoMatchCoordinator(
     }
 }
 
+private data class OnlineAuthoritativeClockAnchor(
+    val runtimeState: DominoMatchRuntimeState,
+    val receivedAtMonotonicMillis: Long,
+)
+
 private data class QueuedOnlineRuntimeState(
     val runtimeState: DominoMatchRuntimeState,
     val revision: Long,
     val automaticPlayerIndexes: Set<Int>,
     val rankedMetricAccumulator: RankedMatchMetricAccumulator?,
+    val receivedAtMonotonicMillis: Long,
 )
+
+internal fun projectOnlineAuthoritativeClock(
+    runtimeState: DominoMatchRuntimeState,
+    elapsedSinceSnapshotMillis: Long,
+): DominoMatchRuntimeState {
+    if (!runtimeState.clockPolicy.enabled) {
+        return runtimeState
+    }
+
+    if (
+        runtimeState.phase !=
+        DominoMatchPhase.WaitingForLocalMove
+    ) {
+        return runtimeState
+    }
+
+    val currentPlayerIndex =
+        runtimeState.gameState.currentPlayerIndex
+
+    return runtimeState.copy(
+        playerClockMillis =
+            decrementPlayerClockMillis(
+                clocks = runtimeState.playerClockMillis,
+                playerIndex = currentPlayerIndex,
+                elapsedMillis =
+                    elapsedSinceSnapshotMillis
+                        .coerceAtLeast(0L),
+            ),
+    )
+}
 
 private data class OnlinePresentationBridge(
     val presentationRuntimeState: DominoMatchRuntimeState,

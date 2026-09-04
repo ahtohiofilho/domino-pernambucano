@@ -308,7 +308,7 @@ class InMemoryOnlineServerStoreTest {
             updatedSnapshot.playerClockMillis[currentPlayerIndex],
         )
         assertEquals(
-            30_000L,
+            10_000L,
             updatedSnapshot.playerClockReserveMillis[currentPlayerIndex],
         )
     }

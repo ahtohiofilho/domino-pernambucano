@@ -295,9 +295,76 @@ class FakeOnlineClientDrivenProgressionTest {
                     )
             }
 
+            /*
+             * This test verifies reserve reload after an APPLICATION actually
+             * plays a legal move. The shuffled initial deal can legitimately
+             * leave an APPLICATION without a move, in which case PASS semantics
+             * preserve the clock/reserve instead of reloading it.
+             *
+             * Advance zero-time turns until the current APPLICATION has a
+             * playable move, keeping this test deterministic without changing
+             * production behavior.
+             */
+            var preparationTurns = 0
+            while (
+                currentParticipant.participantType !=
+                    OnlineParticipantTypeDto.APPLICATION ||
+                findFirstPlayableMoveOrNull(
+                    gameState = runtimeState.gameState,
+                ) == null
+            ) {
+                preparationTurns += 1
+
+                assertTrue(
+                    "Não foi possível preparar um turno APPLICATION jogável.",
+                    preparationTurns <= 8,
+                )
+
+                val preparationAction =
+                    createCurrentTurnAction(
+                        snapshot = snapshot,
+                        gameState = runtimeState.gameState,
+                        playerId = currentParticipant.playerId,
+                        actionId =
+                            "prepare-playable-application-$preparationTurns",
+                    )
+
+                val preparationResult =
+                    repository.submitAction(preparationAction)
+
+                assertTrue(
+                    "Falha ao preparar APPLICATION jogável: ${preparationResult.reason}",
+                    preparationResult.accepted,
+                )
+
+                snapshot = requireNotNull(
+                    repository.matchSnapshot.value,
+                )
+
+                runtimeState = snapshot.toRuntimeState(
+                    localPlayerIndex = 0,
+                )
+
+                room = requireNotNull(
+                    repository.roomSnapshot.value,
+                )
+
+                currentParticipant =
+                    findCurrentParticipant(
+                        room = room,
+                        gameState = runtimeState.gameState,
+                    )
+            }
+
             assertEquals(
                 OnlineParticipantTypeDto.APPLICATION,
                 currentParticipant.participantType,
+            )
+
+            assertTrue(
+                findFirstPlayableMoveOrNull(
+                    gameState = runtimeState.gameState,
+                ) != null,
             )
 
             val applicationPlayerIndex =
@@ -436,10 +503,10 @@ class FakeOnlineClientDrivenProgressionTest {
                 20_000L,
             ),
             playerClockReserveMillis = listOf(
-                40_000L,
-                35_000L,
-                40_000L,
-                40_000L,
+                20_000L,
+                15_000L,
+                20_000L,
+                20_000L,
             ),
         )
 

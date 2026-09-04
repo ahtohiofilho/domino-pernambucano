@@ -118,9 +118,9 @@ data class OnlineServerStoreResourcePolicy(
     val publicRankedQueueEntryRetentionMillis: Long = 2L * 60L * 1_000L,
     val publicRankedFormationLookaheadSize: Int = 8,
     val publicRankedSyntheticFallbackInitialDelayMillis: Long =
-        15L * 1_000L,
+        20L * 1_000L,
     val publicRankedSyntheticFallbackAdditionalSeatDelayMillis: Long =
-        5L * 1_000L,
+        20L * 1_000L,
     val publicRankedExactCohortCooldownMillis: Long =
         30L * 60L * 1_000L,
     val publicRankedFormationHistoryRetentionMillis: Long =

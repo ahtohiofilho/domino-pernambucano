@@ -99,7 +99,17 @@ class SyntheticParticipantIdentityTest {
         }
 
         assertTrue(store.snapshotPersistentState().rooms.isEmpty())
+
         now = 21_000L
+        assertTrue(store.advanceAuthoritativeTime())
+        assertEquals(
+            PublicRankedQueueStatus.QUEUED,
+            store.getPublicRankedQueueStatus(
+                identity = accounts.getValue(1).toRequestIdentity(),
+            ).status,
+        )
+
+        now = 41_000L
         assertTrue(store.advanceAuthoritativeTime())
         val matched = store.getPublicRankedQueueStatus(
             identity = accounts.getValue(1).toRequestIdentity(),
@@ -176,7 +186,17 @@ class SyntheticParticipantIdentityTest {
             )
         }
         assertTrue(firstStore.snapshotPersistentState().rooms.isEmpty())
+
         now = 21_000L
+        assertTrue(firstStore.advanceAuthoritativeTime())
+        assertEquals(
+            PublicRankedQueueStatus.QUEUED,
+            firstStore.getPublicRankedQueueStatus(
+                identity = accounts.getValue(1).toRequestIdentity(),
+            ).status,
+        )
+
+        now = 41_000L
         assertTrue(firstStore.advanceAuthoritativeTime())
         val matched = firstStore.getPublicRankedQueueStatus(
             identity = accounts.getValue(1).toRequestIdentity(),

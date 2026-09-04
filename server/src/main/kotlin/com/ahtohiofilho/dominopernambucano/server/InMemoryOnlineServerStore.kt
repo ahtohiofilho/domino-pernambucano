@@ -24,6 +24,7 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
 import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.match.findRandomPlayableMove
@@ -137,6 +138,18 @@ class InMemoryOnlineServerStore(
         var lastSeenAtEpochMillis: Long,
     )
 
+    /*
+     * One front-lobby fallback stage is enough because public ranked formation
+     * is FIFO/fairness anchored. SYNTHETIC accounts may wait globally, but only
+     * ids admitted here are visible to humans and eligible for the next table.
+     */
+    private data class PublicRankedSyntheticFallbackStage(
+        val anchorHumanAccountId: String,
+        val admittedSyntheticAccountIds: MutableList<String> =
+            mutableListOf(),
+        var lastAdmissionWindowStartedAtEpochMillis: Long,
+    )
+
     private val lock = Any()
 
     private val roomsById = mutableMapOf<String, OnlineRoomSnapshotDto>()
@@ -155,6 +168,8 @@ class InMemoryOnlineServerStore(
 
     private val publicRankedQueueByAccountId =
         linkedMapOf<String, PublicRankedQueueEntry>()
+    private var publicRankedSyntheticFallbackStage:
+        PublicRankedSyntheticFallbackStage? = null
     private val publicRankedFormationHistory =
         mutableListOf<PublicRankedFormationHistoryEntry>()
 
@@ -897,6 +912,14 @@ class InMemoryOnlineServerStore(
             }
 
             val existingEntry = publicRankedQueueByAccountId[accountId]
+            val participantType = requireNotNull(
+                accountsByPlayerId[rankedIdentity.playerId],
+            ).participantType
+            val isNewHumanArrival =
+                existingEntry == null &&
+                    participantType ==
+                    OnlineParticipantTypeDto.HUMAN
+
             if (existingEntry != null) {
                 existingEntry.playerName = request.playerName
                 existingEntry.lastSeenAtEpochMillis = now
@@ -919,6 +942,12 @@ class InMemoryOnlineServerStore(
                         enqueuedAtEpochMillis = now,
                         lastSeenAtEpochMillis = now,
                     )
+            }
+
+            if (isNewHumanArrival) {
+                notePublicRankedHumanArrival(
+                    nowEpochMillis = now,
+                )
             }
 
             formPublicRankedMatchesFromQueue(
@@ -2069,6 +2098,14 @@ class InMemoryOnlineServerStore(
                 nowEpochMillis = now,
             )
 
+            if (
+                advancePublicRankedSyntheticFallbackStage(
+                    nowEpochMillis = now,
+                )
+            ) {
+                stateChanged = true
+            }
+
             val roomCountBeforeRankedFormation = roomsById.size
             formPublicRankedMatchesFromQueue(
                 nowEpochMillis = now,
@@ -2964,6 +3001,150 @@ class InMemoryOnlineServerStore(
         )
     }
 
+    private fun queuedPublicRankedAccountIds(
+        participantType: OnlineParticipantTypeDto,
+    ): List<String> {
+        return publicRankedQueueByAccountId.values
+            .filter { entry ->
+                accountsByPlayerId[entry.playerId]
+                    ?.participantType == participantType
+            }
+            .map { entry -> entry.accountId }
+    }
+
+    private fun ensurePublicRankedSyntheticFallbackStage(
+        nowEpochMillis: Long,
+    ): PublicRankedSyntheticFallbackStage? {
+        val humanAccountIds = queuedPublicRankedAccountIds(
+            participantType = OnlineParticipantTypeDto.HUMAN,
+        )
+
+        if (humanAccountIds.isEmpty()) {
+            publicRankedSyntheticFallbackStage = null
+            return null
+        }
+
+        val existing = publicRankedSyntheticFallbackStage
+        if (
+            existing != null &&
+            existing.anchorHumanAccountId in humanAccountIds
+        ) {
+            val queuedSyntheticAccountIds =
+                queuedPublicRankedAccountIds(
+                    participantType =
+                        OnlineParticipantTypeDto.SYNTHETIC,
+                ).toSet()
+
+            existing.admittedSyntheticAccountIds.retainAll(
+                queuedSyntheticAccountIds,
+            )
+            return existing
+        }
+
+        val anchorAccountId = humanAccountIds.first()
+        val anchorEnqueuedAtEpochMillis =
+            publicRankedQueueByAccountId[anchorAccountId]
+                ?.enqueuedAtEpochMillis
+                ?: nowEpochMillis
+
+        return PublicRankedSyntheticFallbackStage(
+            anchorHumanAccountId = anchorAccountId,
+            lastAdmissionWindowStartedAtEpochMillis =
+                anchorEnqueuedAtEpochMillis,
+        ).also { stage ->
+            publicRankedSyntheticFallbackStage = stage
+        }
+    }
+
+    private fun notePublicRankedHumanArrival(
+        nowEpochMillis: Long,
+    ) {
+        val stage = ensurePublicRankedSyntheticFallbackStage(
+            nowEpochMillis = nowEpochMillis,
+        ) ?: return
+
+        /*
+         * An admitted synthetic remains in the neutral lobby, but every real
+         * human arrival buys a fresh full window for another human to arrive.
+         */
+        stage.lastAdmissionWindowStartedAtEpochMillis =
+            nowEpochMillis
+    }
+
+    private fun advancePublicRankedSyntheticFallbackStage(
+        nowEpochMillis: Long,
+    ): Boolean {
+        val stage = ensurePublicRankedSyntheticFallbackStage(
+            nowEpochMillis = nowEpochMillis,
+        ) ?: return false
+
+        val humanAccountIds = queuedPublicRankedAccountIds(
+            participantType = OnlineParticipantTypeDto.HUMAN,
+        )
+
+        if (
+            humanAccountIds.size >= 4 ||
+            humanAccountIds.size +
+                stage.admittedSyntheticAccountIds.size >= 4
+        ) {
+            return false
+        }
+
+        val elapsedMillis = (
+            nowEpochMillis -
+                stage.lastAdmissionWindowStartedAtEpochMillis
+        ).coerceAtLeast(0L)
+
+        if (
+            elapsedMillis <
+            resourcePolicy.publicRankedSyntheticFallbackInitialDelayMillis
+        ) {
+            return false
+        }
+
+        val admitted = stage.admittedSyntheticAccountIds.toSet()
+        val nextSyntheticAccountId =
+            queuedPublicRankedAccountIds(
+                participantType = OnlineParticipantTypeDto.SYNTHETIC,
+            ).firstOrNull { accountId ->
+                accountId !in admitted
+            } ?: return false
+
+        stage.admittedSyntheticAccountIds +=
+            nextSyntheticAccountId
+        stage.lastAdmissionWindowStartedAtEpochMillis =
+            nowEpochMillis
+
+        return true
+    }
+
+    private fun visiblePublicRankedAccountIdsForHuman(
+        nowEpochMillis: Long,
+    ): List<String> {
+        val stage = ensurePublicRankedSyntheticFallbackStage(
+            nowEpochMillis = nowEpochMillis,
+        )
+        val humanAccountIds = queuedPublicRankedAccountIds(
+            participantType = OnlineParticipantTypeDto.HUMAN,
+        )
+
+        if (stage == null) {
+            return humanAccountIds.take(4)
+        }
+
+        val admittedSyntheticAccountIds =
+            stage.admittedSyntheticAccountIds.filter { accountId ->
+                accountId in publicRankedQueueByAccountId
+            }
+
+        val humanCapacity =
+            (4 - admittedSyntheticAccountIds.size)
+                .coerceAtLeast(1)
+
+        return humanAccountIds.take(humanCapacity) +
+            admittedSyntheticAccountIds
+    }
+
     private fun queuedPublicRankedResult(
         accountId: String,
     ): PublicRankedQueueResult {
@@ -2974,13 +3155,9 @@ class InMemoryOnlineServerStore(
         val visibleAccountIds = if (
             participantType == OnlineParticipantTypeDto.HUMAN
         ) {
-            publicRankedQueueByAccountId.values
-                .filter { entry ->
-                    accountsByPlayerId[entry.playerId]
-                        ?.participantType ==
-                        OnlineParticipantTypeDto.HUMAN
-                }
-                .map { entry -> entry.accountId }
+            visiblePublicRankedAccountIdsForHuman(
+                nowEpochMillis = nowEpochMillis(),
+            )
         } else {
             publicRankedQueueByAccountId.keys.toList()
         }
@@ -3077,9 +3254,32 @@ class InMemoryOnlineServerStore(
                 continue
             }
 
+            val stage = ensurePublicRankedSyntheticFallbackStage(
+                nowEpochMillis = nowEpochMillis,
+            )
+            val admittedSyntheticAccountIds =
+                stage?.admittedSyntheticAccountIds
+                    ?.toSet()
+                    .orEmpty()
+
+            val formationEntries =
+                publicRankedQueueByAccountId.values.filter { entry ->
+                    when (
+                        requireNotNull(
+                            accountsByPlayerId[entry.playerId],
+                        ).participantType
+                    ) {
+                        OnlineParticipantTypeDto.HUMAN -> true
+                        OnlineParticipantTypeDto.SYNTHETIC ->
+                            entry.accountId in
+                                admittedSyntheticAccountIds
+                        OnlineParticipantTypeDto.APPLICATION -> false
+                    }
+                }
+
             val plan = planPublicRankedMatchFormation(
                 queuedCandidates =
-                    publicRankedQueueByAccountId.values.map { entry ->
+                    formationEntries.map { entry ->
                         PublicRankedFormationCandidate(
                             playerId = entry.playerId,
                             accountId = entry.accountId,
@@ -3690,6 +3890,7 @@ class InMemoryOnlineServerStore(
             advanceServerControlledTurnIfNeeded(
                 matchRecord = matchRecord,
                 runtimeState = clockReduction.runtimeState,
+                nowEpochMillis = nowEpochMillis,
             )
 
         if (runtimeStateAfterBotTurn == clockReduction.runtimeState) {
@@ -3755,6 +3956,7 @@ class InMemoryOnlineServerStore(
     private fun advanceServerControlledTurnIfNeeded(
         matchRecord: MatchRecord,
         runtimeState: DominoMatchRuntimeState,
+        nowEpochMillis: Long,
     ): DominoMatchRuntimeState {
         val serverControlledSeatIndexes =
             resolveServerControlledSeatIndexes(
@@ -3779,6 +3981,36 @@ class InMemoryOnlineServerStore(
         val currentPlayerIndex = gameState.currentPlayerIndex
 
         if (currentPlayerIndex !in serverControlledSeatIndexes) {
+            return runtimeState
+        }
+
+        val currentParticipantType =
+            roomsById[matchRecord.roomId]
+                ?.players
+                ?.firstOrNull { player ->
+                    player.seatIndex == currentPlayerIndex
+                }
+                ?.participantType
+
+        /*
+         * SYNTHETIC participants keep the same natural decision cadence used by
+         * local bots, but the server remains the only authority that executes
+         * their move. The delay is measured from the authoritative snapshot
+         * that made this seat current. A legacy snapshot without server time is
+         * allowed to progress immediately instead of deadlocking.
+         */
+        val turnStartedAtEpochMillis =
+            matchRecord.snapshot.serverEpochMillis
+        val syntheticDecisionIsStillCoolingDown =
+            currentParticipantType ==
+                OnlineParticipantTypeDto.SYNTHETIC &&
+                turnStartedAtEpochMillis != null &&
+                (
+                    nowEpochMillis - turnStartedAtEpochMillis
+                ).coerceAtLeast(0L) <
+                DominoMatchTiming.BotDecisionDelayMillis
+
+        if (syntheticDecisionIsStillCoolingDown) {
             return runtimeState
         }
 
