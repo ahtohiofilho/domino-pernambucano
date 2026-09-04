@@ -633,6 +633,21 @@ try {
             )
     }
 
+    $startResult = Invoke-JsonRequest `
+        -Method Post `
+        -Uri "$baseUri/rooms/private/start" `
+        -AccessToken ([string]$sessions[0].accessToken) `
+        -Body @{
+            roomId = $roomId
+            localPlayerId = [string]$sessions[0].playerId
+        }
+    Assert-Condition `
+        -Condition ([bool]$startResult.accepted) `
+        -Message (
+            "The server rejected private room start: " +
+            "$($startResult.reason)"
+        )
+
     $roomBefore = Invoke-JsonRequest `
         -Method Get `
         -Uri "$baseUri/rooms/$roomId" `
