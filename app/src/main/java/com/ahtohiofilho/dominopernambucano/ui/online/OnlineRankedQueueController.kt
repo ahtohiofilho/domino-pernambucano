@@ -29,6 +29,7 @@ sealed interface OnlineRankedQueueUiState {
 
     data class Waiting(
         val queuePosition: Int,
+        val participantCodes: List<String> = emptyList(),
     ) : OnlineRankedQueueUiState
 
     data object Cancelling : OnlineRankedQueueUiState
@@ -149,6 +150,8 @@ class OnlineRankedQueueController(
                         mutableState.value =
                             OnlineRankedQueueUiState.Waiting(
                                 queuePosition = state.queuePosition,
+                                participantCodes =
+                                    state.participantCodes,
                             )
                         true
                     }

@@ -32,6 +32,7 @@ enum class OnlineRankedQueueFailureKind {
 sealed interface OnlineRankedQueueState {
     data class Waiting(
         val queuePosition: Int,
+        val participantCodes: List<String> = emptyList(),
     ) : OnlineRankedQueueState
 
     data class Matched(
@@ -239,8 +240,20 @@ private fun PublicRankedQueueHttpResponseDto.toClientState():
             require(matchId == null)
             require(localSeatIndex == null)
 
+            require(participantCodes.size <= 4)
+            val normalizedParticipantCodes = participantCodes
+                .map { code -> code.trim() }
+                .filter { code -> code.length == 3 }
+                .distinct()
+                .sorted()
+            require(
+                normalizedParticipantCodes.size ==
+                    participantCodes.size
+            )
+
             OnlineRankedQueueState.Waiting(
                 queuePosition = requiredPosition,
+                participantCodes = normalizedParticipantCodes,
             )
         }
 

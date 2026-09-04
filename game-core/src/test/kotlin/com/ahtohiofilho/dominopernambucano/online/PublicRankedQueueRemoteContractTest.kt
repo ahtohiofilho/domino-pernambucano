@@ -44,6 +44,20 @@ class PublicRankedQueueRemoteContractTest {
     }
 
     @Test
+    fun waiting_response_can_add_neutral_lobby_codes() {
+        assertEquals(
+            "{\"status\":\"WAITING\",\"queuePosition\":2,\"participantCodes\":[\"AAA\",\"ZZZ\"],\"matchId\":null,\"localSeatIndex\":null}",
+            json.encodeToString(
+                PublicRankedQueueHttpResponseDto(
+                    status = PublicRankedQueueHttpStatus.WAITING,
+                    queuePosition = 2,
+                    participantCodes = listOf("AAA", "ZZZ"),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun matched_response_preserves_homologated_json() {
         assertEquals(
             "{\"status\":\"MATCHED\",\"queuePosition\":null,\"matchId\":\"match-1\",\"localSeatIndex\":3}",

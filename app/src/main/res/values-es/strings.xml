@@ -363,4 +363,6 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="post_match_action_back_summary">Volver al resumen</string>
     <string name="post_match_team_balance">SALDO</string>
     <string name="post_match_automatic_rounds">RONDAS AUTO</string>    <string name="post_match_mvp">MVP</string>
+    <string name="ranked_queue_waiting_players">Esperando jugadores</string>
+    <string name="ranked_queue_seats_assigned_at_match">Las posiciones se sortearán cuando se forme la mesa.</string>
 </resources>

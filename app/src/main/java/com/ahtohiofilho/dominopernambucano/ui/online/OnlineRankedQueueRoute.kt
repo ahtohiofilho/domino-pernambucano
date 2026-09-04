@@ -146,8 +146,21 @@ private fun OnlineRankedQueueScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (uiState.showsProgress()) {
+                val participantCodes = when (uiState) {
+                    is OnlineRankedQueueUiState.Waiting ->
+                        uiState.participantCodes
+
+                    else -> emptyList()
+                }.ifEmpty {
+                    listOf(
+                        resolveDominoVisiblePlayerCode(
+                            name = playerName,
+                        ),
+                    )
+                }
+
                 RankedMatchmakingCluster(
-                    localPlayerName = playerName,
+                    participantCodes = participantCodes,
                 )
             }
 
@@ -242,42 +255,66 @@ private fun OnlineRankedQueueScreen(
 
 @Composable
 private fun RankedMatchmakingCluster(
-    localPlayerName: String,
+    participantCodes: List<String>,
 ) {
-    val localCode = resolveDominoVisiblePlayerCode(
-        name = localPlayerName,
-    )
+    /*
+     * Presentation only. Codes are sorted to avoid exposing queue order.
+     * There are no four fixed visual slots: seat/team assignment happens
+     * only after authoritative match formation.
+     */
+    val visibleCodes = participantCodes
+        .asSequence()
+        .map { code -> code.trim() }
+        .filter { code -> code.length == 3 }
+        .distinct()
+        .sorted()
+        .take(4)
+        .toList()
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        horizontalArrangement =
+            Arrangement.spacedBy(
+                space = 12.dp,
+                alignment = Alignment.CenterHorizontally,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            DominoPlayerIdentityDisc(
-                name = localPlayerName,
-                participantType = DominoParticipantType.HUMAN,
-                isCurrent = false,
-                isWinner = false,
-                identitySize = 44.dp,
-            )
-
-            Text(
-                text = localCode,
-                color = DominoSemanticColors.primaryTextOnDark,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
+        visibleCodes.forEach { code ->
+            RankedQueuedPlayerSlot(
+                code = code,
             )
         }
 
-        repeat(3) {
+        if (visibleCodes.size < 4) {
             RankedSearchingPlayerSlot()
         }
+    }
+}
+
+@Composable
+private fun RankedQueuedPlayerSlot(code: String,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        DominoPlayerIdentityDisc(
+            name = code,
+            participantType = DominoParticipantType.HUMAN,
+            isCurrent = false,
+            isWinner = false,
+            identitySize = 44.dp,
+        )
+
+        Text(
+            text = code,
+            color = DominoSemanticColors.primaryTextOnDark,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+        )
     }
 }
 
@@ -336,7 +373,7 @@ private fun OnlineRankedQueueUiState.primaryMessage(): String {
             stringResource(R.string.online_queue_checking)
 
         is OnlineRankedQueueUiState.Waiting ->
-            stringResource(R.string.online_queue_position_format, queuePosition)
+            stringResource(R.string.ranked_queue_waiting_players)
 
         OnlineRankedQueueUiState.Cancelling ->
             stringResource(R.string.online_queue_cancelling)
@@ -359,7 +396,9 @@ private fun OnlineRankedQueueUiState.primaryMessage(): String {
 private fun OnlineRankedQueueUiState.secondaryMessage(): String {
     return when (this) {
         is OnlineRankedQueueUiState.Waiting ->
-            stringResource(R.string.online_queue_server_assignment)
+            stringResource(
+                R.string.ranked_queue_seats_assigned_at_match,
+            )
 
         OnlineRankedQueueUiState.OpeningMatch,
         is OnlineRankedQueueUiState.MatchReady ->

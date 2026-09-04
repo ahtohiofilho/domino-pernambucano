@@ -20,10 +20,15 @@ enum class PublicRankedQueueHttpStatus {
     NOT_QUEUED,
 }
 
+@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
 @Serializable
 data class PublicRankedQueueHttpResponseDto(
     val status: PublicRankedQueueHttpStatus,
     val queuePosition: Int? = null,
+    @kotlinx.serialization.EncodeDefault(
+        kotlinx.serialization.EncodeDefault.Mode.NEVER,
+    )
+    val participantCodes: List<String> = emptyList(),
     val matchId: String? = null,
     val localSeatIndex: Int? = null,
 )

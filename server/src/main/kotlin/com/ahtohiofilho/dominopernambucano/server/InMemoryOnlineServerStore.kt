@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCyclePeriod
@@ -2989,10 +2989,29 @@ class InMemoryOnlineServerStore(
             .takeIf { index -> index >= 0 }
             ?.plus(1)
 
+        /*
+         * Esta projeÃ§Ã£o Ã© deliberadamente neutra: a ordem visual do lobby
+         * nÃ£o representa fila, parceria nem assento. Os assentos continuam
+         * sendo decididos apenas por planPublicRankedMatchFormation().
+         */
+        val participantCodes = visibleAccountIds
+            .asSequence()
+            .mapNotNull { visibleAccountId ->
+                publicRankedQueueByAccountId[visibleAccountId]
+                    ?.playerName
+                    ?.trim()
+            }
+            .filter { code -> code.length == 3 }
+            .distinct()
+            .sorted()
+            .take(4)
+            .toList()
+
         return PublicRankedQueueResult(
             accepted = true,
             status = PublicRankedQueueStatus.QUEUED,
             queuePosition = position,
+            participantCodes = participantCodes,
         )
     }
 
@@ -3668,7 +3687,7 @@ class InMemoryOnlineServerStore(
         }
 
         val runtimeStateAfterBotTurn =
-            advanceDevelopmentBotTurnIfNeeded(
+            advanceServerControlledTurnIfNeeded(
                 matchRecord = matchRecord,
                 runtimeState = clockReduction.runtimeState,
             )
@@ -3688,7 +3707,7 @@ class InMemoryOnlineServerStore(
             automaticPlayerIndexes = matchRecord.automaticSeatIndexes,
             attributes = mapOf(
                 "playerIndex" to currentPlayerIndex.toString(),
-                "reason" to "development_bot",
+                "reason" to "server_controlled_participant",
                 "trigger" to trigger,
             ),
         )
@@ -3698,7 +3717,7 @@ class InMemoryOnlineServerStore(
             previousSnapshot = currentSnapshot,
             runtimeState = runtimeStateAfterBotTurn,
             serverEpochMillis = nowEpochMillis,
-            trigger = "$trigger:development_bot",
+            trigger = "$trigger:server_controlled_participant",
             traceSource = traceSource,
         )
 
@@ -3733,11 +3752,21 @@ class InMemoryOnlineServerStore(
         )
     }
 
-    private fun advanceDevelopmentBotTurnIfNeeded(
+    private fun advanceServerControlledTurnIfNeeded(
         matchRecord: MatchRecord,
         runtimeState: DominoMatchRuntimeState,
     ): DominoMatchRuntimeState {
-        if (matchRecord.developmentBotSeatIndexes.isEmpty()) {
+        val serverControlledSeatIndexes =
+            resolveServerControlledSeatIndexes(
+                players =
+                    roomsById[matchRecord.roomId]
+                        ?.players
+                        .orEmpty(),
+                legacyApplicationSeatIndexes =
+                    matchRecord.developmentBotSeatIndexes,
+            )
+
+        if (serverControlledSeatIndexes.isEmpty()) {
             return runtimeState
         }
 
@@ -3749,7 +3778,7 @@ class InMemoryOnlineServerStore(
 
         val currentPlayerIndex = gameState.currentPlayerIndex
 
-        if (currentPlayerIndex !in matchRecord.developmentBotSeatIndexes) {
+        if (currentPlayerIndex !in serverControlledSeatIndexes) {
             return runtimeState
         }
 
@@ -3764,14 +3793,11 @@ class InMemoryOnlineServerStore(
             state = gameState,
         )
 
-        registerAutomaticPiecePlayIfNeeded(
-            previousState = gameState,
-            updatedState = updatedGameState,
-            seatIndex = currentPlayerIndex,
-            automaticRoundSeatIndexes =
-                matchRecord.automaticRoundSeatIndexes,
-        )
-
+        /*
+         * Server-controlled participants are bots by identity/control policy.
+         * Their normal bot moves must not be counted as "automatic rounds",
+         * which is a human timeout/control-loss metric used by ranking/MVP.
+         */
         return runtimeState.copy(
             gameState = updatedGameState,
             phase = determineOnlineNextPhase(

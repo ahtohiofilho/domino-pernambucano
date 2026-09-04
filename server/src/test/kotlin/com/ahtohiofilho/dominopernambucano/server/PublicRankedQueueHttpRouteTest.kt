@@ -162,6 +162,7 @@ class PublicRankedQueueHttpRouteTest {
                 first.status,
             )
             assertEquals(1, first.queuePosition)
+            assertEquals(listOf("P01"), first.participantCodes)
             assertEquals(first, repeated)
             assertSafeResponseBody(firstBody)
             assertSafeResponseBody(repeatedBody)

@@ -13,6 +13,7 @@ data class PublicRankedQueueResult(
     val accepted: Boolean,
     val status: PublicRankedQueueStatus,
     val queuePosition: Int? = null,
+    val participantCodes: List<String> = emptyList(),
     val roomSnapshot: OnlineRoomSnapshotDto? = null,
     val localSeatIndex: Int? = null,
     val reason: String? = null,

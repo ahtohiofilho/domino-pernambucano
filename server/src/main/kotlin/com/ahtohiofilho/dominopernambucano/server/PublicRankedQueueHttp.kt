@@ -21,6 +21,7 @@ internal suspend fun ApplicationCall.respondPublicRankedQueueResult(
                 PublicRankedQueueHttpResponseDto(
                     status = PublicRankedQueueHttpStatus.WAITING,
                     queuePosition = result.queuePosition,
+                    participantCodes = result.participantCodes,
                 ),
             )
         }

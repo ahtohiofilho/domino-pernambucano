@@ -363,4 +363,6 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="post_match_action_back_summary">Back to summary</string>
     <string name="post_match_team_balance">BALANCE</string>
     <string name="post_match_automatic_rounds">AUTO ROUNDS</string>    <string name="post_match_mvp">MVP</string>
+    <string name="ranked_queue_waiting_players">Waiting for players</string>
+    <string name="ranked_queue_seats_assigned_at_match">Seats will be assigned when the table is formed.</string>
 </resources>
