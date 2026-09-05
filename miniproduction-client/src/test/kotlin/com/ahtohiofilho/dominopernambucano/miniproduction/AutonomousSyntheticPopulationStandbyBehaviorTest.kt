@@ -4,6 +4,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileResponseDt
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountSessionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAnonymousSessionDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineDominoPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueHttpResponseDto
@@ -107,6 +108,55 @@ class AutonomousSyntheticPopulationStandbyBehaviorTest {
         )
     }
 
+    @Test
+    fun resolves_missing_http_seat_from_unique_snapshot_table_code() {
+        val localCode = syntheticRoster.first().tableCode
+        val players = listOf(
+            OnlineDominoPlayerDto(
+                id = 0,
+                name = "H01",
+                hand = emptyList(),
+            ),
+            OnlineDominoPlayerDto(
+                id = 1,
+                name = localCode,
+                hand = emptyList(),
+            ),
+            OnlineDominoPlayerDto(
+                id = 2,
+                name = "S02",
+                hand = emptyList(),
+            ),
+            OnlineDominoPlayerDto(
+                id = 3,
+                name = "S03",
+                hand = emptyList(),
+            ),
+        )
+
+        assertEquals(
+            1,
+            resolveSyntheticLocalSeatIndex(
+                players = players,
+                tableCode = localCode,
+            ),
+        )
+
+        assertEquals(
+            null,
+            resolveSyntheticLocalSeatIndex(
+                players = players.mapIndexed { index, player ->
+                    if (index == 2) {
+                        player.copy(name = localCode)
+                    } else {
+                        player
+                    }
+                },
+                tableCode = localCode,
+            ),
+        )
+    }
+
     private fun population(
         running: AtomicBoolean,
         gateway: MiniProductionGateway,
@@ -176,7 +226,8 @@ class AutonomousSyntheticPopulationStandbyBehaviorTest {
                 PublicRankedQueueHttpResponseDto(
                     status = PublicRankedQueueHttpStatus.MATCHED,
                     matchId = "match-1",
-                    localSeatIndex = 0,
+                    // Mirrors the production HTTP privacy contract.
+                    localSeatIndex = null,
                 )
             } else {
                 PublicRankedQueueHttpResponseDto(

@@ -1,9 +1,33 @@
 package com.ahtohiofilho.dominopernambucano.miniproduction
 
+import com.ahtohiofilho.dominopernambucano.online.OnlineDominoPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchPhaseTypeDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueHttpStatus
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean
+
+/*
+ * The ranked HTTP boundary intentionally omits localSeatIndex. Synthetic
+ * participants recover their seat from the participant-projected snapshot
+ * using the same unique table code already used by SyntheticPlayerPolicy.
+ */
+internal fun resolveSyntheticLocalSeatIndex(
+    players: List<OnlineDominoPlayerDto>,
+    tableCode: String,
+): Int? {
+    val normalizedTableCode = tableCode.trim()
+    if (normalizedTableCode.isBlank()) {
+        return null
+    }
+
+    return players
+        .mapIndexedNotNull { seatIndex, player ->
+            seatIndex.takeIf {
+                player.name.trim() == normalizedTableCode
+            }
+        }
+        .singleOrNull()
+}
 
 internal class AutonomousSyntheticPopulation(
     private val config: MiniProductionClientConfig,
@@ -143,9 +167,13 @@ internal class AutonomousSyntheticPopulation(
                 player.matchId = requireNotNull(queue.matchId) {
                     "Resposta MATCHED sem matchId."
                 }
-                player.localSeatIndex = requireNotNull(queue.localSeatIndex) {
-                    "Resposta MATCHED sem localSeatIndex."
-                }
+                /*
+                 * Production ranked HTTP deliberately does not expose the
+                 * selected seat. Keep a seat only when a compatible gateway
+                 * already supplied one; otherwise resolve it from the first
+                 * participant-projected match snapshot.
+                 */
+                player.localSeatIndex = queue.localSeatIndex
                 player.standbyEnabled = false
             }
 
@@ -158,7 +186,6 @@ internal class AutonomousSyntheticPopulation(
         player: SyntheticPlayerRuntime,
     ) {
         val matchId = requireNotNull(player.matchId)
-        val localSeatIndex = requireNotNull(player.localSeatIndex)
         val snapshot = gateway.fetchMatchSnapshot(
             accessToken = player.credential.accessToken,
             matchId = matchId,
@@ -169,6 +196,17 @@ internal class AutonomousSyntheticPopulation(
             player.clearMatch()
             return
         }
+
+        val localSeatIndex = player.localSeatIndex
+            ?: resolveSyntheticLocalSeatIndex(
+                players = snapshot.gameState.players,
+                tableCode = player.profile.tableCode,
+            )
+            ?: throw IllegalArgumentException(
+                "Snapshot da partida não contém assento único para " +
+                    player.profile.tableCode,
+            )
+        player.localSeatIndex = localSeatIndex
 
         val action = policy.chooseAction(
             snapshot = snapshot,
