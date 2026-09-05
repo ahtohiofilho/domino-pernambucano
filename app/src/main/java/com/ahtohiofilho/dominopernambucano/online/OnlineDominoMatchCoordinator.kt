@@ -88,8 +88,8 @@ class OnlineDominoMatchCoordinator(
     )
 
     private val mutableState = MutableStateFlow(
-        initialRuntimeState.copy(
-            phase = DominoMatchPhase.RoundIntro,
+        initialOnlineMatchPresentationState(
+            runtimeState = initialRuntimeState,
         )
     )
 
@@ -1548,6 +1548,19 @@ private data class QueuedOnlineRuntimeState(
     val rankedMetricAccumulator: RankedMatchMetricAccumulator?,
     val receivedAtMonotonicMillis: Long,
 )
+
+internal fun initialOnlineMatchPresentationState(
+    runtimeState: DominoMatchRuntimeState,
+): DominoMatchRuntimeState {
+    return when (runtimeState.phase) {
+        DominoMatchPhase.RoundSummary,
+        DominoMatchPhase.MatchFinished -> runtimeState
+
+        else -> runtimeState.copy(
+            phase = DominoMatchPhase.RoundIntro,
+        )
+    }
+}
 
 internal fun projectOnlineAuthoritativeClock(
     runtimeState: DominoMatchRuntimeState,

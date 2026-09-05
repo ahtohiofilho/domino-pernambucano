@@ -213,6 +213,12 @@ fun MainMenuScreen(
                                 )
                             }
 
+                            OnlineRoomStatusDto.FINISHED -> {
+                                stringResource(
+                                    R.string.main_menu_participation_finished,
+                                )
+                            }
+
                             else -> {
                                 stringResource(
                                     R.string.main_menu_participation_confirmed,
@@ -363,6 +369,12 @@ fun MainMenuScreen(
                                 OnlineRoomStatusDto.IN_MATCH -> {
                                     stringResource(
                                         R.string.main_menu_resume_match,
+                                    )
+                                }
+
+                                OnlineRoomStatusDto.FINISHED -> {
+                                    stringResource(
+                                        R.string.main_menu_view_match_result,
                                     )
                                 }
 

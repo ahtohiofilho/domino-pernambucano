@@ -13,11 +13,13 @@
     <string name="main_menu_resuming">Resuming...</string>
     <string name="main_menu_resume_room">Resume online room</string>
     <string name="main_menu_resume_match">Resume online match</string>
+    <string name="main_menu_view_match_result">View match summary</string>
     <string name="main_menu_resume_participation">Resume online participation</string>
     <string name="main_menu_remove_rejected_participation">Remove rejected online participation</string>
     <string name="main_menu_previous_participation_unverifiable">The previous online participation cannot be verified on this device.</string>
     <string name="main_menu_participation_confirmed_waiting">Online participation confirmed. The room is still waiting for players.</string>
     <string name="main_menu_participation_confirmed">Online participation confirmed.</string>
+    <string name="main_menu_participation_finished">The online match has finished. The final summary is available.</string>
     <string name="main_menu_participation_unavailable">The previous online participation is no longer available.</string>
     <string name="main_menu_session_rejected">The participation could not be verified because the online session on this device was rejected.</string>
     <string name="main_menu_inspection_unavailable">Your participation could not be verified on this device.</string>

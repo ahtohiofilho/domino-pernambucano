@@ -13,11 +13,13 @@
     <string name="main_menu_resuming">Reanudando...</string>
     <string name="main_menu_resume_room">Reanudar sala en línea</string>
     <string name="main_menu_resume_match">Reanudar partida en línea</string>
+    <string name="main_menu_view_match_result">Ver resumen de la partida</string>
     <string name="main_menu_resume_participation">Reanudar participación en línea</string>
     <string name="main_menu_remove_rejected_participation">Eliminar participación en línea rechazada</string>
     <string name="main_menu_previous_participation_unverifiable">La participación en línea anterior no se puede verificar en este dispositivo.</string>
     <string name="main_menu_participation_confirmed_waiting">Participación en línea confirmada. La sala aún está esperando jugadores.</string>
     <string name="main_menu_participation_confirmed">Participación en línea confirmada.</string>
+    <string name="main_menu_participation_finished">La partida online ha terminado. El resumen final está disponible.</string>
     <string name="main_menu_participation_unavailable">La participación en línea anterior ya no está disponible.</string>
     <string name="main_menu_session_rejected">No se pudo verificar la participación: la sesión en línea de este dispositivo fue rechazada.</string>
     <string name="main_menu_inspection_unavailable">No se pudo verificar tu participación en este dispositivo.</string>

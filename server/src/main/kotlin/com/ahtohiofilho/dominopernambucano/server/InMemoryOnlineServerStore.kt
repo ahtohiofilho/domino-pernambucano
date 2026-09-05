@@ -2008,13 +2008,16 @@ class InMemoryOnlineServerStore(
 
             val result = when (action.type) {
                 /*
-                 * Mantido temporariamente no contrato para compatibilidade de
-                 * versões. Não conduz mais relógio, bot ou troca de turno.
+                 * Mantido no contrato como sinal explícito de presença.
+                 * Leituras continuam observacionais; porém uma retomada
+                 * autenticada pode usar esta ação para devolver ao jogador
+                 * humano o controle que o servidor assumiu após timeout.
                  */
                 OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT -> {
-                    OnlineActionResultDto(
-                        accepted = true,
-                        revision = matchRecord.snapshot.revision,
+                    submitPresenceRefresh(
+                        action = action,
+                        seatIndex = seatIndex,
+                        matchRecord = matchRecord,
                     )
                 }
 
@@ -3783,6 +3786,79 @@ class InMemoryOnlineServerStore(
             localPlayerIndex = 0,
         )
 
+        /*
+         * RoundSummary is a presentation window, not a client-owned pause.
+         * The server closes it after the same UI interval even when every
+         * client is absent. This prevents online matches from freezing for
+         * hours or days at a round boundary.
+         */
+        if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
+            return false
+        }
+
+        if (isRoundFinished(runtimeState.gameState)) {
+            val roundSummaryElapsedMillis =
+                currentSnapshot.serverEpochMillis?.let {
+                        summaryStartedAtEpochMillis ->
+                    (
+                        nowEpochMillis -
+                            summaryStartedAtEpochMillis
+                    ).coerceAtLeast(0L)
+                } ?: DominoMatchTiming.RoundSummaryAutoAdvanceMillis
+
+            if (
+                roundSummaryElapsedMillis <
+                DominoMatchTiming.RoundSummaryAutoAdvanceMillis
+            ) {
+                return false
+            }
+
+            val currentRoom =
+                roomsById[matchRecord.roomId]
+                    ?: return false
+            val authorityPlayerId =
+                currentRoom.players.firstOrNull()?.playerId
+                    ?: return false
+            val transitionAction = OnlinePlayerActionDto(
+                roomId = currentSnapshot.roomId,
+                matchId = currentSnapshot.matchId,
+                playerId = authorityPlayerId,
+                revision = currentSnapshot.revision,
+                type = OnlinePlayerActionTypeDto.START_NEXT_ROUND,
+                actionId =
+                    "server-round-summary-" +
+                        "${matchRecord.matchId}-" +
+                        currentSnapshot.revision,
+            )
+
+            return when (
+                val reduction = reduceOnlineStartNextRoundAction(
+                    action = transitionAction,
+                    currentRoom = currentRoom,
+                    currentSnapshot = currentSnapshot,
+                )
+            ) {
+                is OnlineMatchActionReduction.Accepted -> {
+                    matchRecord.automaticSeatIndexes.clear()
+                    matchRecord.automaticRoundSeatIndexes.clear()
+
+                    publishMatchSnapshot(
+                        matchRecord = matchRecord,
+                        previousSnapshot = currentSnapshot,
+                        runtimeState = reduction.runtimeState,
+                        serverEpochMillis = nowEpochMillis,
+                        action = transitionAction,
+                        trigger = "$trigger:round_summary_auto_advance",
+                        traceSource = traceSource,
+                    )
+
+                    true
+                }
+
+                is OnlineMatchActionReduction.Rejected -> false
+            }
+        }
+
         val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
 
         val mandatoryPassRuntimeState = resolveMandatoryPassIfNeeded(
@@ -4035,6 +4111,35 @@ class InMemoryOnlineServerStore(
             phase = determineOnlineNextPhase(
                 gameState = updatedGameState,
             ),
+        )
+    }
+
+    private fun submitPresenceRefresh(
+        action: OnlinePlayerActionDto,
+        seatIndex: Int,
+        matchRecord: MatchRecord,
+    ): OnlineActionResultDto {
+        val controlReclaimed =
+            matchRecord.automaticSeatIndexes.remove(seatIndex)
+
+        if (!controlReclaimed) {
+            return OnlineActionResultDto(
+                accepted = true,
+                revision = matchRecord.snapshot.revision,
+            )
+        }
+
+        val currentSnapshot = matchRecord.snapshot
+        val runtimeState = currentSnapshot.toRuntimeState(
+            localPlayerIndex = seatIndex,
+        )
+
+        return publishMatchSnapshot(
+            matchRecord = matchRecord,
+            previousSnapshot = currentSnapshot,
+            runtimeState = runtimeState,
+            action = action,
+            trigger = "request_snapshot:control_reclaimed",
         )
     }
 

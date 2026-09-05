@@ -1413,7 +1413,7 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
-    fun activate_pending_participation_match_resume_publishes_prepared_snapshots_without_fetching_again() =
+    fun activate_pending_participation_match_resume_reclaims_presence_and_refreshes_authoritative_snapshot() =
         runBlocking {
             val binding = createPendingParticipationBinding(
                 matchId = "match-1",
@@ -1428,7 +1428,15 @@ class RemoteOnlineRoomRepositoryTest {
             val match = createMatchSnapshot(
                 revision = 5L,
             )
-            val apiClient = FakeRemoteOnlineApiClient()
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionResult = OnlineActionResultDto(
+                    accepted = true,
+                    revision = match.revision,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
             val repository = createRepository(
                 apiClient = apiClient,
                 anonymousSessionRepository =
@@ -1462,8 +1470,30 @@ class RemoteOnlineRoomRepositoryTest {
                 apiClient.fetchRoomSnapshotRequests,
             )
             assertEquals(
-                emptyList<String>(),
+                listOf(match.matchId),
                 apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(
+                1,
+                apiClient.submitActionRequests.size,
+            )
+            val presenceAction =
+                apiClient.submitActionRequests.single()
+            assertEquals(
+                OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT,
+                presenceAction.type,
+            )
+            assertEquals(
+                binding.roomId,
+                presenceAction.roomId,
+            )
+            assertEquals(
+                match.matchId,
+                presenceAction.matchId,
+            )
+            assertEquals(
+                binding.playerId,
+                presenceAction.playerId,
             )
         }
 
@@ -1483,8 +1513,17 @@ class RemoteOnlineRoomRepositoryTest {
                 revision = 5L,
             )
             val traceBuffer = InMemoryOnlineTraceBuffer()
+            val apiClient = FakeRemoteOnlineApiClient(
+                submitActionResult = OnlineActionResultDto(
+                    accepted = true,
+                    revision = match.revision,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
             val repository = createRepository(
-                apiClient = FakeRemoteOnlineApiClient(),
+                apiClient = apiClient,
                 traceLogger = createTraceLogger(
                     traceBuffer = traceBuffer,
                 ),
@@ -3706,7 +3745,14 @@ class RemoteOnlineRoomRepositoryTest {
                 revision = 5L,
             )
             val apiClient = FakeRemoteOnlineApiClient(
+                submitActionResult = OnlineActionResultDto(
+                    accepted = true,
+                    revision = preservedMatch.revision,
+                ),
                 fetchRoomSnapshotFailure = createUnauthorizedClientRequestException(),
+                matchSnapshotsById = mutableMapOf(
+                    preservedMatch.matchId to preservedMatch,
+                ),
             )
             val repository = createRepository(
                 apiClient = apiClient,
@@ -3727,6 +3773,8 @@ class RemoteOnlineRoomRepositoryTest {
 
             apiClient.bearerAccessTokenUpdates.clear()
             apiClient.developmentPlayerIdUpdates.clear()
+            apiClient.fetchMatchSnapshotRequests.clear()
+            apiClient.submitActionRequests.clear()
 
             val result = repository.preparePendingParticipationMatchResume(
                 binding = binding,
@@ -4739,10 +4787,12 @@ class RemoteOnlineRoomRepositoryTest {
         }
 
     @Test
-    fun inspect_pending_participation_returns_not_recoverable_when_room_is_finished() =
+    fun inspect_pending_participation_returns_recoverable_when_room_is_finished() =
         runBlocking {
             val binding = createPendingParticipationBinding()
-            val room = createWaitingRoomSnapshot().copy(
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            ).copy(
                 status = OnlineRoomStatusDto.FINISHED,
             )
 
@@ -4768,9 +4818,8 @@ class RemoteOnlineRoomRepositoryTest {
 
             assertEquals(
                 OnlinePendingParticipationRemoteInspection
-                    .NoLongerRecoverable(
-                        reason = OnlinePendingParticipationRemoteInvalidReason
-                            .ROOM_FINISHED,
+                    .Recoverable(
+                        roomSnapshot = room,
                     ),
                 result,
             )
@@ -4779,6 +4828,98 @@ class RemoteOnlineRoomRepositoryTest {
             )
             assertNull(
                 repository.matchSnapshot.value,
+            )
+        }
+
+    @Test
+    fun prepare_and_activate_finished_pending_participation_uses_retained_authoritative_match_without_presence_action() =
+        runBlocking {
+            val binding = createPendingParticipationBinding(
+                matchId = "match-1",
+                localSeatIndex = 2,
+            )
+            val session = createAnonymousSession(
+                playerId = binding.playerId,
+            )
+            val room = createInMatchRoomSnapshotForBinding(
+                binding = binding,
+            ).copy(
+                status = OnlineRoomStatusDto.FINISHED,
+            )
+            val match =
+                DominoMatchRuntimeState(
+                    gameState = createInitialDominoGameState(),
+                    roundNumber = 1,
+                    localPlayerIndex = 0,
+                    phase = DominoMatchPhase.MatchFinished,
+                ).toOnlineSnapshotDto(
+                    roomId = room.roomId,
+                    matchId = requireNotNull(room.matchId),
+                    revision = 5L,
+                    serverEpochMillis = 1_000L,
+                )
+            val apiClient = FakeRemoteOnlineApiClient(
+                roomSnapshotsById = mutableMapOf(
+                    room.roomId to room,
+                ),
+                matchSnapshotsById = mutableMapOf(
+                    match.matchId to match,
+                ),
+            )
+            val repository = createRepository(
+                apiClient = apiClient,
+                anonymousSessionRepository =
+                    createAnonymousSessionRepository(
+                        session = session,
+                    ),
+            )
+
+            val preparation =
+                repository.preparePendingParticipationMatchResume(
+                    binding = binding,
+                )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumePreparation.Ready(
+                    binding = binding,
+                    roomSnapshot = room,
+                    matchSnapshot = match,
+                ),
+                preparation,
+            )
+
+            val readyPreparation =
+                preparation as
+                    OnlinePendingParticipationMatchResumePreparation
+                        .Ready
+            val activation =
+                repository.activatePendingParticipationMatchResume(
+                    preparation = readyPreparation,
+                )
+
+            assertEquals(
+                OnlinePendingParticipationMatchResumeActivation.Activated,
+                activation,
+            )
+            assertEquals(
+                room,
+                repository.roomSnapshot.value,
+            )
+            assertEquals(
+                match,
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                listOf(room.roomId),
+                apiClient.fetchRoomSnapshotRequests,
+            )
+            assertEquals(
+                listOf(match.matchId),
+                apiClient.fetchMatchSnapshotRequests,
+            )
+            assertEquals(
+                emptyList<OnlinePlayerActionDto>(),
+                apiClient.submitActionRequests,
             )
         }
 

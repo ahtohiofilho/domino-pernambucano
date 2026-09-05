@@ -937,7 +937,10 @@ private enum class ActiveReadRefreshOutcome {
                         .Recoverable
                 ).roomSnapshot
 
-                if (recoverableRoom.status != OnlineRoomStatusDto.IN_MATCH) {
+                if (
+                    recoverableRoom.status ==
+                    OnlineRoomStatusDto.WAITING_FOR_PLAYERS
+                ) {
                     return@withLock OnlinePendingParticipationMatchResumePreparation
                         .WaitingForPlayers(
                             binding = binding,
@@ -1041,12 +1044,27 @@ private enum class ActiveReadRefreshOutcome {
     override suspend fun activatePendingParticipationMatchResume(
         preparation: OnlinePendingParticipationMatchResumePreparation.Ready,
     ): OnlinePendingParticipationMatchResumeActivation {
+        val expectedRoomStatus = preparation.roomSnapshot.status
+
+        if (
+            expectedRoomStatus != OnlineRoomStatusDto.IN_MATCH &&
+            expectedRoomStatus != OnlineRoomStatusDto.FINISHED
+        ) {
+            return OnlinePendingParticipationMatchResumeActivation
+                .TemporarilyUnavailable(
+                    reason =
+                        "A partida preparada não está ativa nem finalizada.",
+                )
+        }
+
         return activatePendingParticipationResume(
             binding = preparation.binding,
             roomSnapshot = preparation.roomSnapshot,
             matchSnapshot = preparation.matchSnapshot,
-            expectedRoomStatus = OnlineRoomStatusDto.IN_MATCH,
+            expectedRoomStatus = expectedRoomStatus,
             traceTrigger = "pending_participation_resume_activation",
+            startPollingAfterActivation =
+                expectedRoomStatus == OnlineRoomStatusDto.IN_MATCH,
         )
     }
 
@@ -1056,6 +1074,7 @@ private enum class ActiveReadRefreshOutcome {
         matchSnapshot: OnlineMatchSnapshotDto?,
         expectedRoomStatus: OnlineRoomStatusDto,
         traceTrigger: String,
+        startPollingAfterActivation: Boolean = true,
     ): OnlinePendingParticipationMatchResumeActivation {
         val client = apiClient
             ?: return OnlinePendingParticipationMatchResumeActivation
@@ -1131,9 +1150,42 @@ private enum class ActiveReadRefreshOutcome {
             }
 
             try {
+                /*
+                 * A retomada de uma partida ativa is also an explicit presence
+                 * signal. If this seat was temporarily server-controlled after
+                 * timeout, REQUEST_SNAPSHOT reclaims it without changing game
+                 * state. We then read the newest authoritative snapshot.
+                 */
+                val activatedMatchSnapshot =
+                    if (
+                        matchSnapshot != null &&
+                        expectedRoomStatus ==
+                            OnlineRoomStatusDto.IN_MATCH
+                    ) {
+                        val presenceResult = client.submitAction(
+                            createOnlineSnapshotRequestAction(
+                                roomId = roomSnapshot.roomId,
+                                matchId = matchSnapshot.matchId,
+                                playerId = session.playerId,
+                                revision = matchSnapshot.revision,
+                            ),
+                        )
+
+                        check(presenceResult.accepted) {
+                            presenceResult.reason
+                                ?: "O servidor rejeitou a retomada do controle."
+                        }
+
+                        client.fetchMatchSnapshot(
+                            matchId = matchSnapshot.matchId,
+                        )
+                    } else {
+                        matchSnapshot
+                    }
+
                 mutableRoomSnapshot.value = roomSnapshot
 
-                if (matchSnapshot == null) {
+                if (activatedMatchSnapshot == null) {
                     mutableMatchSnapshot.value = null
 
                     trace(
@@ -1149,7 +1201,7 @@ private enum class ActiveReadRefreshOutcome {
                     )
                 } else {
                     publishMatchSnapshotIfNewer(
-                        snapshot = matchSnapshot,
+                        snapshot = activatedMatchSnapshot,
                         trigger = traceTrigger,
                         playerId = session.playerId,
                     )
@@ -1180,10 +1232,16 @@ private enum class ActiveReadRefreshOutcome {
                     )
             }
 
-            startPolling(
-                roomId = roomSnapshot.roomId,
-                client = client,
-            )
+            if (startPollingAfterActivation) {
+                startPolling(
+                    roomId = roomSnapshot.roomId,
+                    client = client,
+                )
+            } else {
+                stopPolling(
+                    reason = "finished_match_recovery",
+                )
+            }
 
             OnlinePendingParticipationMatchResumeActivation.Activated
         }
@@ -1668,16 +1726,14 @@ private enum class ActiveReadRefreshOutcome {
                     )
             }
 
-            OnlineRoomStatusDto.FINISHED -> {
-                return OnlinePendingParticipationRemoteInspection
-                    .NoLongerRecoverable(
-                        reason = OnlinePendingParticipationRemoteInvalidReason
-                            .ROOM_FINISHED,
-                    )
-            }
-
+            /*
+             * FINISHED remains inspectable while the server retains the
+             * authoritative match. The UI can then route the player to the
+             * final summary instead of pretending the old match can resume.
+             */
             OnlineRoomStatusDto.WAITING_FOR_PLAYERS,
-            OnlineRoomStatusDto.IN_MATCH -> Unit
+            OnlineRoomStatusDto.IN_MATCH,
+            OnlineRoomStatusDto.FINISHED -> Unit
         }
 
         val localPlayer = room.players.firstOrNull { player ->

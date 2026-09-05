@@ -13,11 +13,13 @@
     <string name="main_menu_resuming">Retomando...</string>
     <string name="main_menu_resume_room">Retomar sala online</string>
     <string name="main_menu_resume_match">Retomar partida online</string>
+    <string name="main_menu_view_match_result">Ver resumo da partida</string>
     <string name="main_menu_resume_participation">Retomar participação online</string>
     <string name="main_menu_remove_rejected_participation">Remover participação online rejeitada</string>
     <string name="main_menu_previous_participation_unverifiable">A participação online anterior não pode ser verificada neste dispositivo.</string>
     <string name="main_menu_participation_confirmed_waiting">Participação online confirmada. A sala ainda está aguardando jogadores.</string>
     <string name="main_menu_participation_confirmed">Participação online confirmada.</string>
+    <string name="main_menu_participation_finished">A partida online foi concluída. O resumo final está disponível.</string>
     <string name="main_menu_participation_unavailable">A participação online anterior não está mais disponível.</string>
     <string name="main_menu_session_rejected">Não foi possível verificar a participação: a sessão online deste dispositivo foi rejeitada.</string>
     <string name="main_menu_inspection_unavailable">Não foi possível verificar sua participação neste dispositivo.</string>
