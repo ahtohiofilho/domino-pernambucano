@@ -1279,21 +1279,26 @@ fun DominoPernambucanoApp(
                 onlineFeedbackMessage =
                     onlineGoogleAccountFeedbackMessage,
                 onRankedGameClick = {
-                    if (onlineAccountConnected) {
-                        sessionCoordinator.dispatch(
-                            DominoSessionCommand
-                                .OpenOnlineRankedQueue,
-                        )
-                    } else {
-                        connectOnlineGoogleAccount(
-                            onConnected = {
-                                sessionCoordinator.dispatch(
-                                    DominoSessionCommand
-                                        .OpenOnlineRankedQueue,
-                                )
-                            },
-                        )
-                    }
+                    enterOnlineRankedFlow(
+                        accountConnected = onlineAccountConnected,
+                        authenticate = { onConnected ->
+                            connectOnlineGoogleAccount(
+                                onConnected = onConnected,
+                            )
+                        },
+                        openAccountSetup = {
+                            openAccountDialogOnNextMainMenu = true
+                            sessionCoordinator.dispatch(
+                                DominoSessionCommand.BackToMainMenu,
+                            )
+                        },
+                        openMatchmaking = {
+                            sessionCoordinator.dispatch(
+                                DominoSessionCommand
+                                    .OpenOnlineRankedQueue,
+                            )
+                        },
+                    )
                 },
                 onLocalGameClick = {
                     if (offlineIdentityStore.read() == null) {
