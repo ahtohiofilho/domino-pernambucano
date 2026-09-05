@@ -1359,6 +1359,18 @@ class OnlineDominoMatchCoordinator(
         if (detectedMove != null) {
             return OnlinePresentationBridge(
                 presentationRuntimeState = previousRuntimeState.copy(
+                    /*
+                     * A animacao precisa manter o tabuleiro anterior para
+                     * mostrar a peca saindo da mao e chegando a mesa. Os
+                     * relogios, porem, ja pertencem ao snapshot autoritativo
+                     * aceito pelo servidor. Usar os relogios do estado anterior
+                     * fazia a UI exibir o tempo gasto durante PresentingMove,
+                     * mesmo depois da recarga pela reserva.
+                     */
+                    playerClockMillis =
+                        remoteRuntimeState.playerClockMillis,
+                    playerClockReserveMillis =
+                        remoteRuntimeState.playerClockReserveMillis,
                     phase = DominoMatchPhase.PresentingMove(
                         playerIndex = detectedMove.playerIndex,
                         move = detectedMove.move,

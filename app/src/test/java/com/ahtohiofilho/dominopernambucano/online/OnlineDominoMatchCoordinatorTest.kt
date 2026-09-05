@@ -470,6 +470,124 @@ class OnlineDominoMatchCoordinatorTest {
         }
 
     @Test
+    fun presentation_bridge_exposes_refilled_clock_from_remote_snapshot_during_move_animation() =
+        runBlocking {
+            val openingPiece = DominoPiece(
+                left = 6,
+                right = 6,
+            )
+
+            val initialRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    listOf(openingPiece),
+                    listOf(DominoPiece(6, 5)),
+                    listOf(DominoPiece(1, 1)),
+                    listOf(DominoPiece(2, 2)),
+                ),
+            ).copy(
+                clockPolicy =
+                    DominoMatchClockPolicy.OnlinePerPlayerRound,
+                playerClockMillis = listOf(
+                    8_000L,
+                    20_000L,
+                    20_000L,
+                    20_000L,
+                ),
+                playerClockReserveMillis = listOf(
+                    20_000L,
+                    20_000L,
+                    20_000L,
+                    20_000L,
+                ),
+            )
+
+            val remoteRuntimeState = createRuntimeState(
+                board = listOf(openingPiece),
+                boardChain = DominoBoardChain(
+                    openingPiece = openingPiece,
+                ),
+                currentPlayerIndex = 1,
+                playerHands = listOf(
+                    emptyList(),
+                    listOf(DominoPiece(6, 5)),
+                    listOf(DominoPiece(1, 1)),
+                    listOf(DominoPiece(2, 2)),
+                ),
+            ).copy(
+                clockPolicy =
+                    DominoMatchClockPolicy.OnlinePerPlayerRound,
+                playerClockMillis = listOf(
+                    20_000L,
+                    20_000L,
+                    20_000L,
+                    20_000L,
+                ),
+                playerClockReserveMillis = listOf(
+                    8_000L,
+                    20_000L,
+                    20_000L,
+                    20_000L,
+                ),
+            )
+
+            val initialSnapshot = initialRuntimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialSnapshot,
+            )
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialSnapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+                monotonicNowMillis = { 1_000L },
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                repository.publishMatchSnapshot(
+                    remoteRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                assertTrue(
+                    coordinator.currentState.phase
+                        is DominoMatchPhase.PresentingMove,
+                )
+
+                /*
+                 * The animation intentionally renders the previous game board,
+                 * but the visible clock pair must already use the accepted
+                 * authoritative snapshot values. Otherwise the player sees the
+                 * spent 8s/20s pair during the move animation even though the
+                 * server has already refilled it to 20s/8s.
+                 */
+                assertEquals(
+                    20_000L,
+                    coordinator.currentState.playerClockMillis[0],
+                )
+                assertEquals(
+                    8_000L,
+                    coordinator.currentState.playerClockReserveMillis[0],
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+    @Test
     fun remote_revisions_arriving_during_move_presentation_are_presented_in_order() =
         runBlocking {
             val openingPiece = DominoPiece(
