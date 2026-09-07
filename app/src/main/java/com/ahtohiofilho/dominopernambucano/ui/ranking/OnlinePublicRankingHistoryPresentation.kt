@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.ui.ranking
+package com.ahtohiofilho.dominopernambucano.ui.ranking
 
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
@@ -41,15 +41,28 @@ internal fun PublicRankingResponseDto.publicPeriodLabel(
 internal fun PublicRankingEntryDto.publicRankLabel(
     locale: Locale,
 ): String {
-    return if (locale.language.equals("en", ignoreCase = true)) {
-        "#$rank"
-    } else {
-        "${rank}º"
+    return when {
+        locale.language.equals("en", ignoreCase = true) ->
+            "#$rank"
+        locale.language.equals("pt", ignoreCase = true) ->
+            "${rank}\u00AA"
+        else ->
+            "${rank}\u00BA"
     }
 }
-
 internal fun PublicRankingEntryDto.publicScoreText(): String {
     return "$scoreNumerator/$scoreDenominator"
+}
+internal fun PublicRankingEntryDto.publicDecimalScoreText(): String {
+    if (scoreDenominator == 0L) {
+        return "0.000"
+    }
+
+    return String.format(
+        Locale.ROOT,
+        "%.3f",
+        scoreNumerator.toDouble() / scoreDenominator.toDouble(),
+    )
 }
 
 internal fun PublicRankingEntryDto.publicDisplayName(

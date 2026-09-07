@@ -97,6 +97,13 @@ class OnlineDominoMatchCoordinator(
     private var stableRevision = initialSnapshot.revision
 
     /*
+     * RoundIntro continua sendo a fase autoritativa ate o servidor publicar
+     * a revisao seguinte. Este flag registra somente que a animacao local ja
+     * terminou, permitindo consumir essa revisao quando ela chegar.
+     */
+    private var roundIntroPresentationCompleted = false
+
+    /*
      * Every visible online countdown is derived from the last promoted
      * authoritative snapshot. The UI heartbeat only asks for a re-projection;
      * it is not itself the source of elapsed time.
@@ -566,6 +573,25 @@ class OnlineDominoMatchCoordinator(
     private fun handleRoundIntroFinished() {
         if (completeActivePresentation()) {
             advancePresentationQueue()
+        }
+
+        /*
+         * A UI terminou a intro, mas o estado autoritativo continua RoundIntro
+         * ate a revisao de liberacao chegar. A partir daqui, snapshots novos
+         * podem atravessar a fila sem serem bloqueados pela propria intro que
+         * acabou de terminar.
+         */
+        roundIntroPresentationCompleted = true
+        advancePresentationQueue()
+
+        /*
+         * Somente a autoridade visual envia REQUEST_SNAPSHOT. Os demais
+         * clientes apenas aguardam a mesma revisao autoritativa.
+         */
+        if (stableRuntimeState.phase == DominoMatchPhase.RoundIntro) {
+            if (shouldReleaseAuthoritativeRoundIntro()) {
+                submitClientDrivenSnapshotRequest()
+            }
             return
         }
 
@@ -573,6 +599,31 @@ class OnlineDominoMatchCoordinator(
 
         advancePresentationQueue()
         submitClientDrivenMandatoryPassProgression()
+    }
+
+    private fun shouldReleaseAuthoritativeRoundIntro(): Boolean {
+        val players = stableRuntimeState.gameState.players
+        val currentPlayerIndex =
+            stableRuntimeState.gameState.currentPlayerIndex
+        val currentPlayer =
+            players.getOrNull(currentPlayerIndex)
+                ?: return false
+
+        val authorityIndex =
+            if (
+                currentPlayer.participantType ==
+                DominoParticipantType.HUMAN
+            ) {
+                currentPlayerIndex
+            } else {
+                players.indexOfFirst { player ->
+                    player.participantType ==
+                        DominoParticipantType.HUMAN
+                }.takeIf { index -> index >= 0 }
+                    ?: return false
+            }
+
+        return localPlayerIndex == authorityIndex
     }
 
     private fun handlePresentationFinished() {
@@ -617,6 +668,10 @@ class OnlineDominoMatchCoordinator(
             !allowCurrentPresentationCompletion &&
             isPresentationInProgress(
                 phase = currentState.phase,
+            ) &&
+            !(
+                currentState.phase == DominoMatchPhase.RoundIntro &&
+                roundIntroPresentationCompleted
             )
         ) {
             return
@@ -643,6 +698,13 @@ class OnlineDominoMatchCoordinator(
             }
 
             activePresentationRuntimeState = queuedRuntimeState
+
+            if (
+                presentation.presentationRuntimeState.phase ==
+                DominoMatchPhase.RoundIntro
+            ) {
+                roundIntroPresentationCompleted = false
+            }
 
             mutableState.value = presentation.presentationRuntimeState
 
@@ -825,6 +887,14 @@ class OnlineDominoMatchCoordinator(
     ) {
         stableRuntimeState = queuedRuntimeState.runtimeState
         stableRevision = queuedRuntimeState.revision
+
+        if (
+            queuedRuntimeState.runtimeState.phase !=
+            DominoMatchPhase.RoundIntro
+        ) {
+            roundIntroPresentationCompleted = false
+        }
+
         automaticPlayerIndexes = queuedRuntimeState.automaticPlayerIndexes
         rankedMetricAccumulator = queuedRuntimeState.rankedMetricAccumulator
 
@@ -1552,14 +1622,12 @@ private data class QueuedOnlineRuntimeState(
 internal fun initialOnlineMatchPresentationState(
     runtimeState: DominoMatchRuntimeState,
 ): DominoMatchRuntimeState {
-    return when (runtimeState.phase) {
-        DominoMatchPhase.RoundSummary,
-        DominoMatchPhase.MatchFinished -> runtimeState
-
-        else -> runtimeState.copy(
-            phase = DominoMatchPhase.RoundIntro,
-        )
-    }
+    /*
+     * O servidor passa a dizer explicitamente quando existe RoundIntro.
+     * Assim, retomar uma partida em WaitingForLocalMove nao fabrica uma nova
+     * introducao enquanto o relogio real ja esta correndo.
+     */
+    return runtimeState
 }
 
 internal fun projectOnlineAuthoritativeClock(

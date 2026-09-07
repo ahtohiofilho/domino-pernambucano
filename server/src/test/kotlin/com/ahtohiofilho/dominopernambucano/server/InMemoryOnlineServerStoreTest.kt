@@ -282,6 +282,12 @@ class InMemoryOnlineServerStoreTest {
             ),
         )
 
+        val playableSnapshot = releaseRoundIntroForTest(
+            store = store,
+            roomId = startedRoom.roomId,
+            matchId = matchId,
+        )
+
         now += 10_000L
 
         val result = store.submitAction(
@@ -289,7 +295,7 @@ class InMemoryOnlineServerStoreTest {
                 roomId = startedRoom.roomId,
                 matchId = matchId,
                 playerId = currentPlayerId,
-                revision = initialSnapshot.revision,
+                revision = playableSnapshot.revision,
                 move = move,
                 actionId = "clock-reload-after-ten-seconds",
             ),
@@ -578,6 +584,15 @@ class InMemoryOnlineServerStoreTest {
             val currentPlayerIndex =
                 snapshot.gameState.currentPlayerIndex
 
+            if (runtimeState.phase == DominoMatchPhase.RoundIntro) {
+                releaseRoundIntroForTest(
+                    store = store,
+                    roomId = startedRoom.roomId,
+                    matchId = matchId,
+                )
+                return@repeat
+            }
+
             if (
                 currentPlayerIndex == 2 &&
                 runtimeState.phase ==
@@ -706,10 +721,16 @@ class InMemoryOnlineServerStoreTest {
         )
 
         val matchId = requireNotNull(startedRoom.matchId)
-        val initialSnapshot = requireNotNull(
+        requireNotNull(
             store.getMatchSnapshot(
                 matchId = matchId,
             ),
+        )
+
+        val playableSnapshot = releaseRoundIntroForTest(
+            store = store,
+            roomId = startedRoom.roomId,
+            matchId = matchId,
         )
 
         now += 31_000L
@@ -719,7 +740,7 @@ class InMemoryOnlineServerStoreTest {
                 roomId = startedRoom.roomId,
                 matchId = matchId,
                 playerId = "player-1",
-                revision = initialSnapshot.revision,
+                revision = playableSnapshot.revision,
             ),
         )
 
@@ -730,8 +751,8 @@ class InMemoryOnlineServerStoreTest {
         )
 
         assertTrue(result.accepted)
-        assertEquals(initialSnapshot.revision, result.revision)
-        assertEquals(initialSnapshot, snapshotAfterRequest)
+        assertEquals(playableSnapshot.revision, result.revision)
+        assertEquals(playableSnapshot, snapshotAfterRequest)
     }
 
     @Test
@@ -751,6 +772,12 @@ class InMemoryOnlineServerStoreTest {
             store.getMatchSnapshot(
                 matchId = matchId,
             ),
+        )
+
+        releaseRoundIntroForTest(
+            store = store,
+            roomId = startedRoom.roomId,
+            matchId = matchId,
         )
 
         now += 31_000L
@@ -796,6 +823,12 @@ class InMemoryOnlineServerStoreTest {
             startedRoom.players.firstOrNull { player ->
                 player.seatIndex == expiredSeatIndex
             },
+        )
+
+        releaseRoundIntroForTest(
+            store = store,
+            roomId = startedRoom.roomId,
+            matchId = matchId,
         )
 
         now += 31_000L
@@ -972,6 +1005,12 @@ class InMemoryOnlineServerStoreTest {
             startedRoom.matchId,
         )
 
+        releaseRoundIntroForTest(
+            store = store,
+            roomId = startedRoom.roomId,
+            matchId = matchId,
+        )
+
         traceSink.clear()
 
         now += 31_000L
@@ -1021,10 +1060,16 @@ class InMemoryOnlineServerStoreTest {
             startedRoom.matchId,
         )
 
-        val initialSnapshot = requireNotNull(
+        requireNotNull(
             store.getMatchSnapshot(
                 matchId = matchId,
             ),
+        )
+
+        val playableSnapshot = releaseRoundIntroForTest(
+            store = store,
+            roomId = startedRoom.roomId,
+            matchId = matchId,
         )
 
         traceSink.clear()
@@ -1033,7 +1078,7 @@ class InMemoryOnlineServerStoreTest {
             roomId = startedRoom.roomId,
             matchId = matchId,
             playerId = "player-1",
-            revision = initialSnapshot.revision,
+            revision = playableSnapshot.revision,
             actionId = "deduplicated-action",
         )
 
@@ -1199,6 +1244,15 @@ class InMemoryOnlineServerStoreTest {
             val runtimeState = snapshot.toRuntimeState(
                 localPlayerIndex = snapshot.gameState.currentPlayerIndex,
             )
+
+            if (runtimeState.phase == DominoMatchPhase.RoundIntro) {
+                releaseRoundIntroForTest(
+                    store = store,
+                    roomId = roomId,
+                    matchId = matchId,
+                )
+                return@repeat
+            }
 
             if (
                 snapshot.gameState.currentPlayerIndex == playerIndex &&

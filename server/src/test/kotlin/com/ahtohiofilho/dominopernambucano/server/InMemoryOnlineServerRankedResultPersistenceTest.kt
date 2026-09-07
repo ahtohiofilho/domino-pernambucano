@@ -224,7 +224,34 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
         room: OnlineRoomSnapshotDto,
         matchId: String,
     ): OnlineMatchSnapshotDto {
-        repeat(64) { roundIndex ->
+        repeat(256) { roundIndex ->
+            val beforeSnapshot = requireNotNull(
+                store.getMatchSnapshot(matchId),
+            )
+            val beforeState = beforeSnapshot.toRuntimeState(
+                localPlayerIndex = 0,
+            )
+
+            if (beforeState.phase == DominoMatchPhase.MatchFinished) {
+                return beforeSnapshot
+            }
+
+            if (beforeState.phase == DominoMatchPhase.RoundSummary) {
+                val result = store.submitAction(
+                    createOnlineStartNextRoundAction(
+                        roomId = room.roomId,
+                        matchId = matchId,
+                        playerId = room.hostPlayerId,
+                        revision = beforeSnapshot.revision,
+                        actionId =
+                            "ranked-result-next-round-$roundIndex",
+                    ),
+                )
+
+                assertTrue(result.accepted)
+                return@repeat
+            }
+
             val terminalSnapshot = playUntilRoundTerminal(
                 store = store,
                 room = room,
@@ -243,21 +270,24 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
                 terminalState.phase,
             )
 
-            val result = store.submitAction(
-                createOnlineStartNextRoundAction(
-                    roomId = room.roomId,
-                    matchId = matchId,
-                    playerId = room.hostPlayerId,
-                    revision = terminalSnapshot.revision,
-                    actionId =
-                        "ranked-result-next-round-$roundIndex",
-                ),
+            assertEquals(
+                DominoMatchPhase.RoundSummary,
+                terminalState.phase,
             )
-
-            assertTrue(result.accepted)
         }
 
-        error("A partida nao terminou dentro do limite de rodadas.")
+        val lastSnapshot = requireNotNull(
+            store.getMatchSnapshot(matchId),
+        )
+        val lastAccumulator = requireNotNull(
+            store.getRankedMatchMetricAccumulator(matchId),
+        )
+        error(
+            "A partida nao terminou dentro do limite de 256 rodadas. " +
+                "scores=${lastSnapshot.gameState.teamScores}; " +
+                "completedRounds=${lastAccumulator.completedRounds}; " +
+                "revision=${lastSnapshot.revision}",
+        )
     }
 
     private fun playUntilRoundTerminal(
@@ -278,6 +308,15 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
                 runtimeState.phase == DominoMatchPhase.MatchFinished
             ) {
                 return snapshot
+            }
+
+            if (runtimeState.phase == DominoMatchPhase.RoundIntro) {
+                releaseRoundIntroForTest(
+                    store = store,
+                    roomId = room.roomId,
+                    matchId = matchId,
+                )
+                return@repeat
             }
 
             if (runtimeState.phase is DominoMatchPhase.PresentingPass) {

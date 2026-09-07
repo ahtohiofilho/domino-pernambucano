@@ -238,6 +238,9 @@ class FakeOnlineRoomRepositoryTest {
     @Test
     fun snapshot_request_for_human_turn_does_not_advance_revision() = runBlocking {
         val repository = createFilledRoomRepository()
+
+        releaseRoundIntroForFakeRepositoryTest(repository)
+
         val snapshot = requireNotNull(repository.matchSnapshot.value)
         val room = requireNotNull(repository.roomSnapshot.value)
 

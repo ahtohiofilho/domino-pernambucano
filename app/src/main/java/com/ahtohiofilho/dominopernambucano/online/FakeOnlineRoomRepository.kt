@@ -21,6 +21,18 @@ import kotlinx.coroutines.flow.asStateFlow
 
 private const val FAKE_MATCH_SNAPSHOT_EVENT_BUFFER_CAPACITY = 64
 
+internal fun applyFakeRoundIntroAfterNextRound(
+    runtimeState: DominoMatchRuntimeState,
+): DominoMatchRuntimeState {
+    return if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
+        runtimeState
+    } else {
+        runtimeState.copy(
+            phase = DominoMatchPhase.RoundIntro,
+        )
+    }
+}
+
 class FakeOnlineRoomRepository(
     private val clockPolicy: DominoMatchClockPolicy =
         DominoMatchClockPolicy.OnlinePerPlayerRound,
@@ -342,6 +354,7 @@ class FakeOnlineRoomRepository(
         val result = when (action.type) {
             OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT -> {
                 submitSnapshotRequest(
+                    action = action,
                     currentRoom = currentRoom,
                     currentSnapshot = currentSnapshot,
                 )
@@ -420,9 +433,7 @@ class FakeOnlineRoomRepository(
             gameState = gameState,
             roundNumber = 1,
             localPlayerIndex = 0,
-            phase = determineOnlineNextPhase(
-                gameState = gameState,
-            ),
+            phase = DominoMatchPhase.RoundIntro,
             clockPolicy = clockPolicy,
             playerClockMillis = createInitialPlayerClockMillis(
                 playerCount = gameState.players.size,
@@ -445,12 +456,58 @@ class FakeOnlineRoomRepository(
     }
 
     private fun submitSnapshotRequest(
+        action: OnlinePlayerActionDto,
         currentRoom: OnlineRoomSnapshotDto,
         currentSnapshot: OnlineMatchSnapshotDto,
     ): OnlineActionResultDto {
         val runtimeState = currentSnapshot.toRuntimeState(
             localPlayerIndex = 0,
         )
+
+        if (runtimeState.phase == DominoMatchPhase.RoundIntro) {
+            val currentPlayerIndex =
+                runtimeState.gameState.currentPlayerIndex
+            val currentParticipant =
+                currentRoom.players.firstOrNull { player ->
+                    player.seatIndex == currentPlayerIndex
+                }
+            val authoritySeatIndex =
+                if (
+                    currentParticipant?.participantType ==
+                    OnlineParticipantTypeDto.HUMAN
+                ) {
+                    currentPlayerIndex
+                } else {
+                    currentRoom.players
+                        .filter { player ->
+                            player.participantType ==
+                                OnlineParticipantTypeDto.HUMAN
+                        }
+                        .mapNotNull { player -> player.seatIndex }
+                        .minOrNull()
+                }
+            val actionSeatIndex =
+                currentRoom.players.firstOrNull { player ->
+                    player.playerId == action.playerId
+                }?.seatIndex
+
+            if (actionSeatIndex == authoritySeatIndex) {
+                return publishMatchSnapshot(
+                    previousSnapshot = currentSnapshot,
+                    runtimeState = runtimeState.copy(
+                        phase = determineOnlineNextPhase(
+                            gameState = runtimeState.gameState,
+                        ),
+                    ),
+                    serverEpochMillis = nowEpochMillis(),
+                )
+            }
+
+            return OnlineActionResultDto(
+                accepted = true,
+                revision = currentSnapshot.revision,
+            )
+        }
 
         val currentPlayerIndex =
             runtimeState.gameState.currentPlayerIndex
@@ -598,7 +655,9 @@ class FakeOnlineRoomRepository(
 
                 publishMatchSnapshot(
                     previousSnapshot = currentSnapshot,
-                    runtimeState = reduction.runtimeState,
+                    runtimeState = applyFakeRoundIntroAfterNextRound(
+                        reduction.runtimeState,
+                    ),
                 )
             }
 
@@ -628,7 +687,9 @@ class FakeOnlineRoomRepository(
 
                 publishMatchSnapshot(
                     previousSnapshot = currentSnapshot,
-                    runtimeState = reduction.runtimeState,
+                    runtimeState = reduction.runtimeState.copy(
+                        phase = DominoMatchPhase.RoundIntro,
+                    ),
                 )
             }
 

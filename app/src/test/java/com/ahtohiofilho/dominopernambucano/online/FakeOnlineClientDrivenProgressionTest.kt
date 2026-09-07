@@ -19,6 +19,81 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+internal suspend fun releaseRoundIntroForFakeRepositoryTest(
+    repository: FakeOnlineRoomRepository,
+): OnlineMatchSnapshotDto {
+    val snapshot = requireNotNull(
+        repository.matchSnapshot.value,
+    )
+    val runtimeState = snapshot.toRuntimeState(
+        localPlayerIndex = snapshot.gameState.currentPlayerIndex,
+    )
+
+    if (runtimeState.phase != DominoMatchPhase.RoundIntro) {
+        return snapshot
+    }
+
+    val room = requireNotNull(
+        repository.roomSnapshot.value,
+    )
+    val currentParticipant =
+        room.players.firstOrNull { player ->
+            player.seatIndex ==
+                runtimeState.gameState.currentPlayerIndex
+        }
+
+    val authority =
+        if (
+            currentParticipant?.participantType ==
+                OnlineParticipantTypeDto.HUMAN
+        ) {
+            currentParticipant
+        } else {
+            room.players
+                .filter { player ->
+                    player.participantType ==
+                        OnlineParticipantTypeDto.HUMAN
+                }
+                .minByOrNull { player ->
+                    requireNotNull(player.seatIndex)
+                }
+        }
+
+    val authorityPlayer = requireNotNull(authority) {
+        "RoundIntro fake de teste sem humano apto a liberar a apresentaÃ§Ã£o."
+    }
+
+    val result = repository.submitAction(
+        createOnlineSnapshotRequestAction(
+            roomId = snapshot.roomId,
+            matchId = snapshot.matchId,
+            playerId = authorityPlayer.playerId,
+            revision = snapshot.revision,
+            actionId =
+                "fake-test-round-intro-release-${snapshot.revision}",
+        ),
+    )
+
+    require(result.accepted) {
+        "Falha ao liberar RoundIntro fake no teste: ${result.reason}"
+    }
+
+    val released = requireNotNull(
+        repository.matchSnapshot.value,
+    )
+
+    require(
+        released.toRuntimeState(
+            localPlayerIndex =
+                released.gameState.currentPlayerIndex,
+        ).phase != DominoMatchPhase.RoundIntro,
+    ) {
+        "RoundIntro fake permaneceu ativo apÃ³s ack autoritativo de teste."
+    }
+
+    return released
+}
+
 class FakeOnlineClientDrivenProgressionTest {
     @Test
     fun snapshot_request_advances_application_turn_without_timeout() =
@@ -56,6 +131,8 @@ class FakeOnlineClientDrivenProgressionTest {
 
                 assertTrue(result.accepted)
             }
+
+            releaseRoundIntroForFakeRepositoryTest(repository)
 
             var snapshot = requireNotNull(
                 repository.matchSnapshot.value,
@@ -234,6 +311,8 @@ class FakeOnlineClientDrivenProgressionTest {
 
                 assertTrue(result.accepted)
             }
+
+            releaseRoundIntroForFakeRepositoryTest(repository)
 
             var snapshot = requireNotNull(
                 repository.matchSnapshot.value,

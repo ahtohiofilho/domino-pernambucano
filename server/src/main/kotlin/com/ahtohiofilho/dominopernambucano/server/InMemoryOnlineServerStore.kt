@@ -80,6 +80,18 @@ private const val MAX_SERVER_IDENTIFIER_CHARACTERS = 160
 private const val MAX_SERVER_PLAYER_NAME_CHARACTERS = 160
 private const val MAX_SERVER_ROOM_CODE_CHARACTERS = 16
 
+internal fun applyServerRoundIntroAfterNextRound(
+    runtimeState: DominoMatchRuntimeState,
+): DominoMatchRuntimeState {
+    return if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
+        runtimeState
+    } else {
+        runtimeState.copy(
+            phase = DominoMatchPhase.RoundIntro,
+        )
+    }
+}
+
 class InMemoryOnlineServerStore(
     private val clockPolicy: DominoMatchClockPolicy =
         DominoMatchClockPolicy.OnlinePerPlayerRound,
@@ -3703,9 +3715,7 @@ class InMemoryOnlineServerStore(
             gameState = gameState,
             roundNumber = 1,
             localPlayerIndex = 0,
-            phase = determineOnlineNextPhase(
-                gameState = gameState,
-            ),
+            phase = DominoMatchPhase.RoundIntro,
             clockPolicy = clockPolicy,
             playerClockMillis = createInitialPlayerClockMillis(
                 playerCount = gameState.players.size,
@@ -3796,6 +3806,36 @@ class InMemoryOnlineServerStore(
             return false
         }
 
+        if (runtimeState.phase == DominoMatchPhase.RoundIntro) {
+            val introElapsedMillis =
+                getElapsedMillisSinceSnapshot(
+                    snapshot = currentSnapshot,
+                    nowEpochMillis = nowEpochMillis,
+                )
+
+            if (
+                introElapsedMillis <
+                DominoMatchTiming.RoundIntroServerFallbackMillis
+            ) {
+                return false
+            }
+
+            publishMatchSnapshot(
+                matchRecord = matchRecord,
+                previousSnapshot = currentSnapshot,
+                runtimeState = runtimeState.copy(
+                    phase = determineOnlineNextPhase(
+                        gameState = runtimeState.gameState,
+                    ),
+                ),
+                serverEpochMillis = nowEpochMillis,
+                trigger = "$trigger:round_intro_fallback",
+                traceSource = traceSource,
+            )
+
+            return true
+        }
+
         if (isRoundFinished(runtimeState.gameState)) {
             val roundSummaryElapsedMillis =
                 currentSnapshot.serverEpochMillis?.let {
@@ -3845,7 +3885,9 @@ class InMemoryOnlineServerStore(
                     publishMatchSnapshot(
                         matchRecord = matchRecord,
                         previousSnapshot = currentSnapshot,
-                        runtimeState = reduction.runtimeState,
+                        runtimeState = applyServerRoundIntroAfterNextRound(
+                            reduction.runtimeState,
+                        ),
                         serverEpochMillis = nowEpochMillis,
                         action = transitionAction,
                         trigger = "$trigger:round_summary_auto_advance",
@@ -4119,20 +4161,70 @@ class InMemoryOnlineServerStore(
         seatIndex: Int,
         matchRecord: MatchRecord,
     ): OnlineActionResultDto {
+        val currentSnapshot = matchRecord.snapshot
+        val runtimeState = currentSnapshot.toRuntimeState(
+            localPlayerIndex = seatIndex,
+        )
+
+        if (runtimeState.phase == DominoMatchPhase.RoundIntro) {
+            val currentPlayerIndex =
+                runtimeState.gameState.currentPlayerIndex
+            val currentRoom =
+                roomsById[matchRecord.roomId]
+                    ?: return rejectedAction(
+                        reason = "Sala invalida.",
+                        revision = currentSnapshot.revision,
+                    )
+            val currentParticipant =
+                currentRoom.players.firstOrNull { player ->
+                    player.seatIndex == currentPlayerIndex
+                }
+            val authoritySeatIndex =
+                if (
+                    currentParticipant?.participantType ==
+                    OnlineParticipantTypeDto.HUMAN
+                ) {
+                    currentPlayerIndex
+                } else {
+                    currentRoom.players
+                        .filter { player ->
+                            player.participantType ==
+                                OnlineParticipantTypeDto.HUMAN
+                        }
+                        .mapNotNull { player -> player.seatIndex }
+                        .minOrNull()
+                }
+
+            if (seatIndex == authoritySeatIndex) {
+                return publishMatchSnapshot(
+                    matchRecord = matchRecord,
+                    previousSnapshot = currentSnapshot,
+                    runtimeState = runtimeState.copy(
+                        phase = determineOnlineNextPhase(
+                            gameState = runtimeState.gameState,
+                        ),
+                    ),
+                    serverEpochMillis = nowEpochMillis(),
+                    action = action,
+                    trigger = "request_snapshot:round_intro_finished",
+                )
+            }
+
+            return OnlineActionResultDto(
+                accepted = true,
+                revision = currentSnapshot.revision,
+            )
+        }
+
         val controlReclaimed =
             matchRecord.automaticSeatIndexes.remove(seatIndex)
 
         if (!controlReclaimed) {
             return OnlineActionResultDto(
                 accepted = true,
-                revision = matchRecord.snapshot.revision,
+                revision = currentSnapshot.revision,
             )
         }
-
-        val currentSnapshot = matchRecord.snapshot
-        val runtimeState = currentSnapshot.toRuntimeState(
-            localPlayerIndex = seatIndex,
-        )
 
         return publishMatchSnapshot(
             matchRecord = matchRecord,
@@ -4238,7 +4330,9 @@ class InMemoryOnlineServerStore(
                 publishMatchSnapshot(
                     matchRecord = matchRecord,
                     previousSnapshot = matchRecord.snapshot,
-                    runtimeState = reduction.runtimeState,
+                    runtimeState = applyServerRoundIntroAfterNextRound(
+                        reduction.runtimeState,
+                    ),
                     action = action,
                     trigger = "start_next_round",
                 )
@@ -4293,7 +4387,9 @@ class InMemoryOnlineServerStore(
                 publishMatchSnapshot(
                     matchRecord = matchRecord,
                     previousSnapshot = matchRecord.snapshot,
-                    runtimeState = reduction.runtimeState,
+                    runtimeState = reduction.runtimeState.copy(
+                        phase = DominoMatchPhase.RoundIntro,
+                    ),
                     action = action,
                     trigger = "start_new_match",
                 )

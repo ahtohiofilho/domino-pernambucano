@@ -121,6 +121,12 @@ class PersistentOnlineServerStoreTest {
                 },
             )
 
+            releaseRoundIntroForTest(
+                store = firstStore,
+                roomId = room.roomId,
+                matchId = matchId,
+            )
+
             nowEpochMillis += 31_000L
             firstStore.advanceAuthoritativeTime()
 

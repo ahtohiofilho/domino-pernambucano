@@ -33,6 +33,12 @@ class InMemoryOnlineServerRankedMetricAccumulatorTest {
             },
         )
 
+        releaseRoundIntroForTest(
+            store = store,
+            roomId = room.roomId,
+            matchId = matchId,
+        )
+
         now += 31_000L
         assertTrue(store.advanceAuthoritativeTime())
 
@@ -160,6 +166,15 @@ class InMemoryOnlineServerRankedMetricAccumulatorTest {
                 runtimeState.phase == DominoMatchPhase.MatchFinished
             ) {
                 return snapshot
+            }
+
+            if (runtimeState.phase == DominoMatchPhase.RoundIntro) {
+                releaseRoundIntroForTest(
+                    store = store,
+                    roomId = room.roomId,
+                    matchId = matchId,
+                )
+                return@repeat
             }
 
             if (runtimeState.phase is DominoMatchPhase.PresentingPass) {

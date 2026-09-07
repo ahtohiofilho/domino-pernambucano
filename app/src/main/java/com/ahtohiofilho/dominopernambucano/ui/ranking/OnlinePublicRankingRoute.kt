@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -41,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -61,7 +59,6 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingCyclesResponseDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandShapes
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPatternBackground
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenTitle
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
@@ -463,9 +460,6 @@ internal fun OnlinePublicRankingScreen(
                     RankingEntryCard(
                         entry = viewer,
                         locale = locale,
-                        heading = stringResource(
-                            R.string.ranking_your_position,
-                        ),
                         highlighted = true,
                     )
                 }
@@ -955,13 +949,6 @@ private fun RankingEntries(
             RankingEntryCard(
                 entry = entry,
                 locale = locale,
-                heading = if (highlighted) {
-                    stringResource(
-                        R.string.ranking_your_position,
-                    )
-                } else {
-                    null
-                },
                 highlighted = highlighted,
             )
         }
@@ -1011,9 +998,11 @@ private fun RankingEntries(
 private fun RankingEntryCard(
     entry: PublicRankingEntryDto,
     locale: java.util.Locale,
-    heading: String? = null,
     highlighted: Boolean = false,
 ) {
+    var expanded by remember(entry.competitorId) {
+        mutableStateOf(false)
+    }
     val normalizedName = entry.publicDisplayName(
         fallback = stringResource(
             R.string.ranking_player_fallback,
@@ -1032,6 +1021,9 @@ private fun RankingEntryCard(
     }
 
     Card(
+        onClick = {
+            expanded = !expanded
+        },
         modifier = Modifier.fillMaxWidth(),
         shape = DominoBrandShapes.card,
         colors = CardDefaults.cardColors(
@@ -1042,36 +1034,50 @@ private fun RankingEntryCard(
             color = borderColor,
         ),
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 12.dp,
+                    vertical = 10.dp,
+                ),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            RankingPositionBadge(
-                rank = entry.rank,
-                label = entry.publicRankLabel(locale),
-            )
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                heading?.let { text ->
-                    Text(
-                        text = text,
-                        color = DominoSemanticColors.brandText,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
+                Text(
+                    modifier = Modifier.width(42.dp),
+                    text = entry.publicRankLabel(locale),
+                    color = DominoSemanticColors.brandText,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
 
                 Text(
+                    modifier = Modifier.weight(1f),
                     text = normalizedName,
+                    color = DominoSemanticColors.brandText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+
+                Text(
+                    text = entry.publicDecimalScoreText(),
                     color = DominoSemanticColors.brandText,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
                 )
+            }
 
+            if (expanded) {
                 Text(
                     text = stringResource(
                         R.string.ranking_score_summary,
@@ -1103,38 +1109,6 @@ private fun RankingEntryCard(
     }
 }
 
-@Composable
-private fun RankingPositionBadge(
-    rank: Int,
-    label: String,
-) {
-    val backgroundColor = when (rank) {
-        1 -> DominoColorTokens.AccentYellow
-        2 -> DominoColorTokens.PureWhite.copy(alpha = 0.24f)
-        3 -> DominoColorTokens.AccentRed.copy(alpha = 0.92f)
-        else -> DominoSemanticColors.brandSurfaceElevated
-    }
-    val contentColor = if (rank == 1) {
-        DominoColorTokens.InkBlue
-    } else {
-        DominoSemanticColors.brandText
-    }
-
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(backgroundColor),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            color = contentColor,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.ExtraBold,
-        )
-    }
-}
 
 @Composable
 private fun RankingFailureContent(

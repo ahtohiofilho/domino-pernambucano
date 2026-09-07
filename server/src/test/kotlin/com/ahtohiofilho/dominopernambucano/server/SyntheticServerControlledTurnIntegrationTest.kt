@@ -130,6 +130,15 @@ class SyntheticServerControlledTurnIntegrationTest {
                     before.gameState.currentPlayerIndex,
             )
 
+            if (runtime.phase == DominoMatchPhase.RoundIntro) {
+                releaseRoundIntroForTest(
+                    store = store,
+                    roomId = room.roomId,
+                    matchId = matchId,
+                )
+                return@repeat
+            }
+
             if (
                 runtime.phase ==
                     DominoMatchPhase.WaitingForLocalMove
@@ -285,6 +294,14 @@ class SyntheticServerControlledTurnIntegrationTest {
             )
 
             when {
+                runtime.phase == DominoMatchPhase.RoundIntro -> {
+                    releaseRoundIntroForTest(
+                        store = store,
+                        roomId = roomId,
+                        matchId = matchId,
+                    )
+                }
+
                 runtime.phase ==
                     DominoMatchPhase.WaitingForLocalMove -> {
                     val seat = snapshot.gameState.currentPlayerIndex

@@ -8,5 +8,12 @@ object DominoMatchTiming {
     const val OnlinePlayerRoundReserveMillis = 20_000L
     const val ClockTickMillis = 250L
     const val BotDecisionDelayMillis = 2_000L
+
+    /*
+     * A animacao visual normal termina antes deste teto.
+     * O fallback existe apenas para clientes antigos/desconectados.
+     */
+    const val RoundIntroServerFallbackMillis = 4_000L
+
     const val RoundSummaryAutoAdvanceMillis = 3_000L
 }

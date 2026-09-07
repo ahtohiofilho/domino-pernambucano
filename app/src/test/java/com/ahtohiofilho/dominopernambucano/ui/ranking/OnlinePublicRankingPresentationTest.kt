@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.ui.ranking
+package com.ahtohiofilho.dominopernambucano.ui.ranking
 
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingFailureKind
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
@@ -182,13 +182,13 @@ class OnlinePublicRankingPresentationTest {
             entry.publicRankLabel(Locale.US),
         )
         assertEquals(
-            "7º",
+            "7\u00AA",
             entry.publicRankLabel(
                 Locale("pt", "BR"),
             ),
         )
         assertEquals(
-            "7º",
+            "7\u00BA",
             entry.publicRankLabel(
                 Locale("es", "ES"),
             ),
@@ -233,6 +233,10 @@ class OnlinePublicRankingPresentationTest {
         assertEquals(
             "2/3",
             entry.publicScoreText(),
+        )
+        assertEquals(
+            "0.667",
+            entry.publicDecimalScoreText(),
         )
     }
 

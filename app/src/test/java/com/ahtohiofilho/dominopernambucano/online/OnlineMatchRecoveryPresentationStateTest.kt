@@ -32,13 +32,13 @@ class OnlineMatchRecoveryPresentationStateTest {
     }
 
     @Test
-    fun active_game_still_enters_through_round_intro_presentation() {
+    fun active_game_resume_does_not_fabricate_round_intro() {
         val state = runtimeState(
             phase = DominoMatchPhase.WaitingForLocalMove,
         )
 
         assertEquals(
-            DominoMatchPhase.RoundIntro,
+            DominoMatchPhase.WaitingForLocalMove,
             initialOnlineMatchPresentationState(state).phase,
         )
     }

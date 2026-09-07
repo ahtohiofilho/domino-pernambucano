@@ -97,6 +97,12 @@ class InMemoryOnlineServerRecoveryAuthorityTest {
             },
         ).playerId
 
+        releaseRoundIntroForTest(
+            store = store,
+            roomId = room.roomId,
+            matchId = matchId,
+        )
+
         now += 60_000L
 
         assertTrue(
