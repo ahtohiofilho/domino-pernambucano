@@ -1,0 +1,36 @@
+﻿DOMINÓ PE — DERIVADOS DE ÁUDIO
+
+Arquivo-fonte:
+freesound_community-domino-stone-on-the-table-87997.mp3
+
+Fonte:
+Pixabay
+
+Criador exibido:
+freesound_community
+
+Licença:
+Pixabay Content License
+
+Arquivos derivados incorporados ao aplicativo:
+tile_place_01.ogg
+tile_place_02.ogg
+tile_place_03.ogg
+tile_place_04.ogg
+tile_place_05.ogg
+
+Transformações:
+- seleção de impactos individuais;
+- recorte;
+- ajuste de nível quando necessário;
+- exportação Ogg Vorbis;
+- mono;
+- 44100 Hz;
+- qualidade de exportação 128 kbit/s.
+
+Observação:
+O MP3 original é mantido no pacote de evidências do projeto e
+não é incorporado ao APK.
+
+Os arquivos derivados continuam sujeitos à licença aplicável
+ao conteúdo-fonte.

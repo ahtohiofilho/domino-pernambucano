@@ -1,0 +1,37 @@
+﻿DOMINÓ PE — R8.B.8.C17.A AUDIO BASELINE
+
+Fonte:
+Pixabay
+
+Arquivo-fonte:
+freesound_community-domino-stone-on-the-table-87997.mp3
+
+Autor exibido:
+freesound_community
+
+Uso:
+Som de peça de dominó sendo colocada sobre a mesa.
+
+Arquivos derivados:
+tile_place_01.ogg
+tile_place_02.ogg
+tile_place_03.ogg
+tile_place_04.ogg
+tile_place_05.ogg
+
+Transformações:
+- seleção de cinco impactos distintos do arquivo-fonte;
+- recorte individual;
+- exportação para Ogg Vorbis;
+- mono;
+- 44100 Hz;
+- 128 kbit/s.
+
+Licença:
+Pixabay Content License.
+
+Observação:
+Os cinco arquivos são derivados editados para uso no Dominó PE e permanecem vinculados à licença do arquivo-fonte original.
+
+Data de preparação:
+08/09/2026

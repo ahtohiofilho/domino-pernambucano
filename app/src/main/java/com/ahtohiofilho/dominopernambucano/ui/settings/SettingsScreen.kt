@@ -1,4 +1,4 @@
-package com.ahtohiofilho.dominopernambucano.ui.settings
+﻿package com.ahtohiofilho.dominopernambucano.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,10 +11,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -24,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import com.ahtohiofilho.dominopernambucano.BuildConfig
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidSoundEffectsPreferences
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandShapes
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
@@ -69,6 +76,12 @@ fun SettingsScreen(
     onTermsClick: () -> Unit = {},
 ) {
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    var soundEffectsEnabled by remember(context) {
+        mutableStateOf(
+            AndroidSoundEffectsPreferences.isEnabled(context),
+        )
+    }
 
     DominoScreenScaffold(
         title = stringResource(R.string.settings_title),
@@ -128,6 +141,35 @@ fun SettingsScreen(
                 )
             }
 
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(
+                    MaterialTheme.dominoSpacing.sm,
+                ),
+            ) {
+                Text(
+                    modifier = Modifier.semantics {
+                        heading()
+                    },
+                    text = stringResource(
+                        R.string.settings_audio_title,
+                    ),
+                    color = DominoSemanticColors.brandText,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                SoundEffectsOptionCard(
+                    enabled = soundEffectsEnabled,
+                    onEnabledChange = { enabled ->
+                        AndroidSoundEffectsPreferences.setEnabled(
+                            context = context,
+                            enabled = enabled,
+                        )
+                        soundEffectsEnabled = enabled
+                    },
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -251,6 +293,83 @@ fun SettingsScreen(
             }
 
             Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(
+                    MaterialTheme.dominoSpacing.xs,
+                ),
+            ) {
+                Text(
+                    modifier = Modifier.semantics {
+                        heading()
+                    },
+                    text = stringResource(
+                        R.string.settings_licenses_title,
+                    ),
+                    color = DominoSemanticColors.brandText,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = DominoBrandShapes.card,
+                    color = DominoSemanticColors.brandSurfaceElevated,
+                    contentColor = DominoSemanticColors.brandText,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(
+                            MaterialTheme.dominoSpacing.md,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(
+                            MaterialTheme.dominoSpacing.xs,
+                        ),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_sound_effects,
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_domino_table,
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_source,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_creator,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_license,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_adapted,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(SettingsAboutTag),
@@ -302,6 +421,75 @@ private fun SettingsSymbol(
     )
 }
 
+@Composable
+private fun SoundEffectsOptionCard(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                role = Role.Switch,
+                onClick = {
+                    onEnabledChange(!enabled)
+                },
+            ),
+        shape = DominoBrandShapes.card,
+        color = DominoSemanticColors.brandSurfaceElevated,
+        contentColor = DominoSemanticColors.brandText,
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                MaterialTheme.dominoSpacing.md,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(
+                MaterialTheme.dominoSpacing.sm,
+            ),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(
+                    MaterialTheme.dominoSpacing.xs,
+                ),
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.settings_sound_effects_title,
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Text(
+                    text = stringResource(
+                        R.string.settings_sound_effects_description,
+                    ),
+                    color = DominoSemanticColors.brandSupportingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                Text(
+                    text = stringResource(
+                        if (enabled) {
+                            R.string.settings_sound_effects_on
+                        } else {
+                            R.string.settings_sound_effects_off
+                        },
+                    ),
+                    color = DominoSemanticColors.brandSupportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            Switch(
+                checked = enabled,
+                onCheckedChange = null,
+            )
+        }
+    }
+}
 @Composable
 private fun LanguageOptionCard(
     title: String,

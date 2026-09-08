@@ -367,4 +367,15 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="post_match_automatic_rounds">RONDAS AUTO</string>    <string name="post_match_mvp">MVP</string>
     <string name="ranked_queue_waiting_players">Esperando jugadores</string>
     <string name="ranked_queue_seats_assigned_at_match">Las posiciones se sortearán cuando se forme la mesa.</string>
-</resources>
+    <string name="settings_audio_title">Audio</string>
+    <string name="settings_sound_effects_title">Efectos de sonido</string>
+    <string name="settings_sound_effects_description">Sonidos durante las partidas.</string>
+    <string name="settings_sound_effects_on">Activado</string>
+    <string name="settings_sound_effects_off">Desactivado</string>
+    <string name="settings_licenses_title">Licencias y créditos</string>
+    <string name="settings_licenses_sound_effects">Efectos de sonido</string>
+    <string name="settings_licenses_domino_table">Fichas de dominó sobre la mesa</string>
+    <string name="settings_licenses_source">Fuente: Pixabay</string>
+    <string name="settings_licenses_creator">Creador: freesound_community</string>
+    <string name="settings_licenses_license">Licencia: Pixabay Content License</string>
+    <string name="settings_licenses_adapted">Adaptado para Dominó PE</string></resources>

@@ -367,4 +367,15 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="post_match_automatic_rounds">AUTO ROUNDS</string>    <string name="post_match_mvp">MVP</string>
     <string name="ranked_queue_waiting_players">Waiting for players</string>
     <string name="ranked_queue_seats_assigned_at_match">Seats will be assigned when the table is formed.</string>
-</resources>
+    <string name="settings_audio_title">Audio</string>
+    <string name="settings_sound_effects_title">Sound effects</string>
+    <string name="settings_sound_effects_description">Sounds during matches.</string>
+    <string name="settings_sound_effects_on">On</string>
+    <string name="settings_sound_effects_off">Off</string>
+    <string name="settings_licenses_title">Licenses and credits</string>
+    <string name="settings_licenses_sound_effects">Sound effects</string>
+    <string name="settings_licenses_domino_table">Domino tiles on the table</string>
+    <string name="settings_licenses_source">Source: Pixabay</string>
+    <string name="settings_licenses_creator">Creator: freesound_community</string>
+    <string name="settings_licenses_license">License: Pixabay Content License</string>
+    <string name="settings_licenses_adapted">Adapted for Dominó PE</string></resources>

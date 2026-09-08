@@ -1,11 +1,13 @@
 ﻿package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import com.ahtohiofilho.dominopernambucano.domain.getPlayableMoves
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
@@ -15,6 +17,8 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
 import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineGameUiTraceReporter
 import com.ahtohiofilho.dominopernambucano.online.OnlineUiTraceContext
+import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidTilePlacementSoundPlayer
+import com.ahtohiofilho.dominopernambucano.ui.audio.TilePlacementAudioTransitionTracker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
@@ -30,6 +34,27 @@ fun DominoGameRoute(
 ) {
     val runtimeState by matchCoordinator.state.collectAsState()
     val gameState = runtimeState.gameState
+    val context = LocalContext.current
+
+    val tilePlacementSoundPlayer = remember(context) {
+        AndroidTilePlacementSoundPlayer(
+            context = context.applicationContext,
+        )
+    }
+
+    val tilePlacementAudioTracker = remember(matchCoordinator) {
+        TilePlacementAudioTransitionTracker(
+            initiallyPresentingMove =
+                matchCoordinator.currentState.phase is
+                    DominoMatchPhase.PresentingMove,
+        )
+    }
+
+    DisposableEffect(tilePlacementSoundPlayer) {
+        onDispose {
+            tilePlacementSoundPlayer.release()
+        }
+    }
     val onlineUiTraceContext = onlineUiTraceReporter?.currentUiTraceContext()
     val postMatchStatisticsTracker = remember(matchCoordinator) {
         PostMatchStatisticsTracker(
@@ -42,6 +67,15 @@ fun DominoGameRoute(
 
     LaunchedEffect(matchCoordinator) {
         matchCoordinator.state.collect { state ->
+            if (
+                tilePlacementAudioTracker.accept(
+                    isPresentingMove =
+                        state.phase is DominoMatchPhase.PresentingMove,
+                )
+            ) {
+                tilePlacementSoundPlayer.playTilePlacement()
+            }
+
             val authoritativeAccumulator =
                 onlineUiTraceReporter?.currentRankedMetricAccumulator()
 

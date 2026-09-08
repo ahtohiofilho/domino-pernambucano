@@ -367,4 +367,15 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="post_match_automatic_rounds">RODADAS AUTO</string>    <string name="post_match_mvp">MVP</string>
     <string name="ranked_queue_waiting_players">Aguardando jogadores</string>
     <string name="ranked_queue_seats_assigned_at_match">As posições serão sorteadas quando a mesa for formada.</string>
-</resources>
+    <string name="settings_audio_title">Áudio</string>
+    <string name="settings_sound_effects_title">Efeitos sonoros</string>
+    <string name="settings_sound_effects_description">Sons durante a partida.</string>
+    <string name="settings_sound_effects_on">Ligado</string>
+    <string name="settings_sound_effects_off">Desligado</string>
+    <string name="settings_licenses_title">Licenças e créditos</string>
+    <string name="settings_licenses_sound_effects">Efeitos sonoros</string>
+    <string name="settings_licenses_domino_table">Peças de dominó na mesa</string>
+    <string name="settings_licenses_source">Fonte: Pixabay</string>
+    <string name="settings_licenses_creator">Criador: freesound_community</string>
+    <string name="settings_licenses_license">Licença: Pixabay Content License</string>
+    <string name="settings_licenses_adapted">Adaptado para o Dominó PE</string></resources>
