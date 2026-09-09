@@ -368,4 +368,8 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="post_match_automatic_rounds">RODADAS AUTO</string>    <string name="post_match_mvp">MVP</string>
     <string name="ranked_queue_waiting_players">Aguardando jogadores</string>
     <string name="ranked_queue_seats_assigned_at_match">As posições serão sorteadas quando a mesa for formada.</string>
+    <string name="settings_menu_music_title">Música do menu</string>
+    <string name="settings_menu_music_description">Reproduz música ambiente enquanto você navega pelos menus.</string>
+    <string name="settings_menu_music_on">Ligada</string>
+    <string name="settings_menu_music_off">Desligada</string>
 </resources>

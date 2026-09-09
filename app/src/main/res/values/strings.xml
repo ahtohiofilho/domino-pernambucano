@@ -378,4 +378,8 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="settings_licenses_source">Fonte: Pixabay</string>
     <string name="settings_licenses_creator">Criador: freesound_community</string>
     <string name="settings_licenses_license">Licença: Pixabay Content License</string>
-    <string name="settings_licenses_adapted">Adaptado para o Dominó PE</string></resources>
+    <string name="settings_licenses_adapted">Adaptado para o Dominó PE</string>    <string name="settings_menu_music_title">Música do menu</string>
+    <string name="settings_menu_music_description">Reproduz música ambiente enquanto você navega pelos menus.</string>
+    <string name="settings_menu_music_on">Ligada</string>
+    <string name="settings_menu_music_off">Desligada</string>
+</resources>

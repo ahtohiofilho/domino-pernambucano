@@ -12,6 +12,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.ahtohiofilho.dominopernambucano.advertising.AndroidAdvertisingController
 import com.ahtohiofilho.dominopernambucano.ui.DominoPernambucanoApp
+import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMenuMusicController
 import com.ahtohiofilho.dominopernambucano.ui.settings.AndroidAppLanguageManager
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
 
@@ -71,6 +72,29 @@ class MainActivity : ComponentActivity() {
         advertisingController.start(
             activity = this,
         )
+    }
+
+    override fun onStart() {
+        super.onStart()
+
+        AndroidMenuMusicController.setAppForeground(
+            context = applicationContext,
+            foreground = true,
+        )
+    }
+
+    override fun onStop() {
+        AndroidMenuMusicController.setAppForeground(
+            context = applicationContext,
+            foreground = false,
+        )
+
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        AndroidMenuMusicController.release()
+        super.onDestroy()
     }
 
     override fun onWindowFocusChanged(

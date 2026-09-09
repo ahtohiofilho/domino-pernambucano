@@ -59,6 +59,7 @@ import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSes
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiCoordinator
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileStrings
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
+import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMenuMusicController
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
 import com.ahtohiofilho.dominopernambucano.ui.info.RulesHelpScreen
 import com.ahtohiofilho.dominopernambucano.ui.info.TermsOfUseScreen
@@ -490,6 +491,18 @@ fun DominoPernambucanoApp(
     val onlineDebugOptions = onlineAppConfig.debugOptions
 
     val sessionState by sessionCoordinator.state.collectAsState()
+
+    LaunchedEffect(sessionState) {
+        AndroidMenuMusicController.setMenuActive(
+            context = context.applicationContext,
+            active = when (sessionState) {
+                is DominoSessionState.LocalMatch,
+                is DominoSessionState.OnlineMatch -> false
+
+                else -> true
+            },
+        )
+    }
 
     var offlineIdentityDialogVisible by remember {
         mutableStateOf(false)

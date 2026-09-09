@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import com.ahtohiofilho.dominopernambucano.BuildConfig
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMenuMusicController
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidSoundEffectsPreferences
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandShapes
@@ -77,6 +78,11 @@ fun SettingsScreen(
 ) {
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
+    var menuMusicEnabled by remember(context) {
+        mutableStateOf(
+            AndroidMenuMusicController.isEnabled(context),
+        )
+    }
     var soundEffectsEnabled by remember(context) {
         mutableStateOf(
             AndroidSoundEffectsPreferences.isEnabled(context),
@@ -157,6 +163,17 @@ fun SettingsScreen(
                     color = DominoSemanticColors.brandText,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
+                )
+
+                MenuMusicOptionCard(
+                    enabled = menuMusicEnabled,
+                    onEnabledChange = { enabled ->
+                        AndroidMenuMusicController.setEnabled(
+                            context = context,
+                            enabled = enabled,
+                        )
+                        menuMusicEnabled = enabled
+                    },
                 )
 
                 SoundEffectsOptionCard(
@@ -419,6 +436,77 @@ private fun SettingsSymbol(
         style = MaterialTheme.typography.titleLarge,
         fontWeight = FontWeight.Black,
     )
+}
+
+@Composable
+private fun MenuMusicOptionCard(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("settings_menu_music")
+            .clickable(
+                role = Role.Switch,
+                onClick = {
+                    onEnabledChange(!enabled)
+                },
+            ),
+        shape = DominoBrandShapes.card,
+        color = DominoSemanticColors.brandSurfaceElevated,
+        contentColor = DominoSemanticColors.brandText,
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                MaterialTheme.dominoSpacing.md,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(
+                MaterialTheme.dominoSpacing.sm,
+            ),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(
+                    MaterialTheme.dominoSpacing.xs,
+                ),
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.settings_menu_music_title,
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                Text(
+                    text = stringResource(
+                        R.string.settings_menu_music_description,
+                    ),
+                    color = DominoSemanticColors.brandSupportingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                Text(
+                    text = stringResource(
+                        if (enabled) {
+                            R.string.settings_menu_music_on
+                        } else {
+                            R.string.settings_menu_music_off
+                        },
+                    ),
+                    color = DominoSemanticColors.brandSupportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            Switch(
+                checked = enabled,
+                onCheckedChange = null,
+            )
+        }
+    }
 }
 
 @Composable
