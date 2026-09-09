@@ -168,7 +168,7 @@
     <string name="ranking_loading">Carregando...</string>
     <string name="ranking_load_more">Carregar mais</string>
     <string name="ranking_score_summary">Pontuação %1$s · %2$d vitórias em %3$d jogos</string>
-    <string name="ranking_metrics_summary">Saldo %1$d · Pontos %2$d · Toques %3$d · Rodadas automáticas %4$d</string>
+    <string name="ranking_metrics_summary">Saldo %1$d · Pontos %2$d · Toques dados %3$d · Rodadas automáticas %4$d</string>
     <string name="ranking_player_fallback">Jogador %1$d</string>
     <string name="ranking_failure_authentication_required">Não há uma sessão online válida para consultar o ranking.</string>
     <string name="ranking_failure_rate_limited">Muitas consultas foram feitas. Aguarde e tente novamente.</string>

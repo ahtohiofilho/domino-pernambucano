@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.ranking
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -40,6 +42,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -1048,14 +1052,9 @@ private fun RankingEntryCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(
-                    modifier = Modifier.width(42.dp),
-                    text = entry.publicRankLabel(locale),
-                    color = DominoSemanticColors.brandText,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
+                RankingAvatarSlot(
+                    rankLabel = entry.publicRankLabel(locale),
+                    highlighted = highlighted,
                 )
 
                 Text(
@@ -1106,6 +1105,78 @@ private fun RankingEntryCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun RankingAvatarSlot(
+    rankLabel: String,
+    highlighted: Boolean,
+) {
+    val frameColor = if (highlighted) {
+        DominoSemanticColors.brandPositive
+    } else {
+        DominoSemanticColors.brandBorder
+    }
+
+    Box(
+        modifier = Modifier.size(52.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(
+            modifier = Modifier.size(46.dp),
+        ) {
+            val silhouetteColor =
+                DominoSemanticColors.brandSupportingText.copy(
+                    alpha = 0.68f,
+                )
+            val frameWidth =
+                if (highlighted) 2.5.dp.toPx() else 1.5.dp.toPx()
+
+            drawCircle(
+                color = DominoSemanticColors.brandSurface,
+                radius = size.minDimension * 0.48f,
+            )
+            drawCircle(
+                color = frameColor,
+                radius = size.minDimension * 0.48f,
+                style = Stroke(width = frameWidth),
+            )
+            drawCircle(
+                color = silhouetteColor,
+                radius = size.minDimension * 0.14f,
+                center = Offset(
+                    x = size.width * 0.50f,
+                    y = size.height * 0.36f,
+                ),
+            )
+            drawCircle(
+                color = silhouetteColor,
+                radius = size.minDimension * 0.25f,
+                center = Offset(
+                    x = size.width * 0.50f,
+                    y = size.height * 0.78f,
+                ),
+            )
+        }
+
+        Text(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .background(
+                    color = DominoSemanticColors.brandSurface,
+                    shape = CircleShape,
+                )
+                .padding(
+                    horizontal = 4.dp,
+                    vertical = 1.dp,
+                ),
+            text = rankLabel,
+            color = DominoSemanticColors.brandText,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1,
+        )
     }
 }
 

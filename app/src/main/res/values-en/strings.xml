@@ -168,7 +168,7 @@
     <string name="ranking_loading">Loading...</string>
     <string name="ranking_load_more">Load more</string>
     <string name="ranking_score_summary">Score %1$s · %2$d wins in %3$d games</string>
-    <string name="ranking_metrics_summary">Balance %1$d · Points %2$d · Touches %3$d · Automatic rounds %4$d</string>
+    <string name="ranking_metrics_summary">Balance %1$d · Points %2$d · Blocks %3$d · Automatic rounds %4$d</string>
     <string name="ranking_player_fallback">Player %1$d</string>
     <string name="ranking_failure_authentication_required">There is no valid online session to view the leaderboard.</string>
     <string name="ranking_failure_rate_limited">Too many requests were made. Wait and try again.</string>
