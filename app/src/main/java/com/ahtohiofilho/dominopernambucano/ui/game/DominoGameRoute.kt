@@ -17,7 +17,9 @@ import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
 import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineGameUiTraceReporter
 import com.ahtohiofilho.dominopernambucano.online.OnlineUiTraceContext
+import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMatchResultSoundPlayer
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidTilePlacementSoundPlayer
+import com.ahtohiofilho.dominopernambucano.ui.audio.MatchResultAudioTransitionTracker
 import com.ahtohiofilho.dominopernambucano.ui.audio.TilePlacementAudioTransitionTracker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -50,9 +52,27 @@ fun DominoGameRoute(
         )
     }
 
-    DisposableEffect(tilePlacementSoundPlayer) {
+    val matchResultSoundPlayer = remember(context) {
+        AndroidMatchResultSoundPlayer(
+            context = context.applicationContext,
+        )
+    }
+
+    val matchResultAudioTracker = remember(matchCoordinator) {
+        MatchResultAudioTransitionTracker(
+            initiallyMatchFinished =
+                matchCoordinator.currentState.phase ==
+                    DominoMatchPhase.MatchFinished,
+        )
+    }
+
+    DisposableEffect(
+        tilePlacementSoundPlayer,
+        matchResultSoundPlayer,
+    ) {
         onDispose {
             tilePlacementSoundPlayer.release()
+            matchResultSoundPlayer.release()
         }
     }
     val onlineUiTraceContext = onlineUiTraceReporter?.currentUiTraceContext()
@@ -88,6 +108,23 @@ fun DominoGameRoute(
                 } else {
                     postMatchStatisticsTracker.accept(state.gameState)
                 }
+        }
+    }
+
+    LaunchedEffect(
+        runtimeState.phase,
+        gameState.gameWinnerTeamIndex,
+        runtimeState.localPlayerIndex,
+    ) {
+        matchResultAudioTracker.accept(
+            isMatchFinished =
+                runtimeState.phase == DominoMatchPhase.MatchFinished,
+            winnerTeamIndex =
+                gameState.gameWinnerTeamIndex,
+            localPlayerIndex =
+                runtimeState.localPlayerIndex,
+        )?.let { outcome ->
+            matchResultSoundPlayer.play(outcome)
         }
     }
 
