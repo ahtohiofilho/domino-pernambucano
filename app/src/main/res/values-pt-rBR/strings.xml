@@ -7,7 +7,8 @@
     <string name="main_menu_ranking">Ranking</string>
     <string name="main_menu_ranking_support">Veja sua posição e os ciclos.</string>
     <string name="main_menu_account">Conta</string>
-    <string name="main_menu_account_support">Gerencie sua identidade online.</string>
+    <string name="main_menu_account_support">Entre ou crie sua conta.</string>
+    <string name="main_menu_account_connected_support">Gerencie seu perfil.</string>
     <string name="main_menu_checking_participation">Verificando sua participação online...</string>
     <string name="main_menu_check_participation">Verificar participação online</string>
     <string name="main_menu_resuming">Retomando...</string>
@@ -78,6 +79,15 @@
     <string name="play_mode_table_name">Na mesa: %1$s</string>
     <string name="play_mode_editable_identity_hint">O nome curto é gerado agora e poderá ser personalizado no perfil.</string>
     <string name="play_mode_managed_identity_hint">Edite o nome público e o nome curto em Conta.</string>
+    <string name="account_entry_title">Conta Dominó PE</string>
+    <string name="account_entry_description">Jogue partidas ranqueadas e veja sua posição no ranking.</string>
+    <string name="account_entry_continue">Continuar</string>
+    <string name="account_entry_create_account">Criar conta</string>
+    <string name="account_entry_sign_in">Entrar</string>
+    <string name="account_entry_or">ou</string>
+    <string name="account_entry_existing">Já tem uma conta? Entrar</string>
+    <string name="account_entry_code_title">Verifique seu e-mail</string>
+    <string name="account_entry_code_description">Enviamos um código de 6 dígitos para %1$s.</string>
     <string name="account_title">Conta</string>
     <string name="account_connecting">Conectando...</string>
     <string name="account_saving">Salvando...</string>

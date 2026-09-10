@@ -5,14 +5,11 @@ import org.junit.Test
 
 class OnlineRankedEntryFlowTest {
     @Test
-    fun connected_account_enters_matchmaking_without_reauthentication() {
+    fun connected_account_enters_matchmaking_without_account_gate() {
         val events = mutableListOf<String>()
 
         enterOnlineRankedFlow(
             accountConnected = true,
-            authenticate = { _ ->
-                events += "authenticate"
-            },
             openAccountSetup = {
                 events += "account-setup"
             },
@@ -28,16 +25,11 @@ class OnlineRankedEntryFlowTest {
     }
 
     @Test
-    fun successful_authentication_opens_account_setup_and_never_matchmaking() {
+    fun disconnected_account_opens_account_surface_before_matchmaking() {
         val events = mutableListOf<String>()
-        var authenticationSuccess: (() -> Unit)? = null
 
         enterOnlineRankedFlow(
             accountConnected = false,
-            authenticate = { onConnected ->
-                events += "authenticate"
-                authenticationSuccess = onConnected
-            },
             openAccountSetup = {
                 events += "account-setup"
             },
@@ -47,17 +39,7 @@ class OnlineRankedEntryFlowTest {
         )
 
         assertEquals(
-            listOf("authenticate"),
-            events,
-        )
-
-        requireNotNull(authenticationSuccess).invoke()
-
-        assertEquals(
-            listOf(
-                "authenticate",
-                "account-setup",
-            ),
+            listOf("account-setup"),
             events,
         )
     }

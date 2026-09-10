@@ -7,7 +7,8 @@
     <string name="main_menu_ranking">Leaderboard</string>
     <string name="main_menu_ranking_support">View your position and ranking cycles.</string>
     <string name="main_menu_account">Account</string>
-    <string name="main_menu_account_support">Manage your online identity.</string>
+    <string name="main_menu_account_support">Sign in or create your account.</string>
+    <string name="main_menu_account_connected_support">Manage your profile.</string>
     <string name="main_menu_checking_participation">Checking your online participation...</string>
     <string name="main_menu_check_participation">Check online participation</string>
     <string name="main_menu_resuming">Resuming...</string>
@@ -78,6 +79,15 @@
     <string name="play_mode_table_name">At the table: %1$s</string>
     <string name="play_mode_editable_identity_hint">The short name is generated now and can be customized in the profile.</string>
     <string name="play_mode_managed_identity_hint">Edit the public name and short name in Account.</string>
+    <string name="account_entry_title">Dominó PE Account</string>
+    <string name="account_entry_description">Play ranked matches and see where you stand.</string>
+    <string name="account_entry_continue">Continue</string>
+    <string name="account_entry_create_account">Create account</string>
+    <string name="account_entry_sign_in">Sign in</string>
+    <string name="account_entry_or">or</string>
+    <string name="account_entry_existing">Already have an account? Sign in</string>
+    <string name="account_entry_code_title">Check your email</string>
+    <string name="account_entry_code_description">We sent a 6-digit code to %1$s.</string>
     <string name="account_title">Account</string>
     <string name="account_connecting">Connecting...</string>
     <string name="account_saving">Saving...</string>

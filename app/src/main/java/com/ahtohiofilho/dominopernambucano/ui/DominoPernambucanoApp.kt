@@ -1294,11 +1294,7 @@ fun DominoPernambucanoApp(
                 onRankedGameClick = {
                     enterOnlineRankedFlow(
                         accountConnected = onlineAccountConnected,
-                        authenticate = { onConnected ->
-                            connectOnlineGoogleAccount(
-                                onConnected = onConnected,
-                            )
-                        },
+
                         openAccountSetup = {
                             openAccountDialogOnNextMainMenu = true
                             sessionCoordinator.dispatch(

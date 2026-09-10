@@ -258,41 +258,17 @@ fun MainMenuScreen(
             }
         }
 
-    val connectedAccountName = onlineAccountDisplayName
-        ?.trim()
-        ?.takeIf { it.isNotEmpty() }
-    val connectedTableName = onlineAccountTableName
-        ?.trim()
-        ?.takeIf { it.isNotEmpty() }
-    val accountTitle = if (
-        onlineGoogleAccountStatus == OnlineGoogleAccountStatus.CONNECTED &&
-        connectedAccountName != null
-    ) {
-        connectedAccountName
-    } else {
+    val accountTitle =
         stringResource(R.string.main_menu_account)
-    }
-    val accountSupport = when (onlineGoogleAccountStatus) {
-        OnlineGoogleAccountStatus.CONNECTED -> {
-            if (connectedTableName != null) {
-                stringResource(R.string.account_state_connected) +
-                    " · " + connectedTableName
-            } else {
-                stringResource(R.string.account_state_connected)
-            }
-        }
-
-        OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
-            stringResource(R.string.account_state_recovery_required)
-
-        OnlineGoogleAccountStatus.VISITOR ->
-            stringResource(R.string.account_state_visitor)
-
-        OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL ->
-            stringResource(R.string.account_state_disconnected)
-
-        OnlineGoogleAccountStatus.UNAVAILABLE ->
-            stringResource(R.string.account_state_unavailable)
+    val accountSupport = if (
+        onlineGoogleAccountStatus ==
+        OnlineGoogleAccountStatus.CONNECTED
+    ) {
+        stringResource(
+            R.string.main_menu_account_connected_support,
+        )
+    } else {
+        stringResource(R.string.main_menu_account_support)
     }
 
 

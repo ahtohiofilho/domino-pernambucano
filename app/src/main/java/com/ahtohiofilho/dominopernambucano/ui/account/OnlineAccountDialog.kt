@@ -1,17 +1,49 @@
 package com.ahtohiofilho.dominopernambucano.ui.account
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -20,8 +52,12 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.BuildConfig
 import com.ahtohiofilho.dominopernambucano.online.MAX_ONLINE_PUBLIC_DISPLAY_NAME_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.ONLINE_ACCOUNT_TABLE_CODE_LENGTH
 import com.ahtohiofilho.dominopernambucano.online.OnlineEmailAccountIntent
@@ -54,6 +90,38 @@ internal const val OnlineAccountEmailCodeFieldTag =
 internal const val OnlineAccountEmailPrimaryActionTag =
     "online_account_email_primary_action"
 
+internal enum class OnlineAccountEntryMode {
+    CREATE_ACCOUNT,
+    SIGN_IN,
+}
+
+internal fun defaultOnlineAccountEntryMode(
+    status: OnlineGoogleAccountStatus,
+): OnlineAccountEntryMode {
+    return if (
+        status == OnlineGoogleAccountStatus.RECOVERY_REQUIRED
+    ) {
+        OnlineAccountEntryMode.SIGN_IN
+    } else {
+        OnlineAccountEntryMode.CREATE_ACCOUNT
+    }
+}
+
+internal fun accountEntryModeButtonsShouldStack(
+    availableWidthDp: Float,
+): Boolean {
+    return availableWidthDp < 320f
+}
+internal fun onlineAccountEmailIntentFor(
+    mode: OnlineAccountEntryMode,
+): OnlineEmailAccountIntent {
+    return when (mode) {
+        OnlineAccountEntryMode.CREATE_ACCOUNT ->
+            OnlineEmailAccountIntent.LINK
+        OnlineAccountEntryMode.SIGN_IN ->
+            OnlineEmailAccountIntent.RECOVER
+    }
+}
 internal fun onlineEmailAccountAvailableIntents(
     status: OnlineGoogleAccountStatus,
     emailAvailable: Boolean,
@@ -158,6 +226,30 @@ fun OnlineAccountDialog(
             status = status,
             feedbackMessage = feedbackMessage,
         )
+    if (status != OnlineGoogleAccountStatus.CONNECTED) {
+        OnlineAccountEntrySurface(
+            status = status,
+            actionInProgress = actionInProgress,
+            visibleFeedbackMessage = visibleFeedbackMessage,
+            googleAvailable = googleAvailable,
+            emailAvailable = emailAvailable,
+            emailAddress = emailAddress,
+            emailCode = emailCode,
+            emailCodeRequested = emailCodeRequested,
+            emailActionInProgress = emailActionInProgress,
+            emailFeedbackMessage = emailFeedbackMessage,
+            onEmailAddressChange = onEmailAddressChange,
+            onEmailCodeChange = onEmailCodeChange,
+            onEmailStartLinkClick = onEmailStartLinkClick,
+            onEmailStartRecoverClick = onEmailStartRecoverClick,
+            onEmailConfirmCodeClick = onEmailConfirmCodeClick,
+            onEmailResetClick = onEmailResetClick,
+            onConnectGoogleClick = onConnectGoogleClick,
+            onDismissRequest = onDismissRequest,
+        )
+        return
+    }
+
     val accountStateDescription = if (anyActionInProgress) {
         stringResource(R.string.account_state_action_in_progress)
     } else {
@@ -381,6 +473,530 @@ fun OnlineAccountDialog(
     )
 }
 
+@Composable
+private fun OnlineAccountEntrySurface(
+    status: OnlineGoogleAccountStatus,
+    actionInProgress: Boolean,
+    visibleFeedbackMessage: String?,
+    googleAvailable: Boolean,
+    emailAvailable: Boolean,
+    emailAddress: String,
+    emailCode: String,
+    emailCodeRequested: Boolean,
+    emailActionInProgress: Boolean,
+    emailFeedbackMessage: String?,
+    onEmailAddressChange: (String) -> Unit,
+    onEmailCodeChange: (String) -> Unit,
+    onEmailStartLinkClick: () -> Unit,
+    onEmailStartRecoverClick: () -> Unit,
+    onEmailConfirmCodeClick: () -> Unit,
+    onEmailResetClick: () -> Unit,
+    onConnectGoogleClick: () -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    val anyActionInProgress =
+        actionInProgress || emailActionInProgress
+    val emailEntryVisible =
+        emailAvailable || BuildConfig.DEBUG
+
+    var entryModeName by rememberSaveable(status) {
+        mutableStateOf(
+            defaultOnlineAccountEntryMode(status).name,
+        )
+    }
+    val entryMode = OnlineAccountEntryMode.valueOf(
+        entryModeName,
+    )
+
+    Dialog(
+        onDismissRequest = {
+            if (!anyActionInProgress) {
+                onDismissRequest()
+            }
+        },
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 440.dp)
+                .testTag(OnlineAccountDialogTag),
+            shape = RoundedCornerShape(24.dp),
+            color = DominoSemanticColors.dialogSurface,
+            tonalElevation = 8.dp,
+            shadowElevation = 12.dp,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = 28.dp,
+                        end = 28.dp,
+                        top = 26.dp,
+                        bottom = 22.dp,
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(
+                    MaterialTheme.dominoSpacing.sm,
+                ),
+            ) {
+                Image(
+                    painter = painterResource(
+                        R.drawable.ic_launcher_foreground,
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(96.dp),
+                )
+
+                Text(
+                    modifier = Modifier
+                        .testTag(OnlineAccountTitleTag)
+                        .semantics {
+                            heading()
+                        },
+                    text = if (emailCodeRequested) {
+                        stringResource(
+                            R.string.account_entry_code_title,
+                        )
+                    } else {
+                        stringResource(
+                            R.string.account_entry_title,
+                        )
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = DominoSemanticColors.dialogTitle,
+                    textAlign = TextAlign.Center,
+                )
+
+                if (emailCodeRequested) {
+                    Text(
+                        text = stringResource(
+                            R.string.account_entry_code_description,
+                            emailAddress,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = DominoSemanticColors.dialogBody,
+                        textAlign = TextAlign.Center,
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    DominoOutlinedTextField(
+                        value = emailCode,
+                        onValueChange = onEmailCodeChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                OnlineAccountEmailCodeFieldTag,
+                            ),
+                        enabled = !emailActionInProgress,
+                        label = stringResource(
+                            R.string.account_email_code,
+                        ),
+                        supportingText = stringResource(
+                            R.string.account_email_code_hint,
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                        ),
+                        tone = DominoTextFieldTone.OnLight,
+                    )
+
+                    DominoPrimaryButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                OnlineAccountEmailPrimaryActionTag,
+                            ),
+                        text = if (emailActionInProgress) {
+                            stringResource(
+                                R.string.account_email_verifying,
+                            )
+                        } else {
+                            stringResource(
+                                R.string.account_email_confirm,
+                            )
+                        },
+                        onClick = onEmailConfirmCodeClick,
+                        enabled =
+                            !emailActionInProgress &&
+                                emailCode.length == 6,
+                        loading = emailActionInProgress,
+                        containerColor =
+                            DominoSemanticColors.dialogAction,
+                        contentColor =
+                            DominoSemanticColors.dialogActionContent,
+                        disabledContainerColor =
+                            DominoSemanticColors.dialogDisabledAction,
+                        disabledContentColor =
+                            DominoSemanticColors
+                                .dialogDisabledActionContent,
+                    )
+
+                    DominoTextAction(
+                        text = stringResource(
+                            R.string.account_email_use_another,
+                        ),
+                        onClick = onEmailResetClick,
+                        enabled = !emailActionInProgress,
+                        contentColor =
+                            DominoSemanticColors.dialogDismissAction,
+                        disabledContentColor =
+                            DominoSemanticColors
+                                .dialogDisabledDismissAction,
+                    )
+                } else {
+                    Text(
+                        text = stringResource(
+                            R.string.account_entry_description,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = DominoSemanticColors.dialogBody,
+                        textAlign = TextAlign.Center,
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (emailEntryVisible) {
+                        BoxWithConstraints(
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            val stackModeActions =
+                                accountEntryModeButtonsShouldStack(
+                                    maxWidth.value,
+                                )
+
+                            if (stackModeActions) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement =
+                                        Arrangement.spacedBy(8.dp),
+                                ) {
+                                    OnlineAccountEntryModeButton(
+                                        modifier =
+                                            Modifier.fillMaxWidth(),
+                                        selected =
+                                            entryMode ==
+                                                OnlineAccountEntryMode
+                                                    .CREATE_ACCOUNT,
+                                        text = stringResource(
+                                            R.string
+                                                .account_entry_create_account,
+                                        ),
+                                        enabled =
+                                            !emailActionInProgress,
+                                        onClick = {
+                                            entryModeName =
+                                                OnlineAccountEntryMode
+                                                    .CREATE_ACCOUNT
+                                                    .name
+                                        },
+                                    )
+
+                                    OnlineAccountEntryModeButton(
+                                        modifier =
+                                            Modifier.fillMaxWidth(),
+                                        selected =
+                                            entryMode ==
+                                                OnlineAccountEntryMode
+                                                    .SIGN_IN,
+                                        text = stringResource(
+                                            R.string
+                                                .account_entry_sign_in,
+                                        ),
+                                        enabled =
+                                            !emailActionInProgress,
+                                        onClick = {
+                                            entryModeName =
+                                                OnlineAccountEntryMode
+                                                    .SIGN_IN
+                                                    .name
+                                        },
+                                    )
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement =
+                                        Arrangement.spacedBy(8.dp),
+                                ) {
+                                    OnlineAccountEntryModeButton(
+                                        modifier =
+                                            Modifier.weight(1f),
+                                        selected =
+                                            entryMode ==
+                                                OnlineAccountEntryMode
+                                                    .CREATE_ACCOUNT,
+                                        text = stringResource(
+                                            R.string
+                                                .account_entry_create_account,
+                                        ),
+                                        enabled =
+                                            !emailActionInProgress,
+                                        onClick = {
+                                            entryModeName =
+                                                OnlineAccountEntryMode
+                                                    .CREATE_ACCOUNT
+                                                    .name
+                                        },
+                                    )
+
+                                    OnlineAccountEntryModeButton(
+                                        modifier =
+                                            Modifier.weight(1f),
+                                        selected =
+                                            entryMode ==
+                                                OnlineAccountEntryMode
+                                                    .SIGN_IN,
+                                        text = stringResource(
+                                            R.string
+                                                .account_entry_sign_in,
+                                        ),
+                                        enabled =
+                                            !emailActionInProgress,
+                                        onClick = {
+                                            entryModeName =
+                                                OnlineAccountEntryMode
+                                                    .SIGN_IN
+                                                    .name
+                                        },
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        DominoOutlinedTextField(
+                            value = emailAddress,
+                            onValueChange = onEmailAddressChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(
+                                    OnlineAccountEmailFieldTag,
+                                ),
+                            enabled = !emailActionInProgress,
+                            label = stringResource(
+                                R.string.account_email_address,
+                            ),
+                            supportingText = null,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                            ),
+                            tone = DominoTextFieldTone.OnLight,
+                        )
+
+                        DominoPrimaryButton(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(
+                                    OnlineAccountEmailPrimaryActionTag,
+                                ),
+                            text = if (emailActionInProgress) {
+                                stringResource(
+                                    R.string.account_email_sending_code,
+                                )
+                            } else {
+                                stringResource(
+                                    R.string.account_entry_continue,
+                                )
+                            },
+                            onClick = {
+                                when (
+                                    onlineAccountEmailIntentFor(
+                                        entryMode,
+                                    )
+                                ) {
+                                    OnlineEmailAccountIntent.LINK ->
+                                        onEmailStartLinkClick()
+                                    OnlineEmailAccountIntent.RECOVER ->
+                                        onEmailStartRecoverClick()
+                                }
+                            },
+                            enabled =
+                                !emailActionInProgress &&
+                                    emailAddress.isNotBlank(),
+                            loading = emailActionInProgress,
+                            containerColor =
+                                DominoSemanticColors.dialogAction,
+                            contentColor =
+                                DominoSemanticColors
+                                    .dialogActionContent,
+                            disabledContainerColor =
+                                DominoSemanticColors
+                                    .dialogDisabledAction,
+                            disabledContentColor =
+                                DominoSemanticColors
+                                    .dialogDisabledActionContent,
+                        )
+                    }
+
+                    if (emailEntryVisible) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment =
+                                Alignment.CenterVertically,
+                        ) {
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme
+                                    .colorScheme
+                                    .outline
+                                    .copy(alpha = 0.45f),
+                            )
+                            Text(
+                                modifier = Modifier.padding(
+                                    horizontal = 12.dp,
+                                ),
+                                text = stringResource(
+                                    R.string.account_entry_or,
+                                ),
+                                style =
+                                    MaterialTheme.typography.bodySmall,
+                                color =
+                                    DominoSemanticColors.dialogBody,
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme
+                                    .colorScheme
+                                    .outline
+                                    .copy(alpha = 0.45f),
+                            )
+                        }
+                    }
+
+                    OutlinedButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .testTag(
+                                OnlineAccountPrimaryActionTag,
+                            ),
+                        onClick = onConnectGoogleClick,
+                        enabled =
+                            googleAvailable &&
+                                !anyActionInProgress,
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Text(
+                            text = "G",
+                            fontWeight = FontWeight.Black,
+                            color = if (googleAvailable) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme
+                                    .colorScheme
+                                    .onSurface
+                                    .copy(alpha = 0.38f)
+                            },
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = if (actionInProgress) {
+                                stringResource(
+                                    R.string.account_connecting,
+                                )
+                            } else {
+                                stringResource(
+                                    R.string.account_continue_google,
+                                )
+                            },
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+
+                visibleFeedbackMessage?.let { message ->
+                    Text(
+                        modifier = Modifier.semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DominoSemanticColors.dialogBody,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                emailFeedbackMessage?.let { message ->
+                    Text(
+                        modifier = Modifier.semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DominoSemanticColors.dialogBody,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                DominoTextAction(
+                    modifier = Modifier.testTag(
+                        OnlineAccountDismissActionTag,
+                    ),
+                    text = stringResource(R.string.common_back),
+                    onClick = onDismissRequest,
+                    enabled = !anyActionInProgress,
+                    contentColor =
+                        DominoSemanticColors.dialogDismissAction,
+                    disabledContentColor =
+                        DominoSemanticColors
+                            .dialogDisabledDismissAction,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnlineAccountEntryModeButton(
+    modifier: Modifier,
+    selected: Boolean,
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        modifier = modifier.height(48.dp),
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) {
+                DominoSemanticColors.dialogAction
+            } else {
+                MaterialTheme.colorScheme.outline.copy(
+                    alpha = 0.62f,
+                )
+            },
+        ),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (selected) {
+                DominoSemanticColors.dialogAction
+            } else {
+                Color.Transparent
+            },
+            contentColor = if (selected) {
+                DominoSemanticColors.dialogActionContent
+            } else {
+                DominoSemanticColors.dialogAction
+            },
+            disabledContentColor =
+                DominoSemanticColors.dialogDisabledDismissAction,
+        ),
+    ) {
+        Text(
+            text = text,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
 @Composable
 private fun OnlineEmailAccountContent(
     status: OnlineGoogleAccountStatus,

@@ -1,19 +1,15 @@
 package com.ahtohiofilho.dominopernambucano.ui
 
 /*
- * Ranked entry is intentionally split into three responsibilities:
+ * Ranked entry keeps account access separate from matchmaking.
  *
- * 1) authenticate the person;
- * 2) complete the current account-setup/onboarding contract;
- * 3) enter matchmaking only from an already connected account.
- *
- * Account setup is deliberately generic. Today it may collect only the MVP
- * fields. Future production fields belong behind [openAccountSetup] and must
- * not require coupling authentication directly to matchmaking again.
+ * An already connected account enters matchmaking immediately.
+ * Otherwise the player first sees the Dominó PE account-entry surface and
+ * explicitly chooses how to authenticate. External providers such as Google
+ * must never be launched automatically from the ranked-game button.
  */
 internal fun enterOnlineRankedFlow(
     accountConnected: Boolean,
-    authenticate: (onConnected: () -> Unit) -> Unit,
     openAccountSetup: () -> Unit,
     openMatchmaking: () -> Unit,
 ) {
@@ -22,7 +18,5 @@ internal fun enterOnlineRankedFlow(
         return
     }
 
-    authenticate {
-        openAccountSetup()
-    }
+    openAccountSetup()
 }
