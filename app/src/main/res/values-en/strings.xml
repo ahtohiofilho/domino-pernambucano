@@ -400,4 +400,7 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="settings_group_help">Help &amp; information</string>
     <string name="settings_group_account">Account</string>
     <string name="post_match_action_back_to_summary">Back to summary</string>
+    <string name="settings_licenses_pass_knock">Pass / knock — “Knock on door”</string>
+    <string name="settings_licenses_pass_knock_creator">Creator: jankooiker (Freesound)</string>
+    <string name="settings_licenses_pass_knock_adapted">Original audio trimmed and adapted for Dominó PE</string>
 </resources>

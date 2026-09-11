@@ -390,4 +390,7 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="settings_group_help">Ajuda e informações</string>
     <string name="settings_group_account">Conta</string>
     <string name="post_match_action_back_to_summary">Voltar ao resumo</string>
+    <string name="settings_licenses_pass_knock">Toque / passar a vez — “Knock on door”</string>
+    <string name="settings_licenses_pass_knock_creator">Criador: jankooiker (Freesound)</string>
+    <string name="settings_licenses_pass_knock_adapted">Áudio original recortado e adaptado para o Dominó PE</string>
 </resources>

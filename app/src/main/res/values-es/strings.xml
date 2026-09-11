@@ -400,4 +400,7 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="settings_group_help">Ayuda e información</string>
     <string name="settings_group_account">Cuenta</string>
     <string name="post_match_action_back_to_summary">Volver al resumen</string>
+    <string name="settings_licenses_pass_knock">Toque / pasar turno — “Knock on door”</string>
+    <string name="settings_licenses_pass_knock_creator">Creador: jankooiker (Freesound)</string>
+    <string name="settings_licenses_pass_knock_adapted">Audio original recortado y adaptado para Dominó PE</string>
 </resources>

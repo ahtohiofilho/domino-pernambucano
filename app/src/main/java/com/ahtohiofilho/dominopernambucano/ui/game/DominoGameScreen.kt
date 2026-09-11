@@ -45,6 +45,7 @@ fun DominoGameScreen(
     onTurnClockTick: (Long) -> Unit,
     onBotDecisionReady: () -> Unit,
     onPresentationFinished: () -> Unit,
+    onPassKnockImpact: () -> Unit = {},
     onStartNextRound: () -> Unit,
     onStartNewMatch: () -> Unit,
 ) {
@@ -621,6 +622,7 @@ fun DominoGameScreen(
                         attributes = attributes,
                     )
                 },
+                onKnockImpact = onPassKnockImpact,
                 onAnimationFinished = onPresentationFinished,
             )
         }

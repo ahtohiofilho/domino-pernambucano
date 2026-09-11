@@ -18,6 +18,7 @@ import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineGameUiTraceReporter
 import com.ahtohiofilho.dominopernambucano.online.OnlineUiTraceContext
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMatchResultSoundPlayer
+import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidPassKnockSoundPlayer
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidTilePlacementSoundPlayer
 import com.ahtohiofilho.dominopernambucano.ui.audio.MatchResultAudioTransitionTracker
 import com.ahtohiofilho.dominopernambucano.ui.audio.TilePlacementAudioTransitionTracker
@@ -40,6 +41,12 @@ fun DominoGameRoute(
 
     val tilePlacementSoundPlayer = remember(context) {
         AndroidTilePlacementSoundPlayer(
+            context = context.applicationContext,
+        )
+    }
+
+    val passKnockSoundPlayer = remember(context) {
+        AndroidPassKnockSoundPlayer(
             context = context.applicationContext,
         )
     }
@@ -68,10 +75,12 @@ fun DominoGameRoute(
 
     DisposableEffect(
         tilePlacementSoundPlayer,
+        passKnockSoundPlayer,
         matchResultSoundPlayer,
     ) {
         onDispose {
             tilePlacementSoundPlayer.release()
+            passKnockSoundPlayer.release()
             matchResultSoundPlayer.release()
         }
     }
@@ -261,6 +270,9 @@ fun DominoGameRoute(
             matchCoordinator.dispatch(
                 DominoMatchCommand.PresentationFinished,
             )
+        },
+        onPassKnockImpact = {
+            passKnockSoundPlayer.playImpact()
         },
         onStartNextRound = {
             matchCoordinator.dispatch(

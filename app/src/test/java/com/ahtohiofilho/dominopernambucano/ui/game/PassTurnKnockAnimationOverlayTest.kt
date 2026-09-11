@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
+import androidx.compose.ui.unit.IntOffset
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -36,6 +37,54 @@ class PassTurnKnockAnimationOverlayTest {
             resolveKnockScreenPlayerIndex(
                 playerIndex = 0,
                 localPlayerIndex = 1,
+            ),
+        )
+    }
+
+    @Test
+    fun `knock placement uses refined vertical offsets and preserves sides`() {
+        assertEquals(
+            IntOffset(
+                x = 200,
+                y = -100,
+            ),
+            getKnockPlacementOffset(
+                playerIndex = 0,
+                screenWidthPx = 1000f,
+                screenHeightPx = 1000f,
+            ),
+        )
+        assertEquals(
+            IntOffset(
+                x = 80,
+                y = 0,
+            ),
+            getKnockPlacementOffset(
+                playerIndex = 1,
+                screenWidthPx = 1000f,
+                screenHeightPx = 1000f,
+            ),
+        )
+        assertEquals(
+            IntOffset(
+                x = -200,
+                y = 160,
+            ),
+            getKnockPlacementOffset(
+                playerIndex = 2,
+                screenWidthPx = 1000f,
+                screenHeightPx = 1000f,
+            ),
+        )
+        assertEquals(
+            IntOffset(
+                x = -80,
+                y = 0,
+            ),
+            getKnockPlacementOffset(
+                playerIndex = 3,
+                screenWidthPx = 1000f,
+                screenHeightPx = 1000f,
             ),
         )
     }

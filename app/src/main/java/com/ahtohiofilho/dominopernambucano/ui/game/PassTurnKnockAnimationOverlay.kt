@@ -43,7 +43,9 @@ private const val KNOCK_END_MILLIS = 160
 private const val KNOCK_OFFSET_PX = 14f
 private const val KNOCK_ROTATION_DEGREES = 5f
 
-private const val KNOCK_TOWARD_CENTER_SCREEN_FRACTION = 0.08f
+private const val KNOCK_SIDE_TOWARD_CENTER_SCREEN_FRACTION = 0.08f
+private const val KNOCK_BOTTOM_TOWARD_CENTER_SCREEN_FRACTION = 0.10f
+private const val KNOCK_TOP_TOWARD_CENTER_SCREEN_FRACTION = 0.16f
 private const val KNOCK_PLAYER_RIGHT_SCREEN_FRACTION = 0.20f
 
 @Composable
@@ -52,6 +54,7 @@ fun PassTurnKnockAnimationOverlay(
     localPlayerIndex: Int,
     presentationId: String?,
     onAnimationTrace: (OnlineTraceType, Map<String, String>) -> Unit,
+    onKnockImpact: () -> Unit = {},
     modifier: Modifier = Modifier,
     onAnimationFinished: () -> Unit,
 ) {
@@ -123,6 +126,7 @@ fun PassTurnKnockAnimationOverlay(
                 )
 
                 frameIndex = 1
+                onKnockImpact()
 
                 val offsetJob = launch {
                     offsetAnim.animateTo(
@@ -386,20 +390,20 @@ private fun getDirectionalKnockOffset(
     }
 }
 
-private fun getKnockPlacementOffset(
+internal fun getKnockPlacementOffset(
     playerIndex: Int,
     screenWidthPx: Float,
     screenHeightPx: Float,
 ): IntOffset {
     val towardCenterX = when (playerIndex) {
-        1 -> screenWidthPx * KNOCK_TOWARD_CENTER_SCREEN_FRACTION
-        3 -> -screenWidthPx * KNOCK_TOWARD_CENTER_SCREEN_FRACTION
+        1 -> screenWidthPx * KNOCK_SIDE_TOWARD_CENTER_SCREEN_FRACTION
+        3 -> -screenWidthPx * KNOCK_SIDE_TOWARD_CENTER_SCREEN_FRACTION
         else -> 0f
     }
 
     val towardCenterY = when (playerIndex) {
-        0 -> -screenHeightPx * KNOCK_TOWARD_CENTER_SCREEN_FRACTION
-        2 -> screenHeightPx * KNOCK_TOWARD_CENTER_SCREEN_FRACTION
+        0 -> -screenHeightPx * KNOCK_BOTTOM_TOWARD_CENTER_SCREEN_FRACTION
+        2 -> screenHeightPx * KNOCK_TOP_TOWARD_CENTER_SCREEN_FRACTION
         else -> 0f
     }
 

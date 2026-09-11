@@ -479,6 +479,41 @@ fun SettingsScreen(
                             ),
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_pass_knock,
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_source,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_pass_knock_creator,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_license,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_pass_knock_adapted,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
             }
