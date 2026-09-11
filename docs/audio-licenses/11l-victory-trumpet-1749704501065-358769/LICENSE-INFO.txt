@@ -1,0 +1,53 @@
+﻿DOMINÓ PE — AUDIO LICENSE / PROVENANCE
+
+Fonte:
+Pixabay
+
+Página de origem:
+https://pixabay.com/pt/sound-effects/filme-e-efeitos-especiais-11l-victory-trumpet-1749704501065-358769/
+
+Título exibido:
+11L-Victory_trumpet-1749704501065
+
+Criador exibido:
+AstralSynthesizer
+
+Marcação exibida na página:
+IA gerada
+
+Arquivo-fonte local:
+astralsynthesizer-11l-victory_trumpet-1749704501065-358769.mp3
+
+Arquivo incorporado ao aplicativo:
+app/src/main/res/raw/match_result_victory.mp3
+
+Uso:
+Som de vitória no encerramento final da partida.
+
+Transformações do arquivo:
+- nenhuma edição do conteúdo;
+- nenhum recorte;
+- nenhuma reencodificação;
+- nenhuma normalização gravada no arquivo;
+- somente renomeação para o nome interno do recurso.
+
+Observação de reprodução:
+O volume de 50% é aplicado em tempo de execução e não altera o MP3.
+
+SHA-256 do arquivo-fonte:
+0BE251D779646D816262D6494E76676AF5FC9891F0D4FEDA22AD2C7E30641ADF
+
+SHA-256 do arquivo incorporado:
+0BE251D779646D816262D6494E76676AF5FC9891F0D4FEDA22AD2C7E30641ADF
+
+Tamanho:
+98638 bytes
+
+Licença:
+Pixabay Content License.
+
+Observação:
+O arquivo incorporado é byte-a-byte idêntico ao arquivo-fonte validado.
+
+Data de verificação:
+11/09/2026

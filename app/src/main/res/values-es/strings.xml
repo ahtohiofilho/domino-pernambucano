@@ -392,4 +392,9 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="settings_menu_music_description">Reproduce música de fondo mientras navegas por los menús.</string>
     <string name="settings_menu_music_on">Activada</string>
     <string name="settings_menu_music_off">Desactivada</string>
+    <string name="settings_licenses_match_victory">Resultado de la partida — victoria</string>
+    <string name="settings_licenses_match_victory_creator">Creador: AstralSynthesizer</string>
+    <string name="settings_licenses_match_defeat">Resultado de la partida — derrota</string>
+    <string name="settings_licenses_match_defeat_creator">Creador: Leszek_Szary (Freesound)</string>
+    <string name="settings_licenses_original_unmodified">Audio original incorporado sin edición</string>
 </resources>

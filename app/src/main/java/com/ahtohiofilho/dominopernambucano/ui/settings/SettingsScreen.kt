@@ -383,6 +383,77 @@ fun SettingsScreen(
                             ),
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_match_victory,
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_source,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_match_victory_creator,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_license,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_original_unmodified,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_match_defeat,
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_source,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_match_defeat_creator,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_license,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.settings_licenses_original_unmodified,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
             }

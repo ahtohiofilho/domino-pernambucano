@@ -1,0 +1,33 @@
+﻿DOMINÓ PE — RASTREAMENTO DE ÁUDIO
+
+Arquivo-fonte:
+astralsynthesizer-11l-victory_trumpet-1749704501065-358769.mp3
+
+Fonte:
+Pixabay
+
+Página:
+https://pixabay.com/pt/sound-effects/filme-e-efeitos-especiais-11l-victory-trumpet-1749704501065-358769/
+
+Criador exibido:
+AstralSynthesizer
+
+Licença:
+Pixabay Content License
+
+Arquivo incorporado:
+app/src/main/res/raw/match_result_victory.mp3
+
+Transformações:
+- nenhuma transformação de conteúdo;
+- nenhum recorte;
+- nenhuma conversão de formato;
+- somente renomeação para o nome interno do recurso.
+
+SOURCE_SHA256=0BE251D779646D816262D6494E76676AF5FC9891F0D4FEDA22AD2C7E30641ADF
+APP_SHA256=0BE251D779646D816262D6494E76676AF5FC9891F0D4FEDA22AD2C7E30641ADF
+BYTE_IDENTITY=YES
+
+Observação:
+A reprodução usa o arquivo completo.
+O ganho de 50% é aplicado em runtime.

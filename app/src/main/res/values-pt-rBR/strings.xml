@@ -382,4 +382,9 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="settings_menu_music_description">Reproduz música ambiente enquanto você navega pelos menus.</string>
     <string name="settings_menu_music_on">Ligada</string>
     <string name="settings_menu_music_off">Desligada</string>
+    <string name="settings_licenses_match_victory">Resultado da partida — vitória</string>
+    <string name="settings_licenses_match_victory_creator">Criador: AstralSynthesizer</string>
+    <string name="settings_licenses_match_defeat">Resultado da partida — derrota</string>
+    <string name="settings_licenses_match_defeat_creator">Criador: Leszek_Szary (Freesound)</string>
+    <string name="settings_licenses_original_unmodified">Áudio original incorporado sem edição</string>
 </resources>

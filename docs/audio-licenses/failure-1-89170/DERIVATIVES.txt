@@ -1,0 +1,36 @@
+﻿DOMINÓ PE — RASTREAMENTO DE ÁUDIO
+
+Arquivo-fonte:
+freesound_community-failure-1-89170.mp3
+
+Fonte:
+Pixabay
+
+Página:
+https://pixabay.com/pt/sound-effects/filme-e-efeitos-especiais-failure-1-89170/
+
+Artista/autor exibido:
+Leszek_Szary (Freesound)
+
+Conta exibida:
+freesound_community
+
+Licença:
+Pixabay Content License
+
+Arquivo incorporado:
+app/src/main/res/raw/match_result_defeat.mp3
+
+Transformações:
+- nenhuma transformação de conteúdo;
+- nenhum recorte;
+- nenhuma conversão de formato;
+- somente renomeação para o nome interno do recurso.
+
+SOURCE_SHA256=FF579CA2748EEA734A27FB7776B014667BE76C8611FC49E98B23500CEE193827
+APP_SHA256=FF579CA2748EEA734A27FB7776B014667BE76C8611FC49E98B23500CEE193827
+BYTE_IDENTITY=YES
+
+Observação:
+A reprodução usa o arquivo completo.
+O ganho de 50% é aplicado em runtime.
