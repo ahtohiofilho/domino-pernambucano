@@ -38,6 +38,8 @@ fun PlayModeScreen(
     DominoScreenScaffold(
         title = stringResource(R.string.play_mode_title),
         layout = DominoScreenLayout.Centered,
+        onBackClick = onBackClick,
+        backContentDescription = stringResource(R.string.common_back),
         contentModifier = Modifier.testTag(
             PlayModeContentGroupTag,
         ),
@@ -99,15 +101,7 @@ fun PlayModeScreen(
             },
         )
 
-        DominoSecondaryActionCard(
-            title = stringResource(R.string.common_back),
-            supportingText = null,
-            accent = DominoBrandAccent.Blue,
-            onClick = onBackClick,
-            leadingContent = {
-                BrandGlyph("←")
-            },
-        )
+
     }
 }
 

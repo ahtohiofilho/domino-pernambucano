@@ -14,10 +14,8 @@ import androidx.compose.ui.text.font.FontWeight
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.advertising.AdvertisingPlacement
 import com.ahtohiofilho.dominopernambucano.advertising.DominoBannerAd
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenScaffold
-import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSecondaryActionCard
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 
@@ -29,6 +27,8 @@ fun RulesHelpScreen(
     DominoScreenScaffold(
         title = stringResource(R.string.rules_help_title),
         layout = DominoScreenLayout.Top,
+        onBackClick = onBackClick,
+        backContentDescription = stringResource(R.string.common_back),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -84,20 +84,7 @@ fun RulesHelpScreen(
                 adsReady = bannerAdsReady,
             )
 
-            DominoSecondaryActionCard(
-                title = stringResource(R.string.common_back),
-                supportingText = null,
-                accent = DominoBrandAccent.Blue,
-                onClick = onBackClick,
-                leadingContent = {
-                    Text(
-                        text = "←",
-                        color = DominoSemanticColors.brandText,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black,
-                    )
-                },
-            )
+
         }
     }
 }

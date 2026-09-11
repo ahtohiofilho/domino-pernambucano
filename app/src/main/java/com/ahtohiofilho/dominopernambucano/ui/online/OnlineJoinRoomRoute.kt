@@ -367,6 +367,8 @@ private fun OnlineJoinRoomScreen(
             stringResource(R.string.private_room_join_action)
         },
         layout = DominoScreenLayout.Top,
+        onBackClick = onBackClick,
+        backContentDescription = stringResource(R.string.common_back),
     ) {
 
         Text(
@@ -465,10 +467,7 @@ private fun OnlineJoinRoomScreen(
             }
         }
 
-        SecondaryMenuButton(
-            text = stringResource(R.string.common_back),
-            onClick = onBackClick,
-        )
+
     }
 }
 

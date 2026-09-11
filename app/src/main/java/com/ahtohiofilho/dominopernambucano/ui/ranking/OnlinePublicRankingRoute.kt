@@ -62,10 +62,12 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCyclesResponseDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBackNavigationButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandShapes
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPatternBackground
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenTitle
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
+import com.ahtohiofilho.dominopernambucano.ui.theme.dominoSpacing
 
 internal const val RankingScreenTag = "ranking_screen"
 internal const val RankingTitleTag = "ranking_title"
@@ -409,10 +411,12 @@ internal fun OnlinePublicRankingScreen(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(
-                    horizontal = 16.dp,
-                    vertical = 12.dp,
+                    horizontal = MaterialTheme.dominoSpacing.md,
+                    vertical = MaterialTheme.dominoSpacing.sm,
                 ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(
+                MaterialTheme.dominoSpacing.sm,
+            ),
         ) {
             RankingHeader(
                 onBackClick = onBackClick,
@@ -535,20 +539,18 @@ private fun RankingHeader(
     Box(
         modifier = Modifier.fillMaxWidth(),
     ) {
-        TextButton(
+        DominoBackNavigationButton(
             modifier = Modifier.align(Alignment.CenterStart),
             onClick = onBackClick,
-        ) {
-            Text(
-                text = stringResource(R.string.common_back),
-                color = DominoSemanticColors.brandText,
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
+            contentDescription = stringResource(R.string.common_back),
+        )
 
         DominoScreenTitle(
             text = stringResource(R.string.ranking_title),
             modifier = Modifier
+                .padding(
+                    horizontal = MaterialTheme.dominoSpacing.xxl,
+                )
                 .testTag(RankingTitleTag),
         )
     }

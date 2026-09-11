@@ -48,6 +48,7 @@ import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoCompactActionCard
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPrimaryActionCard
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSecondaryActionCard
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
@@ -303,7 +304,7 @@ fun MainMenuScreen(
                             .ReadyForRemoteReconciliation &&
                     !resumePendingOnlineMatchAvailable
                 ) {
-                    DominoSecondaryActionCard(
+                    DominoCompactActionCard(
                         title = if (inspectionInProgress) {
                             stringResource(
                                 R.string.main_menu_checking_participation,
@@ -313,7 +314,6 @@ fun MainMenuScreen(
                                 R.string.main_menu_check_participation,
                             )
                         },
-                        supportingText = null,
                         accent = DominoBrandAccent.Blue,
                         onClick =
                             onInspectPendingOnlineParticipationClick,
@@ -363,9 +363,8 @@ fun MainMenuScreen(
                             }
                         }
 
-                    DominoSecondaryActionCard(
+                    DominoCompactActionCard(
                         title = resumeTitle,
-                        supportingText = null,
                         accent = DominoBrandAccent.Green,
                         onClick = onResumePendingOnlineMatchClick,
                         enabled = !menuActionInProgress,
@@ -376,12 +375,11 @@ fun MainMenuScreen(
                 }
 
                 if (discardRejectedPendingOnlineParticipationAvailable) {
-                    DominoSecondaryActionCard(
+                    DominoCompactActionCard(
                         title = stringResource(
                             R.string
                                 .main_menu_remove_rejected_participation,
                         ),
-                        supportingText = null,
                         accent = DominoBrandAccent.Red,
                         onClick =
                             onDiscardRejectedPendingOnlineParticipationClick,

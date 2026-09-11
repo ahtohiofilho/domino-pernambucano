@@ -88,10 +88,15 @@ fun SettingsScreen(
             AndroidSoundEffectsPreferences.isEnabled(context),
         )
     }
+    var licensesExpanded by remember {
+        mutableStateOf(false)
+    }
 
     DominoScreenScaffold(
         title = stringResource(R.string.settings_title),
         layout = DominoScreenLayout.Top,
+        onBackClick = onBackClick,
+        backContentDescription = stringResource(R.string.common_back),
         contentModifier = Modifier.testTag(SettingsScreenTag),
     ) {
         Column(
@@ -187,6 +192,10 @@ fun SettingsScreen(
                     },
                 )
             }
+            SettingsSectionHeading(
+                text = stringResource(R.string.settings_group_help),
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -287,6 +296,10 @@ fun SettingsScreen(
                 )
             }
 
+            SettingsSectionHeading(
+                text = stringResource(R.string.settings_group_account),
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -299,7 +312,7 @@ fun SettingsScreen(
                     supportingText = stringResource(
                         R.string.settings_account_deletion_description,
                     ),
-                    accent = DominoBrandAccent.Blue,
+                    accent = DominoBrandAccent.Red,
                     onClick = {
                         uriHandler.openUri(AccountDeletionUrl)
                     },
@@ -309,7 +322,19 @@ fun SettingsScreen(
                 )
             }
 
-            Column(
+            DominoSecondaryActionCard(
+                title = stringResource(R.string.settings_licenses_title),
+                supportingText = null,
+                accent = DominoBrandAccent.Blue,
+                onClick = {
+                    licensesExpanded = !licensesExpanded
+                },
+                leadingContent = {
+                    SettingsSymbol(if (licensesExpanded) "-" else "+")
+                },
+            )
+
+            if (licensesExpanded) {            Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(
                     MaterialTheme.dominoSpacing.xs,
@@ -457,6 +482,7 @@ fun SettingsScreen(
                     }
                 }
             }
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -484,19 +510,27 @@ fun SettingsScreen(
                 )
             }
 
-            DominoSecondaryActionCard(
-                title = stringResource(R.string.common_back),
-                supportingText = null,
-                accent = DominoBrandAccent.Blue,
-                onClick = onBackClick,
-                leadingContent = {
-                    SettingsSymbol("←")
-                },
-            )
+
         }
     }
 }
 
+@Composable
+private fun SettingsSectionHeading(
+    text: String,
+) {
+    Text(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                heading()
+            },
+        text = text,
+        color = DominoSemanticColors.brandText,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+    )
+}
 @Composable
 private fun SettingsSymbol(
     text: String,

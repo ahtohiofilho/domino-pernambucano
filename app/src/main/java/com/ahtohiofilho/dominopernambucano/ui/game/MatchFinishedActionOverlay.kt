@@ -51,7 +51,9 @@ import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoPlayer
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBackNavigationButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
+import com.ahtohiofilho.dominopernambucano.ui.theme.DominoHomeNavigationButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
 @Composable
@@ -69,6 +71,7 @@ fun MatchFinishedActionOverlay(
         PostMatchStatisticsOverlay(
             uiState = uiState,
             onStartNewMatch = onStartNewMatch,
+            onBackToSummary = { showDetails = false },
             onBackToMenuClick = onBackToMenuClick,
             modifier = modifier,
         )
@@ -179,6 +182,7 @@ private fun PostMatchSummaryOverlay(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedButton(
                     onClick = onStartNewMatch,
@@ -198,23 +202,12 @@ private fun PostMatchSummaryOverlay(
                     )
                 }
 
-                OutlinedButton(
+                DominoHomeNavigationButton(
                     onClick = onBackToMenuClick,
-                    modifier = Modifier.weight(1f),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = DominoColorTokens.PureWhite.copy(alpha = 0.72f),
+                    contentDescription = stringResource(
+                        R.string.post_match_action_home,
                     ),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = DominoSemanticColors.primaryTextOnDark,
-                    ),
-                ) {
-                    Text(
-                        text = stringResource(R.string.post_match_action_home),
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                )
             }
         }
     }
@@ -224,6 +217,7 @@ private fun PostMatchSummaryOverlay(
 private fun PostMatchStatisticsOverlay(
     uiState: DominoGameUiState,
     onStartNewMatch: () -> Unit,
+    onBackToSummary: () -> Unit,
     onBackToMenuClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -261,6 +255,27 @@ private fun PostMatchStatisticsOverlay(
                 .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DominoBackNavigationButton(
+                    onClick = onBackToSummary,
+                    contentDescription = stringResource(
+                        R.string.post_match_action_back_to_summary,
+                    ),
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                DominoHomeNavigationButton(
+                    onClick = onBackToMenuClick,
+                    contentDescription = stringResource(
+                        R.string.post_match_action_home,
+                    ),
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top,
@@ -333,10 +348,6 @@ private fun PostMatchStatisticsOverlay(
                 onClick = onStartNewMatch,
             )
 
-            SecondaryMenuButton(
-                text = stringResource(R.string.post_match_action_home),
-                onClick = onBackToMenuClick,
-            )
 
             Spacer(modifier = Modifier.height(8.dp))
         }

@@ -221,6 +221,10 @@ fun DominoPernambucanoApp(
         mutableStateOf(false)
     }
 
+    var accountDialogReturnsToPlayMode by rememberSaveable {
+        mutableStateOf(false)
+    }
+
     val onlineTraceClientSessionId = remember {
         "android-${UUID.randomUUID()}"
     }
@@ -1012,6 +1016,12 @@ fun DominoPernambucanoApp(
                     resetOnlineEmailFlow(
                         clearAddress = true,
                     )
+                    if (accountDialogReturnsToPlayMode) {
+                        accountDialogReturnsToPlayMode = false
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.BackToPlayModeSelection,
+                        )
+                    }
                 },
                 onPlayClick = {
                     if (
@@ -1296,6 +1306,7 @@ fun DominoPernambucanoApp(
                         accountConnected = onlineAccountConnected,
 
                         openAccountSetup = {
+                            accountDialogReturnsToPlayMode = true
                             openAccountDialogOnNextMainMenu = true
                             sessionCoordinator.dispatch(
                                 DominoSessionCommand.BackToMainMenu,
@@ -1407,6 +1418,7 @@ fun DominoPernambucanoApp(
                         )
                     },
                     onAccountAccessClick = {
+                        accountDialogReturnsToPlayMode = true
                         openAccountDialogOnNextMainMenu = true
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.BackToMainMenu,

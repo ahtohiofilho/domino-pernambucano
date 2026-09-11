@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,9 +38,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -67,6 +70,7 @@ enum class DominoScreenLayout {
 fun DominoBrandScaffold(
     modifier: Modifier = Modifier,
     contentVerticalAlignment: Alignment.Vertical = Alignment.Top,
+    scrollable: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Box(
@@ -78,12 +82,19 @@ fun DominoBrandScaffold(
             modifier = Modifier.matchParentSize(),
         )
 
+        val baseContentModifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .imePadding()
+
+        val scrollAwareModifier = if (scrollable) {
+            baseContentModifier.verticalScroll(rememberScrollState())
+        } else {
+            baseContentModifier
+        }
+
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .imePadding()
-                .verticalScroll(rememberScrollState())
+            modifier = scrollAwareModifier
                 .padding(
                     horizontal = MaterialTheme.dominoSpacing.lg,
                     vertical = MaterialTheme.dominoSpacing.md,
@@ -109,6 +120,9 @@ fun DominoScreenScaffold(
     titleModifier: Modifier = Modifier,
     statusMessage: String? = null,
     statusModifier: Modifier = Modifier,
+    onBackClick: (() -> Unit)? = null,
+    backContentDescription: String? = null,
+    scrollable: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     DominoScreenScaffold(
@@ -119,6 +133,9 @@ fun DominoScreenScaffold(
         titleModifier = titleModifier,
         statusMessage = statusMessage,
         statusModifier = statusModifier,
+        onBackClick = onBackClick,
+        backContentDescription = backContentDescription,
+        scrollable = scrollable,
         content = content,
     )
 }
@@ -132,6 +149,9 @@ fun DominoScreenScaffold(
     titleModifier: Modifier = Modifier,
     statusMessage: String? = null,
     statusModifier: Modifier = Modifier,
+    onBackClick: (() -> Unit)? = null,
+    backContentDescription: String? = null,
+    scrollable: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val verticalAlignment = when (layout) {
@@ -143,6 +163,7 @@ fun DominoScreenScaffold(
     DominoBrandScaffold(
         modifier = modifier,
         contentVerticalAlignment = verticalAlignment,
+        scrollable = scrollable,
     ) {
         Column(
             modifier = contentModifier.fillMaxWidth(),
@@ -151,9 +172,11 @@ fun DominoScreenScaffold(
             ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            DominoScreenTitle(
-                text = title,
-                modifier = titleModifier,
+            DominoScreenHeader(
+                title = title,
+                titleModifier = titleModifier,
+                onBackClick = onBackClick,
+                backContentDescription = backContentDescription,
             )
 
             statusMessage?.let { message ->
@@ -168,6 +191,159 @@ fun DominoScreenScaffold(
     }
 }
 
+@Composable
+private fun DominoScreenHeader(
+    title: AnnotatedString,
+    titleModifier: Modifier,
+    onBackClick: (() -> Unit)?,
+    backContentDescription: String?,
+) {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        DominoScreenTitle(
+            text = title,
+            modifier = titleModifier.padding(
+                horizontal = MaterialTheme.dominoSpacing.xxl,
+            ),
+        )
+
+        if (onBackClick != null && backContentDescription != null) {
+            DominoBackNavigationButton(
+                modifier = Modifier.align(Alignment.CenterStart),
+                onClick = onBackClick,
+                contentDescription = backContentDescription,
+            )
+        }
+    }
+}
+
+@Composable
+fun DominoBackNavigationButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(
+        modifier = modifier.semantics {
+            this.contentDescription = contentDescription
+        },
+        onClick = onClick,
+    ) {
+        Canvas(modifier = Modifier.size(24.dp)) {
+            val stroke = 2.5.dp.toPx()
+            drawLine(
+                color = DominoSemanticColors.brandText,
+                start = Offset(size.width * 0.72f, size.height * 0.50f),
+                end = Offset(size.width * 0.28f, size.height * 0.50f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = DominoSemanticColors.brandText,
+                start = Offset(size.width * 0.28f, size.height * 0.50f),
+                end = Offset(size.width * 0.48f, size.height * 0.30f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = DominoSemanticColors.brandText,
+                start = Offset(size.width * 0.28f, size.height * 0.50f),
+                end = Offset(size.width * 0.48f, size.height * 0.70f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+}
+
+@Composable
+fun DominoHomeNavigationButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(
+        modifier = modifier.semantics {
+            this.contentDescription = contentDescription
+        },
+        onClick = onClick,
+    ) {
+        Canvas(modifier = Modifier.size(24.dp)) {
+            val stroke = 2.25.dp.toPx()
+            val color = DominoSemanticColors.brandText
+            drawLine(
+                color = color,
+                start = Offset(size.width * 0.18f, size.height * 0.46f),
+                end = Offset(size.width * 0.50f, size.height * 0.20f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = color,
+                start = Offset(size.width * 0.50f, size.height * 0.20f),
+                end = Offset(size.width * 0.82f, size.height * 0.46f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = color,
+                start = Offset(size.width * 0.28f, size.height * 0.42f),
+                end = Offset(size.width * 0.28f, size.height * 0.82f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = color,
+                start = Offset(size.width * 0.72f, size.height * 0.42f),
+                end = Offset(size.width * 0.72f, size.height * 0.82f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = color,
+                start = Offset(size.width * 0.28f, size.height * 0.82f),
+                end = Offset(size.width * 0.72f, size.height * 0.82f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+}
+
+@Composable
+fun DominoCloseNavigationButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(
+        modifier = modifier.semantics {
+            this.contentDescription = contentDescription
+        },
+        onClick = onClick,
+    ) {
+        Canvas(modifier = Modifier.size(22.dp)) {
+            val stroke = 2.5.dp.toPx()
+            val color = DominoSemanticColors.brandText
+            drawLine(
+                color = color,
+                start = Offset(size.width * 0.28f, size.height * 0.28f),
+                end = Offset(size.width * 0.72f, size.height * 0.72f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = color,
+                start = Offset(size.width * 0.72f, size.height * 0.28f),
+                end = Offset(size.width * 0.28f, size.height * 0.72f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+}
 @Composable
 fun BoxScope.DominoPatternBackground(
     modifier: Modifier = Modifier,
@@ -537,6 +713,67 @@ fun DominoSecondaryActionCard(
     }
 }
 
+@Composable
+fun DominoCompactActionCard(
+    title: String,
+    accent: DominoBrandAccent,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    leadingContent: (@Composable BoxScope.() -> Unit)? = null,
+) {
+    val shape = DominoBrandShapes.card
+    val accentColor = accent.color()
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(DominoSemanticColors.brandSurface)
+            .border(
+                width = 1.dp,
+                color = accentColor.copy(alpha = 0.68f),
+                shape = shape,
+            )
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .alpha(if (enabled) 1f else 0.58f)
+            .heightIn(min = 68.dp)
+            .padding(
+                horizontal = MaterialTheme.dominoSpacing.md,
+                vertical = MaterialTheme.dominoSpacing.xs,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        leadingContent?.let { content ->
+            DominoIconBadge(
+                accent = accent,
+                modifier = Modifier.size(44.dp),
+                content = content,
+            )
+            Spacer(
+                modifier = Modifier.width(
+                    MaterialTheme.dominoSpacing.sm,
+                ),
+            )
+        }
+
+        DominoActionCopy(
+            title = title,
+            supportingText = null,
+            titleColor = DominoSemanticColors.brandText,
+            supportingColor = DominoSemanticColors.brandSupportingText,
+            modifier = Modifier.weight(1f),
+        )
+
+        DominoChevron(
+            color = DominoSemanticColors.brandText,
+        )
+    }
+}
 @Composable
 private fun DominoActionCopy(
     title: String,

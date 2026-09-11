@@ -19,6 +19,8 @@ fun MenuPlaceholderScreen(
     DominoScreenScaffold(
         title = title,
         layout = DominoScreenLayout.Centered,
+        onBackClick = onBackClick,
+        backContentDescription = stringResource(R.string.common_back),
     ) {
         Text(
             text = description,
@@ -27,9 +29,6 @@ fun MenuPlaceholderScreen(
             textAlign = TextAlign.Center,
         )
 
-        SecondaryMenuButton(
-            text = stringResource(R.string.common_back),
-            onClick = onBackClick,
-        )
+
     }
 }

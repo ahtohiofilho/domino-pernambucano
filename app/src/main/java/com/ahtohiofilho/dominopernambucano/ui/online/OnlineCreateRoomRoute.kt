@@ -46,7 +46,6 @@ import com.ahtohiofilho.dominopernambucano.online.createDebugFakeOnlinePlayerIde
 import com.ahtohiofilho.dominopernambucano.online.resolvedDisplayName
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceLogger
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
-import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenScaffold
@@ -333,6 +332,8 @@ private fun OnlineLobbyScreen(
     DominoScreenScaffold(
         title = stringResource(R.string.private_room_title),
         layout = DominoScreenLayout.Top,
+        onBackClick = onBackClick,
+        backContentDescription = stringResource(R.string.common_back),
     ) {
 
         Text(
@@ -407,10 +408,7 @@ private fun OnlineLobbyScreen(
             )
         }
 
-        SecondaryMenuButton(
-            text = stringResource(R.string.common_back),
-            onClick = onBackClick,
-        )
+
     }
 }
 

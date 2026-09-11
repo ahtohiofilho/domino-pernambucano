@@ -397,4 +397,7 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="settings_licenses_match_defeat">Match result — defeat</string>
     <string name="settings_licenses_match_defeat_creator">Creator: Leszek_Szary (Freesound)</string>
     <string name="settings_licenses_original_unmodified">Original audio included without editing</string>
+    <string name="settings_group_help">Help &amp; information</string>
+    <string name="settings_group_account">Account</string>
+    <string name="post_match_action_back_to_summary">Back to summary</string>
 </resources>

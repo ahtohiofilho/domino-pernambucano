@@ -938,7 +938,7 @@ private fun OnlineAccountEntrySurface(
                     modifier = Modifier.testTag(
                         OnlineAccountDismissActionTag,
                     ),
-                    text = stringResource(R.string.common_back),
+                    text = stringResource(R.string.common_close),
                     onClick = onDismissRequest,
                     enabled = !anyActionInProgress,
                     contentColor =
