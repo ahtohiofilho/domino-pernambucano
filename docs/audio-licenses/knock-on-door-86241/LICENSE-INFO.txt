@@ -1,0 +1,52 @@
+DOMINÓ PE — R8.B.8.C24 PASS KNOCK AUDIO BASELINE
+
+Fonte:
+Pixabay
+
+Página-fonte:
+https://pixabay.com/pt/sound-effects/domestico-knock-on-door-86241/
+
+Título exibido:
+Knock on door
+
+Criador exibido:
+jankooiker (Freesound)
+
+Arquivo-fonte:
+freesound_community-knock-on-door-86241.mp3
+
+SHA-256 do arquivo-fonte:
+1ca037be32b70e3a67ed33bc2655fa5ea3a8478aeea7a41bba24148ac46df57c
+
+Uso no Dominó PE:
+Efeito de batida sincronizado aos dois impactos visuais da animação de passe/"toque".
+
+Arquivo derivado incorporado ao aplicativo:
+pass_knock_single.wav
+
+SHA-256 do derivado incorporado:
+b02c8f0d3118b0e4e3d3a841e7cb1b22b4c50455e462c8fc259e0a59ed9d90b5
+
+Transformações:
+- seleção do terceiro impacto individual do arquivo-fonte;
+- recorte aproximado de 0,515 s a 0,680 s;
+- duração aproximada de 0,165 s;
+- PCM 16-bit;
+- mono;
+- 44100 Hz;
+- fade-out de aproximadamente 15 ms;
+- o mesmo impacto é reproduzido duas vezes pelo jogo, sincronizado com a animação visual.
+
+Licença:
+Pixabay Content License.
+
+Crédito exibido na UI:
+"Knock on door" — jankooiker (Freesound), via Pixabay, Pixabay Content License.
+Efeito sonoro original adaptado/cortado para uso no Dominó PE.
+
+Observação:
+O arquivo-fonte original é mantido nas evidências do projeto e não é incorporado ao aplicativo.
+O derivado continua sujeito à licença aplicável ao conteúdo-fonte original.
+
+Data de preparação:
+11/09/2026

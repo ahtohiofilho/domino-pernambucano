@@ -1,0 +1,45 @@
+DOMINÓ PE — DERIVADOS DE ÁUDIO — PASS KNOCK
+
+Arquivo-fonte:
+freesound_community-knock-on-door-86241.mp3
+
+SHA-256 do arquivo-fonte:
+1ca037be32b70e3a67ed33bc2655fa5ea3a8478aeea7a41bba24148ac46df57c
+
+Fonte:
+Pixabay
+
+Página-fonte:
+https://pixabay.com/pt/sound-effects/domestico-knock-on-door-86241/
+
+Título:
+Knock on door
+
+Criador:
+jankooiker (Freesound)
+
+Licença:
+Pixabay Content License
+
+Arquivo derivado incorporado ao aplicativo:
+pass_knock_single.wav
+
+SHA-256 do derivado:
+b02c8f0d3118b0e4e3d3a841e7cb1b22b4c50455e462c8fc259e0a59ed9d90b5
+
+Parâmetros do derivado:
+- recorte do terceiro impacto;
+- janela aproximada: 0,515–0,680 s;
+- duração aproximada: 0,165 s;
+- PCM 16-bit mono;
+- 44100 Hz;
+- fade-out de aproximadamente 15 ms.
+
+Comportamento no aplicativo:
+O arquivo pass_knock_single.wav contém um único impacto.
+A lógica de jogo dispara o mesmo sample duas vezes, uma em cada impacto visual da animação de passe,
+mantendo o áudio dirigido pela própria animação em vez de por temporizadores independentes.
+
+Observação:
+O MP3 original não é incorporado ao APK/AAB.
+O arquivo derivado permanece vinculado à licença do conteúdo-fonte original.
