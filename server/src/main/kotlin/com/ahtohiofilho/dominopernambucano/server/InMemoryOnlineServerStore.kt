@@ -543,6 +543,56 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    override fun getAccountPasswordCredential(
+        accountId: String,
+    ): OnlineServerPasswordCredential? {
+        return synchronized(lock) {
+            val normalizedAccountId = requireStoreIdentifier(
+                value = accountId,
+                fieldName = "accountId",
+            )
+            accountsByPlayerId.values
+                .firstOrNull { account ->
+                    account.accountId == normalizedAccountId
+                }
+                ?.passwordCredential
+        }
+    }
+
+    override fun setAccountPasswordCredential(
+        accountId: String,
+        credential: OnlineServerPasswordCredential,
+    ): OnlineServerAccount? {
+        require(isValidOnlineServerPasswordCredential(credential)) {
+            "A credencial de senha informada é inválida."
+        }
+
+        return synchronized(lock) {
+            val normalizedAccountId = requireStoreIdentifier(
+                value = accountId,
+                fieldName = "accountId",
+            )
+            val account = accountsByPlayerId.values
+                .firstOrNull { candidate ->
+                    candidate.accountId == normalizedAccountId
+                }
+                ?: return@synchronized null
+
+            if (
+                account.participantType !=
+                OnlineParticipantTypeDto.HUMAN
+            ) {
+                return@synchronized null
+            }
+
+            account.copy(
+                passwordCredential = credential,
+            ).also { updated ->
+                accountsByPlayerId[updated.playerId] = updated
+            }
+        }
+    }
+
     override fun findSyntheticAccount(
         accountId: String,
     ): OnlineServerAccount? {
@@ -2522,6 +2572,13 @@ class InMemoryOnlineServerStore(
             return state
         }
 
+        if (state.schemaVersion in 10..11) {
+            return state.copy(
+                schemaVersion =
+                    ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+            )
+        }
+
         if (state.schemaVersion == 9) {
             return state.copy(
                 schemaVersion =
@@ -2653,6 +2710,12 @@ class InMemoryOnlineServerStore(
                                     account.profileUpdatedAtEpochMillis,
                             ) == account.toOnlineAccountProfileOrNull()
                         )
+                    ) &&
+                    (
+                        account.passwordCredential == null ||
+                            isValidOnlineServerPasswordCredential(
+                                account.passwordCredential,
+                            )
                     )
             }
         ) {
@@ -2731,6 +2794,18 @@ class InMemoryOnlineServerStore(
                 }
         ) {
             "O estado persistido contem uma identidade externa invalida."
+        }
+        require(
+            state.accounts.all { account ->
+                account.passwordCredential == null ||
+                    state.externalIdentities.any { identity ->
+                        identity.provider ==
+                            OnlineExternalIdentityProvider.EMAIL &&
+                            identity.accountId == account.accountId
+                    }
+            }
+        ) {
+            "Credencial de senha persistida sem identidade de e-mail."
         }
         require(state.rooms.size <= resourcePolicy.maxRoomCount) {
             "O estado persistido excede a capacidade de salas."

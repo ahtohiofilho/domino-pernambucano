@@ -12,16 +12,34 @@ DOMINO_SESSION_SIGNING_SECRET=<segredo com pelo menos 32 bytes>
 DOMINO_SERVER_STATE_FILE=<caminho absoluto em volume persistente>
 ```
 
-Para habilitar as rotas de vinculacao e recuperacao Google, configure tambem:
+Para habilitar as rotas de vinculação e recuperação Google, configure também
+ao menos um client ID OAuth do tipo Web.
+
+Configuração estável de um único client:
 
 ```text
 DOMINO_GOOGLE_WEB_CLIENT_ID=<client ID OAuth do tipo Web>
 ```
 
-Sem essa variavel, o servidor continua compativel com os fluxos existentes,
-mas as duas rotas Google falham fechadas com HTTP 503. O ID token e validado
-quanto a assinatura, audiencia, emissor e expiracao. Somente o `sub` estavel e
-persistido; e-mail e demais dados do perfil nao integram a chave da conta.
+Durante uma migração controlada de client OAuth, o servidor pode aceitar uma
+lista adicional, separada por vírgulas:
+
+```text
+DOMINO_GOOGLE_WEB_CLIENT_ID=<client ID atual>
+DOMINO_GOOGLE_WEB_CLIENT_IDS=<novo client ID>[,<outro client ID>...]
+```
+
+As duas variáveis são combinadas, valores vazios são ignorados e IDs repetidos
+são eliminados. Isso permite manter o client anterior aceito enquanto Android e
+Google Play migram para o novo audience. Depois que todos os clientes ativos
+estiverem usando o novo client ID, remova o client antigo da configuração e
+volte preferencialmente à variável singular.
+
+Sem nenhuma dessas variáveis, o servidor continua compatível com os fluxos
+existentes, mas as duas rotas Google falham fechadas com HTTP 503. O ID token é
+validado quanto a assinatura, audiência, emissor e expiração. Somente o `sub`
+estável é persistido; e-mail e demais dados do perfil não integram a chave da
+conta.
 
 Exemplo Linux:
 

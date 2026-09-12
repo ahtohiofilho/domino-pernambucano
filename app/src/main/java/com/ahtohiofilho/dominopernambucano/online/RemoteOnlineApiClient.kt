@@ -77,6 +77,31 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun registerEmailPassword(
+        request: OnlinePasswordRegisterRequestDto,
+        accessToken: String,
+    ): OnlineAccountSessionDto {
+        throw UnsupportedOperationException(
+            "Cadastro por e-mail e senha não configurado para este cliente remoto.",
+        )
+    }
+
+    suspend fun loginEmailPassword(
+        request: OnlinePasswordLoginRequestDto,
+    ): OnlineAccountSessionDto {
+        throw UnsupportedOperationException(
+            "Login por e-mail e senha não configurado para este cliente remoto.",
+        )
+    }
+
+    suspend fun resetEmailPassword(
+        request: OnlinePasswordResetRequestDto,
+    ): OnlineAccountSessionDto {
+        throw UnsupportedOperationException(
+            "Redefinição de senha não configurada para este cliente remoto.",
+        )
+    }
+
     suspend fun enqueuePublicRankedQueue(
         request: PublicRankedQueueEnterRequestDto,
     ): PublicRankedQueueHttpResponseDto {

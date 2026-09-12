@@ -42,8 +42,8 @@ class OnlineRankedQueuePresentationTest {
     }
 
     @Test
-    fun ranked_session_rejected_does_not_expose_account_remediation() {
-        assertFalse(
+    fun ranked_session_rejected_exposes_account_remediation() {
+        assertTrue(
             failure(
                 OnlineRankedQueueUiFailureKind.SESSION_REJECTED,
             ).showsAccountRemediation(),

@@ -880,17 +880,12 @@ private fun OnlineAccountEntrySurface(
                                 !anyActionInProgress,
                         shape = RoundedCornerShape(16.dp),
                     ) {
-                        Text(
-                            text = "G",
-                            fontWeight = FontWeight.Black,
-                            color = if (googleAvailable) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme
-                                    .colorScheme
-                                    .onSurface
-                                    .copy(alpha = 0.38f)
-                            },
+                        Image(
+                            painter = painterResource(
+                                R.drawable.ic_google_g,
+                            ),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(

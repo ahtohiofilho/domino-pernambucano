@@ -76,6 +76,15 @@ interface OnlineServerStore : AutoCloseable {
         subject: String,
     ): OnlineServerAccount?
 
+    fun getAccountPasswordCredential(
+        accountId: String,
+    ): OnlineServerPasswordCredential?
+
+    fun setAccountPasswordCredential(
+        accountId: String,
+        credential: OnlineServerPasswordCredential,
+    ): OnlineServerAccount?
+
     /**
      * Resolves an existing synthetic account for authorized session renewal.
      */

@@ -10,6 +10,9 @@ import kotlinx.coroutines.withContext
 internal const val GOOGLE_WEB_CLIENT_ID_ENVIRONMENT_VARIABLE =
     "DOMINO_GOOGLE_WEB_CLIENT_ID"
 
+internal const val GOOGLE_WEB_CLIENT_IDS_ENVIRONMENT_VARIABLE =
+    "DOMINO_GOOGLE_WEB_CLIENT_IDS"
+
 private const val MAX_GOOGLE_ID_TOKEN_CHARACTERS = 16_384
 private val ACCEPTED_GOOGLE_ISSUERS = setOf(
     "accounts.google.com",
@@ -32,22 +35,52 @@ fun interface OnlineGoogleIdentityTokenVerifier {
     ): OnlineGoogleIdentityVerificationResult
 }
 
+internal fun readConfiguredGoogleWebClientIds(
+    readEnvironmentVariable: (String) -> String? = { variableName ->
+        System.getenv(variableName)
+    },
+): List<String> {
+    val legacyClientId = readEnvironmentVariable(
+        GOOGLE_WEB_CLIENT_ID_ENVIRONMENT_VARIABLE,
+    )
+
+    val additionalClientIds = readEnvironmentVariable(
+        GOOGLE_WEB_CLIENT_IDS_ENVIRONMENT_VARIABLE,
+    )
+        ?.split(',')
+        .orEmpty()
+
+    return buildList {
+        add(legacyClientId.orEmpty())
+        addAll(additionalClientIds)
+    }
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .distinct()
+}
+
 internal class GoogleApiOnlineIdentityTokenVerifier(
-    audience: String,
+    audiences: Collection<String>,
 ) : OnlineGoogleIdentityTokenVerifier {
+    constructor(audience: String) : this(
+        audiences = listOf(audience),
+    )
+
+    private val normalizedAudiences = audiences
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .distinct()
+        .also { configuredAudiences ->
+            require(configuredAudiences.isNotEmpty()) {
+                "Ao menos um client ID Google do servidor deve ser configurado."
+            }
+        }
+
     private val verifier = GoogleIdTokenVerifier.Builder(
         GoogleNetHttpTransport.newTrustedTransport(),
         GsonFactory.getDefaultInstance(),
     )
-        .setAudience(
-            listOf(
-                audience.trim().also { normalizedAudience ->
-                    require(normalizedAudience.isNotBlank()) {
-                        "O client ID Google do servidor nao pode ser vazio."
-                    }
-                },
-            ),
-        )
+        .setAudience(normalizedAudiences)
         .build()
 
     override suspend fun verify(
@@ -90,19 +123,17 @@ internal fun createDefaultOnlineGoogleIdentityTokenVerifier(
         System.getenv(variableName)
     },
 ): OnlineGoogleIdentityTokenVerifier {
-    val audience = readEnvironmentVariable(
-        GOOGLE_WEB_CLIENT_ID_ENVIRONMENT_VARIABLE,
+    val audiences = readConfiguredGoogleWebClientIds(
+        readEnvironmentVariable = readEnvironmentVariable,
     )
-        ?.trim()
-        ?.takeIf { value -> value.isNotBlank() }
 
-    return if (audience == null) {
+    return if (audiences.isEmpty()) {
         OnlineGoogleIdentityTokenVerifier {
             OnlineGoogleIdentityVerificationResult.Unavailable
         }
     } else {
         GoogleApiOnlineIdentityTokenVerifier(
-            audience = audience,
+            audiences = audiences,
         )
     }
 }

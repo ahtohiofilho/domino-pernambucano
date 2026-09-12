@@ -47,11 +47,19 @@ fun OnlineRankedQueueRoute(
     queueClient: OnlineRankedQueueClient,
     roomRepository: OnlineRoomRepository,
     playerName: String,
+    accessAllowed: Boolean = true,
     onStartOnlineMatch:
         (OnlinePublicRankedMatchActivation.Ready) -> Unit,
     onAccountAccessClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
+    if (!accessAllowed) {
+        LaunchedEffect(Unit) {
+            onAccountAccessClick()
+        }
+        return
+    }
+
     val controller = remember(
         queueClient,
         roomRepository,
@@ -68,6 +76,14 @@ fun OnlineRankedQueueRoute(
     }
 
     val uiState by controller.state.collectAsState()
+
+    if (uiState.showsAccountRemediation()) {
+        LaunchedEffect(uiState) {
+            onAccountAccessClick()
+        }
+        return
+    }
+
     val coroutineScope = rememberCoroutineScope()
 
     var operationJob by remember {
@@ -362,7 +378,9 @@ internal fun OnlineRankedQueueUiState.showsAccountRemediation(): Boolean {
     return failure.kind ==
         OnlineRankedQueueUiFailureKind.AUTHENTICATION_REQUIRED ||
         failure.kind ==
-        OnlineRankedQueueUiFailureKind.ACCOUNT_REQUIRED
+        OnlineRankedQueueUiFailureKind.ACCOUNT_REQUIRED ||
+        failure.kind ==
+        OnlineRankedQueueUiFailureKind.SESSION_REJECTED
 }
 
 @Composable

@@ -35,6 +35,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountManager
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlinePasswordAccountManager
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
@@ -59,6 +60,8 @@ import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSes
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiCoordinator
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileStrings
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
+import com.ahtohiofilho.dominopernambucano.ui.account.RankedAccountEntryMode
+import com.ahtohiofilho.dominopernambucano.ui.account.RankedAccountEntryScreen
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMenuMusicController
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
 import com.ahtohiofilho.dominopernambucano.ui.info.RulesHelpScreen
@@ -225,6 +228,18 @@ fun DominoPernambucanoApp(
         mutableStateOf(false)
     }
 
+    var rankedAccountEntryVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var rankedAccountEntryMode by remember {
+        mutableStateOf(RankedAccountEntryMode.SIGN_IN)
+    }
+
+    var rankedAccountRestoreInProgress by remember {
+        mutableStateOf(false)
+    }
+
     val onlineTraceClientSessionId = remember {
         "android-${UUID.randomUUID()}"
     }
@@ -379,6 +394,21 @@ fun DominoPernambucanoApp(
             store = SharedPreferencesOnlineParticipationBindingStore(
                 context = context.applicationContext,
             ),
+        )
+    }
+
+    val onlinePasswordAccountManager = remember(
+        googleIdentityApiClient,
+        onlineSessionCredentialRepository,
+        onlineParticipationBindingRepository,
+    ) {
+        OnlinePasswordAccountManager(
+            available = googleIdentityApiClient != null,
+            apiClient = googleIdentityApiClient,
+            sessionCredentialRepository =
+                onlineSessionCredentialRepository,
+            onlineParticipationBindingRepository =
+                onlineParticipationBindingRepository,
         )
     }
 
@@ -601,6 +631,23 @@ fun DominoPernambucanoApp(
         }
     }
 
+    suspend fun synchronizeOnlineAccountProfileAfterAuthentication() {
+        val coordinator = onlineAccountProfileUiCoordinator ?: return
+
+        onlineAccountProfileUiState =
+            OnlineAccountProfileUiState.Loading
+
+        val outcome = coordinator.load(
+            fallbackIdentity = onlinePlayerIdentity,
+        )
+
+        onlineAccountProfileUiState = outcome.state
+
+        outcome.synchronizedIdentity?.let { synchronizedIdentity ->
+            onlinePlayerIdentity = synchronizedIdentity
+        }
+    }
+
     fun connectOnlineGoogleAccount(
         onConnected: () -> Unit = {},
     ) {
@@ -657,6 +704,47 @@ fun DominoPernambucanoApp(
                 }
             } finally {
                 onlineGoogleAccountActionInProgress = false
+            }
+        }
+    }
+
+    fun openRankedAccountEntry(
+        mode: RankedAccountEntryMode =
+            RankedAccountEntryMode.SIGN_IN,
+    ) {
+        onlineGoogleAccountFeedbackMessage = null
+        rankedAccountEntryMode = mode
+        rankedAccountEntryVisible = true
+    }
+
+    fun openRankedMatchmaking() {
+        rankedAccountEntryVisible = false
+        rankedAccountEntryMode = RankedAccountEntryMode.SIGN_IN
+        sessionCoordinator.dispatch(
+            DominoSessionCommand.OpenOnlineRankedQueue,
+        )
+    }
+
+    fun restoreSavedRankedAccount() {
+        if (
+            rankedAccountRestoreInProgress ||
+            onlineGoogleAccountActionInProgress
+        ) {
+            return
+        }
+
+        rankedAccountRestoreInProgress = true
+        onlineGoogleAccountFeedbackMessage = null
+
+        menuCoroutineScope.launch {
+            try {
+                if (onlineGoogleAccountManager.restoreAuthorizedAccount()) {
+                    openRankedMatchmaking()
+                } else {
+                    openRankedAccountEntry()
+                }
+            } finally {
+                rankedAccountRestoreInProgress = false
             }
         }
     }
@@ -898,6 +986,8 @@ fun DominoPernambucanoApp(
                         googleIdentityApiClient != null,
                 onlineEmailAvailable =
                     onlineEmailAccountManager.isAvailable,
+                onlinePasswordAccountManager =
+                    onlinePasswordAccountManager,
                 onlineEmailAddress = onlineEmailAddress,
                 onlineEmailCode = onlineEmailCode,
                 onlineEmailIntent = onlineEmailIntent,
@@ -920,6 +1010,9 @@ fun DominoPernambucanoApp(
                 },
                 onAccountDialogOpened = {
                     requestOnlineAccountProfile()
+                },
+                onPasswordAuthenticated = {
+                    synchronizeOnlineAccountProfileAfterAuthentication()
                 },
                 onAccountProfilePublicDisplayNameChange = {
                         publicDisplayName ->
@@ -1291,69 +1384,107 @@ fun DominoPernambucanoApp(
         }
 
         DominoSessionState.PlayModeSelection -> {
-            PlayModeScreen(
-                onBackClick = {
-                    sessionCoordinator.dispatch(
-                        DominoSessionCommand.BackToMainMenu,
-                    )
-                },
-                onlineActionInProgress =
-                    onlineGoogleAccountActionInProgress,
-                onlineFeedbackMessage =
-                    onlineGoogleAccountFeedbackMessage,
-                onRankedGameClick = {
-                    enterOnlineRankedFlow(
-                        accountConnected = onlineAccountConnected,
-
-                        openAccountSetup = {
-                            accountDialogReturnsToPlayMode = true
-                            openAccountDialogOnNextMainMenu = true
-                            sessionCoordinator.dispatch(
-                                DominoSessionCommand.BackToMainMenu,
-                            )
-                        },
-                        openMatchmaking = {
-                            sessionCoordinator.dispatch(
-                                DominoSessionCommand
-                                    .OpenOnlineRankedQueue,
-                            )
-                        },
-                    )
-                },
-                onLocalGameClick = {
-                    if (offlineIdentityStore.read() == null) {
-                        offlineIdentityDialogVisible = true
-                    } else {
-                        sessionCoordinator.dispatch(
-                            DominoSessionCommand.StartLocalMatch,
-                        )
-                    }
-                },
-                onCreateOnlineRoomClick = {
-                    sessionCoordinator.dispatch(
-                        DominoSessionCommand.OpenOnlineCreateRoom,
-                    )
-                },
-                onJoinOnlineRoomClick = {
-                    sessionCoordinator.dispatch(
-                        DominoSessionCommand.OpenOnlineJoinRoom,
-                    )
-                },
-            )
-
-            if (offlineIdentityDialogVisible) {
-                OfflineIdentityDialog(
-                    onDismiss = {
-                        offlineIdentityDialogVisible = false
+            if (rankedAccountEntryVisible) {
+                RankedAccountEntryScreen(
+                    mode = rankedAccountEntryMode,
+                    actionInProgress =
+                        onlineGoogleAccountActionInProgress ||
+                            rankedAccountRestoreInProgress,
+                    feedbackMessage =
+                        onlineGoogleAccountFeedbackMessage,
+                    googleAvailable =
+                        googleSignInConfig.isConfigured &&
+                            googleIdentityApiClient != null,
+                    passwordAccountManager =
+                        onlinePasswordAccountManager,
+                    onAuthenticated = {
+                        synchronizeOnlineAccountProfileAfterAuthentication()
+                        openRankedMatchmaking()
                     },
-                    onConfirm = { identity ->
-                        offlineIdentityStore.save(identity)
-                        offlineIdentityDialogVisible = false
+                    onContinueGoogleClick = {
+                        connectOnlineGoogleAccount(
+                            onConnected = {
+                                openRankedMatchmaking()
+                            },
+                        )
+                    },
+                    onModeChange = { mode ->
+                        rankedAccountEntryMode = mode
+                        onlineGoogleAccountFeedbackMessage = null
+                    },
+                    onBackClick = {
+                        if (
+                            !onlineGoogleAccountActionInProgress &&
+                            !rankedAccountRestoreInProgress
+                        ) {
+                            rankedAccountEntryVisible = false
+                            rankedAccountEntryMode =
+                                RankedAccountEntryMode.SIGN_IN
+                            onlineGoogleAccountFeedbackMessage = null
+                        }
+                    },
+                )
+            } else {
+                PlayModeScreen(
+                    onBackClick = {
                         sessionCoordinator.dispatch(
-                            DominoSessionCommand.StartLocalMatch,
+                            DominoSessionCommand.BackToMainMenu,
+                        )
+                    },
+                    onlineActionInProgress =
+                        onlineGoogleAccountActionInProgress ||
+                            rankedAccountRestoreInProgress,
+                    onlineFeedbackMessage =
+                        onlineGoogleAccountFeedbackMessage,
+                    onRankedGameClick = {
+                        enterOnlineRankedFlow(
+                            accountStatus = onlineGoogleAccountStatus,
+                            openAccountSetup = {
+                                openRankedAccountEntry()
+                            },
+                            restoreSavedAccount = {
+                                restoreSavedRankedAccount()
+                            },
+                            openMatchmaking = {
+                                openRankedMatchmaking()
+                            },
+                        )
+                    },
+                    onLocalGameClick = {
+                        if (offlineIdentityStore.read() == null) {
+                            offlineIdentityDialogVisible = true
+                        } else {
+                            sessionCoordinator.dispatch(
+                                DominoSessionCommand.StartLocalMatch,
+                            )
+                        }
+                    },
+                    onCreateOnlineRoomClick = {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.OpenOnlineCreateRoom,
+                        )
+                    },
+                    onJoinOnlineRoomClick = {
+                        sessionCoordinator.dispatch(
+                            DominoSessionCommand.OpenOnlineJoinRoom,
                         )
                     },
                 )
+
+                if (offlineIdentityDialogVisible) {
+                    OfflineIdentityDialog(
+                        onDismiss = {
+                            offlineIdentityDialogVisible = false
+                        },
+                        onConfirm = { identity ->
+                            offlineIdentityStore.save(identity)
+                            offlineIdentityDialogVisible = false
+                            sessionCoordinator.dispatch(
+                                DominoSessionCommand.StartLocalMatch,
+                            )
+                        },
+                    )
+                }
             }
         }
 
@@ -1393,6 +1524,7 @@ fun DominoPernambucanoApp(
                     queueClient = queueClient,
                     roomRepository = onlineRoomRepository,
                     playerName = onlinePlayerIdentity.tableName,
+                    accessAllowed = onlineAccountConnected,
                     onStartOnlineMatch = { activation ->
                         val matchCoordinator =
                             OnlineDominoMatchCoordinator(
@@ -1418,10 +1550,9 @@ fun DominoPernambucanoApp(
                         )
                     },
                     onAccountAccessClick = {
-                        accountDialogReturnsToPlayMode = true
-                        openAccountDialogOnNextMainMenu = true
+                        openRankedAccountEntry()
                         sessionCoordinator.dispatch(
-                            DominoSessionCommand.BackToMainMenu,
+                            DominoSessionCommand.BackToPlayModeSelection,
                         )
                     },
                     onBackClick = {

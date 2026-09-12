@@ -90,6 +90,24 @@ class PersistentOnlineServerStore private constructor(
         )
     }
 
+    override fun getAccountPasswordCredential(
+        accountId: String,
+    ): OnlineServerPasswordCredential? = read {
+        delegate.getAccountPasswordCredential(
+            accountId = accountId,
+        )
+    }
+
+    override fun setAccountPasswordCredential(
+        accountId: String,
+        credential: OnlineServerPasswordCredential,
+    ): OnlineServerAccount? = mutate {
+        delegate.setAccountPasswordCredential(
+            accountId = accountId,
+            credential = credential,
+        )
+    }
+
     override fun findSyntheticAccount(
         accountId: String,
     ): OnlineServerAccount? = read {

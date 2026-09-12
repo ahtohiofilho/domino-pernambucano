@@ -80,6 +80,36 @@ class OnlineGoogleAccountManager(
         }
     }
 
+    suspend fun restoreAuthorizedAccount(): Boolean {
+        if (currentStatus() == OnlineGoogleAccountStatus.CONNECTED) {
+            return true
+        }
+        if (currentStatus() != OnlineGoogleAccountStatus.RECOVERY_REQUIRED) {
+            return false
+        }
+
+        val tokenProvider = googleIdTokenProvider ?: return false
+        val identityRepository = googleIdentityRepository ?: return false
+        if (!available) {
+            return false
+        }
+
+        return try {
+            withTimeoutOrNull(connectionTimeoutMillis) {
+                val idToken = tokenProvider
+                    .requestAuthorizedIdTokenOrNull()
+                    ?: return@withTimeoutOrNull false
+
+                identityRepository.recoverGoogleAccount(idToken)
+                currentStatus() == OnlineGoogleAccountStatus.CONNECTED
+            } ?: false
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     suspend fun connect(): OnlineGoogleAccountActionResult {
         val tokenProvider = googleIdTokenProvider
         val identityRepository = googleIdentityRepository

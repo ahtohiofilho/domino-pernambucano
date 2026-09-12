@@ -7,12 +7,15 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 
 interface GoogleIdTokenProvider {
     suspend fun requestIdToken(): String
+
+    suspend fun requestAuthorizedIdTokenOrNull(): String? = null
 }
 
 class GoogleCredentialSelectionCancelledException(
@@ -45,38 +48,94 @@ class AndroidGoogleIdTokenProvider(
             .addCredentialOption(googleOption)
             .build()
 
+        return requestGoogleIdToken(
+            request = request,
+            noCredentialIsError = true,
+        ) ?: throw GoogleCredentialUnavailableException()
+    }
+
+    override suspend fun requestAuthorizedIdTokenOrNull(): String? {
+        if (!config.isConfigured) {
+            return null
+        }
+
+        val googleOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(true)
+            .setServerClientId(config.webClientId)
+            .setAutoSelectEnabled(true)
+            .build()
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleOption)
+            .build()
+
+        return requestGoogleIdToken(
+            request = request,
+            noCredentialIsError = false,
+        )
+    }
+
+    private suspend fun requestGoogleIdToken(
+        request: GetCredentialRequest,
+        noCredentialIsError: Boolean,
+    ): String? {
         val response = try {
             credentialManager.getCredential(
                 context = activityContext,
                 request = request,
             )
         } catch (error: GetCredentialCancellationException) {
-            throw GoogleCredentialSelectionCancelledException(error)
+            if (noCredentialIsError) {
+                throw GoogleCredentialSelectionCancelledException(error)
+            }
+            return null
         } catch (error: NoCredentialException) {
-            throw GoogleCredentialUnavailableException(error)
+            if (noCredentialIsError) {
+                throw GoogleCredentialUnavailableException(error)
+            }
+            return null
         } catch (error: GetCredentialException) {
-            throw GoogleCredentialUnavailableException(error)
+            if (noCredentialIsError) {
+                throw GoogleCredentialUnavailableException(error)
+            }
+            return null
         }
 
         val credential = response.credential as? CustomCredential
-            ?: throw GoogleCredentialUnavailableException()
+            ?: return if (noCredentialIsError) {
+                throw GoogleCredentialUnavailableException()
+            } else {
+                null
+            }
 
         if (
             credential.type !=
             GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
         ) {
-            throw GoogleCredentialUnavailableException()
+            return if (noCredentialIsError) {
+                throw GoogleCredentialUnavailableException()
+            } else {
+                null
+            }
         }
 
         val googleCredential = try {
             GoogleIdTokenCredential.createFrom(credential.data)
         } catch (error: GoogleIdTokenParsingException) {
-            throw GoogleCredentialUnavailableException(error)
+            return if (noCredentialIsError) {
+                throw GoogleCredentialUnavailableException(error)
+            } else {
+                null
+            }
         }
 
         return googleCredential.idToken
             .trim()
             .takeIf(String::isNotBlank)
-            ?: throw GoogleCredentialUnavailableException()
+            ?: if (noCredentialIsError) {
+                throw GoogleCredentialUnavailableException()
+            } else {
+                null
+            }
     }
 }

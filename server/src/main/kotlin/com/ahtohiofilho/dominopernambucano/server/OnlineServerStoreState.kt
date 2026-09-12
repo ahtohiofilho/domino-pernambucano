@@ -11,7 +11,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
-const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 11
+const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 12
 const val MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
 
 @Serializable
@@ -44,6 +44,16 @@ data class OnlineServerAccount(
     val profileUpdatedAtEpochMillis: Long? = null,
     val participantType: OnlineParticipantTypeDto =
         OnlineParticipantTypeDto.HUMAN,
+    val passwordCredential: OnlineServerPasswordCredential? = null,
+)
+
+@Serializable
+data class OnlineServerPasswordCredential(
+    val algorithm: String,
+    val iterations: Int,
+    val saltBase64: String,
+    val hashBase64: String,
+    val updatedAtEpochMillis: Long,
 )
 
 internal fun OnlineServerAccount.toOnlineAccountProfileOrNull():

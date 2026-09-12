@@ -11,6 +11,10 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineEmailCodeRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineEmailCodeRequestResponseDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineEmailIdentityRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineEmailIdentityRoutes
+import com.ahtohiofilho.dominopernambucano.online.OnlinePasswordIdentityRoutes
+import com.ahtohiofilho.dominopernambucano.online.OnlinePasswordLoginRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlinePasswordRegisterRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlinePasswordResetRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
@@ -44,6 +48,9 @@ internal fun Route.onlineServerRoutes(
         System.currentTimeMillis()
     },
 ) {
+    val passwordCredentialService =
+        OnlinePasswordCredentialService()
+
     rateLimit(ANONYMOUS_SESSION_RATE_LIMIT_NAME) {
         post("/${OnlineRemoteRoutes.CREATE_ANONYMOUS_SESSION}") {
             call.respond(
@@ -105,6 +112,101 @@ internal fun Route.onlineServerRoutes(
                     ),
                 )
             }
+
+            post("/${OnlinePasswordIdentityRoutes.RESET}") {
+                val request = call.receive<OnlinePasswordResetRequestDto>()
+                if (
+                    !passwordCredentialService.isPasswordAccepted(
+                        request.password,
+                    )
+                ) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@post
+                }
+
+                val subject = when (
+                    val verification = service.verifyCode(
+                        rawEmail = request.email,
+                        rawCode = request.code,
+                    )
+                ) {
+                    is OnlineEmailVerificationResult.Verified ->
+                        verification.subject
+
+                    OnlineEmailVerificationResult.Rejected -> {
+                        call.respond(HttpStatusCode.Unauthorized)
+                        return@post
+                    }
+                }
+                val account = store.findAccountByExternalIdentity(
+                    provider = OnlineExternalIdentityProvider.EMAIL,
+                    subject = subject,
+                )
+                if (account == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@post
+                }
+
+                val updated = store.setAccountPasswordCredential(
+                    accountId = account.accountId,
+                    credential =
+                        passwordCredentialService.createCredential(
+                            request.password,
+                        ),
+                )
+                if (updated == null) {
+                    call.respond(HttpStatusCode.ServiceUnavailable)
+                    return@post
+                }
+
+                call.respond(
+                    sessionTokenService.issueAccountSession(
+                        playerId = updated.playerId,
+                        accountId = updated.accountId,
+                    ),
+                )
+            }
+        }
+
+        post("/${OnlinePasswordIdentityRoutes.LOGIN}") {
+            val request = call.receive<OnlinePasswordLoginRequestDto>()
+            val subject = onlineEmailIdentitySubject(request.email)
+            if (
+                subject == null ||
+                !passwordCredentialService.isPasswordAccepted(
+                    request.password,
+                )
+            ) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@post
+            }
+
+            val account = store.findAccountByExternalIdentity(
+                provider = OnlineExternalIdentityProvider.EMAIL,
+                subject = subject,
+            )
+            val credential = account?.let { resolvedAccount ->
+                store.getAccountPasswordCredential(
+                    accountId = resolvedAccount.accountId,
+                )
+            }
+            val passwordMatches =
+                passwordCredentialService.verifyPassword(
+                    rawPassword = request.password,
+                    credential = credential,
+                )
+
+            if (account == null || !passwordMatches) {
+                call.respond(HttpStatusCode.Unauthorized)
+                return@post
+            }
+
+            call.respond(
+                sessionTokenService.issueAccountSession(
+                    playerId = account.playerId,
+                    accountId = account.accountId,
+                ),
+            )
         }
 
         post("/${OnlineRemoteRoutes.RECOVER_GOOGLE_ACCOUNT}") {
@@ -222,6 +324,76 @@ internal fun Route.onlineServerRoutes(
         }
 
         emailVerificationService?.let { service ->
+            post("/${OnlinePasswordIdentityRoutes.REGISTER}") {
+                val identity = call.requireOnlineIdentity(
+                    identityResolver = identityResolver,
+                ) ?: return@post
+                val request =
+                    call.receive<OnlinePasswordRegisterRequestDto>()
+
+                if (
+                    !passwordCredentialService.isPasswordAccepted(
+                        request.password,
+                    )
+                ) {
+                    call.respond(HttpStatusCode.BadRequest)
+                    return@post
+                }
+
+                val subject = when (
+                    val verification = service.verifyCode(
+                        rawEmail = request.email,
+                        rawCode = request.code,
+                    )
+                ) {
+                    is OnlineEmailVerificationResult.Verified ->
+                        verification.subject
+
+                    OnlineEmailVerificationResult.Rejected -> {
+                        call.respond(HttpStatusCode.Unauthorized)
+                        return@post
+                    }
+                }
+
+                when (
+                    val result = store.linkExternalIdentity(
+                        playerId = identity.playerId,
+                        expectedAccountId = identity.accountId,
+                        provider = OnlineExternalIdentityProvider.EMAIL,
+                        subject = subject,
+                    )
+                ) {
+                    is OnlineExternalIdentityLinkResult.Linked -> {
+                        val account =
+                            store.setAccountPasswordCredential(
+                                accountId = result.account.accountId,
+                                credential =
+                                    passwordCredentialService
+                                        .createCredential(
+                                            request.password,
+                                        ),
+                            )
+                        if (account == null) {
+                            call.respond(
+                                HttpStatusCode.ServiceUnavailable,
+                            )
+                            return@post
+                        }
+
+                        call.respond(
+                            sessionTokenService.issueAccountSession(
+                                playerId = account.playerId,
+                                accountId = account.accountId,
+                            ),
+                        )
+                    }
+
+                    OnlineExternalIdentityLinkResult.Conflict -> {
+                        call.respond(HttpStatusCode.Conflict)
+                    }
+                }
+            }
+
             post("/${OnlineEmailIdentityRoutes.LINK_IDENTITY}") {
                 val identity = call.requireOnlineIdentity(
                     identityResolver = identityResolver,

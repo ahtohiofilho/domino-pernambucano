@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.OnlineEmailAccountIntent
 import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleAccountStatus
+import com.ahtohiofilho.dominopernambucano.online.OnlinePasswordAccountManager
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
@@ -46,6 +47,8 @@ import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationIns
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
+import com.ahtohiofilho.dominopernambucano.ui.account.RankedAccountEntryMode
+import com.ahtohiofilho.dominopernambucano.ui.account.RankedAccountEntryScreen
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBrandAccent
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoCompactActionCard
@@ -82,6 +85,7 @@ fun MainMenuScreen(
     onlineGoogleAccountFeedbackMessage: String? = null,
     onlineGoogleAvailable: Boolean = true,
     onlineEmailAvailable: Boolean = false,
+    onlinePasswordAccountManager: OnlinePasswordAccountManager? = null,
     onlineEmailAddress: String = "",
     onlineEmailCode: String = "",
     onlineEmailIntent: OnlineEmailAccountIntent? = null,
@@ -95,6 +99,7 @@ fun MainMenuScreen(
     openAccountDialogOnEnter: Boolean = false,
     onAccountDialogOpenRequestConsumed: () -> Unit = {},
     onAccountDialogOpened: () -> Unit = {},
+    onPasswordAuthenticated: suspend () -> Unit = {},
     onAccountProfilePublicDisplayNameChange: (String) -> Unit =
         {},
     onAccountProfileTableNameChange: (String) -> Unit = {},
@@ -119,6 +124,12 @@ fun MainMenuScreen(
     var accountDialogVisible by remember {
         mutableStateOf(false)
     }
+    var accountEntryVisible by remember {
+        mutableStateOf(false)
+    }
+    var accountEntryMode by remember {
+        mutableStateOf(RankedAccountEntryMode.SIGN_IN)
+    }
     var reopenAccountAfterGoogleAction by remember {
         mutableStateOf(false)
     }
@@ -126,8 +137,34 @@ fun MainMenuScreen(
     LaunchedEffect(openAccountDialogOnEnter) {
         if (openAccountDialogOnEnter) {
             onAccountDialogOpenRequestConsumed()
+            if (
+                onlineGoogleAccountStatus ==
+                    OnlineGoogleAccountStatus.CONNECTED
+            ) {
+                accountDialogVisible = true
+                onAccountDialogOpened()
+            } else if (onlinePasswordAccountManager != null) {
+                accountEntryMode = RankedAccountEntryMode.SIGN_IN
+                accountEntryVisible = true
+            } else {
+                accountDialogVisible = true
+                onAccountDialogOpened()
+            }
+        }
+    }
+
+    LaunchedEffect(
+        onlineGoogleAccountStatus,
+        accountEntryVisible,
+    ) {
+        if (
+            accountEntryVisible &&
+            onlineGoogleAccountStatus ==
+                OnlineGoogleAccountStatus.CONNECTED
+        ) {
+            accountEntryVisible = false
+            accountEntryMode = RankedAccountEntryMode.SIGN_IN
             accountDialogVisible = true
-            onAccountDialogOpened()
         }
     }
 
@@ -272,6 +309,30 @@ fun MainMenuScreen(
         stringResource(R.string.main_menu_account_support)
     }
 
+    if (accountEntryVisible && onlinePasswordAccountManager != null) {
+        RankedAccountEntryScreen(
+            mode = accountEntryMode,
+            actionInProgress = onlineGoogleAccountActionInProgress,
+            feedbackMessage = onlineGoogleAccountFeedbackMessage,
+            googleAvailable = onlineGoogleAvailable,
+            passwordAccountManager = onlinePasswordAccountManager,
+            onContinueGoogleClick = onConnectGoogleAccountClick,
+            onAuthenticated = {
+                onPasswordAuthenticated()
+                accountEntryVisible = false
+                accountEntryMode = RankedAccountEntryMode.SIGN_IN
+                accountDialogVisible = true
+            },
+            onModeChange = { mode ->
+                accountEntryMode = mode
+            },
+            onBackClick = {
+                accountEntryVisible = false
+                accountEntryMode = RankedAccountEntryMode.SIGN_IN
+            },
+        )
+        return
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -427,8 +488,18 @@ fun MainMenuScreen(
                     supportingText = accountSupport,
                     accent = DominoBrandAccent.Green,
                     onClick = {
-                        accountDialogVisible = true
-                        onAccountDialogOpened()
+                        if (
+                            onlineGoogleAccountStatus ==
+                                OnlineGoogleAccountStatus.CONNECTED ||
+                            onlinePasswordAccountManager == null
+                        ) {
+                            accountDialogVisible = true
+                            onAccountDialogOpened()
+                        } else {
+                            accountEntryMode =
+                                RankedAccountEntryMode.SIGN_IN
+                            accountEntryVisible = true
+                        }
                     },
                     enabled = !menuActionInProgress,
                     elevated = true,
