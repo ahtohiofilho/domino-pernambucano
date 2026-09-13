@@ -8,7 +8,7 @@ import com.ahtohiofilho.dominopernambucano.R
 
 object AndroidMenuMusicController {
     private const val LogTag = "DominoMenuMusic"
-    private const val MusicVolume = 0.18f
+    private const val MusicVolume = 0.09f
 
     private val lock = Any()
 

@@ -67,8 +67,8 @@ class AndroidPassKnockSoundPlayer(
 
         soundPool.play(
             soundId,
-            1f,
-            1f,
+            PassKnockVolume,
+            PassKnockVolume,
             1,
             0,
             1f,
@@ -82,5 +82,9 @@ class AndroidPassKnockSoundPlayer(
 
         released = true
         soundPool.release()
+    }
+
+    private companion object {
+        const val PassKnockVolume = 0.106f
     }
 }

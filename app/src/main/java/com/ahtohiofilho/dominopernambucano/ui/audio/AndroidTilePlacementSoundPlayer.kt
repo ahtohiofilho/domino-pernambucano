@@ -88,10 +88,12 @@ class AndroidTilePlacementSoundPlayer(
             }
         } ?: return
 
+        val volume = SoundVolumes[indexToPlay]
+
         soundPool.play(
             soundIds[indexToPlay],
-            1f,
-            1f,
+            volume,
+            volume,
             1,
             0,
             1f,
@@ -114,6 +116,14 @@ class AndroidTilePlacementSoundPlayer(
             R.raw.tile_place_03,
             R.raw.tile_place_04,
             R.raw.tile_place_05,
+        )
+
+        val SoundVolumes = floatArrayOf(
+            0.99f,
+            0.80f,
+            0.96f,
+            0.63f,
+            0.96f,
         )
     }
 }

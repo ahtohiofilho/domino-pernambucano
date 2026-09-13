@@ -181,11 +181,15 @@ class AndroidMatchResultSoundPlayer(
         }
 
         val index = soundIndex(outcome)
+        val volume = when (outcome) {
+            MatchResultAudioOutcome.Victory -> VictoryVolume
+            MatchResultAudioOutcome.Defeat -> DefeatVolume
+        }
 
         soundPool.play(
             soundIds[index],
-            ResultVolume,
-            ResultVolume,
+            volume,
+            volume,
             1,
             0,
             1f,
@@ -205,6 +209,7 @@ class AndroidMatchResultSoundPlayer(
         const val VictoryIndex = 0
         const val DefeatIndex = 1
         const val SoundCount = 2
-        const val ResultVolume = 0.5f
+        const val VictoryVolume = 0.214f
+        const val DefeatVolume = 0.155f
     }
 }
