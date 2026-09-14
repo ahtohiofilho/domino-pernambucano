@@ -115,6 +115,7 @@
     <string name="ranked_auth_forgot_title">Reset your password</string>
     <string name="ranked_auth_forgot_description">Enter your account email to receive a recovery code.</string>
     <string name="ranked_auth_send_code">Send code</string>
+    <string name="ranked_auth_resend_code">Resend code</string>
     <string name="ranked_auth_reset_title">Create a new password</string>
     <string name="ranked_auth_reset_description">Enter the code sent to %1$s and choose a new password.</string>
     <string name="ranked_auth_reset_action">Save new password</string>

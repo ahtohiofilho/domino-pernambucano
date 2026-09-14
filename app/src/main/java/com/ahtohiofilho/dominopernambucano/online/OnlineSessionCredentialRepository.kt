@@ -167,6 +167,45 @@ class OnlineSessionCredentialRepository(
         return recoveredCredential
     }
 
+    /**
+     * Recupera uma conta sem destruir previamente uma sessão anônima local.
+     *
+     * O chamador é responsável por bloquear a substituição quando a sessão
+     * anônima ainda possui participação online pendente. A credencial anterior
+     * permanece intacta caso a autenticação remota falhe.
+     */
+    suspend fun recoverAccountCredentialReplacingAnonymous(
+        recoverAccount: suspend () -> OnlineAccountSessionDto,
+    ): OnlineSessionCredential {
+        val currentCredential = getStoredCredentialOrNull()
+        val recoveredCredential = recoverAccount()
+            .toOnlineSessionCredential()
+
+        requireValidForStorage(recoveredCredential)
+
+        if (
+            currentCredential?.sessionKind ==
+            OnlineSessionKind.ACCOUNT
+        ) {
+            require(
+                recoveredCredential.playerId == currentCredential.playerId
+            ) {
+                "A recuperação alterou o playerId da conta online."
+            }
+            require(
+                recoveredCredential.accountId == currentCredential.accountId
+            ) {
+                "A recuperação alterou o accountId da conta online."
+            }
+        }
+
+        if (!store.write(recoveredCredential)) {
+            throw OnlineSessionCredentialPersistenceException()
+        }
+
+        return recoveredCredential
+    }
+
     fun clear(): Boolean {
         return store.clear()
     }

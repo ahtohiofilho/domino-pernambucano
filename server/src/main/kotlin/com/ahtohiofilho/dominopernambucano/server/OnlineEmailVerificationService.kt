@@ -48,6 +48,11 @@ sealed interface OnlineEmailVerificationResult {
     data object Rejected : OnlineEmailVerificationResult
 }
 
+class OnlineEmailVerificationReservation internal constructor(
+    val subject: String,
+    internal val reservationId: Long,
+)
+
 /**
  * Núcleo efêmero da prova de titularidade por e-mail.
  *
@@ -69,6 +74,7 @@ class OnlineEmailVerificationService(
         val codeDigest: ByteArray,
         val expiresAtEpochMillis: Long,
         val failedAttempts: Int = 0,
+        val reservationId: Long? = null,
     )
 
     private data class PendingDispatch(
@@ -92,6 +98,7 @@ class OnlineEmailVerificationService(
         mutableMapOf<String, Challenge>()
     private val nextRequestAtBySubject =
         mutableMapOf<String, Long>()
+    private var nextReservationId = 1L
 
     init {
         require(this.hashSecret.size >= 32) {
@@ -190,6 +197,9 @@ class OnlineEmailVerificationService(
 
             val challenge = challengesBySubject[subject]
                 ?: return@synchronized OnlineEmailVerificationResult.Rejected
+            if (challenge.reservationId != null) {
+                return@synchronized OnlineEmailVerificationResult.Rejected
+            }
 
             val actualDigest = digestCode(
                 subject = subject,
@@ -220,6 +230,99 @@ class OnlineEmailVerificationService(
         }
     }
 
+
+    fun reserveCode(
+        rawEmail: String,
+        rawCode: String,
+    ): OnlineEmailVerificationReservation? {
+        val canonicalEmail =
+            canonicalizeOnlineEmailAddress(rawEmail)
+                ?: return null
+        val code = rawCode.trim()
+        if (
+            code.length != policy.codeLengthDigits ||
+            !code.all { character -> character.isDigit() }
+        ) {
+            return null
+        }
+
+        val subject = onlineEmailIdentitySubjectFromCanonical(
+            canonicalEmail,
+        )
+        val now = nowEpochMillis()
+        require(now >= 0L)
+
+        return synchronized(lock) {
+            pruneExpiredState(now)
+
+            val challenge = challengesBySubject[subject]
+                ?: return@synchronized null
+            if (challenge.reservationId != null) {
+                return@synchronized null
+            }
+
+            val actualDigest = digestCode(
+                subject = subject,
+                code = code,
+            )
+            val matches = MessageDigest.isEqual(
+                challenge.codeDigest,
+                actualDigest,
+            )
+
+            if (!matches) {
+                val failedAttempts = challenge.failedAttempts + 1
+                if (failedAttempts >= policy.maxVerifyAttempts) {
+                    challengesBySubject.remove(subject)
+                } else {
+                    challengesBySubject[subject] = challenge.copy(
+                        failedAttempts = failedAttempts,
+                    )
+                }
+                return@synchronized null
+            }
+
+            val reservationId = nextReservationId
+            nextReservationId =
+                if (reservationId == Long.MAX_VALUE) 1L
+                else reservationId + 1L
+
+            challengesBySubject[subject] = challenge.copy(
+                reservationId = reservationId,
+            )
+            OnlineEmailVerificationReservation(
+                subject = subject,
+                reservationId = reservationId,
+            )
+        }
+    }
+
+    fun completeReservation(
+        reservation: OnlineEmailVerificationReservation,
+        consume: Boolean,
+    ): Boolean {
+        val now = nowEpochMillis()
+        require(now >= 0L)
+
+        return synchronized(lock) {
+            pruneExpiredState(now)
+
+            val challenge = challengesBySubject[reservation.subject]
+                ?: return@synchronized false
+            if (challenge.reservationId != reservation.reservationId) {
+                return@synchronized false
+            }
+
+            if (consume) {
+                challengesBySubject.remove(reservation.subject)
+            } else {
+                challengesBySubject[reservation.subject] = challenge.copy(
+                    reservationId = null,
+                )
+            }
+            true
+        }
+    }
     private fun rollbackDispatch(
         dispatch: PendingDispatch,
     ) {

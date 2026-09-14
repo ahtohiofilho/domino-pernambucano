@@ -115,6 +115,7 @@
     <string name="ranked_auth_forgot_title">Recuperar contraseña</string>
     <string name="ranked_auth_forgot_description">Escribe el correo de tu cuenta para recibir un código de recuperación.</string>
     <string name="ranked_auth_send_code">Enviar código</string>
+    <string name="ranked_auth_resend_code">Reenviar código</string>
     <string name="ranked_auth_reset_title">Crear una nueva contraseña</string>
     <string name="ranked_auth_reset_description">Escribe el código enviado a %1$s y elige una nueva contraseña.</string>
     <string name="ranked_auth_reset_action">Guardar nueva contraseña</string>

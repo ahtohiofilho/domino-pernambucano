@@ -521,6 +521,86 @@ class InMemoryOnlineServerStore(
         }
     }
 
+    override fun registerEmailPasswordIdentity(
+        playerId: String,
+        expectedAccountId: String?,
+        subject: String,
+        credential: OnlineServerPasswordCredential,
+    ): OnlineExternalIdentityLinkResult {
+        require(isValidOnlineServerPasswordCredential(credential)) {
+            "A credencial de senha informada é inválida."
+        }
+
+        return synchronized(lock) {
+            val normalizedPlayerId = requireStoreIdentifier(
+                value = playerId,
+                fieldName = "playerId",
+            )
+            val normalizedSubject = requireStoreIdentifier(
+                value = subject,
+                fieldName = "external subject",
+            )
+            val identityKey = ExternalIdentityKey(
+                provider = OnlineExternalIdentityProvider.EMAIL,
+                subject = normalizedSubject,
+            )
+            val accountBefore =
+                accountsByPlayerId[normalizedPlayerId]
+            val identityBefore =
+                externalIdentitiesByKey[identityKey]
+
+            fun rollbackRegistration() {
+                if (accountBefore == null) {
+                    accountsByPlayerId.remove(normalizedPlayerId)
+                } else {
+                    accountsByPlayerId[normalizedPlayerId] =
+                        accountBefore
+                }
+
+                if (identityBefore == null) {
+                    externalIdentitiesByKey.remove(identityKey)
+                } else {
+                    externalIdentitiesByKey[identityKey] =
+                        identityBefore
+                }
+            }
+
+            try {
+                when (
+                    val result = linkExternalIdentity(
+                        playerId = normalizedPlayerId,
+                        expectedAccountId = expectedAccountId,
+                        provider = OnlineExternalIdentityProvider.EMAIL,
+                        subject = normalizedSubject,
+                    )
+                ) {
+                    is OnlineExternalIdentityLinkResult.Linked -> {
+                        val updatedAccount =
+                            setAccountPasswordCredential(
+                                accountId = result.account.accountId,
+                                credential = credential,
+                            )
+
+                        if (updatedAccount == null) {
+                            rollbackRegistration()
+                            OnlineExternalIdentityLinkResult.Conflict
+                        } else {
+                            OnlineExternalIdentityLinkResult.Linked(
+                                account = updatedAccount,
+                            )
+                        }
+                    }
+
+                    OnlineExternalIdentityLinkResult.Conflict ->
+                        OnlineExternalIdentityLinkResult.Conflict
+                }
+            } catch (error: Exception) {
+                rollbackRegistration()
+                throw error
+            }
+        }
+    }
+
     override fun findAccountByExternalIdentity(
         provider: OnlineExternalIdentityProvider,
         subject: String,

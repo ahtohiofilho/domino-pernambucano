@@ -124,47 +124,51 @@ internal fun Route.onlineServerRoutes(
                     return@post
                 }
 
-                val subject = when (
-                    val verification = service.verifyCode(
-                        rawEmail = request.email,
-                        rawCode = request.code,
-                    )
-                ) {
-                    is OnlineEmailVerificationResult.Verified ->
-                        verification.subject
+                val reservation = service.reserveCode(
+                    rawEmail = request.email,
+                    rawCode = request.code,
+                )
+                if (reservation == null) {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@post
+                }
 
-                    OnlineEmailVerificationResult.Rejected -> {
-                        call.respond(HttpStatusCode.Unauthorized)
+                var consumeVerification = false
+                try {
+                    val account = store.findAccountByExternalIdentity(
+                        provider = OnlineExternalIdentityProvider.EMAIL,
+                        subject = reservation.subject,
+                    )
+                    if (account == null) {
+                        call.respond(HttpStatusCode.NotFound)
                         return@post
                     }
-                }
-                val account = store.findAccountByExternalIdentity(
-                    provider = OnlineExternalIdentityProvider.EMAIL,
-                    subject = subject,
-                )
-                if (account == null) {
-                    call.respond(HttpStatusCode.NotFound)
-                    return@post
-                }
 
-                val updated = store.setAccountPasswordCredential(
-                    accountId = account.accountId,
-                    credential =
-                        passwordCredentialService.createCredential(
-                            request.password,
+                    val updated = store.setAccountPasswordCredential(
+                        accountId = account.accountId,
+                        credential =
+                            passwordCredentialService.createCredential(
+                                request.password,
+                            ),
+                    )
+                    if (updated == null) {
+                        call.respond(HttpStatusCode.ServiceUnavailable)
+                        return@post
+                    }
+
+                    consumeVerification = true
+                    call.respond(
+                        sessionTokenService.issueAccountSession(
+                            playerId = updated.playerId,
+                            accountId = updated.accountId,
                         ),
-                )
-                if (updated == null) {
-                    call.respond(HttpStatusCode.ServiceUnavailable)
-                    return@post
+                    )
+                } finally {
+                    service.completeReservation(
+                        reservation = reservation,
+                        consume = consumeVerification,
+                    )
                 }
-
-                call.respond(
-                    sessionTokenService.issueAccountSession(
-                        playerId = updated.playerId,
-                        accountId = updated.accountId,
-                    ),
-                )
             }
         }
 
@@ -340,57 +344,47 @@ internal fun Route.onlineServerRoutes(
                     return@post
                 }
 
-                val subject = when (
-                    val verification = service.verifyCode(
-                        rawEmail = request.email,
-                        rawCode = request.code,
-                    )
-                ) {
-                    is OnlineEmailVerificationResult.Verified ->
-                        verification.subject
-
-                    OnlineEmailVerificationResult.Rejected -> {
-                        call.respond(HttpStatusCode.Unauthorized)
-                        return@post
-                    }
+                val reservation = service.reserveCode(
+                    rawEmail = request.email,
+                    rawCode = request.code,
+                )
+                if (reservation == null) {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@post
                 }
 
-                when (
-                    val result = store.linkExternalIdentity(
-                        playerId = identity.playerId,
-                        expectedAccountId = identity.accountId,
-                        provider = OnlineExternalIdentityProvider.EMAIL,
-                        subject = subject,
-                    )
-                ) {
-                    is OnlineExternalIdentityLinkResult.Linked -> {
-                        val account =
-                            store.setAccountPasswordCredential(
-                                accountId = result.account.accountId,
-                                credential =
-                                    passwordCredentialService
-                                        .createCredential(
-                                            request.password,
-                                        ),
-                            )
-                        if (account == null) {
+                var consumeVerification = false
+                try {
+                    when (
+                        val result = store.registerEmailPasswordIdentity(
+                            playerId = identity.playerId,
+                            expectedAccountId = identity.accountId,
+                            subject = reservation.subject,
+                            credential =
+                                passwordCredentialService.createCredential(
+                                    request.password,
+                                ),
+                        )
+                    ) {
+                        is OnlineExternalIdentityLinkResult.Linked -> {
+                            consumeVerification = true
                             call.respond(
-                                HttpStatusCode.ServiceUnavailable,
+                                sessionTokenService.issueAccountSession(
+                                    playerId = result.account.playerId,
+                                    accountId = result.account.accountId,
+                                ),
                             )
-                            return@post
                         }
 
-                        call.respond(
-                            sessionTokenService.issueAccountSession(
-                                playerId = account.playerId,
-                                accountId = account.accountId,
-                            ),
-                        )
+                        OnlineExternalIdentityLinkResult.Conflict -> {
+                            call.respond(HttpStatusCode.Conflict)
+                        }
                     }
-
-                    OnlineExternalIdentityLinkResult.Conflict -> {
-                        call.respond(HttpStatusCode.Conflict)
-                    }
+                } finally {
+                    service.completeReservation(
+                        reservation = reservation,
+                        consume = consumeVerification,
+                    )
                 }
             }
 

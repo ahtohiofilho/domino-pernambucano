@@ -110,8 +110,9 @@ class OnlinePasswordAccountManager(
             )
 
         return try {
-            prepareForAccountRecovery()
-            sessionCredentialRepository.recoverAccountCredential {
+            ensureAccountRecoveryAllowed()
+            sessionCredentialRepository
+                .recoverAccountCredentialReplacingAnonymous {
                 client.loginEmailPassword(
                     OnlinePasswordLoginRequestDto(
                         email = email,
@@ -223,8 +224,9 @@ class OnlinePasswordAccountManager(
             )
 
         return try {
-            prepareForAccountRecovery()
-            sessionCredentialRepository.recoverAccountCredential {
+            ensureAccountRecoveryAllowed()
+            sessionCredentialRepository
+                .recoverAccountCredentialReplacingAnonymous {
                 client.resetEmailPassword(
                     OnlinePasswordResetRequestDto(
                         email = email,
@@ -285,7 +287,7 @@ class OnlinePasswordAccountManager(
         )
     }
 
-    private fun prepareForAccountRecovery() {
+    private fun ensureAccountRecoveryAllowed() {
         val storedCredential = sessionCredentialRepository
             .getStoredCredentialOrNull()
             ?: return
@@ -300,10 +302,6 @@ class OnlinePasswordAccountManager(
             ?.getValidBindingOrNull()
         if (pendingBinding?.playerId == storedCredential.playerId) {
             throw OnlineAccountRecoveryBlockedByAnonymousSessionException()
-        }
-
-        if (!sessionCredentialRepository.clear()) {
-            throw OnlineSessionCredentialPersistenceException()
         }
     }
 }

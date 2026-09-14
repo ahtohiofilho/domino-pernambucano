@@ -115,6 +115,7 @@
     <string name="ranked_auth_forgot_title">Recuperar senha</string>
     <string name="ranked_auth_forgot_description">Informe o e-mail da sua conta para receber um código de recuperação.</string>
     <string name="ranked_auth_send_code">Enviar código</string>
+    <string name="ranked_auth_resend_code">Reenviar código</string>
     <string name="ranked_auth_reset_title">Criar nova senha</string>
     <string name="ranked_auth_reset_description">Digite o código enviado para %1$s e escolha uma nova senha.</string>
     <string name="ranked_auth_reset_action">Salvar nova senha</string>

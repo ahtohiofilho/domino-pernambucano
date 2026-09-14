@@ -71,6 +71,48 @@ interface OnlineServerStore : AutoCloseable {
         subject: String,
     ): OnlineExternalIdentityLinkResult
 
+    /**
+     * Vincula a identidade EMAIL e a credencial de senha como uma única
+     * operação autoritativa. Implementações persistentes devem gravar ambas
+     * juntas ou nenhuma delas.
+     *
+     * O corpo padrão preserva compatibilidade de stores auxiliares. Os stores
+     * autoritativos de produção sobrescrevem este método com rollback/commit
+     * atômico.
+     */
+    fun registerEmailPasswordIdentity(
+        playerId: String,
+        expectedAccountId: String? = null,
+        subject: String,
+        credential: OnlineServerPasswordCredential,
+    ): OnlineExternalIdentityLinkResult {
+        return when (
+            val result = linkExternalIdentity(
+                playerId = playerId,
+                expectedAccountId = expectedAccountId,
+                provider = OnlineExternalIdentityProvider.EMAIL,
+                subject = subject,
+            )
+        ) {
+            is OnlineExternalIdentityLinkResult.Linked -> {
+                val updatedAccount = setAccountPasswordCredential(
+                    accountId = result.account.accountId,
+                    credential = credential,
+                )
+                if (updatedAccount == null) {
+                    OnlineExternalIdentityLinkResult.Conflict
+                } else {
+                    OnlineExternalIdentityLinkResult.Linked(
+                        account = updatedAccount,
+                    )
+                }
+            }
+
+            OnlineExternalIdentityLinkResult.Conflict ->
+                OnlineExternalIdentityLinkResult.Conflict
+        }
+    }
+
     fun findAccountByExternalIdentity(
         provider: OnlineExternalIdentityProvider,
         subject: String,

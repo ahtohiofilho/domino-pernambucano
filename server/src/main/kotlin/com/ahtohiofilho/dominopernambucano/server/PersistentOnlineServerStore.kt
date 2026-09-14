@@ -80,6 +80,20 @@ class PersistentOnlineServerStore private constructor(
         )
     }
 
+    override fun registerEmailPasswordIdentity(
+        playerId: String,
+        expectedAccountId: String?,
+        subject: String,
+        credential: OnlineServerPasswordCredential,
+    ): OnlineExternalIdentityLinkResult = mutate {
+        delegate.registerEmailPasswordIdentity(
+            playerId = playerId,
+            expectedAccountId = expectedAccountId,
+            subject = subject,
+            credential = credential,
+        )
+    }
+
     override fun findAccountByExternalIdentity(
         provider: OnlineExternalIdentityProvider,
         subject: String,

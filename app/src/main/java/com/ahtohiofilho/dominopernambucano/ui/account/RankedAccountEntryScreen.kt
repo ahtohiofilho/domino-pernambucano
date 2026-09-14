@@ -171,7 +171,10 @@ fun RankedAccountEntryScreen(
         OnlinePasswordAccountFailureReason.UNKNOWN to
             stringResource(R.string.ranked_auth_unknown_failure),
     )
-    val visibleFeedback = localFeedback ?: feedbackMessage
+    val visibleFeedback = localFeedback ?: feedbackMessage.takeUnless {
+        mode == RankedAccountEntryMode.VERIFY_CREATE_ACCOUNT ||
+            mode == RankedAccountEntryMode.RESET_PASSWORD
+    }
 
     fun switchMode(nextMode: RankedAccountEntryMode) {
         if (busy) return
@@ -473,6 +476,26 @@ fun RankedAccountEntryScreen(
                 AuthModePrompt(
                     prompt = "",
                     action = stringResource(
+                        R.string.ranked_auth_resend_code,
+                    ),
+                    enabled = !busy && passwordAccountManager.isAvailable,
+                    onClick = {
+                        runAction(
+                            block = {
+                                passwordAccountManager
+                                    .requestVerificationCode(
+                                        rawEmail = verifiedEmail ?: email,
+                                        purpose =
+                                            OnlinePasswordVerificationPurpose
+                                                .CREATE_ACCOUNT,
+                                    )
+                            },
+                        )
+                    },
+                )
+                AuthModePrompt(
+                    prompt = "",
+                    action = stringResource(
                         R.string.ranked_auth_back_to_sign_in,
                     ),
                     enabled = !busy,
@@ -590,6 +613,26 @@ fun RankedAccountEntryScreen(
                                 },
                             )
                         }
+                    },
+                )
+                AuthModePrompt(
+                    prompt = "",
+                    action = stringResource(
+                        R.string.ranked_auth_resend_code,
+                    ),
+                    enabled = !busy && passwordAccountManager.isAvailable,
+                    onClick = {
+                        runAction(
+                            block = {
+                                passwordAccountManager
+                                    .requestVerificationCode(
+                                        rawEmail = verifiedEmail ?: email,
+                                        purpose =
+                                            OnlinePasswordVerificationPurpose
+                                                .RESET_PASSWORD,
+                                    )
+                            },
+                        )
                     },
                 )
                 AuthModePrompt(
