@@ -44,6 +44,8 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatc
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemoteInspection
 import com.ahtohiofilho.dominopernambucano.online.OnlineRepositoryFactory
 import com.ahtohiofilho.dominopernambucano.online.OnlineSessionCredentialRepository
+import com.ahtohiofilho.dominopernambucano.online.OnlineSessionKind
+import com.ahtohiofilho.dominopernambucano.online.normalizeOnlinePublicDisplayName
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineSessionCredentialStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineParticipationBindingStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
@@ -62,6 +64,8 @@ import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileString
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
 import com.ahtohiofilho.dominopernambucano.ui.account.RankedAccountEntryMode
 import com.ahtohiofilho.dominopernambucano.ui.account.RankedAccountEntryScreen
+import com.ahtohiofilho.dominopernambucano.ui.account.RankedTableIdentityConfirmationDialog
+import com.ahtohiofilho.dominopernambucano.ui.account.RankedTableIdentityConfirmationStore
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMenuMusicController
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
 import com.ahtohiofilho.dominopernambucano.ui.info.RulesHelpScreen
@@ -203,6 +207,9 @@ fun DominoPernambucanoApp(
     val accountEmailUnknownFailure = stringResource(
         R.string.account_email_unknown_failure,
     )
+    val rankedTableIdentityLoadFailed = stringResource(
+        R.string.ranked_table_identity_load_failed,
+    )
 
     var settingsVisible by rememberSaveable {
         mutableStateOf(false)
@@ -238,6 +245,30 @@ fun DominoPernambucanoApp(
 
     var rankedAccountRestoreInProgress by remember {
         mutableStateOf(false)
+    }
+
+    var rankedTableIdentityPreparationInProgress by remember {
+        mutableStateOf(false)
+    }
+
+    var rankedTableIdentityDialogVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var rankedTableIdentityEditor by remember {
+        mutableStateOf<OnlineAccountProfileUiState.Editing?>(null)
+    }
+
+    var rankedTableIdentitySuggestedFromOffline by remember {
+        mutableStateOf(false)
+    }
+
+    var rankedTableIdentityActionInProgress by remember {
+        mutableStateOf(false)
+    }
+
+    var rankedTableIdentityFeedbackMessage by remember {
+        mutableStateOf<String?>(null)
     }
 
     val onlineTraceClientSessionId = remember {
@@ -432,6 +463,14 @@ fun DominoPernambucanoApp(
         context.applicationContext,
     ) {
         SharedPreferencesOfflinePlayerIdentityStore(
+            context = context.applicationContext,
+        )
+    }
+
+    val rankedTableIdentityConfirmationStore = remember(
+        context.applicationContext,
+    ) {
+        RankedTableIdentityConfirmationStore(
             context = context.applicationContext,
         )
     }
@@ -717,12 +756,222 @@ fun DominoPernambucanoApp(
         rankedAccountEntryVisible = true
     }
 
-    fun openRankedMatchmaking() {
+    fun requiresRankedPublicDisplayName(
+        editor: OnlineAccountProfileUiState.Editing,
+    ): Boolean {
+        if (!editor.established) {
+            return true
+        }
+
+        return try {
+            normalizeOnlinePublicDisplayName(
+                rawName = editor.publicDisplayName,
+            )
+            false
+        } catch (_: IllegalArgumentException) {
+            true
+        }
+    }
+
+    fun dispatchRankedMatchmakingAfterIdentityConfirmation() {
         rankedAccountEntryVisible = false
         rankedAccountEntryMode = RankedAccountEntryMode.SIGN_IN
+        rankedTableIdentityDialogVisible = false
         sessionCoordinator.dispatch(
             DominoSessionCommand.OpenOnlineRankedQueue,
         )
+    }
+
+    fun prepareRankedTableIdentityAndOpenMatchmaking() {
+        if (
+            rankedTableIdentityPreparationInProgress ||
+            rankedTableIdentityActionInProgress
+        ) {
+            return
+        }
+
+        val coordinator = onlineAccountProfileUiCoordinator
+        val queueClient = onlineRankedQueueRemoteClient
+
+        /*
+         * Fake/local development keeps its existing path. The confirmation
+         * checkpoint is authoritative only when the remote ranked stack exists.
+         */
+        if (coordinator == null || queueClient == null) {
+            dispatchRankedMatchmakingAfterIdentityConfirmation()
+            return
+        }
+
+        val credential =
+            onlineSessionCredentialRepository
+                .getValidCredentialOrNull()
+        val accountId = credential?.accountId
+            ?.trim()
+            .orEmpty()
+
+        if (
+            credential?.sessionKind != OnlineSessionKind.ACCOUNT ||
+            accountId.isBlank()
+        ) {
+            openRankedAccountEntry()
+            return
+        }
+
+        rankedTableIdentityPreparationInProgress = true
+        rankedTableIdentityFeedbackMessage = null
+        onlineGoogleAccountFeedbackMessage = null
+
+        menuCoroutineScope.launch {
+            try {
+                onlineAccountProfileUiState =
+                    OnlineAccountProfileUiState.Loading
+
+                val outcome = coordinator.load(
+                    fallbackIdentity = onlinePlayerIdentity,
+                )
+
+                onlineAccountProfileUiState = outcome.state
+
+                outcome.synchronizedIdentity?.let {
+                        synchronizedIdentity ->
+                    onlinePlayerIdentity = synchronizedIdentity
+                }
+
+                val editor =
+                    outcome.state as?
+                        OnlineAccountProfileUiState.Editing
+
+                if (editor == null) {
+                    onlineGoogleAccountFeedbackMessage =
+                        (
+                            outcome.state as?
+                                OnlineAccountProfileUiState.Failure
+                        )?.message
+                            ?: rankedTableIdentityLoadFailed
+                    return@launch
+                }
+
+                val authoritativeCodeReady =
+                    editor.established &&
+                        outcome.authoritativeTableCodeValid
+
+                if (
+                    authoritativeCodeReady &&
+                    rankedTableIdentityConfirmationStore
+                        .isConfirmed(
+                            accountId = accountId,
+                            tableCode = editor.tableName,
+                        )
+                ) {
+                    dispatchRankedMatchmakingAfterIdentityConfirmation()
+                    return@launch
+                }
+
+                val offlineSuggestion =
+                    if (!outcome.authoritativeTableCodeValid) {
+                        offlineIdentityStore.read()?.tableCode
+                    } else {
+                        null
+                    }
+
+                rankedTableIdentityEditor =
+                    offlineSuggestion?.let { tableCode ->
+                        editor.withTableName(tableCode)
+                    } ?: editor
+                rankedTableIdentitySuggestedFromOffline =
+                    offlineSuggestion != null
+                rankedTableIdentityFeedbackMessage = null
+
+                /*
+                 * Authentication is complete at this point. The player now sees
+                 * the table-identity checkpoint, not the auth screen underneath.
+                 */
+                rankedAccountEntryVisible = false
+                rankedTableIdentityDialogVisible = true
+            } finally {
+                rankedTableIdentityPreparationInProgress = false
+            }
+        }
+    }
+
+    fun confirmRankedTableIdentity(
+        publicDisplayName: String,
+        tableCode: String,
+    ) {
+        if (rankedTableIdentityActionInProgress) {
+            return
+        }
+
+        val coordinator = onlineAccountProfileUiCoordinator
+        val editor = rankedTableIdentityEditor
+        val credential =
+            onlineSessionCredentialRepository
+                .getValidCredentialOrNull()
+        val accountId = credential?.accountId
+            ?.trim()
+            .orEmpty()
+
+        if (
+            coordinator == null ||
+            editor == null ||
+            credential?.sessionKind != OnlineSessionKind.ACCOUNT ||
+            accountId.isBlank()
+        ) {
+            rankedTableIdentityDialogVisible = false
+            rankedTableIdentityEditor = null
+            openRankedAccountEntry()
+            return
+        }
+
+        val savingEditor =
+            editor
+                .withPublicDisplayName(publicDisplayName)
+                .withTableName(tableCode)
+                .copy(
+                    actionInProgress = true,
+                    feedbackMessage = null,
+                    saveSucceeded = false,
+                )
+
+        rankedTableIdentityEditor = savingEditor
+        rankedTableIdentityActionInProgress = true
+        rankedTableIdentityFeedbackMessage = null
+
+        menuCoroutineScope.launch {
+            try {
+                val outcome = coordinator.save(
+                    editor = savingEditor,
+                )
+
+                onlineAccountProfileUiState = outcome.state
+                rankedTableIdentityEditor = outcome.state
+
+                outcome.synchronizedIdentity?.let {
+                        synchronizedIdentity ->
+                    onlinePlayerIdentity = synchronizedIdentity
+                }
+
+                if (outcome.state.saveSucceeded) {
+                    rankedTableIdentityConfirmationStore.confirm(
+                        accountId = accountId,
+                        tableCode = outcome.state.tableName,
+                    )
+
+                    rankedTableIdentityDialogVisible = false
+                    rankedTableIdentityEditor = null
+                    rankedTableIdentitySuggestedFromOffline = false
+                    rankedTableIdentityFeedbackMessage = null
+
+                    dispatchRankedMatchmakingAfterIdentityConfirmation()
+                } else {
+                    rankedTableIdentityFeedbackMessage =
+                        outcome.state.feedbackMessage
+                            ?: rankedTableIdentityLoadFailed
+                }
+            } finally {
+                rankedTableIdentityActionInProgress = false
+            }
+        }
     }
 
     fun restoreSavedRankedAccount() {
@@ -739,7 +988,7 @@ fun DominoPernambucanoApp(
         menuCoroutineScope.launch {
             try {
                 if (onlineGoogleAccountManager.restoreAuthorizedAccount()) {
-                    openRankedMatchmaking()
+                    prepareRankedTableIdentityAndOpenMatchmaking()
                 } else {
                     openRankedAccountEntry()
                 }
@@ -1389,7 +1638,9 @@ fun DominoPernambucanoApp(
                     mode = rankedAccountEntryMode,
                     actionInProgress =
                         onlineGoogleAccountActionInProgress ||
-                            rankedAccountRestoreInProgress,
+                            rankedAccountRestoreInProgress ||
+                            rankedTableIdentityPreparationInProgress ||
+                            rankedTableIdentityActionInProgress,
                     feedbackMessage =
                         onlineGoogleAccountFeedbackMessage,
                     googleAvailable =
@@ -1398,13 +1649,12 @@ fun DominoPernambucanoApp(
                     passwordAccountManager =
                         onlinePasswordAccountManager,
                     onAuthenticated = {
-                        synchronizeOnlineAccountProfileAfterAuthentication()
-                        openRankedMatchmaking()
+                        prepareRankedTableIdentityAndOpenMatchmaking()
                     },
                     onContinueGoogleClick = {
                         connectOnlineGoogleAccount(
                             onConnected = {
-                                openRankedMatchmaking()
+                                prepareRankedTableIdentityAndOpenMatchmaking()
                             },
                         )
                     },
@@ -1433,7 +1683,9 @@ fun DominoPernambucanoApp(
                     },
                     onlineActionInProgress =
                         onlineGoogleAccountActionInProgress ||
-                            rankedAccountRestoreInProgress,
+                            rankedAccountRestoreInProgress ||
+                            rankedTableIdentityPreparationInProgress ||
+                            rankedTableIdentityActionInProgress,
                     onlineFeedbackMessage =
                         onlineGoogleAccountFeedbackMessage,
                     onRankedGameClick = {
@@ -1446,7 +1698,7 @@ fun DominoPernambucanoApp(
                                 restoreSavedRankedAccount()
                             },
                             openMatchmaking = {
-                                openRankedMatchmaking()
+                                prepareRankedTableIdentityAndOpenMatchmaking()
                             },
                         )
                     },
@@ -1482,6 +1734,44 @@ fun DominoPernambucanoApp(
                             sessionCoordinator.dispatch(
                                 DominoSessionCommand.StartLocalMatch,
                             )
+                        },
+                    )
+                }
+            }
+
+            if (rankedTableIdentityDialogVisible) {
+                val editor = rankedTableIdentityEditor
+
+                if (editor != null) {
+                    RankedTableIdentityConfirmationDialog(
+                        initialPublicDisplayName =
+                            editor.publicDisplayName,
+                        initialTableCode = editor.tableName,
+                        requiresPublicDisplayName =
+                            requiresRankedPublicDisplayName(editor),
+                        suggestedFromOffline =
+                            rankedTableIdentitySuggestedFromOffline,
+                        actionInProgress =
+                            rankedTableIdentityActionInProgress,
+                        feedbackMessage =
+                            rankedTableIdentityFeedbackMessage,
+                        onConfirm = {
+                                publicDisplayName,
+                                tableCode ->
+                            confirmRankedTableIdentity(
+                                publicDisplayName =
+                                    publicDisplayName,
+                                tableCode = tableCode,
+                            )
+                        },
+                        onDismiss = {
+                            if (!rankedTableIdentityActionInProgress) {
+                                rankedTableIdentityDialogVisible = false
+                                rankedTableIdentityEditor = null
+                                rankedTableIdentitySuggestedFromOffline =
+                                    false
+                                rankedTableIdentityFeedbackMessage = null
+                            }
                         },
                     )
                 }

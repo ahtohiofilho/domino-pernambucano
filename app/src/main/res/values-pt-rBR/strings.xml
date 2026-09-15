@@ -393,4 +393,22 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="settings_licenses_pass_knock">Toque / passar a vez — “Knock on door”</string>
     <string name="settings_licenses_pass_knock_creator">Criador: jankooiker (Freesound)</string>
     <string name="settings_licenses_pass_knock_adapted">Áudio original recortado e adaptado para o Dominó PE</string>
+
+<string name="ranked_table_identity_title">Como vocÃª quer aparecer na mesa?</string>
+    <string name="ranked_table_identity_description">Escolha uma sigla de 3 caracteres. Os outros jogadores ver&#227;o essa identifica&#231;&#227;o ao seu lado na mesa.</string>
+    <string name="ranked_table_identity_preview_label">Na mesa</string>
+    <string name="ranked_table_identity_label">Sigla da mesa</string>
+    <string name="ranked_table_identity_hint">Use exatamente 3 letras ou n&#250;meros (A-Z, 0-9).</string>
+    <string name="ranked_table_identity_offline_suggestion">Usamos como sugest&#227;o a sigla que voc&#234; j&#225; utiliza no modo offline. Confirme ou altere.</string>
+    <string name="ranked_table_identity_change_later">Voc&#234; pode alter&#225;-la depois em Conta.</string>
+    <string name="ranked_table_identity_confirm">Confirmar e continuar</string>
+    <string name="ranked_table_identity_saving">Salvando...</string>
+    <string name="ranked_table_identity_load_failed">NÃ£o foi possÃ­vel carregar ou salvar sua identidade de mesa. Tente novamente.</string>
+
+<string name="ranked_table_identity_complete_title">Complete sua identidade de jogador</string>
+    <string name="ranked_table_identity_complete_description">Seu nome p&#250;blico aparece no ranking. Sua sigla de 3 caracteres aparece ao seu lado na mesa.</string>
+    <string name="ranked_table_identity_public_name">Nome p&#250;blico (obrigat&#243;rio)</string>
+    <string name="ranked_table_identity_public_name_hint">Escolha o nome que ser&#225; exibido no ranking.</string>
+
+    <string name="ranked_table_identity_public_name_invalid">Digite um nome p&#250;blico v&#225;lido.</string>
 </resources>

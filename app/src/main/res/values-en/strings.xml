@@ -453,4 +453,22 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="settings_licenses_pass_knock">Pass / knock — “Knock on door”</string>
     <string name="settings_licenses_pass_knock_creator">Creator: jankooiker (Freesound)</string>
     <string name="settings_licenses_pass_knock_adapted">Original audio trimmed and adapted for Dominó PE</string>
+
+<string name="ranked_table_identity_title">How do you want to appear at the table?</string>
+    <string name="ranked_table_identity_description">Choose a 3-character tag. Other players will see it next to you at the table.</string>
+    <string name="ranked_table_identity_preview_label">At the table</string>
+    <string name="ranked_table_identity_label">Table tag</string>
+    <string name="ranked_table_identity_hint">Use exactly 3 letters or numbers (A-Z, 0-9).</string>
+    <string name="ranked_table_identity_offline_suggestion">We used the tag you already play with offline as a suggestion. Confirm it or change it.</string>
+    <string name="ranked_table_identity_change_later">You can change it later in Account.</string>
+    <string name="ranked_table_identity_confirm">Confirm and continue</string>
+    <string name="ranked_table_identity_saving">Saving...</string>
+    <string name="ranked_table_identity_load_failed">We could not load or save your table identity. Try again.</string>
+
+<string name="ranked_table_identity_complete_title">Complete your player identity</string>
+    <string name="ranked_table_identity_complete_description">Your public name appears in the ranking. Your 3-character tag appears next to you at the table.</string>
+    <string name="ranked_table_identity_public_name">Public name (required)</string>
+    <string name="ranked_table_identity_public_name_hint">Choose the name that will be shown in the ranking.</string>
+
+    <string name="ranked_table_identity_public_name_invalid">Enter a valid public name.</string>
 </resources>

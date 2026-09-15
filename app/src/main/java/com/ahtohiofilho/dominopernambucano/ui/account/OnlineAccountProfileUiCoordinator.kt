@@ -76,6 +76,7 @@ sealed interface OnlineAccountProfileUiState {
 data class OnlineAccountProfileLoadOutcome(
     val state: OnlineAccountProfileUiState,
     val synchronizedIdentity: OnlinePlayerIdentity?,
+    val authoritativeTableCodeValid: Boolean = false,
 )
 
 data class OnlineAccountProfileSaveOutcome(
@@ -145,6 +146,8 @@ class OnlineAccountProfileUiCoordinator(
                         },
                     ),
                     synchronizedIdentity = synchronizedIdentity,
+                    authoritativeTableCodeValid =
+                        !requiresTableCodeSelection,
                 )
             }
 

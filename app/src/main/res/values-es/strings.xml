@@ -453,4 +453,22 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="settings_licenses_pass_knock">Toque / pasar turno — “Knock on door”</string>
     <string name="settings_licenses_pass_knock_creator">Creador: jankooiker (Freesound)</string>
     <string name="settings_licenses_pass_knock_adapted">Audio original recortado y adaptado para Dominó PE</string>
+
+<string name="ranked_table_identity_title">Â¿CÃ³mo quieres aparecer en la mesa?</string>
+    <string name="ranked_table_identity_description">Elige una sigla de 3 caracteres. Los dem&#225;s jugadores la ver&#225;n junto a ti en la mesa.</string>
+    <string name="ranked_table_identity_preview_label">En la mesa</string>
+    <string name="ranked_table_identity_label">Sigla de mesa</string>
+    <string name="ranked_table_identity_hint">Usa exactamente 3 letras o n&#250;meros (A-Z, 0-9).</string>
+    <string name="ranked_table_identity_offline_suggestion">Usamos como sugerencia la sigla que ya utilizas sin conexi&#243;n. Conf&#237;rmala o c&#225;mbiala.</string>
+    <string name="ranked_table_identity_change_later">Puedes cambiarla despu&#233;s en Cuenta.</string>
+    <string name="ranked_table_identity_confirm">Confirmar y continuar</string>
+    <string name="ranked_table_identity_saving">Guardando...</string>
+    <string name="ranked_table_identity_load_failed">No pudimos cargar o guardar tu identidad de mesa. IntÃ©ntalo de nuevo.</string>
+
+<string name="ranked_table_identity_complete_title">Completa tu identidad de jugador</string>
+    <string name="ranked_table_identity_complete_description">Tu nombre p&#250;blico aparece en la clasificaci&#243;n. Tu sigla de 3 caracteres aparece junto a ti en la mesa.</string>
+    <string name="ranked_table_identity_public_name">Nombre p&#250;blico (obligatorio)</string>
+    <string name="ranked_table_identity_public_name_hint">Elige el nombre que aparecer&#225; en la clasificaci&#243;n.</string>
+
+    <string name="ranked_table_identity_public_name_invalid">Introduce un nombre p&#250;blico v&#225;lido.</string>
 </resources>
