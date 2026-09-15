@@ -2,7 +2,9 @@ package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
+import com.ahtohiofilho.dominopernambucano.match.decrementPlayerClockMillis
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
+import com.ahtohiofilho.dominopernambucano.match.reloadPlayerClockFromReserveMillis
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import com.ahtohiofilho.dominopernambucano.online.createOnlinePassTurnAction
@@ -121,7 +123,7 @@ class SyntheticServerControlledTurnIntegrationTest {
          * owns the playable turn, no action is submitted on that participant's
          * behalf: advanceAuthoritativeTime() alone must publish the transition.
          */
-        repeat(32) { step ->
+        repeat(128) { step ->
             val before = requireNotNull(
                 store.getMatchSnapshot(matchId),
             )
@@ -155,6 +157,9 @@ class SyntheticServerControlledTurnIntegrationTest {
                     currentPlayer.participantType ==
                         OnlineParticipantTypeDto.SYNTHETIC
                 ) {
+                    val syntheticMove = findBasicBotMove(
+                        state = runtime.gameState,
+                    )
                     val beforeRevision = before.revision
                     val beforeGameState = before.gameState
 
@@ -193,6 +198,51 @@ class SyntheticServerControlledTurnIntegrationTest {
                     assertTrue(
                         "Synthetic identity must not be recorded as a timed-out human.",
                         currentSeat !in after.automaticPlayerIndexes,
+                    )
+
+                    /*
+                     * A pass keeps the existing no-reload rule. Continue until
+                     * a SYNTHETIC actually plays a piece so this regression
+                     * necessarily exercises reserve -> primary transfer.
+                     */
+                    if (syntheticMove == null) {
+                        return@repeat
+                    }
+
+                    val decrementedClock =
+                        decrementPlayerClockMillis(
+                            clocks = before.playerClockMillis,
+                            playerIndex = currentSeat,
+                            elapsedMillis =
+                                DominoMatchTiming.BotDecisionDelayMillis,
+                        )
+
+                    val expectedReload =
+                        reloadPlayerClockFromReserveMillis(
+                            clocks = decrementedClock,
+                            reserves =
+                                before.playerClockReserveMillis,
+                            playerIndex = currentSeat,
+                            playerRoundTimeMillis =
+                                runtime.clockPolicy
+                                    .playerRoundTimeMillis,
+                        )
+
+                    assertTrue(
+                        "Test fixture did not exercise reserve-to-primary transfer.",
+                        expectedReload.playerClockMillis[currentSeat] >
+                            decrementedClock[currentSeat],
+                    )
+
+                    assertEquals(
+                        "Synthetic primary clock was not reloaded from reserve.",
+                        expectedReload.playerClockMillis[currentSeat],
+                        after.playerClockMillis[currentSeat],
+                    )
+                    assertEquals(
+                        "Synthetic reserve was not debited by the reload.",
+                        expectedReload.playerClockReserveMillis[currentSeat],
+                        after.playerClockReserveMillis[currentSeat],
                     )
 
                     playUntilOneRankedRoundCompletes(
@@ -264,7 +314,7 @@ class SyntheticServerControlledTurnIntegrationTest {
         }
 
         error(
-            "No playable SYNTHETIC turn was reached within the test bound.",
+            "No playable SYNTHETIC move was reached within the test bound.",
         )
     }
 

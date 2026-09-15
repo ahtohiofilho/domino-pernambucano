@@ -29,6 +29,7 @@ import com.ahtohiofilho.dominopernambucano.match.createInitialPlayerClockMillis
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.match.findRandomPlayableMove
 import com.ahtohiofilho.dominopernambucano.match.isPlayerClockExpired
+import com.ahtohiofilho.dominopernambucano.match.reloadPlayerClockFromReserveMillis
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomLeaveRequestDto
@@ -4287,9 +4288,10 @@ class InMemoryOnlineServerStore(
             return runtimeState
         }
 
-        val updatedGameState = findBasicBotMove(
+        val botMove = findBasicBotMove(
             state = gameState,
-        )?.let { move ->
+        )
+        val updatedGameState = botMove?.let { move ->
             playMoveForCurrentPlayer(
                 state = gameState,
                 playableMove = move,
@@ -4299,15 +4301,39 @@ class InMemoryOnlineServerStore(
         )
 
         /*
-         * Server-controlled participants are bots by identity/control policy.
-         * Their normal bot moves must not be counted as "automatic rounds",
-         * which is a human timeout/control-loss metric used by ranking/MVP.
+         * Server-controlled participants must obey the same clock reload
+         * contract as an accepted human PLAY_MOVE. A pass deliberately does
+         * not consume reserve to reload the primary clock.
          */
-        return runtimeState.copy(
+        val updatedRuntimeState = runtimeState.copy(
             gameState = updatedGameState,
             phase = determineOnlineNextPhase(
                 gameState = updatedGameState,
             ),
+        )
+
+        if (botMove == null) {
+            return updatedRuntimeState
+        }
+
+        val reloadedClock = reloadPlayerClockFromReserveMillis(
+            clocks = runtimeState.playerClockMillis,
+            reserves = runtimeState.playerClockReserveMillis,
+            playerIndex = currentPlayerIndex,
+            playerRoundTimeMillis =
+                runtimeState.clockPolicy.playerRoundTimeMillis,
+        )
+
+        /*
+         * Server-controlled participants are bots by identity/control policy.
+         * Their normal bot moves must not be counted as "automatic rounds",
+         * which is a human timeout/control-loss metric used by ranking/MVP.
+         */
+        return updatedRuntimeState.copy(
+            playerClockMillis =
+                reloadedClock.playerClockMillis,
+            playerClockReserveMillis =
+                reloadedClock.playerClockReserveMillis,
         )
     }
 
