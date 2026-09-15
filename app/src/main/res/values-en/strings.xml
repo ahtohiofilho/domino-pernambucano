@@ -212,6 +212,11 @@
     <string name="ranking_context_closed">Final standings · %1$s</string>
     <string name="ranking_summary">%1$d eligible players · %2$d matches</string>
     <string name="ranking_index_label">Index</string>
+    <string name="ranking_v2_order_help">Criteria: SV &#8594; SP &#8594; PF &#8594; AST &#8594; TQ &#8594; fewer JA</string>
+    <string name="ranking_v2_record_summary">%1$d W &#183; %2$d L &#183; %3$d games</string>
+    <string name="ranking_v2_tiebreak_assists">Tiebreak: AST</string>
+    <string name="ranking_v2_tiebreak_touches">Tiebreak: TQ</string>
+    <string name="ranking_v2_tiebreak_automatic_plays">Tiebreak: fewer JA</string>
     <string name="ranking_awards_compact_current">Awards &#183; %1$d/%2$d players &#183; %3$d to go</string>
     <string name="ranking_awards_compact_closed">No awards &#183; %1$d/%2$d players</string>
     <string name="ranking_awards_compact_enabled">Awards enabled</string>

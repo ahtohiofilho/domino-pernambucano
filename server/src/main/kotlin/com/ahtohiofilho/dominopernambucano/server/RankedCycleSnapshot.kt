@@ -1,9 +1,11 @@
-﻿package com.ahtohiofilho.dominopernambucano.server
+package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCyclePeriod
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleStanding
 import com.ahtohiofilho.dominopernambucano.competitive.RankedLadderStats
+import com.ahtohiofilho.dominopernambucano.online.areValidPublicRankingPageRanks
 import kotlinx.serialization.Serializable
 
 
@@ -17,6 +19,8 @@ data class RankedCycleStandingSnapshot(
     val individualPoints: Long,
     val touchesGiven: Long,
     val automaticRounds: Long,
+    val assists: Long = 0L,
+    val automaticPlays: Long = 0L,
 ) {
     init {
         require(rank > 0)
@@ -27,6 +31,8 @@ data class RankedCycleStandingSnapshot(
         require(individualPoints >= 0L)
         require(touchesGiven >= 0L)
         require(automaticRounds >= 0L)
+        require(assists >= 0L)
+        require(automaticPlays >= 0L)
     }
 
     internal fun toRankedCycleStanding(): RankedCycleStanding {
@@ -38,8 +44,10 @@ data class RankedCycleStandingSnapshot(
                 games = games,
                 teamBalance = teamBalance,
                 individualPoints = individualPoints,
+                assists = assists,
                 touchesGiven = touchesGiven,
                 automaticRounds = automaticRounds,
+                automaticPlays = automaticPlays,
             ),
         )
     }
@@ -57,6 +65,8 @@ data class RankedCycleStandingSnapshot(
                 individualPoints = standing.stats.individualPoints,
                 touchesGiven = standing.stats.touchesGiven,
                 automaticRounds = standing.stats.automaticRounds,
+                assists = standing.stats.assists,
+                automaticPlays = standing.stats.automaticPlays,
             )
         }
     }
@@ -81,8 +91,13 @@ data class RankedCycleSnapshot(
         require(totalEligiblePlayers >= retainedRankingSize)
         require(retentionPolicyVersion >= 0)
         require(
-            standings.map { standing -> standing.rank } ==
-                (1..standings.size).toList(),
+            areValidPublicRankingPageRanks(
+                rankingRuleVersion = period.rankingRuleVersion,
+                offset = 0,
+                ranks = standings.map { standing ->
+                    standing.rank
+                },
+            ),
         )
         require(
             standings.map { standing -> standing.accountId }
@@ -124,11 +139,26 @@ internal fun RankedCycleLadder.toClosedSnapshot(
 ): RankedCycleSnapshot {
     require(closedAtEpochMillis >= period.endsAtEpochMillis)
 
-    val retainedStandings = standings
-        .take(retentionPolicy.limitFor(period.kind))
-        .map { standing ->
-            RankedCycleStandingSnapshot.from(standing)
+    val retentionLimit = retentionPolicy.limitFor(period.kind)
+    val retainedStandings = (
+        if (period.rankingRuleVersion == RANKING_RULE_VERSION_V2) {
+            /*
+             * In V2, a retention limit is a public-rank boundary rather
+             * than a hard row count. This prevents an exact tie from
+             * being split merely because it crosses the nominal Top N.
+             *
+             * Example: ranks 99, 100, 100, 100, 103 with a Top 100
+             * retention policy keep all three players ranked 100th.
+             */
+            standings.takeWhile { standing ->
+                standing.rank <= retentionLimit
+            }
+        } else {
+            standings.take(retentionLimit)
         }
+    ).map { standing ->
+        RankedCycleStandingSnapshot.from(standing)
+    }
 
     return RankedCycleSnapshot(
         period = period,

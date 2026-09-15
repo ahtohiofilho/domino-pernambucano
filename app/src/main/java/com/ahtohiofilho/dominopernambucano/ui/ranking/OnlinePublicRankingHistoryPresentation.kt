@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.ui.ranking
 
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
@@ -63,6 +64,56 @@ internal fun PublicRankingEntryDto.publicDecimalScoreText(): String {
         "%.3f",
         scoreNumerator.toDouble() / scoreDenominator.toDouble(),
     )
+}
+
+internal fun PublicRankingResponseDto.usesV2RankingPresentation(): Boolean {
+    return rankingRuleVersion == RANKING_RULE_VERSION_V2
+}
+
+internal fun PublicRankingEntryDto.publicVictoryBalance(): Long {
+    return Math.subtractExact(
+        Math.multiplyExact(victories, 2L),
+        games,
+    )
+}
+
+internal fun PublicRankingEntryDto.publicDefeats(): Long {
+    return Math.subtractExact(games, victories)
+}
+
+internal enum class PublicRankingV2TiebreakCriterion {
+    ASSISTS,
+    TOUCHES,
+    AUTOMATIC_PLAYS,
+}
+
+internal fun publicV2TiebreakCriterion(
+    previous: PublicRankingEntryDto?,
+    current: PublicRankingEntryDto,
+): PublicRankingV2TiebreakCriterion? {
+    previous ?: return null
+
+    if (
+        previous.publicVictoryBalance() !=
+            current.publicVictoryBalance() ||
+        previous.teamBalance != current.teamBalance ||
+        previous.individualPoints != current.individualPoints
+    ) {
+        return null
+    }
+
+    return when {
+        previous.assists != current.assists ->
+            PublicRankingV2TiebreakCriterion.ASSISTS
+
+        previous.touchesGiven != current.touchesGiven ->
+            PublicRankingV2TiebreakCriterion.TOUCHES
+
+        previous.automaticPlays != current.automaticPlays ->
+            PublicRankingV2TiebreakCriterion.AUTOMATIC_PLAYS
+
+        else -> null
+    }
 }
 
 internal fun PublicRankingEntryDto.publicDisplayName(

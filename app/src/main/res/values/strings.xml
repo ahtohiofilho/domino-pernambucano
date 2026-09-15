@@ -212,6 +212,11 @@
     <string name="ranking_context_closed">Classificação encerrada · %1$s</string>
     <string name="ranking_summary">%1$d jogadores elegíveis · %2$d partidas</string>
     <string name="ranking_index_label">&#205;ndice</string>
+    <string name="ranking_v2_order_help">Crit&#233;rios: SV &#8594; SP &#8594; PF &#8594; AST &#8594; TQ &#8594; menos JA</string>
+    <string name="ranking_v2_record_summary">%1$d V &#183; %2$d D &#183; %3$d jogos</string>
+    <string name="ranking_v2_tiebreak_assists">Desempate: AST</string>
+    <string name="ranking_v2_tiebreak_touches">Desempate: TQ</string>
+    <string name="ranking_v2_tiebreak_automatic_plays">Desempate: menos JA</string>
     <string name="ranking_awards_compact_current">Pr&#234;mios &#183; %1$d/%2$d jogadores &#183; faltam %3$d</string>
     <string name="ranking_awards_compact_closed">Sem premia&#231;&#227;o &#183; %1$d/%2$d jogadores</string>
     <string name="ranking_awards_compact_enabled">Pr&#234;mios habilitados</string>

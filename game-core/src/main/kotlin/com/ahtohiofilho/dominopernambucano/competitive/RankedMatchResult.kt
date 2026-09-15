@@ -4,7 +4,15 @@ import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.isGameFinished
 import kotlinx.serialization.Serializable
 
-const val CURRENT_RANKING_RULE_VERSION = 1
+const val RANKING_RULE_VERSION_V1 = 1
+const val RANKING_RULE_VERSION_V2 = 2
+
+/*
+ * O V2 permanece preparado, mas ainda não é ativado como regra corrente
+ * neste subciclo. A ativação só acontece depois da migração de
+ * persistência/API/histórico.
+ */
+const val CURRENT_RANKING_RULE_VERSION = RANKING_RULE_VERSION_V1
 
 @Serializable
 enum class RankedMatchClassification {
@@ -36,6 +44,8 @@ data class RankedMatchPlayerResult(
     val individualPointsScored: Int,
     val touchesGiven: Int,
     val automaticRounds: Int,
+    val assists: Int = 0,
+    val automaticPlays: Int = 0,
 ) {
     init {
         require(playerId.isNotBlank())
@@ -47,6 +57,8 @@ data class RankedMatchPlayerResult(
         require(individualPointsScored >= 0)
         require(touchesGiven >= 0)
         require(automaticRounds >= 0)
+        require(assists >= 0)
+        require(automaticPlays >= 0)
     }
 }
 
@@ -149,6 +161,8 @@ fun buildRankedMatchResult(
                     delta.individualPointsDelta,
                 touchesGiven = delta.touchesGivenDelta,
                 automaticRounds = delta.automaticRoundsDelta,
+                assists = delta.assistsDelta,
+                automaticPlays = delta.automaticPlaysDelta,
             )
         },
     )

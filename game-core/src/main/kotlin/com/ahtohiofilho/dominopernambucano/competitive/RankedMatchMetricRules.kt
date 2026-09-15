@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.competitive
+package com.ahtohiofilho.dominopernambucano.competitive
 
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.RoundWinKind
@@ -22,11 +22,15 @@ data class RankedSeatMatchMetrics(
     val individualPoints: Int = 0,
     val touchesGiven: Int = 0,
     val automaticRounds: Int = 0,
+    val assists: Int = 0,
+    val automaticPlays: Int = 0,
 ) {
     init {
         require(individualPoints >= 0)
         require(touchesGiven >= 0)
         require(automaticRounds >= 0)
+        require(assists >= 0)
+        require(automaticPlays >= 0)
     }
 }
 
@@ -40,6 +44,8 @@ data class RankedSeatResultDelta(
     val individualPointsDelta: Int,
     val touchesGivenDelta: Int,
     val automaticRoundsDelta: Int,
+    val assistsDelta: Int = 0,
+    val automaticPlaysDelta: Int = 0,
 )
 
 fun calculateRankedRoundMetricDelta(
@@ -179,6 +185,8 @@ fun buildRankedSeatResultDeltas(
             individualPointsDelta = metrics.individualPoints,
             touchesGivenDelta = metrics.touchesGiven,
             automaticRoundsDelta = metrics.automaticRounds,
+            assistsDelta = metrics.assists,
+            automaticPlaysDelta = metrics.automaticPlays,
         )
     }
 }

@@ -363,7 +363,7 @@ private fun PublicRankingResponseDto.requireValidFor(
         requestedRankingRevision == null ||
             rankingRevision == requestedRankingRevision,
     )
-    require(rankingRuleVersion > 0)
+    require(isSupportedPublicRankingRuleVersion(rankingRuleVersion))
     require(timeZoneId == "America/Recife")
     require(startsAtEpochMillis >= 0L)
     require(endsAtEpochMillis > startsAtEpochMillis)
@@ -457,11 +457,14 @@ private fun PublicRankingResponseDto.requireValidFor(
         require(consumed >= retainedRankingSize.toLong())
     }
 
-    val expectedRanks = (
-        (offset + 1) until (offset + entries.size + 1)
-    ).toList()
     val pageRanks = entries.map { entry -> entry.rank }
-    require(pageRanks == expectedRanks)
+    require(
+        areValidPublicRankingPageRanks(
+            rankingRuleVersion = rankingRuleVersion,
+            offset = offset,
+            ranks = pageRanks,
+        ),
+    )
 
     val pageCompetitors = entries.map { entry ->
         entry.competitorId
@@ -529,7 +532,7 @@ private fun PublicRankingCycleSummaryDto.requireValidFor(
 ) {
     require(cycle == requestedCycle)
     require(cycleId.isNotBlank())
-    require(rankingRuleVersion > 0)
+    require(isSupportedPublicRankingRuleVersion(rankingRuleVersion))
     require(timeZoneId == "America/Recife")
     require(startsAtEpochMillis >= 0L)
     require(endsAtEpochMillis > startsAtEpochMillis)
@@ -620,8 +623,10 @@ private fun PublicRankingEntryDto.requireValid(
         ),
     )
     require(individualPoints >= 0L)
+    require(assists >= 0L)
     require(touchesGiven >= 0L)
     require(automaticRounds >= 0L)
+    require(automaticPlays >= 0L)
     require(
         awardTier ==
             expectedAwardTier(

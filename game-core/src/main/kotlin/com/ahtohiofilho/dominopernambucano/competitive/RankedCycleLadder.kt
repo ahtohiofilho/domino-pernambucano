@@ -19,9 +19,28 @@ data class RankedCycleLadder(
 ) {
     init {
         require(resultCount >= 0)
+
+        val entries = standings.map { standing ->
+            RankedLadderEntry(
+                technicalId = standing.accountId,
+                stats = standing.stats,
+            )
+        }
+        val canonicalEntries = rankEligibleEntries(
+            entries = entries,
+            rankingRuleVersion = period.rankingRuleVersion,
+        )
+
+        require(
+            canonicalEntries.map { entry -> entry.technicalId } ==
+                entries.map { entry -> entry.technicalId },
+        )
         require(
             standings.map { standing -> standing.rank } ==
-                    (1..standings.size).toList(),
+                buildPublicRanks(
+                    rankedEntries = entries,
+                    rankingRuleVersion = period.rankingRuleVersion,
+                ),
         )
         require(
             standings.map { standing -> standing.accountId }
@@ -41,17 +60,17 @@ fun buildRankedCycleLadder(
     )
     require(
         results.map { result -> result.resultId }.distinct().size ==
-                results.size,
+            results.size,
     ) {
         "Há resultados ranqueados duplicados."
     }
 
     val matchingResults = results.filter { result ->
         result.rankingRuleVersion == period.rankingRuleVersion &&
-                period.contains(result.completedAtEpochMillis) &&
-                result.players.any { player ->
-                    player.accountId !in excludedAccountIds
-                }
+            period.contains(result.completedAtEpochMillis) &&
+            result.players.any { player ->
+                player.accountId !in excludedAccountIds
+            }
     }
     val statsByAccountId = linkedMapOf<String, RankedLadderStats>()
 
@@ -85,12 +104,17 @@ fun buildRankedCycleLadder(
     }
 
     val rankedEntries = rankEligibleEntries(
-        statsByAccountId.map { (accountId, stats) ->
+        entries = statsByAccountId.map { (accountId, stats) ->
             RankedLadderEntry(
                 technicalId = accountId,
                 stats = stats,
             )
         },
+        rankingRuleVersion = period.rankingRuleVersion,
+    )
+    val publicRanks = buildPublicRanks(
+        rankedEntries = rankedEntries,
+        rankingRuleVersion = period.rankingRuleVersion,
     )
 
     return RankedCycleLadder(
@@ -98,12 +122,39 @@ fun buildRankedCycleLadder(
         resultCount = matchingResults.size,
         standings = rankedEntries.mapIndexed { index, entry ->
             RankedCycleStanding(
-                rank = index + 1,
+                rank = publicRanks[index],
                 accountId = entry.technicalId,
                 stats = entry.stats,
             )
         },
     )
+}
+
+private fun buildPublicRanks(
+    rankedEntries: List<RankedLadderEntry>,
+    rankingRuleVersion: Int,
+): List<Int> {
+    var previousEntry: RankedLadderEntry? = null
+    var previousRank = 0
+
+    return rankedEntries.mapIndexed { index, entry ->
+        val currentRank = if (
+            previousEntry != null &&
+            areRankedLadderEntriesPubliclyTied(
+                left = requireNotNull(previousEntry),
+                right = entry,
+                rankingRuleVersion = rankingRuleVersion,
+            )
+        ) {
+            previousRank
+        } else {
+            index + 1
+        }
+
+        previousEntry = entry
+        previousRank = currentRank
+        currentRank
+    }
 }
 
 private fun RankedLadderStats.accumulate(
@@ -126,6 +177,10 @@ private fun RankedLadderStats.accumulate(
             individualPoints,
             result.individualPointsScored.toLong(),
         ),
+        assists = Math.addExact(
+            assists,
+            result.assists.toLong(),
+        ),
         touchesGiven = Math.addExact(
             touchesGiven,
             result.touchesGiven.toLong(),
@@ -133,6 +188,10 @@ private fun RankedLadderStats.accumulate(
         automaticRounds = Math.addExact(
             automaticRounds,
             result.automaticRounds.toLong(),
+        ),
+        automaticPlays = Math.addExact(
+            automaticPlays,
+            result.automaticPlays.toLong(),
         ),
     )
 }

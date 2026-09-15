@@ -191,6 +191,14 @@ internal fun RankedCycleLadder.publicRankingRevision(): String {
         digest.updateCanonical(standing.stats.games)
         digest.updateCanonical(standing.stats.teamBalance)
         digest.updateCanonical(standing.stats.individualPoints)
+        if (
+            period.rankingRuleVersion ==
+                com.ahtohiofilho.dominopernambucano.competitive
+                    .RANKING_RULE_VERSION_V2
+        ) {
+            digest.updateCanonical(standing.stats.assists)
+            digest.updateCanonical(standing.stats.automaticPlays)
+        }
         digest.updateCanonical(standing.stats.touchesGiven)
         digest.updateCanonical(standing.stats.automaticRounds)
     }
@@ -241,6 +249,8 @@ private fun RankedCycleStanding.toPublicRankingEntry(
         individualPoints = stats.individualPoints,
         touchesGiven = stats.touchesGiven,
         automaticRounds = stats.automaticRounds,
+        assists = stats.assists,
+        automaticPlays = stats.automaticPlays,
         awardTier = awardTier,
     )
 }

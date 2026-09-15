@@ -1,5 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.online
 
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -37,8 +39,68 @@ data class PublicRankingEntryDto(
     val individualPoints: Long,
     val touchesGiven: Long,
     val automaticRounds: Long,
+    val assists: Long = 0L,
+    val automaticPlays: Long = 0L,
     val awardTier: PublicRankingAwardTierDto? = null,
 )
+
+fun isSupportedPublicRankingRuleVersion(
+    rankingRuleVersion: Int,
+): Boolean {
+    return rankingRuleVersion == RANKING_RULE_VERSION_V1 ||
+        rankingRuleVersion == RANKING_RULE_VERSION_V2
+}
+
+fun areValidPublicRankingPageRanks(
+    rankingRuleVersion: Int,
+    offset: Int,
+    ranks: List<Int>,
+): Boolean {
+    if (
+        offset < 0 ||
+        !isSupportedPublicRankingRuleVersion(rankingRuleVersion)
+    ) {
+        return false
+    }
+
+    var previousRank: Int? = null
+
+    ranks.forEachIndexed { index, rank ->
+        val globalPosition =
+            offset.toLong() + index.toLong() + 1L
+
+        if (rank <= 0 || rank.toLong() > globalPosition) {
+            return false
+        }
+
+        when (rankingRuleVersion) {
+            RANKING_RULE_VERSION_V1 -> {
+                if (rank.toLong() != globalPosition) {
+                    return false
+                }
+            }
+
+            RANKING_RULE_VERSION_V2 -> {
+                if (index == 0) {
+                    if (offset == 0 && rank != 1) {
+                        return false
+                    }
+                } else {
+                    if (
+                        rank != previousRank &&
+                        rank.toLong() != globalPosition
+                    ) {
+                        return false
+                    }
+                }
+            }
+        }
+
+        previousRank = rank
+    }
+
+    return true
+}
 
 @Serializable
 data class PublicRankingResponseDto(

@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
 import com.ahtohiofilho.dominopernambucano.advertising.AdvertisingPlacement
 import com.ahtohiofilho.dominopernambucano.advertising.DominoBannerAd
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingClient
@@ -462,6 +463,7 @@ internal fun OnlinePublicRankingScreen(
                     RankingEntryCard(
                         entry = viewer,
                         locale = locale,
+                        rankingRuleVersion = response.rankingRuleVersion,
                         highlighted = true,
                         historical = response.isClosed,
                     )
@@ -882,6 +884,18 @@ private fun RankingOverviewCard(
                 style = MaterialTheme.typography.bodySmall,
             )
 
+            if (response.usesV2RankingPresentation()) {
+                Text(
+                    text = stringResource(
+                        R.string.ranking_v2_order_help,
+                    ),
+                    color =
+                        DominoSemanticColors.brandSupportingText,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
             Text(
                 text = awardsText,
                 color = DominoSemanticColors.brandText,
@@ -988,18 +1002,31 @@ private fun RankingEntries(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(
+        itemsIndexed(
             items = entries,
-            key = { entry ->
+            key = { _, entry ->
                 entry.competitorId
             },
-        ) { entry ->
+        ) { index, entry ->
             val highlighted =
                 entry.competitorId == viewerCompetitorId
+            val rankingRuleVersion =
+                latestResponse?.rankingRuleVersion ?: 1
+            val tiebreakCriterion =
+                if (rankingRuleVersion == RANKING_RULE_VERSION_V2) {
+                    publicV2TiebreakCriterion(
+                        previous = entries.getOrNull(index - 1),
+                        current = entry,
+                    )
+                } else {
+                    null
+                }
 
             RankingEntryCard(
                 entry = entry,
                 locale = locale,
+                rankingRuleVersion = rankingRuleVersion,
+                tiebreakCriterion = tiebreakCriterion,
                 highlighted = highlighted,
                 historical = latestResponse?.isClosed == true,
             )
@@ -1045,11 +1072,12 @@ private fun RankingEntries(
         }
     }
 }
-
 @Composable
 private fun RankingEntryCard(
     entry: PublicRankingEntryDto,
     locale: java.util.Locale,
+    rankingRuleVersion: Int,
+    tiebreakCriterion: PublicRankingV2TiebreakCriterion? = null,
     highlighted: Boolean = false,
     historical: Boolean = false,
 ) {
@@ -1062,6 +1090,7 @@ private fun RankingEntryCard(
             entry.rank,
         ),
     )
+    val isV2 = rankingRuleVersion == RANKING_RULE_VERSION_V2
     val featured = entry.rank == 1
     val podium = entry.rank in 1..3
     val featuredAccent =
@@ -1158,66 +1187,177 @@ private fun RankingEntryCard(
                     )
                 }
 
-                Column(
-                    horizontalAlignment = Alignment.End,
+                if (!isV2) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.ranking_index_label,
+                            ),
+                            color =
+                                DominoSemanticColors.brandSupportingText,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                        )
+
+                        Text(
+                            text = entry.publicDecimalScoreText(),
+                            color = DominoSemanticColors.brandText,
+                            style = if (featured) {
+                                MaterialTheme.typography.titleLarge
+                            } else {
+                                MaterialTheme.typography.titleMedium
+                            },
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.End,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+
+            if (isV2) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    RankingV2MetricCell(
+                        modifier = Modifier.weight(1f),
+                        label = "SV",
+                        value = entry.publicVictoryBalance(),
+                    )
+                    RankingV2MetricCell(
+                        modifier = Modifier.weight(1f),
+                        label = "SP",
+                        value = entry.teamBalance,
+                    )
+                    RankingV2MetricCell(
+                        modifier = Modifier.weight(1f),
+                        label = "PF",
+                        value = entry.individualPoints,
+                    )
+                }
+
+                tiebreakCriterion?.let { criterion ->
                     Text(
                         text = stringResource(
-                            R.string.ranking_index_label,
+                            criterion.publicLabelRes(),
                         ),
-                        color =
-                            DominoSemanticColors.brandSupportingText,
+                        color = DominoSemanticColors.brandEnergy,
                         style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                    )
-
-                    Text(
-                        text = entry.publicDecimalScoreText(),
-                        color = DominoSemanticColors.brandText,
-                        style = if (featured) {
-                            MaterialTheme.typography.titleLarge
-                        } else {
-                            MaterialTheme.typography.titleMedium
-                        },
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.End,
-                        maxLines = 1,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
 
             if (expanded) {
-                Text(
-                    text = stringResource(
-                        R.string.ranking_score_summary,
-                        entry.publicScoreText(),
-                        entry.victories,
-                        entry.games,
-                    ),
-                    color =
-                        DominoSemanticColors.brandSupportingText,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                if (isV2) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        RankingV2MetricCell(
+                            modifier = Modifier.weight(1f),
+                            label = "AST",
+                            value = entry.assists,
+                        )
+                        RankingV2MetricCell(
+                            modifier = Modifier.weight(1f),
+                            label = "TQ",
+                            value = entry.touchesGiven,
+                        )
+                        RankingV2MetricCell(
+                            modifier = Modifier.weight(1f),
+                            label = "JA",
+                            value = entry.automaticPlays,
+                        )
+                    }
 
-                Text(
-                    text = stringResource(
-                        R.string.ranking_metrics_summary,
-                        entry.teamBalance,
-                        entry.individualPoints,
-                        entry.touchesGiven,
-                        entry.automaticRounds,
-                    ),
-                    color =
-                        DominoSemanticColors.brandSupportingText.copy(
-                            alpha = 0.88f,
+                    Text(
+                        text = stringResource(
+                            R.string.ranking_v2_record_summary,
+                            entry.victories,
+                            entry.publicDefeats(),
+                            entry.games,
                         ),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                        color =
+                            DominoSemanticColors.brandSupportingText,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    Text(
+                        text = stringResource(
+                            R.string.ranking_score_summary,
+                            entry.publicScoreText(),
+                            entry.victories,
+                            entry.games,
+                        ),
+                        color =
+                            DominoSemanticColors.brandSupportingText,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+
+                    Text(
+                        text = stringResource(
+                            R.string.ranking_metrics_summary,
+                            entry.teamBalance,
+                            entry.individualPoints,
+                            entry.touchesGiven,
+                            entry.automaticRounds,
+                        ),
+                        color =
+                            DominoSemanticColors.brandSupportingText.copy(
+                                alpha = 0.88f,
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
     }
 }
 
+@Composable
+private fun RankingV2MetricCell(
+    modifier: Modifier,
+    label: String,
+    value: Long,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Text(
+            text = label,
+            color = DominoSemanticColors.brandSupportingText,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+
+        Text(
+            text = value.toString(),
+            color = DominoSemanticColors.brandText,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+private fun PublicRankingV2TiebreakCriterion.publicLabelRes(): Int {
+    return when (this) {
+        PublicRankingV2TiebreakCriterion.ASSISTS ->
+            R.string.ranking_v2_tiebreak_assists
+        PublicRankingV2TiebreakCriterion.TOUCHES ->
+            R.string.ranking_v2_tiebreak_touches
+        PublicRankingV2TiebreakCriterion.AUTOMATIC_PLAYS ->
+            R.string.ranking_v2_tiebreak_automatic_plays
+    }
+}
 @Composable
 private fun RankingAvatarSlot(
     rankLabel: String,
