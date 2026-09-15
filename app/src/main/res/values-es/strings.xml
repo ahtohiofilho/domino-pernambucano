@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dominó PE</string>
     <string name="brand_subtitle">App dedicada a la modalidad pernambucana</string>
@@ -235,7 +235,7 @@
     <string name="ranking_loading">Cargando...</string>
     <string name="ranking_load_more">Cargar más</string>
     <string name="ranking_score_summary">Puntuación %1$s · %2$d victorias en %3$d partidas</string>
-    <string name="ranking_metrics_summary">Saldo %1$d · Puntos %2$d · Bloqueos %3$d · Rondas automáticas %4$d</string>
+    <string name="ranking_metrics_summary">Saldo %1$d · Puntos %2$d · Pases %3$d · Rondas automáticas %4$d</string>
     <string name="ranking_player_fallback">Jugador %1$d</string>
     <string name="ranking_failure_authentication_required">No hay una sesión en línea válida para consultar la clasificación.</string>
     <string name="ranking_failure_rate_limited">Se hicieron demasiadas consultas. Espera e inténtalo de nuevo.</string>
@@ -410,8 +410,8 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="post_match_highlight">DESTACADO DE LA PARTIDA</string>
     <string name="post_match_simple_finish">Cierre simple en la ronda decisiva</string>
     <string name="post_match_double_finish">Cierre con doble en la ronda decisiva</string>
-    <string name="post_match_la_e_lo_finish">La e lo en la ronda decisiva</string>
-    <string name="post_match_cross_finish">Cierre cruzado en la ronda decisiva</string>
+    <string name="post_match_la_e_lo_finish">Capicúa en la ronda decisiva</string>
+    <string name="post_match_cross_finish">Doble a dos puntas en la ronda decisiva</string>
     <string name="post_match_closed_finish">Victoria por conteo de puntos</string>
     <string name="post_match_closed_tie">Empate en la ronda final</string>
     <string name="post_match_decisive_player">Jugador decisivo de la partida</string>
@@ -461,7 +461,7 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="settings_licenses_pass_knock_creator">Creador: jankooiker (Freesound)</string>
     <string name="settings_licenses_pass_knock_adapted">Audio original recortado y adaptado para Dominó PE</string>
 
-<string name="ranked_table_identity_title">Â¿CÃ³mo quieres aparecer en la mesa?</string>
+<string name="ranked_table_identity_title">¿Cómo quieres aparecer en la mesa?</string>
     <string name="ranked_table_identity_description">Elige una sigla de 3 caracteres. Los dem&#225;s jugadores la ver&#225;n junto a ti en la mesa.</string>
     <string name="ranked_table_identity_preview_label">En la mesa</string>
     <string name="ranked_table_identity_label">Sigla de mesa</string>
@@ -470,7 +470,7 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="ranked_table_identity_change_later">Puedes cambiarla despu&#233;s en Cuenta.</string>
     <string name="ranked_table_identity_confirm">Confirmar y continuar</string>
     <string name="ranked_table_identity_saving">Guardando...</string>
-    <string name="ranked_table_identity_load_failed">No pudimos cargar o guardar tu identidad de mesa. IntÃ©ntalo de nuevo.</string>
+    <string name="ranked_table_identity_load_failed">No pudimos cargar o guardar tu identidad de mesa. Inténtalo de nuevo.</string>
 
 <string name="ranked_table_identity_complete_title">Completa tu identidad de jugador</string>
     <string name="ranked_table_identity_complete_description">Tu nombre p&#250;blico aparece en la clasificaci&#243;n. Tu sigla de 3 caracteres aparece junto a ti en la mesa.</string>

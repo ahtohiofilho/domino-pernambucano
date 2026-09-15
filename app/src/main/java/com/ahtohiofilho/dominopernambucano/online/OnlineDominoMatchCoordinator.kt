@@ -648,8 +648,8 @@ class OnlineDominoMatchCoordinator(
             is DominoMatchPhase.PresentingMove -> Unit
 
             /*
-             * O passe obrigatÃ³rio Ã© reduzido pelo servidor no ticker
-             * autoritativo. O cliente encerra apenas a apresentaÃ§Ã£o visual.
+             * O passe obrigatório é reduzido pelo servidor no ticker
+             * autoritativo. O cliente encerra apenas a apresentação visual.
              */
             is DominoMatchPhase.PresentingPass -> Unit
 

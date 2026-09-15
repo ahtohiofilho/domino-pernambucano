@@ -234,7 +234,7 @@ fun RankedTableIdentityConfirmationDialog(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = normalizedCode.ifBlank { "Â·Â·Â·" },
+                        text = normalizedCode.ifBlank { "···" },
                         fontSize = 30.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 3.sp,

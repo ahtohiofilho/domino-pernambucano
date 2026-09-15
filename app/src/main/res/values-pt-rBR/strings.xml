@@ -30,13 +30,13 @@
     <string name="play_mode_public_identity">Identidade pública</string>
     <string name="play_mode_public_name">Nome público</string>
     <string name="play_mode_ranked">Jogar online</string>
-    <string name="play_mode_ranked_support">Entre na fila pública rankeada.</string>
+    <string name="play_mode_ranked_support">Entre na fila pública ranqueada.</string>
     <string name="play_mode_ranked_account_required">Conecte ou recupere sua conta para participar do ranking.</string>
     <string name="play_mode_local">Jogar offline</string>
     <string name="play_mode_local_support">Partidas locais sem internet.</string>
     <string name="play_mode_private_section">Sala privada</string>
     <string name="play_mode_create_room">Criar sala</string>
-    <string name="play_mode_create_room_support">Abra uma sala privada não rankeada.</string>
+    <string name="play_mode_create_room_support">Abra uma sala privada não ranqueada.</string>
     <string name="play_mode_join_room">Entrar em sala</string>
     <string name="play_mode_join_room_support">Acesse uma sala privada existente.</string>
     <string name="common_back">Voltar</string>
@@ -228,12 +228,12 @@
     <string name="online_queue_may_remain_active">A fila pode continuar ativa no servidor. Tente novamente ou cancele explicitamente.</string>
     <string name="online_queue_account_access_hint">Volte ao menu de conta caso seja necessário confirmar seu acesso.</string>
     <string name="online_queue_ranked_policy">A fila pública é exclusiva para contas autenticadas e afeta o ranking.</string>
-    <string name="online_queue_account_required">Uma conta conectada é obrigatória para jogar rankeado.</string>
+    <string name="online_queue_account_required">Uma conta conectada é obrigatória para jogar ranqueado.</string>
     <string name="online_queue_rate_limited">Muitas tentativas em pouco tempo. Aguarde e tente novamente.</string>
-    <string name="online_queue_unavailable">A fila rankeada está temporariamente indisponível.</string>
+    <string name="online_queue_unavailable">A fila ranqueada está temporariamente indisponível.</string>
     <string name="online_queue_invalid_match">A resposta da partida não pôde ser validada com segurança.</string>
     <string name="online_queue_session_rejected">Sua sessão foi rejeitada. Confirme novamente a conta.</string>
-    <string name="online_queue_continue_failed">Não foi possível continuar a busca rankeada.</string>
+    <string name="online_queue_continue_failed">Não foi possível continuar a busca ranqueada.</string>
     <string name="online_room_resume_load_failed">Não foi possível carregar a sala online retomada.</string>
     <string name="online_room_resume_mismatch">A sala online carregada não corresponde à participação salva.</string>
     <string name="online_room_seat_mismatch">A posição do jogador na sala não corresponde à participação salva.</string>
@@ -247,7 +247,7 @@
     <string name="online_room_shared_code_hint">Use o código compartilhado pelo criador da sala online.</string>
     <string name="online_seat_available">Livre</string>
     <string name="online_match_revision_suffix_format"> · versão %1$d</string>
-    <string name="online_queue_authentication_required">Confirme novamente sua conta para jogar rankeado.</string>
+    <string name="online_queue_authentication_required">Confirme novamente sua conta para jogar partidas ranqueadas.</string>
     <string name="account_google_continue">Continuar com Google</string>
     <string name="account_google_link">Vincular com Google</string>
     <string name="account_google_recover">Recuperar com Google</string>
@@ -269,7 +269,7 @@
     <string name="account_profile_operation_failed">Não foi possível concluir a operação de perfil.</string>
     <string name="participant_app_label">Aplicativo</string>
     <string name="room_fill_app_players_disabled">Completar a mesa com jogadores controlados pelo aplicativo está desabilitado neste ambiente.</string>
-    <string name="ranked_match_title">Partida rankeada</string>
+    <string name="ranked_match_title">Partida ranqueada</string>
     <string name="resume_participation_session_rejected">Não foi possível retomar a participação online: a sessão deste dispositivo foi rejeitada.</string>
     <string name="active_match_no_longer_available">A partida online não está mais disponível.</string>
     <string name="active_match_participation_not_authorized">Seu acesso a esta partida online não está mais autorizado.</string>
@@ -281,7 +281,7 @@
     <string name="resume_match_device_failed">Não foi possível retomar a partida neste dispositivo. Verifique a participação novamente.</string>
     <string name="resume_match_retry">Não foi possível retomar a partida agora. Tente novamente.</string>
     <string name="account_connected_success">Conta conectada com sucesso.</string>
-    <string name="ranked_queue_unavailable">A fila rankeada não está disponível neste ambiente.</string>
+    <string name="ranked_queue_unavailable">A fila ranqueada não está disponível neste ambiente.</string>
     <string name="online_join_create_demo_room">Criar sala fake de teste</string>
 
     <string name="settings_privacy_policy_title">Política de Privacidade</string>
@@ -324,7 +324,7 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="rules_help_clock_title">Tempo de jogada</string>
     <string name="rules_help_clock_body">Partidas com relógio mostram o tempo disponível junto ao jogador. Faça a jogada antes de o tempo se esgotar; a interface informa quando uma ação automática for necessária.</string>
     <string name="rules_help_online_title">Jogo online</string>
-    <string name="rules_help_online_body">Partidas públicas rankeadas exigem uma conta conectada. Salas privadas e partidas locais seguem as opções apresentadas no menu de jogo e não entram no ranking público.</string>
+    <string name="rules_help_online_body">Partidas públicas ranqueadas exigem uma conta conectada. Salas privadas e partidas locais seguem as opções apresentadas no menu de jogo e não entram no ranking público.</string>
     <string name="rules_help_ranking_title">Ranking</string>
     <string name="rules_help_ranking_body">O ranking público apresenta ciclos atuais e encerrados. A classificação e os detalhes exibidos na tela são atualizados conforme os resultados elegíveis registrados pelo serviço.</string>
     <string name="terms_title">Termos de Uso</string>
@@ -401,7 +401,7 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="settings_licenses_pass_knock_creator">Criador: jankooiker (Freesound)</string>
     <string name="settings_licenses_pass_knock_adapted">Áudio original recortado e adaptado para o Dominó PE</string>
 
-<string name="ranked_table_identity_title">Como vocÃª quer aparecer na mesa?</string>
+<string name="ranked_table_identity_title">Como você quer aparecer na mesa?</string>
     <string name="ranked_table_identity_description">Escolha uma sigla de 3 caracteres. Os outros jogadores ver&#227;o essa identifica&#231;&#227;o ao seu lado na mesa.</string>
     <string name="ranked_table_identity_preview_label">Na mesa</string>
     <string name="ranked_table_identity_label">Sigla da mesa</string>
@@ -410,7 +410,7 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="ranked_table_identity_change_later">Voc&#234; pode alter&#225;-la depois em Conta.</string>
     <string name="ranked_table_identity_confirm">Confirmar e continuar</string>
     <string name="ranked_table_identity_saving">Salvando...</string>
-    <string name="ranked_table_identity_load_failed">NÃ£o foi possÃ­vel carregar ou salvar sua identidade de mesa. Tente novamente.</string>
+    <string name="ranked_table_identity_load_failed">Não foi possível carregar ou salvar sua identidade de mesa. Tente novamente.</string>
 
 <string name="ranked_table_identity_complete_title">Complete sua identidade de jogador</string>
     <string name="ranked_table_identity_complete_description">Seu nome p&#250;blico aparece no ranking. Sua sigla de 3 caracteres aparece ao seu lado na mesa.</string>
