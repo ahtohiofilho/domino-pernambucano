@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 private const val PartnerClockLateralOffsetFraction = 0.30f
-private const val LocalClockLateralOffsetFraction = 0.24f
+private const val LocalClockLateralOffsetFraction = -0.24f
 private const val SideClockLateralOffsetFraction = 0.18f
 
 private enum class DominoClockPairOrientation {
