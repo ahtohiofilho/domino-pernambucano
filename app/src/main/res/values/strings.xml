@@ -211,6 +211,13 @@
     <string name="ranking_context_current">Classificação atual · %1$s</string>
     <string name="ranking_context_closed">Classificação encerrada · %1$s</string>
     <string name="ranking_summary">%1$d jogadores elegíveis · %2$d partidas</string>
+    <string name="ranking_index_label">&#205;ndice</string>
+    <string name="ranking_awards_compact_current">Pr&#234;mios &#183; %1$d/%2$d jogadores &#183; faltam %3$d</string>
+    <string name="ranking_awards_compact_closed">Sem premia&#231;&#227;o &#183; %1$d/%2$d jogadores</string>
+    <string name="ranking_awards_compact_enabled">Pr&#234;mios habilitados</string>
+    <string name="ranking_leader_badge">&#127942; L&#237;der atual</string>
+    <string name="ranking_period_leader_badge">&#127942; L&#237;der do per&#237;odo</string>
+    <string name="ranking_closed_swipe_hint">Deslize para ver per&#237;odos anteriores</string>
     <string name="ranking_publication_pending_current_title">Premiação ainda não habilitada</string>
     <string name="ranking_publication_pending_closed_title">Ciclo sem premiação</string>
     <string name="ranking_publication_pending_current_progress">%1$d de %2$d jogadores elegíveis. Faltam %3$d para habilitar a premiação.</string>

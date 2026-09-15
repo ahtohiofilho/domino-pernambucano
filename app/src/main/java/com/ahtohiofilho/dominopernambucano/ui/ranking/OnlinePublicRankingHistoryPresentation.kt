@@ -76,6 +76,19 @@ internal fun PublicRankingEntryDto.publicDisplayName(
         ?: fallback
 }
 
+internal fun PublicRankingEntryDto.publicAvatarMonogram(
+    fallback: String,
+): String {
+    val compact = publicDisplayName(fallback)
+        .filter { character ->
+            character.isLetterOrDigit()
+        }
+
+    return compact
+        .take(3)
+        .uppercase(Locale.ROOT)
+        .ifBlank { "?" }
+}
 internal fun PublicRankingResponseDto.isOfficialRankingPending(): Boolean {
     return publicationStatus ==
         PublicRankingPublicationStatusDto.BELOW_THRESHOLD

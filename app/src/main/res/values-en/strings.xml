@@ -211,6 +211,13 @@
     <string name="ranking_context_current">Current standings · %1$s</string>
     <string name="ranking_context_closed">Final standings · %1$s</string>
     <string name="ranking_summary">%1$d eligible players · %2$d matches</string>
+    <string name="ranking_index_label">Index</string>
+    <string name="ranking_awards_compact_current">Awards &#183; %1$d/%2$d players &#183; %3$d to go</string>
+    <string name="ranking_awards_compact_closed">No awards &#183; %1$d/%2$d players</string>
+    <string name="ranking_awards_compact_enabled">Awards enabled</string>
+    <string name="ranking_leader_badge">&#127942; Current leader</string>
+    <string name="ranking_period_leader_badge">&#127942; Period leader</string>
+    <string name="ranking_closed_swipe_hint">Swipe to see older periods</string>
     <string name="ranking_publication_pending_current_title">Awards not yet enabled</string>
     <string name="ranking_publication_pending_closed_title">Cycle without awards</string>
     <string name="ranking_publication_pending_current_progress">%1$d of %2$d eligible players. %3$d more are needed to enable awards.</string>

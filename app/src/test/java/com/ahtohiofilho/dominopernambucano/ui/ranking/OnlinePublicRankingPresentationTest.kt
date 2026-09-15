@@ -241,6 +241,37 @@ class OnlinePublicRankingPresentationTest {
     }
 
     @Test
+    fun avatar_monogram_is_derived_locally_from_public_name() {
+        val named = entry(
+            rank = 1,
+            competitorId = "competitor-secret",
+            displayName = "  Antonio Filho  ",
+        )
+        val fallback = entry(
+            rank = 7,
+            competitorId = "competitor-secret",
+            displayName = null,
+        )
+
+        assertEquals(
+            "ANT",
+            named.publicAvatarMonogram(
+                fallback = "Player 1",
+            ),
+        )
+        assertEquals(
+            "PLA",
+            fallback.publicAvatarMonogram(
+                fallback = "Player 7",
+            ),
+        )
+        assertFalse(
+            fallback.publicAvatarMonogram(
+                fallback = "Player 7",
+            ).contains("competitor-secret"),
+        )
+    }
+    @Test
     fun below_threshold_response_maps_to_pending_publication() {
         val response = rankingResponse(
             publicationStatus =

@@ -451,12 +451,6 @@ internal fun OnlinePublicRankingScreen(
                     locale = locale,
                 )
 
-                if (response.isOfficialRankingPending()) {
-                    RankingPublicationPendingContent(
-                        response = response,
-                    )
-                }
-
                 val viewer = response.viewer
                 val viewerAlreadyVisible = viewer?.let { currentViewer ->
                     entries.any { entry ->
@@ -469,6 +463,7 @@ internal fun OnlinePublicRankingScreen(
                         entry = viewer,
                         locale = locale,
                         highlighted = true,
+                        historical = response.isClosed,
                     )
                 }
             }
@@ -646,161 +641,153 @@ private fun ClosedRankingCycleSelector(
     onRetry: () -> Unit,
 ) {
     val locale = LocalConfiguration.current.locales[0]
+    val showSwipeHint =
+        cycles.size > 2 || latestResponse?.hasMore == true
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = DominoBrandShapes.card,
-        colors = CardDefaults.cardColors(
-            containerColor =
-                DominoSemanticColors.brandSurface.copy(alpha = 0.88f),
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = DominoSemanticColors.brandBorder,
-        ),
-    ) {
-        when {
-            loading && cycles.isEmpty() -> {
-                RankingInlineLoading(
-                    text = stringResource(
-                        R.string.ranking_closed_loading,
-                    ),
-                )
-            }
+    when {
+        loading && cycles.isEmpty() -> {
+            RankingInlineLoading(
+                text = stringResource(
+                    R.string.ranking_closed_loading,
+                ),
+            )
+        }
 
-            failure != null && cycles.isEmpty() -> {
-                RankingFailureContent(
-                    modifier = Modifier.padding(14.dp),
-                    failure = failure,
-                    onRetry = onRetry,
-                )
-            }
+        failure != null && cycles.isEmpty() -> {
+            RankingFailureContent(
+                modifier = Modifier.padding(10.dp),
+                failure = failure,
+                onRetry = onRetry,
+            )
+        }
 
-            !loading && cycles.isEmpty() -> {
-                Text(
-                    modifier = Modifier.padding(16.dp),
-                    text = stringResource(
-                        R.string.ranking_closed_empty,
-                    ),
-                    color = DominoSemanticColors.brandText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-            }
+        !loading && cycles.isEmpty() -> {
+            Text(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                text = stringResource(
+                    R.string.ranking_closed_empty,
+                ),
+                color = DominoSemanticColors.brandText,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+        }
 
-            else -> {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
+        else -> {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                if (showSwipeHint) {
                     Text(
                         text = stringResource(
-                            R.string.ranking_closed_count,
-                            latestResponse?.totalClosedCycles
-                                ?: cycles.size,
+                            R.string.ranking_closed_swipe_hint,
                         ),
                         color =
                             DominoSemanticColors.brandSupportingText,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                     )
+                }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(
-                                rememberScrollState(),
-                            ),
-                        horizontalArrangement =
-                            Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        cycles.forEach { summary ->
-                            FilterChip(
-                                selected =
-                                    summary.cycleId ==
-                                        selectedCycleId,
-                                onClick = {
-                                    onCycleSelected(
-                                        summary.cycleId,
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text =
-                                            summary.publicPeriodLabel(
-                                                locale = locale,
-                                            ),
-                                        maxLines = 1,
-                                    )
-                                },
-                                shape = DominoBrandShapes.control,
-                                colors =
-                                    FilterChipDefaults.filterChipColors(
-                                        containerColor =
-                                            DominoSemanticColors
-                                                .brandSurfaceElevated,
-                                        labelColor =
-                                            DominoSemanticColors.brandText,
-                                        selectedContainerColor =
-                                            DominoSemanticColors.brandEnergy,
-                                        selectedLabelColor =
-                                            DominoSemanticColors.brandText,
-                                    ),
-                            )
-                        }
-
-                        if (latestResponse?.hasMore == true) {
-                            TextButton(
-                                onClick = onLoadMore,
-                                enabled = !loading,
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        R.string.ranking_more_periods,
-                                    ),
-                                    color =
-                                        DominoSemanticColors.brandText,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(
+                            rememberScrollState(),
+                        )
+                        .padding(end = 18.dp),
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    cycles.forEach { summary ->
+                        FilterChip(
+                            selected =
+                                summary.cycleId ==
+                                    selectedCycleId,
+                            onClick = {
+                                onCycleSelected(
+                                    summary.cycleId,
                                 )
-                            }
-                        }
+                            },
+                            label = {
+                                Text(
+                                    text =
+                                        summary.publicPeriodLabel(
+                                            locale = locale,
+                                        ),
+                                    maxLines = 1,
+                                )
+                            },
+                            shape = DominoBrandShapes.control,
+                            colors =
+                                FilterChipDefaults.filterChipColors(
+                                    containerColor =
+                                        DominoSemanticColors
+                                            .brandSurfaceElevated,
+                                    labelColor =
+                                        DominoSemanticColors.brandText,
+                                    selectedContainerColor =
+                                        DominoSemanticColors.brandEnergy,
+                                    selectedLabelColor =
+                                        DominoSemanticColors.brandText,
+                                ),
+                        )
+                    }
 
-                        if (loading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
+                    if (latestResponse?.hasMore == true) {
+                        TextButton(
+                            onClick = onLoadMore,
+                            enabled = !loading,
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.ranking_more_periods,
+                                ),
                                 color =
                                     DominoSemanticColors.brandText,
-                                strokeWidth = 2.dp,
                             )
                         }
                     }
 
-                    failure?.let { currentFailure ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
+                    if (loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color =
+                                DominoSemanticColors.brandText,
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                }
+
+                failure?.let { currentFailure ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(
+                                currentFailure.publicMessageRes(),
+                            ),
+                            modifier = Modifier.weight(1f),
+                            color =
+                                DominoSemanticColors.brandText,
+                            style =
+                                MaterialTheme.typography.bodySmall,
+                        )
+
+                        TextButton(
+                            onClick = onRetry,
                         ) {
                             Text(
                                 text = stringResource(
-                                    currentFailure.publicMessageRes(),
+                                    R.string.ranking_retry,
                                 ),
-                                modifier = Modifier.weight(1f),
                                 color =
                                     DominoSemanticColors.brandText,
-                                style =
-                                    MaterialTheme.typography.bodySmall,
                             )
-
-                            TextButton(
-                                onClick = onRetry,
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        R.string.ranking_retry,
-                                    ),
-                                    color =
-                                        DominoSemanticColors.brandText,
-                                )
-                            }
                         }
                     }
                 }
@@ -808,7 +795,6 @@ private fun ClosedRankingCycleSelector(
         }
     }
 }
-
 @Composable
 private fun RankingOverviewCard(
     response: PublicRankingResponseDto,
@@ -830,6 +816,38 @@ private fun RankingOverviewCard(
         response.totalEligiblePlayers,
         response.resultCount,
     )
+    val awardsText = when {
+        response.isOfficialRankingPending() && response.isClosed ->
+            stringResource(
+                R.string.ranking_awards_compact_closed,
+                response.totalEligiblePlayers,
+                response.publicationThreshold,
+            )
+
+        response.isOfficialRankingPending() ->
+            stringResource(
+                R.string.ranking_awards_compact_current,
+                response.totalEligiblePlayers,
+                response.publicationThreshold,
+                response.eligiblePlayersRemaining,
+            )
+
+        else ->
+            stringResource(
+                R.string.ranking_awards_compact_enabled,
+            )
+    }
+    val progressFraction = if (response.publicationThreshold > 0) {
+        (
+            response.totalEligiblePlayers.toFloat() /
+                response.publicationThreshold.toFloat()
+        ).coerceIn(0f, 1f)
+    } else {
+        1f
+    }
+    val showProgressBar =
+        response.isOfficialRankingPending() &&
+            progressFraction >= 0.10f
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -842,14 +860,14 @@ private fun RankingOverviewCard(
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = DominoSemanticColors.brandEnergy.copy(
-                alpha = 0.72f,
+            color = DominoSemanticColors.brandBorder.copy(
+                alpha = 0.82f,
             ),
         ),
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Text(
                 text = contextText,
@@ -861,13 +879,40 @@ private fun RankingOverviewCard(
             Text(
                 text = summaryText,
                 color = DominoSemanticColors.brandSupportingText,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
             )
 
+            Text(
+                text = awardsText,
+                color = DominoSemanticColors.brandText,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+
+            if (showProgressBar) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(
+                            DominoSemanticColors.brandBorder.copy(
+                                alpha = 0.55f,
+                            ),
+                        ),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progressFraction)
+                            .height(4.dp)
+                            .background(
+                                DominoSemanticColors.brandEnergy,
+                            ),
+                    )
+                }
+            }
         }
     }
 }
-
 @Composable
 private fun RankingPublicationPendingContent(
     response: PublicRankingResponseDto,
@@ -956,6 +1001,7 @@ private fun RankingEntries(
                 entry = entry,
                 locale = locale,
                 highlighted = highlighted,
+                historical = latestResponse?.isClosed == true,
             )
         }
 
@@ -1005,6 +1051,7 @@ private fun RankingEntryCard(
     entry: PublicRankingEntryDto,
     locale: java.util.Locale,
     highlighted: Boolean = false,
+    historical: Boolean = false,
 ) {
     var expanded by remember(entry.competitorId) {
         mutableStateOf(false)
@@ -1015,15 +1062,27 @@ private fun RankingEntryCard(
             entry.rank,
         ),
     )
-    val containerColor = if (highlighted) {
-        DominoSemanticColors.brandPositive.copy(alpha = 0.34f)
-    } else {
-        DominoSemanticColors.brandSurface.copy(alpha = 0.96f)
+    val featured = entry.rank == 1
+    val podium = entry.rank in 1..3
+    val featuredAccent =
+        androidx.compose.ui.graphics.Color(0xFFFFC107)
+    val containerColor = when {
+        featured ->
+            featuredAccent.copy(alpha = 0.14f)
+        highlighted ->
+            DominoSemanticColors.brandPositive.copy(alpha = 0.34f)
+        else ->
+            DominoSemanticColors.brandSurface.copy(alpha = 0.96f)
     }
-    val borderColor = if (highlighted) {
-        DominoSemanticColors.brandPositive
-    } else {
-        DominoSemanticColors.brandBorder
+    val borderColor = when {
+        featured ->
+            featuredAccent
+        highlighted ->
+            DominoSemanticColors.brandPositive
+        podium ->
+            DominoSemanticColors.brandEnergy.copy(alpha = 0.48f)
+        else ->
+            DominoSemanticColors.brandBorder
     }
 
     Card(
@@ -1036,7 +1095,7 @@ private fun RankingEntryCard(
             containerColor = containerColor,
         ),
         border = BorderStroke(
-            width = if (highlighted) 2.dp else 1.dp,
+            width = if (featured || highlighted) 2.dp else 1.dp,
             color = borderColor,
         ),
     ) {
@@ -1045,37 +1104,86 @@ private fun RankingEntryCard(
                 .fillMaxWidth()
                 .padding(
                     horizontal = 12.dp,
-                    vertical = 10.dp,
+                    vertical = if (featured) 11.dp else 6.dp,
                 ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 RankingAvatarSlot(
                     rankLabel = entry.publicRankLabel(locale),
+                    monogram = entry.publicAvatarMonogram(
+                        fallback = normalizedName,
+                    ),
                     highlighted = highlighted,
+                    featured = featured,
                 )
 
-                Text(
+                Column(
                     modifier = Modifier.weight(1f),
-                    text = normalizedName,
-                    color = DominoSemanticColors.brandText,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                )
+                    verticalArrangement =
+                        Arrangement.spacedBy(
+                            if (featured) 2.dp else 0.dp,
+                        ),
+                ) {
+                    if (featured) {
+                        Text(
+                            text = stringResource(
+                                if (historical) {
+                                    R.string.ranking_period_leader_badge
+                                } else {
+                                    R.string.ranking_leader_badge
+                                },
+                            ),
+                            color = featuredAccent,
+                            style =
+                                MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
 
-                Text(
-                    text = entry.publicDecimalScoreText(),
-                    color = DominoSemanticColors.brandText,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                )
+                    Text(
+                        text = normalizedName,
+                        color = DominoSemanticColors.brandText,
+                        style = if (featured) {
+                            MaterialTheme.typography.titleMedium
+                        } else {
+                            MaterialTheme.typography.bodyLarge
+                        },
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    Text(
+                        text = stringResource(
+                            R.string.ranking_index_label,
+                        ),
+                        color =
+                            DominoSemanticColors.brandSupportingText,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                    )
+
+                    Text(
+                        text = entry.publicDecimalScoreText(),
+                        color = DominoSemanticColors.brandText,
+                        style = if (featured) {
+                            MaterialTheme.typography.titleLarge
+                        } else {
+                            MaterialTheme.typography.titleMedium
+                        },
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                    )
+                }
             }
 
             if (expanded) {
@@ -1113,27 +1221,33 @@ private fun RankingEntryCard(
 @Composable
 private fun RankingAvatarSlot(
     rankLabel: String,
+    monogram: String,
     highlighted: Boolean,
+    featured: Boolean,
 ) {
-    val frameColor = if (highlighted) {
-        DominoSemanticColors.brandPositive
-    } else {
-        DominoSemanticColors.brandBorder
+    val featuredAccent =
+        androidx.compose.ui.graphics.Color(0xFFFFC107)
+    val frameColor = when {
+        featured -> featuredAccent
+        highlighted -> DominoSemanticColors.brandPositive
+        else -> DominoSemanticColors.brandBorder
     }
+    val slotSize = if (featured) 66.dp else 42.dp
+    val circleSize = if (featured) 58.dp else 36.dp
 
     Box(
-        modifier = Modifier.size(52.dp),
+        modifier = Modifier.size(slotSize),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(
-            modifier = Modifier.size(46.dp),
+            modifier = Modifier.size(circleSize),
         ) {
-            val silhouetteColor =
-                DominoSemanticColors.brandSupportingText.copy(
-                    alpha = 0.68f,
-                )
             val frameWidth =
-                if (highlighted) 2.5.dp.toPx() else 1.5.dp.toPx()
+                if (featured || highlighted) {
+                    2.5.dp.toPx()
+                } else {
+                    1.5.dp.toPx()
+                }
 
             drawCircle(
                 color = DominoSemanticColors.brandSurface,
@@ -1144,23 +1258,19 @@ private fun RankingAvatarSlot(
                 radius = size.minDimension * 0.48f,
                 style = Stroke(width = frameWidth),
             )
-            drawCircle(
-                color = silhouetteColor,
-                radius = size.minDimension * 0.14f,
-                center = Offset(
-                    x = size.width * 0.50f,
-                    y = size.height * 0.36f,
-                ),
-            )
-            drawCircle(
-                color = silhouetteColor,
-                radius = size.minDimension * 0.25f,
-                center = Offset(
-                    x = size.width * 0.50f,
-                    y = size.height * 0.78f,
-                ),
-            )
         }
+
+        Text(
+            text = monogram,
+            color = DominoSemanticColors.brandText,
+            style = if (featured) {
+                MaterialTheme.typography.titleMedium
+            } else {
+                MaterialTheme.typography.labelLarge
+            },
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1,
+        )
 
         Text(
             modifier = Modifier
@@ -1181,7 +1291,6 @@ private fun RankingAvatarSlot(
         )
     }
 }
-
 
 @Composable
 private fun RankingFailureContent(
