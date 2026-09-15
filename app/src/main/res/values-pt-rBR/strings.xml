@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dominó PE</string>
     <string name="brand_subtitle">App dedicado à modalidade pernambucana</string>
@@ -418,4 +418,68 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="ranked_table_identity_public_name_hint">Escolha o nome que ser&#225; exibido no ranking.</string>
 
     <string name="ranked_table_identity_public_name_invalid">Digite um nome p&#250;blico v&#225;lido.</string>
+
+    <!-- C30: Portuguese (Brazil) parity for release lint -->
+    <string name="ranked_auth_sign_in_title">Entrar no Dominó PE</string>
+    <string name="ranked_auth_sign_in_description">Entre para jogar partidas ranqueadas e acompanhar sua posição no ranking.</string>
+    <string name="ranked_auth_create_title">Criar sua conta</string>
+    <string name="ranked_auth_create_description">Crie sua conta para jogar partidas ranqueadas e participar do ranking.</string>
+    <string name="ranked_auth_no_account_prompt">Ainda não tem uma conta?</string>
+    <string name="ranked_auth_create_action">Criar conta</string>
+    <string name="ranked_auth_have_account_prompt">Já tem uma conta?</string>
+    <string name="ranked_auth_sign_in_action">Entrar</string>
+    <string name="ranked_auth_email">E-mail</string>
+    <string name="ranked_auth_password">Senha</string>
+    <string name="ranked_auth_confirm_password">Confirmar senha</string>
+    <string name="ranked_auth_show_password">Mostrar</string>
+    <string name="ranked_auth_hide_password">Ocultar</string>
+    <string name="ranked_auth_forgot_password">Esqueceu a senha?</string>
+    <string name="ranked_auth_primary_sign_in">Entrar</string>
+    <string name="ranked_auth_primary_continue">Continuar</string>
+    <string name="ranked_auth_or">ou</string>
+    <string name="ranked_auth_new_prompt">Novo no Dominó PE?</string>
+    <string name="ranked_auth_join_action">Criar conta</string>
+    <string name="ranked_auth_already_prompt">Já tem uma conta?</string>
+    <string name="ranked_auth_password_hint">Use pelo menos 8 caracteres.</string>
+    <string name="ranked_auth_password_mismatch">As senhas não coincidem.</string>
+    <string name="ranked_auth_verify_create_title">Verifique seu e-mail</string>
+    <string name="ranked_auth_verify_create_description">Enviamos um código de 6 dígitos para %1$s. Digite-o para concluir sua conta.</string>
+    <string name="ranked_auth_code">Código de 6 dígitos</string>
+    <string name="ranked_auth_finish_create">Criar conta</string>
+    <string name="ranked_auth_forgot_title">Recuperar senha</string>
+    <string name="ranked_auth_forgot_description">Informe o e-mail da sua conta para receber um código de recuperação.</string>
+    <string name="ranked_auth_send_code">Enviar código</string>
+    <string name="ranked_auth_resend_code">Reenviar código</string>
+    <string name="ranked_auth_reset_title">Criar nova senha</string>
+    <string name="ranked_auth_reset_description">Digite o código enviado para %1$s e escolha uma nova senha.</string>
+    <string name="ranked_auth_reset_action">Salvar nova senha</string>
+    <string name="ranked_auth_back_to_sign_in">Voltar para entrar</string>
+    <string name="ranked_auth_signing_in">Entrando...</string>
+    <string name="ranked_auth_sending_code">Enviando código...</string>
+    <string name="ranked_auth_creating">Criando conta...</string>
+    <string name="ranked_auth_resetting">Salvando...</string>
+    <string name="ranked_auth_invalid_email">Informe um e-mail válido.</string>
+    <string name="ranked_auth_invalid_password">A senha deve ter pelo menos 8 caracteres.</string>
+    <string name="ranked_auth_invalid_code">Informe o código de 6 dígitos enviado por e-mail.</string>
+    <string name="ranked_auth_invalid_credentials">E-mail ou senha incorretos.</string>
+    <string name="ranked_auth_account_exists">Já existe uma conta com este e-mail. Entre ou recupere sua senha.</string>
+    <string name="ranked_auth_account_not_found">Não encontramos uma conta para este e-mail.</string>
+    <string name="ranked_auth_rate_limited">Muitas tentativas em pouco tempo. Aguarde e tente novamente.</string>
+    <string name="ranked_auth_service_unavailable">O acesso por e-mail está temporariamente indisponível.</string>
+    <string name="ranked_auth_session_conflict">Há uma sessão de visitante ativa neste dispositivo. Finalize ou saia dela antes de entrar em outra conta.</string>
+    <string name="ranked_auth_session_expired">A sessão salva expirou. Entre novamente.</string>
+    <string name="ranked_auth_local_persistence">A conta foi confirmada, mas a sessão não pôde ser salva neste dispositivo.</string>
+    <string name="ranked_auth_unknown_failure">Não foi possível concluir o acesso agora. Tente novamente.</string>
+    <string name="settings_audio_title">Áudio</string>
+    <string name="settings_sound_effects_title">Efeitos sonoros</string>
+    <string name="settings_sound_effects_description">Sons durante a partida.</string>
+    <string name="settings_sound_effects_on">Ligado</string>
+    <string name="settings_sound_effects_off">Desligado</string>
+    <string name="settings_licenses_title">Licenças e créditos</string>
+    <string name="settings_licenses_sound_effects">Efeitos sonoros</string>
+    <string name="settings_licenses_domino_table">Peças de dominó na mesa</string>
+    <string name="settings_licenses_source">Fonte: Pixabay</string>
+    <string name="settings_licenses_creator">Criador: freesound_community</string>
+    <string name="settings_licenses_license">Licença: Pixabay Content License</string>
+    <string name="settings_licenses_adapted">Adaptado para o Dominó PE</string>
 </resources>
