@@ -87,9 +87,9 @@
     <string name="account_entry_or">o</string>
     <string name="account_entry_existing">¿Ya tienes una cuenta? Entrar</string>
     <string name="ranked_auth_sign_in_title">Entrar en Dominó PE</string>
-    <string name="ranked_auth_sign_in_description">Entra para jugar partidas clasificatorias y seguir tu posición en la clasificación.</string>
+    <string name="ranked_auth_sign_in_description">Entra para acceder a tu perfil y jugar partidas clasificatorias.</string>
     <string name="ranked_auth_create_title">Crea tu cuenta</string>
-    <string name="ranked_auth_create_description">Crea una cuenta para jugar partidas clasificatorias y participar en la clasificación.</string>
+    <string name="ranked_auth_create_description">Crea tu cuenta para conservar tu perfil y jugar partidas clasificatorias.</string>
     <string name="ranked_auth_no_account_prompt">¿Aún no tienes una cuenta?</string>
     <string name="ranked_auth_create_action">Crear cuenta</string>
     <string name="ranked_auth_have_account_prompt">¿Ya tienes una cuenta?</string>
@@ -493,4 +493,13 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="identity_hub_hand_appearance_pending">Predeterminado</string>
     <string name="identity_hub_account_section">Cuenta</string>
     <string name="identity_hub_account_support">Gestiona el acceso y la identidad online</string>
+    <string name="identity_profile_sign_in">Iniciar sesión</string>
+    <string name="identity_profile_recover">Recuperar cuenta</string>
+    <string name="identity_hub_sign_in_or_create">Iniciar sesión o crear cuenta</string>
+    <string name="identity_hub_sign_in_or_create_support">Inicia sesión para jugar partidas clasificatorias y conservar tu perfil.</string>
+    <string name="identity_hub_recover_access">Recuperar acceso</string>
+    <string name="identity_hub_recover_access_support">Recupera tu cuenta para volver a tu perfil y a las partidas clasificatorias.</string>
+    <string name="identity_hub_account_signed_out_support">Aún no has iniciado sesión en una cuenta.</string>
+    <string name="identity_hub_account_recovery_support">Tu cuenta necesita recuperación.</string>
+    <string name="identity_hub_account_heading">Tu cuenta</string>
 </resources>

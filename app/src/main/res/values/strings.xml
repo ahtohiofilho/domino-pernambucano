@@ -87,9 +87,9 @@
     <string name="account_entry_or">ou</string>
     <string name="account_entry_existing">Já tem uma conta? Entrar</string>
     <string name="ranked_auth_sign_in_title">Entrar no Dominó PE</string>
-    <string name="ranked_auth_sign_in_description">Entre para jogar partidas ranqueadas e acompanhar sua posição no ranking.</string>
+    <string name="ranked_auth_sign_in_description">Entre para acessar seu perfil e jogar partidas ranqueadas.</string>
     <string name="ranked_auth_create_title">Criar sua conta</string>
-    <string name="ranked_auth_create_description">Crie sua conta para jogar partidas ranqueadas e participar do ranking.</string>
+    <string name="ranked_auth_create_description">Crie sua conta para manter seu perfil e jogar partidas ranqueadas.</string>
     <string name="ranked_auth_no_account_prompt">Ainda não tem uma conta?</string>
     <string name="ranked_auth_create_action">Criar conta</string>
     <string name="ranked_auth_have_account_prompt">Já tem uma conta?</string>
@@ -493,4 +493,13 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="identity_hub_hand_appearance_pending">Padrão</string>
     <string name="identity_hub_account_section">Conta</string>
     <string name="identity_hub_account_support">Gerencie acesso e identidade online</string>
+    <string name="identity_profile_sign_in">Entrar</string>
+    <string name="identity_profile_recover">Recuperar conta</string>
+    <string name="identity_hub_sign_in_or_create">Entrar ou criar conta</string>
+    <string name="identity_hub_sign_in_or_create_support">Entre para jogar ranqueadas e manter seu perfil.</string>
+    <string name="identity_hub_recover_access">Recuperar acesso</string>
+    <string name="identity_hub_recover_access_support">Recupere sua conta para voltar ao perfil e às partidas ranqueadas.</string>
+    <string name="identity_hub_account_signed_out_support">Você ainda não entrou em uma conta.</string>
+    <string name="identity_hub_account_recovery_support">Sua conta precisa de recuperação.</string>
+    <string name="identity_hub_account_heading">Sua conta</string>
 </resources>

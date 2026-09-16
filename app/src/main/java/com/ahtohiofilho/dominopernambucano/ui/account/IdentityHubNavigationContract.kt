@@ -10,6 +10,7 @@ package com.ahtohiofilho.dominopernambucano.ui.account
 internal enum class IdentityHubEntryPoint {
     MAIN_MENU_PROFILE,
     LEGACY_ACCOUNT_CARD,
+    ACCOUNT_MANAGEMENT_REQUIRED,
     RANKED_ACCOUNT_REQUIRED,
     POST_AUTH_ONBOARDING,
 }
@@ -23,6 +24,12 @@ internal enum class IdentityHubEntryPoint {
 internal enum class IdentityHubReturnIntent {
     MAIN_MENU,
     RESUME_RANKED_ENTRY,
+}
+
+internal enum class IdentityHubSurface {
+    PROFILE,
+    AUTHENTICATION,
+    POST_AUTH_ONBOARDING,
 }
 
 internal data class IdentityHubLaunchRequest(
@@ -40,6 +47,20 @@ internal data class IdentityHubLaunchRequest(
     }
 }
 
+internal val IdentityHubLaunchRequest.surface: IdentityHubSurface
+    get() = when (entryPoint) {
+        IdentityHubEntryPoint.ACCOUNT_MANAGEMENT_REQUIRED,
+        IdentityHubEntryPoint.RANKED_ACCOUNT_REQUIRED ->
+            IdentityHubSurface.AUTHENTICATION
+
+        IdentityHubEntryPoint.POST_AUTH_ONBOARDING ->
+            IdentityHubSurface.POST_AUTH_ONBOARDING
+
+        IdentityHubEntryPoint.MAIN_MENU_PROFILE,
+        IdentityHubEntryPoint.LEGACY_ACCOUNT_CARD ->
+            IdentityHubSurface.PROFILE
+    }
+
 internal fun mainMenuProfileIdentityHubRequest():
     IdentityHubLaunchRequest {
     return IdentityHubLaunchRequest(
@@ -52,6 +73,14 @@ internal fun legacyAccountIdentityHubRequest():
     IdentityHubLaunchRequest {
     return IdentityHubLaunchRequest(
         entryPoint = IdentityHubEntryPoint.LEGACY_ACCOUNT_CARD,
+        returnIntent = IdentityHubReturnIntent.MAIN_MENU,
+    )
+}
+
+internal fun accountManagementIdentityHubRequest():
+    IdentityHubLaunchRequest {
+    return IdentityHubLaunchRequest(
+        entryPoint = IdentityHubEntryPoint.ACCOUNT_MANAGEMENT_REQUIRED,
         returnIntent = IdentityHubReturnIntent.MAIN_MENU,
     )
 }

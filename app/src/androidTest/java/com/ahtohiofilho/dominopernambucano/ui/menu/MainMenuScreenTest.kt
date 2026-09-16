@@ -408,8 +408,16 @@ class MainMenuScreenTest {
             .assertIsEnabled()
 
         composeRule
-            .onNodeWithText("Perfil")
+            .onNodeWithText("Entrar")
             .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText("Jogador")
+            .assertCountEquals(0)
+
+        composeRule
+            .onAllNodesWithText("JOGADOR")
+            .assertCountEquals(0)
 
         composeRule
             .onAllNodesWithText("Conta")

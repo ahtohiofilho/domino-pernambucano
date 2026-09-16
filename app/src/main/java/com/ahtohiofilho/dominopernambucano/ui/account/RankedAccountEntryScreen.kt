@@ -223,7 +223,7 @@ fun RankedAccountEntryScreen(
 
     DominoScreenScaffold(
         title = title,
-        layout = DominoScreenLayout.Centered,
+        layout = DominoScreenLayout.Guided,
         onBackClick = {
             if (!busy) {
                 when (mode) {
@@ -245,29 +245,36 @@ fun RankedAccountEntryScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 440.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = DominoSemanticColors.dialogSurface,
-            tonalElevation = 4.dp,
-            shadowElevation = 8.dp,
+            shape = RoundedCornerShape(22.dp),
+            color = DominoSemanticColors.brandSurface,
+            contentColor = DominoSemanticColors.brandText,
+            border = BorderStroke(
+                width = 1.dp,
+                color = DominoSemanticColors.brandBorder,
+            ),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(
+                        horizontal = MaterialTheme.dominoSpacing.md,
+                        vertical = MaterialTheme.dominoSpacing.lg,
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(
                     MaterialTheme.dominoSpacing.sm,
                 ),
             ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_launcher_foreground),
-                    contentDescription = null,
-                    modifier = Modifier.size(78.dp),
+                IdentityAvatar(
+                    label = null,
+                    size = 64.dp,
                 )
 
                 Text(
                     text = description,
-                    color = DominoSemanticColors.dialogBody,
+                    color = DominoSemanticColors.brandSupportingText,
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                 )
@@ -312,7 +319,7 @@ fun RankedAccountEntryScreen(
                             switchMode(RankedAccountEntryMode.FORGOT_PASSWORD)
                         },
                     text = stringResource(R.string.ranked_auth_forgot_password),
-                    color = DominoSemanticColors.dialogAction,
+                    color = DominoSemanticColors.brandPrimaryAction,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -719,6 +726,7 @@ private fun AuthPasswordField(
                             R.string.ranked_auth_show_password
                         },
                     ),
+                    color = DominoSemanticColors.brandPrimaryAction,
                 )
             }
         },
@@ -769,22 +777,22 @@ private fun AuthTextField(
 
 @Composable
 private fun authTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = DominoSemanticColors.dialogTitle,
-    unfocusedTextColor = DominoSemanticColors.dialogTitle,
-    disabledTextColor = DominoSemanticColors.dialogBody.copy(alpha = 0.52f),
-    focusedBorderColor = DominoSemanticColors.dialogAction,
-    unfocusedBorderColor = DominoSemanticColors.dialogBody.copy(
-        alpha = 0.52f,
+    focusedTextColor = DominoSemanticColors.brandText,
+    unfocusedTextColor = DominoSemanticColors.brandText,
+    disabledTextColor = DominoSemanticColors.brandSupportingText.copy(
+        alpha = 0.60f,
     ),
-    disabledBorderColor = DominoSemanticColors.dialogBody.copy(
-        alpha = 0.24f,
+    focusedBorderColor = DominoSemanticColors.brandPrimaryAction,
+    unfocusedBorderColor = DominoSemanticColors.brandBorder,
+    disabledBorderColor = DominoSemanticColors.brandBorder.copy(
+        alpha = 0.60f,
     ),
-    focusedLabelColor = DominoSemanticColors.dialogAction,
-    unfocusedLabelColor = DominoSemanticColors.dialogBody,
-    disabledLabelColor = DominoSemanticColors.dialogBody.copy(
-        alpha = 0.48f,
+    focusedLabelColor = DominoSemanticColors.brandPrimaryAction,
+    unfocusedLabelColor = DominoSemanticColors.brandSupportingText,
+    disabledLabelColor = DominoSemanticColors.brandSupportingText.copy(
+        alpha = 0.60f,
     ),
-    cursorColor = DominoSemanticColors.dialogAction,
+    cursorColor = DominoSemanticColors.brandPrimaryAction,
 )
 
 @Composable
@@ -802,11 +810,10 @@ private fun AuthPrimaryButton(
         enabled = enabled,
         shape = AuthActionShape,
         colors = ButtonDefaults.buttonColors(
-            containerColor = DominoSemanticColors.dialogAction,
-            contentColor = DominoSemanticColors.dialogActionContent,
-            disabledContainerColor = DominoSemanticColors.dialogDisabledAction,
-            disabledContentColor =
-                DominoSemanticColors.dialogDisabledActionContent,
+            containerColor = DominoSemanticColors.brandPrimaryAction,
+            contentColor = DominoSemanticColors.brandPrimaryActionContent,
+            disabledContainerColor = DominoSemanticColors.disabledAction,
+            disabledContentColor = DominoSemanticColors.disabledContentOnDark,
         ),
     ) {
         Text(
@@ -830,15 +837,15 @@ private fun AuthDivider() {
                 .weight(1f)
                 .height(1.dp)
                 .background(
-                    DominoSemanticColors.dialogBody.copy(
-                        alpha = 0.34f,
+                    DominoSemanticColors.brandSupportingText.copy(
+                        alpha = 0.42f,
                     ),
                 ),
         )
         Text(
             modifier = Modifier.padding(horizontal = 12.dp),
             text = stringResource(R.string.ranked_auth_or),
-            color = DominoSemanticColors.dialogBody,
+            color = DominoSemanticColors.brandSupportingText,
             style = MaterialTheme.typography.bodySmall,
         )
         Box(
@@ -846,8 +853,8 @@ private fun AuthDivider() {
                 .weight(1f)
                 .height(1.dp)
                 .background(
-                    DominoSemanticColors.dialogBody.copy(
-                        alpha = 0.34f,
+                    DominoSemanticColors.brandSupportingText.copy(
+                        alpha = 0.42f,
                     ),
                 ),
         )
@@ -870,13 +877,17 @@ private fun GoogleButton(
         shape = AuthActionShape,
         border = BorderStroke(
             width = 1.dp,
-            color = Color(0xFFDADCE0),
+            color = if (enabled) {
+                Color(0xFFDADCE0)
+            } else {
+                DominoSemanticColors.brandBorder
+            },
         ),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.White,
             contentColor = Color(0xFF1F1F1F),
-            disabledContainerColor = Color.White.copy(alpha = 0.62f),
-            disabledContentColor = Color(0xFF1F1F1F).copy(alpha = 0.50f),
+            disabledContainerColor = DominoSemanticColors.brandSurfaceElevated,
+            disabledContentColor = DominoSemanticColors.brandSupportingText,
         ),
     ) {
         Image(
@@ -911,7 +922,7 @@ private fun AuthModePrompt(
         if (prompt.isNotBlank()) {
             Text(
                 text = prompt,
-                color = DominoSemanticColors.dialogBody,
+                color = DominoSemanticColors.brandSupportingText,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -925,7 +936,7 @@ private fun AuthModePrompt(
                     onClick = onClick,
                 ),
             text = action,
-            color = DominoSemanticColors.dialogAction,
+            color = DominoSemanticColors.brandPrimaryAction,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
         )

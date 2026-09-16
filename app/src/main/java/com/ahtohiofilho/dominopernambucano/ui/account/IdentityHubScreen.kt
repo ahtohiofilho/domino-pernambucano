@@ -91,6 +91,21 @@ internal data class IdentityHubUiState(
             displayName = displayName,
             tableName = tableName,
         )
+
+    val headerAvatarLabel: String?
+        get() = avatarLabel.takeIf {
+            accountState == IdentityHubAccountState.CONNECTED
+        }
+
+    val headerDisplayName: String?
+        get() = compactDisplayName.takeIf {
+            accountState == IdentityHubAccountState.CONNECTED
+        }
+
+    val headerTableName: String?
+        get() = meaningfulTableName.takeIf {
+            accountState == IdentityHubAccountState.CONNECTED
+        }
 }
 
 /**
@@ -234,8 +249,13 @@ private fun identityHubIsGenericTableName(
     return value.trim().uppercase() in setOf(
         "DP",
         "JOG",
+        "JOGADOR",
+        "JOGADORA",
         "JUG",
+        "JUGADOR",
+        "JUGADORA",
         "PLA",
+        "PLAYER",
         "PLY",
     )
 }
@@ -329,6 +349,47 @@ internal fun IdentityHubScreen(
     onManageProfileClick: () -> Unit,
     onHandAppearanceClick: (() -> Unit)? = null,
 ) {
+    val profileActionTitle = when (state.accountState) {
+        IdentityHubAccountState.CONNECTED ->
+            stringResource(R.string.identity_hub_edit_profile)
+
+        IdentityHubAccountState.RECOVERY_REQUIRED ->
+            stringResource(R.string.identity_hub_recover_access)
+
+        IdentityHubAccountState.UNAVAILABLE,
+        IdentityHubAccountState.DISCONNECTED ->
+            stringResource(R.string.identity_hub_sign_in_or_create)
+    }
+    val profileActionSupportingText = when (state.accountState) {
+        IdentityHubAccountState.CONNECTED ->
+            stringResource(R.string.identity_hub_edit_profile_support)
+
+        IdentityHubAccountState.RECOVERY_REQUIRED ->
+            stringResource(R.string.identity_hub_recover_access_support)
+
+        IdentityHubAccountState.UNAVAILABLE,
+        IdentityHubAccountState.DISCONNECTED ->
+            stringResource(R.string.identity_hub_sign_in_or_create_support)
+    }
+    val accountSupportingText = when (state.accountState) {
+        IdentityHubAccountState.CONNECTED ->
+            stringResource(R.string.identity_hub_account_support)
+
+        IdentityHubAccountState.RECOVERY_REQUIRED ->
+            stringResource(R.string.identity_hub_account_recovery_support)
+
+        IdentityHubAccountState.UNAVAILABLE,
+        IdentityHubAccountState.DISCONNECTED ->
+            stringResource(R.string.identity_hub_account_signed_out_support)
+    }
+    val accountAction = if (
+        state.accountState == IdentityHubAccountState.CONNECTED
+    ) {
+        onManageProfileClick
+    } else {
+        null
+    }
+
     DominoScreenScaffold(
         title = stringResource(R.string.account_title),
         layout = DominoScreenLayout.Guided,
@@ -354,7 +415,7 @@ internal fun IdentityHubScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             IdentityAvatar(
-                label = state.avatarLabel,
+                label = state.headerAvatarLabel,
                 size = 80.dp,
                 modifier = Modifier.testTag(
                     IdentityHubAvatarTag,
@@ -366,17 +427,26 @@ internal fun IdentityHubScreen(
                     IdentityHubDisplayNameTag,
                 ),
                 text =
-                    state.compactDisplayName
-                        ?: stringResource(
-                            R.string.identity_profile_fallback,
-                        ),
+                    state.headerDisplayName
+                        ?: if (
+                            state.accountState ==
+                                IdentityHubAccountState.CONNECTED
+                        ) {
+                            stringResource(
+                                R.string.identity_profile_fallback,
+                            )
+                        } else {
+                            stringResource(
+                                R.string.identity_hub_account_heading,
+                            )
+                        },
                 color = DominoSemanticColors.brandText,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
 
-            state.meaningfulTableName?.let { tableName ->
+            state.headerTableName?.let { tableName ->
                 Text(
                     modifier = Modifier.testTag(
                         IdentityHubTableNameTag,
@@ -406,12 +476,8 @@ internal fun IdentityHubScreen(
                 modifier = Modifier.testTag(
                     IdentityHubEditProfileActionTag,
                 ),
-                title = stringResource(
-                    R.string.identity_hub_edit_profile,
-                ),
-                supportingText = stringResource(
-                    R.string.identity_hub_edit_profile_support,
-                ),
+                title = profileActionTitle,
+                supportingText = profileActionSupportingText,
                 icon = IdentityHubRowIcon.Profile,
                 onClick = onManageProfileClick,
             )
@@ -452,11 +518,9 @@ internal fun IdentityHubScreen(
                 title = identityHubAccountStateLabel(
                     state.accountState,
                 ),
-                supportingText = stringResource(
-                    R.string.identity_hub_account_support,
-                ),
+                supportingText = accountSupportingText,
                 icon = IdentityHubRowIcon.Account,
-                onClick = onManageProfileClick,
+                onClick = accountAction,
             )
         }
     }
@@ -745,9 +809,7 @@ private fun identityHubAccountStateLabel(
     state: IdentityHubAccountState,
 ): String {
     return when (state) {
-        IdentityHubAccountState.UNAVAILABLE ->
-            stringResource(R.string.account_state_unavailable)
-
+        IdentityHubAccountState.UNAVAILABLE,
         IdentityHubAccountState.DISCONNECTED ->
             stringResource(R.string.account_state_disconnected)
 
