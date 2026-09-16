@@ -483,4 +483,14 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="ranked_table_identity_public_name_hint">Choose the name that will be shown in the ranking.</string>
 
     <string name="ranked_table_identity_public_name_invalid">Enter a valid public name.</string>
+    <string name="identity_profile_fallback">Profile</string>
+    <string name="identity_hub_profile_section">Profile</string>
+    <string name="identity_hub_edit_profile">Edit profile</string>
+    <string name="identity_hub_edit_profile_support">Public name and short name</string>
+    <string name="identity_hub_personalization_section">Personalization</string>
+    <string name="identity_hub_hand_appearance">Hand appearance</string>
+    <string name="identity_hub_hand_appearance_support">Tone used in animations</string>
+    <string name="identity_hub_hand_appearance_pending">Default</string>
+    <string name="identity_hub_account_section">Account</string>
+    <string name="identity_hub_account_support">Manage access and online identity</string>
 </resources>

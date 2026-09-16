@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -63,8 +64,11 @@ enum class DominoBrandAccent {
 
 enum class DominoScreenLayout {
     Centered,
+    Guided,
     Top,
 }
+
+private val DominoGuidedHeaderTopInset = 112.dp
 
 @Composable
 fun DominoBrandScaffold(
@@ -157,6 +161,7 @@ fun DominoScreenScaffold(
     val verticalAlignment = when (layout) {
         DominoScreenLayout.Centered ->
             Alignment.CenterVertically
+        DominoScreenLayout.Guided,
         DominoScreenLayout.Top -> Alignment.Top
     }
 
@@ -165,6 +170,12 @@ fun DominoScreenScaffold(
         contentVerticalAlignment = verticalAlignment,
         scrollable = scrollable,
     ) {
+        if (layout == DominoScreenLayout.Guided) {
+            Spacer(
+                modifier = Modifier.height(DominoGuidedHeaderTopInset),
+            )
+        }
+
         Column(
             modifier = contentModifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(

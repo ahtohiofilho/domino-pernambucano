@@ -59,6 +59,11 @@ import com.ahtohiofilho.dominopernambucano.session.DominoSessionState
 import com.ahtohiofilho.dominopernambucano.session.LocalDominoSessionCoordinator
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
+import com.ahtohiofilho.dominopernambucano.ui.account.IdentityHubAccountState
+import com.ahtohiofilho.dominopernambucano.ui.account.IdentityHubLaunchRequest
+import com.ahtohiofilho.dominopernambucano.ui.account.IdentityHubScreen
+import com.ahtohiofilho.dominopernambucano.ui.account.IdentityHubUiState
+import com.ahtohiofilho.dominopernambucano.ui.account.mainMenuProfileIdentityHubRequest
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiCoordinator
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileStrings
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
@@ -236,6 +241,10 @@ fun DominoPernambucanoApp(
 
     var termsVisible by rememberSaveable {
         mutableStateOf(false)
+    }
+
+    var identityHubLaunchRequest by remember {
+        mutableStateOf<IdentityHubLaunchRequest?>(null)
     }
 
     var openAccountDialogOnNextMainMenu by rememberSaveable {
@@ -1165,6 +1174,42 @@ fun DominoPernambucanoApp(
         }
     }
 
+    val activeIdentityHubRequest =
+        identityHubLaunchRequest
+
+    if (activeIdentityHubRequest != null) {
+        IdentityHubScreen(
+            state = IdentityHubUiState(
+                displayName = onlinePlayerIdentity.displayName,
+                tableName = onlinePlayerIdentity.tableName,
+                accountState = when (onlineGoogleAccountStatus) {
+                    OnlineGoogleAccountStatus.UNAVAILABLE ->
+                        IdentityHubAccountState.UNAVAILABLE
+
+                    OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL,
+                    OnlineGoogleAccountStatus.VISITOR ->
+                        IdentityHubAccountState.DISCONNECTED
+
+                    OnlineGoogleAccountStatus.CONNECTED ->
+                        IdentityHubAccountState.CONNECTED
+
+                    OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
+                        IdentityHubAccountState.RECOVERY_REQUIRED
+                },
+            ),
+            onBackClick = {
+                identityHubLaunchRequest = null
+            },
+            onManageProfileClick = {
+                identityHubLaunchRequest = null
+                accountDialogReturnsToPlayMode = false
+                openAccountDialogOnNextMainMenu = true
+            },
+        )
+
+        return
+    }
+
     if (rulesHelpVisible) {
         RulesHelpScreen(
             bannerAdsReady = bannerAdsReady,
@@ -1261,6 +1306,10 @@ fun DominoPernambucanoApp(
                     onlinePlayerIdentity.displayName,
                 onlineAccountTableName =
                     onlinePlayerIdentity.tableName,
+                onProfileClick = {
+                    identityHubLaunchRequest =
+                        mainMenuProfileIdentityHubRequest()
+                },
                 onlineAccountProfileUiState =
                     onlineAccountProfileUiState,
                 openAccountDialogOnEnter =

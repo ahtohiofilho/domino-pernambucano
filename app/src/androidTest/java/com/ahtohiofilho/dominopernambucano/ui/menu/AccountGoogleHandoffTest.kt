@@ -3,9 +3,11 @@ package com.ahtohiofilho.dominopernambucano.ui.menu
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -26,7 +28,7 @@ class AccountGoogleHandoffTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun google_handoff_closes_account_dialog_and_reopens_after_action_finishes() {
+    fun google_handoff_reopens_account_dialog_after_action_finishes() {
         val actionInProgress = mutableStateOf(false)
         var connectClickCount = 0
 
@@ -42,6 +44,7 @@ class AccountGoogleHandoffTest {
                     OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL,
                 onlineGoogleAccountActionInProgress =
                     actionInProgress.value,
+                openAccountDialogOnEnter = true,
                 onPlayClick = {},
                 onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
@@ -52,10 +55,6 @@ class AccountGoogleHandoffTest {
                 },
             )
         }
-
-        composeRule
-            .onNodeWithTag(MainMenuAccountActionTag)
-            .performClick()
 
         composeRule
             .onNodeWithTag(OnlineAccountDialogTag)
@@ -82,7 +81,7 @@ class AccountGoogleHandoffTest {
     }
 
     @Test
-    fun connected_home_identifies_the_signed_in_player() {
+    fun connected_home_uses_compact_identity_instead_of_account_card() {
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation =
@@ -93,7 +92,7 @@ class AccountGoogleHandoffTest {
                 pendingOnlineMatchResumeInProgress = false,
                 onlineGoogleAccountStatus =
                     OnlineGoogleAccountStatus.CONNECTED,
-                onlineAccountDisplayName = "Antonio",
+                onlineAccountDisplayName = "Antonio Filho",
                 onlineAccountTableName = "ANT",
                 onPlayClick = {},
                 onRankingClick = {},
@@ -103,12 +102,17 @@ class AccountGoogleHandoffTest {
         }
 
         composeRule
-            .onNodeWithText("Antonio")
+            .onNodeWithTag(MainMenuProfileActionTag)
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithText("Antonio Filho")
             .assertIsDisplayed()
 
         composeRule
-            .onNodeWithText("Conta conectada · ANT")
-            .assertIsDisplayed()
+            .onAllNodesWithText("Conta conectada · ANT")
+            .assertCountEquals(0)
     }
 
     @Test

@@ -403,14 +403,17 @@ class MainMenuScreenTest {
             .assertIsEnabled()
 
         composeRule
-            .onNodeWithText("Conta")
+            .onNodeWithTag(MainMenuProfileActionTag)
             .assertIsDisplayed()
             .assertIsEnabled()
 
         composeRule
-            .onNodeWithTag(MainMenuAccountActionTag)
+            .onNodeWithText("Perfil")
             .assertIsDisplayed()
-            .assertIsEnabled()
+
+        composeRule
+            .onAllNodesWithText("Conta")
+            .assertCountEquals(0)
 
         composeRule
             .onAllNodesWithText("MESA, PARCERIA E ESTRATÉGIA")
@@ -465,9 +468,7 @@ class MainMenuScreenTest {
         val rankingBounds = composeRule
             .onNodeWithText("Ranking")
             .getUnclippedBoundsInRoot()
-        val accountBounds = composeRule
-            .onNodeWithText("Conta")
-            .getUnclippedBoundsInRoot()
+
 
         with(composeRule.density) {
             val rootCenterPx =
@@ -479,8 +480,7 @@ class MainMenuScreenTest {
                     ) / 2f
             val centerTolerancePx =
                 32.dp.toPx()
-            val actionBalanceTolerancePx =
-                8.dp.toPx()
+
             val titleToFirstActionGapMinimumPx =
                 32.dp.toPx()
             val playCenterPx =
@@ -490,15 +490,7 @@ class MainMenuScreenTest {
                     rankingBounds.top.toPx() +
                         rankingBounds.bottom.toPx()
                     ) / 2f
-            val accountCenterPx =
-                (
-                    accountBounds.top.toPx() +
-                        accountBounds.bottom.toPx()
-                    ) / 2f
-            val playRankingStepPx =
-                rankingCenterPx - playCenterPx
-            val rankingAccountStepPx =
-                accountCenterPx - rankingCenterPx
+
 
             assertEquals(
                 rootCenterPx,
@@ -515,12 +507,6 @@ class MainMenuScreenTest {
                     titleToFirstActionGapMinimumPx,
             )
             assertTrue(playCenterPx < rankingCenterPx)
-            assertTrue(rankingCenterPx < accountCenterPx)
-            assertEquals(
-                playRankingStepPx,
-                rankingAccountStepPx,
-                actionBalanceTolerancePx,
-            )
         }
     }
 

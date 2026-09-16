@@ -483,4 +483,14 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="ranked_table_identity_public_name_hint">Elige el nombre que aparecer&#225; en la clasificaci&#243;n.</string>
 
     <string name="ranked_table_identity_public_name_invalid">Introduce un nombre p&#250;blico v&#225;lido.</string>
+    <string name="identity_profile_fallback">Perfil</string>
+    <string name="identity_hub_profile_section">Perfil</string>
+    <string name="identity_hub_edit_profile">Editar perfil</string>
+    <string name="identity_hub_edit_profile_support">Nombre público y nombre corto</string>
+    <string name="identity_hub_personalization_section">Personalización</string>
+    <string name="identity_hub_hand_appearance">Apariencia de la mano</string>
+    <string name="identity_hub_hand_appearance_support">Tono usado en las animaciones</string>
+    <string name="identity_hub_hand_appearance_pending">Predeterminado</string>
+    <string name="identity_hub_account_section">Cuenta</string>
+    <string name="identity_hub_account_support">Gestiona el acceso y la identidad online</string>
 </resources>

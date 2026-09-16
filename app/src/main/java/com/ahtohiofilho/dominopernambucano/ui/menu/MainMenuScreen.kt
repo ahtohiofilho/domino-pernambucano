@@ -1,15 +1,21 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,10 +38,12 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.OnlineEmailAccountIntent
@@ -45,6 +54,9 @@ import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationRemo
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationInspectionState
 import com.ahtohiofilho.dominopernambucano.session.OnlinePendingParticipationSessionRejection
+import com.ahtohiofilho.dominopernambucano.ui.account.IdentityAvatar
+import com.ahtohiofilho.dominopernambucano.ui.account.identityHubAvatarLabel
+import com.ahtohiofilho.dominopernambucano.ui.account.identityHubCompactDisplayName
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
 import com.ahtohiofilho.dominopernambucano.ui.account.RankedAccountEntryMode
@@ -64,6 +76,7 @@ internal const val MainMenuTitleTag = "main_menu_title"
 internal const val MainMenuActionsGroupTag = "main_menu_actions_group"
 internal const val MainMenuRankingActionTag = "main_menu_ranking_action"
 internal const val MainMenuAccountActionTag = "main_menu_account_action"
+internal const val MainMenuProfileActionTag = "main_menu_profile_action"
 internal const val MainMenuStatusTag = "main_menu_status"
 internal const val MainMenuSettingsActionTag = "main_menu_settings_action"
 internal const val MainMenuRulesActionTag = "main_menu_rules_action"
@@ -94,6 +107,7 @@ fun MainMenuScreen(
     onlineEmailFeedbackMessage: String? = null,
     onlineAccountDisplayName: String? = null,
     onlineAccountTableName: String? = null,
+    onProfileClick: () -> Unit = {},
     onlineAccountProfileUiState: OnlineAccountProfileUiState =
         OnlineAccountProfileUiState.NotAvailable,
     openAccountDialogOnEnter: Boolean = false,
@@ -296,19 +310,6 @@ fun MainMenuScreen(
             }
         }
 
-    val accountTitle =
-        stringResource(R.string.main_menu_account)
-    val accountSupport = if (
-        onlineGoogleAccountStatus ==
-        OnlineGoogleAccountStatus.CONNECTED
-    ) {
-        stringResource(
-            R.string.main_menu_account_connected_support,
-        )
-    } else {
-        stringResource(R.string.main_menu_account_support)
-    }
-
     if (accountEntryVisible && onlinePasswordAccountManager != null) {
         RankedAccountEntryScreen(
             mode = accountEntryMode,
@@ -480,34 +481,71 @@ fun MainMenuScreen(
                     },
                 )
 
-                DominoSecondaryActionCard(
-                    modifier = Modifier.testTag(
-                        MainMenuAccountActionTag,
-                    ),
-                    title = accountTitle,
-                    supportingText = accountSupport,
-                    accent = DominoBrandAccent.Green,
-                    onClick = {
-                        if (
-                            onlineGoogleAccountStatus ==
-                                OnlineGoogleAccountStatus.CONNECTED ||
-                            onlinePasswordAccountManager == null
-                        ) {
-                            accountDialogVisible = true
-                            onAccountDialogOpened()
-                        } else {
-                            accountEntryMode =
-                                RankedAccountEntryMode.SIGN_IN
-                            accountEntryVisible = true
-                        }
-                    },
-                    enabled = !menuActionInProgress,
-                    elevated = true,
-                    leadingContent = {
-                        AccountSilhouetteGlyph()
-                    },
-                )
             }
+        }
+
+        val profileDisplayName =
+            identityHubCompactDisplayName(
+                displayName = onlineAccountDisplayName,
+                tableName = onlineAccountTableName,
+            )
+        val profileAvatarLabel =
+            identityHubAvatarLabel(
+                displayName = onlineAccountDisplayName,
+                tableName = onlineAccountTableName,
+            )
+        val profileLabel =
+            profileDisplayName
+                ?: stringResource(
+                    R.string.identity_profile_fallback,
+                )
+        val profileDescription = profileLabel
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(
+                    top = MaterialTheme.dominoSpacing.sm,
+                    start = MaterialTheme.dominoSpacing.lg,
+                )
+                .widthIn(max = 220.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .clickable(
+                    enabled = !menuActionInProgress,
+                    role = Role.Button,
+                    onClick = onProfileClick,
+                )
+                .testTag(MainMenuProfileActionTag)
+                .semantics {
+                    contentDescription = profileDescription
+                }
+                .padding(
+                    top = 5.dp,
+                    end = MaterialTheme.dominoSpacing.xs,
+                    bottom = 5.dp,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IdentityAvatar(
+                label = profileAvatarLabel,
+                size = 38.dp,
+            )
+
+            Spacer(
+                modifier = Modifier.width(
+                    MaterialTheme.dominoSpacing.xs,
+                ),
+            )
+
+            Text(
+                text = profileLabel,
+                color = DominoSemanticColors.brandText,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
 
         val rulesDescription = stringResource(
@@ -516,10 +554,10 @@ fun MainMenuScreen(
 
         IconButton(
             modifier = Modifier
-                .align(Alignment.TopStart)
+                .align(Alignment.BottomStart)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(
-                    top = MaterialTheme.dominoSpacing.md,
+                    bottom = MaterialTheme.dominoSpacing.md,
                     start = MaterialTheme.dominoSpacing.lg,
                 )
                 .testTag(MainMenuRulesActionTag)
