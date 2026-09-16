@@ -81,8 +81,19 @@ import com.ahtohiofilho.dominopernambucano.ui.settings.AndroidAppLanguageManager
 import com.ahtohiofilho.dominopernambucano.ui.settings.SettingsScreen
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
+
+internal fun launchAccountProfileSyncAfterAuthentication(
+    scope: CoroutineScope,
+    action: suspend () -> Unit,
+): Job {
+    return scope.launch {
+        action()
+    }
+}
 @Composable
 fun DominoPernambucanoApp(
     onlineAppConfig: OnlineAppConfig = OnlineAppEnvironment.Current,
@@ -1261,7 +1272,11 @@ fun DominoPernambucanoApp(
                     requestOnlineAccountProfile()
                 },
                 onPasswordAuthenticated = {
-                    synchronizeOnlineAccountProfileAfterAuthentication()
+                    launchAccountProfileSyncAfterAuthentication(
+                        scope = menuCoroutineScope,
+                    ) {
+                        synchronizeOnlineAccountProfileAfterAuthentication()
+                    }
                 },
                 onAccountProfilePublicDisplayNameChange = {
                         publicDisplayName ->

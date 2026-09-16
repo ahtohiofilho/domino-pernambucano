@@ -89,7 +89,7 @@ fun RankedAccountEntryScreen(
     googleAvailable: Boolean = true,
     passwordAccountManager: OnlinePasswordAccountManager,
     onContinueGoogleClick: () -> Unit,
-    onAuthenticated: suspend () -> Unit,
+    onAuthenticated: () -> Unit,
     onModeChange: (RankedAccountEntryMode) -> Unit,
     onBackClick: () -> Unit,
 ) {

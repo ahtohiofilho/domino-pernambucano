@@ -99,7 +99,7 @@ fun MainMenuScreen(
     openAccountDialogOnEnter: Boolean = false,
     onAccountDialogOpenRequestConsumed: () -> Unit = {},
     onAccountDialogOpened: () -> Unit = {},
-    onPasswordAuthenticated: suspend () -> Unit = {},
+    onPasswordAuthenticated: () -> Unit = {},
     onAccountProfilePublicDisplayNameChange: (String) -> Unit =
         {},
     onAccountProfileTableNameChange: (String) -> Unit = {},
