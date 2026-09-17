@@ -674,6 +674,10 @@ class KtorRemoteOnlineApiClient(
                 key = "afterRevision",
                 value = afterRevision,
             )
+            header(
+                HttpHeaders.CacheControl,
+                "no-cache",
+            )
             accept(ContentType.Application.Json)
             applyProtectedAuthentication(
                 developmentPlayerId = developmentPlayerId,

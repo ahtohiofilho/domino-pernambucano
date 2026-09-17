@@ -22,10 +22,12 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
 import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueEnterRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineSyntheticAccountRecoveryRequestDto
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchDto
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.receive
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -1089,6 +1091,10 @@ internal fun Route.onlineServerRoutes(
         }
 
         get("/matches/{matchId}/updates") {
+            call.response.header(
+                HttpHeaders.CacheControl,
+                "no-store",
+            )
             val identity = call.requireOnlineIdentity(
                 identityResolver = identityResolver,
             ) ?: return@get
