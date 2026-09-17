@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
+import com.ahtohiofilho.dominopernambucano.ui.personalization.HandAppearanceTone
+import com.ahtohiofilho.dominopernambucano.ui.personalization.toKnockHandColorFilter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -52,6 +54,8 @@ private const val KNOCK_PLAYER_RIGHT_SCREEN_FRACTION = 0.20f
 fun PassTurnKnockAnimationOverlay(
     playerIndex: Int,
     localPlayerIndex: Int,
+    handAppearanceTone: HandAppearanceTone =
+        HandAppearanceTone.TONE_1,
     presentationId: String?,
     onAnimationTrace: (OnlineTraceType, Map<String, String>) -> Unit,
     onKnockImpact: () -> Unit = {},
@@ -62,6 +66,13 @@ fun PassTurnKnockAnimationOverlay(
         playerIndex = playerIndex,
         localPlayerIndex = localPlayerIndex,
     )
+
+    val effectiveHandAppearanceTone =
+        resolveKnockHandAppearanceTone(
+            playerIndex = playerIndex,
+            localPlayerIndex = localPlayerIndex,
+            selectedTone = handAppearanceTone,
+        )
 
     val offsetAnim = remember(presentationId, playerIndex, localPlayerIndex) {
         Animatable(0f)
@@ -259,6 +270,9 @@ fun PassTurnKnockAnimationOverlay(
                 id = getKnockFrameRes(frameIndex),
             ),
             contentDescription = stringResource(R.string.game_pass_content_description),
+            colorFilter =
+                effectiveHandAppearanceTone
+                    .toKnockHandColorFilter(),
             modifier = Modifier
                 .offset {
                     placementOffset + directionalOffset
@@ -291,6 +305,18 @@ internal fun resolveKnockScreenPlayerIndex(
         relativeIndex + playerCount
     } else {
         relativeIndex
+    }
+}
+
+internal fun resolveKnockHandAppearanceTone(
+    playerIndex: Int,
+    localPlayerIndex: Int,
+    selectedTone: HandAppearanceTone,
+): HandAppearanceTone {
+    return if (playerIndex == localPlayerIndex) {
+        selectedTone
+    } else {
+        HandAppearanceTone.TONE_1
     }
 }
 

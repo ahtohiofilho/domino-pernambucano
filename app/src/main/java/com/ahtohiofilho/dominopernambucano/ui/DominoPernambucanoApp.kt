@@ -1,8 +1,10 @@
 package com.ahtohiofilho.dominopernambucano.ui
 
 import com.ahtohiofilho.dominopernambucano.ui.menu.OfflineIdentityDialog
-import com.ahtohiofilho.dominopernambucano.offline.buildOfflinePlayerTableCodes
+import com.ahtohiofilho.dominopernambucano.offline.OfflinePlayerIdentity
 import com.ahtohiofilho.dominopernambucano.offline.SharedPreferencesOfflinePlayerIdentityStore
+import com.ahtohiofilho.dominopernambucano.offline.buildOfflinePlayerTableCodes
+import com.ahtohiofilho.dominopernambucano.offline.resolveLocalMatchPlayerIdentity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -66,6 +68,7 @@ import com.ahtohiofilho.dominopernambucano.ui.account.IdentityHubReturnIntent
 import com.ahtohiofilho.dominopernambucano.ui.account.IdentityHubScreen
 import com.ahtohiofilho.dominopernambucano.ui.account.IdentityHubSurface
 import com.ahtohiofilho.dominopernambucano.ui.account.IdentityHubUiState
+import com.ahtohiofilho.dominopernambucano.ui.account.HandAppearanceDialog
 import com.ahtohiofilho.dominopernambucano.ui.account.accountManagementIdentityHubRequest
 import com.ahtohiofilho.dominopernambucano.ui.account.mainMenuProfileIdentityHubRequest
 import com.ahtohiofilho.dominopernambucano.ui.account.rankedIdentityHubRequest
@@ -80,6 +83,8 @@ import com.ahtohiofilho.dominopernambucano.ui.account.RankedTableIdentityConfirm
 import com.ahtohiofilho.dominopernambucano.ui.account.RankedTableIdentityConfirmationStore
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMenuMusicController
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
+import com.ahtohiofilho.dominopernambucano.ui.personalization.HandAppearanceTone
+import com.ahtohiofilho.dominopernambucano.ui.personalization.SharedPreferencesHandAppearanceStore
 import com.ahtohiofilho.dominopernambucano.ui.info.RulesHelpScreen
 import com.ahtohiofilho.dominopernambucano.ui.info.TermsOfUseScreen
 import com.ahtohiofilho.dominopernambucano.ui.menu.MainMenuScreen
@@ -262,6 +267,10 @@ fun DominoPernambucanoApp(
         mutableStateOf(false)
     }
 
+    var handAppearanceDialogVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+
     var accountDialogReturnsToPlayMode by rememberSaveable {
         mutableStateOf(false)
     }
@@ -389,6 +398,22 @@ fun DominoPernambucanoApp(
         )
     }
 
+    val handAppearanceStore = remember(
+        context.applicationContext,
+    ) {
+        SharedPreferencesHandAppearanceStore(
+            context = context.applicationContext,
+        )
+    }
+
+    var handAppearanceTone by remember(
+        handAppearanceStore,
+    ) {
+        mutableStateOf(
+            handAppearanceStore.read(),
+        )
+    }
+
     val onlineGoogleAccountManager = remember(
         context,
         googleSignInConfig,
@@ -505,6 +530,10 @@ fun DominoPernambucanoApp(
         )
     }
 
+    val localMatchIdentityOverride = remember {
+        mutableStateOf<OfflinePlayerIdentity?>(null)
+    }
+
     val rankedTableIdentityConfirmationStore = remember(
         context.applicationContext,
     ) {
@@ -518,6 +547,7 @@ fun DominoPernambucanoApp(
         onlineSessionCredentialRepository,
         onlineRoomRepository,
         offlineIdentityStore,
+        localMatchIdentityOverride,
     ) {
         LocalDominoSessionCoordinator(
             onlineParticipationBindingRepository =
@@ -526,7 +556,10 @@ fun DominoPernambucanoApp(
                 onlineSessionCredentialRepository,
             onlineRoomRepository = onlineRoomRepository,
             localPlayerNamesProvider = {
-                offlineIdentityStore.read()?.let(
+                (
+                    localMatchIdentityOverride.value
+                        ?: offlineIdentityStore.read()
+                )?.let(
                     ::buildOfflinePlayerTableCodes,
                 )
             },
@@ -1338,6 +1371,8 @@ fun DominoPernambucanoApp(
                         },
                         profilePhotoUri =
                             onlineProfilePhotoUri,
+                        handAppearanceTone =
+                            handAppearanceTone,
                     ),
                     onBackClick = {
                         identityHubProfileDialogVisible = false
@@ -1365,6 +1400,9 @@ fun DominoPernambucanoApp(
                             }
                         }
                     },
+                    onHandAppearanceClick = {
+                        handAppearanceDialogVisible = true
+                    },
                     onDisconnectClick = {
                         val cleared =
                             onlineSessionCredentialRepository.clear()
@@ -1389,6 +1427,25 @@ fun DominoPernambucanoApp(
                         cleared
                     },
                 )
+
+                if (handAppearanceDialogVisible) {
+                    HandAppearanceDialog(
+                        selectedTone = handAppearanceTone,
+                        onToneSelected = { selectedTone ->
+                            if (
+                                handAppearanceStore.write(
+                                    selectedTone,
+                                )
+                            ) {
+                                handAppearanceTone = selectedTone
+                                handAppearanceDialogVisible = false
+                            }
+                        },
+                        onDismissRequest = {
+                            handAppearanceDialogVisible = false
+                        },
+                    )
+                }
 
                 if (
                     identityHubProfileDialogVisible &&
@@ -1994,9 +2051,24 @@ fun DominoPernambucanoApp(
                     )
                 },
                 onLocalGameClick = {
-                    if (offlineIdentityStore.read() == null) {
+                    val localMatchIdentity =
+                        resolveLocalMatchPlayerIdentity(
+                            accountConnected =
+                                onlineAccountConnected,
+                            connectedDisplayName =
+                                onlinePlayerIdentity.displayName,
+                            connectedTableCode =
+                                onlinePlayerIdentity.tableName,
+                            storedOfflineIdentity =
+                                offlineIdentityStore.read(),
+                        )
+
+                    if (localMatchIdentity == null) {
+                        localMatchIdentityOverride.value = null
                         offlineIdentityDialogVisible = true
                     } else {
+                        localMatchIdentityOverride.value =
+                            localMatchIdentity
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.StartLocalMatch,
                         )
@@ -2021,6 +2093,7 @@ fun DominoPernambucanoApp(
                     },
                     onConfirm = { identity ->
                         offlineIdentityStore.save(identity)
+                        localMatchIdentityOverride.value = identity
                         offlineIdentityDialogVisible = false
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.StartLocalMatch,
@@ -2071,6 +2144,7 @@ fun DominoPernambucanoApp(
         is DominoSessionState.LocalMatch -> {
             DominoGameRoute(
                 matchCoordinator = state.matchCoordinator,
+                handAppearanceTone = handAppearanceTone,
                 onBackToMenuClick = {
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.BackToPlayModeSelection,
@@ -2283,6 +2357,7 @@ fun DominoPernambucanoApp(
 
             DominoGameRoute(
                 matchCoordinator = state.matchCoordinator,
+                handAppearanceTone = handAppearanceTone,
                 onBackToMenuClick = {
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.BackToPlayModeSelection,

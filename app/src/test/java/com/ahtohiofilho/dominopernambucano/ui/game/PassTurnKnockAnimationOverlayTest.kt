@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.ui.unit.IntOffset
+import com.ahtohiofilho.dominopernambucano.ui.personalization.HandAppearanceTone
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -37,6 +38,30 @@ class PassTurnKnockAnimationOverlayTest {
             resolveKnockScreenPlayerIndex(
                 playerIndex = 0,
                 localPlayerIndex = 1,
+            ),
+        )
+    }
+
+    @Test
+    fun `local player uses selected hand appearance tone`() {
+        assertEquals(
+            HandAppearanceTone.TONE_4,
+            resolveKnockHandAppearanceTone(
+                playerIndex = 2,
+                localPlayerIndex = 2,
+                selectedTone = HandAppearanceTone.TONE_4,
+            ),
+        )
+    }
+
+    @Test
+    fun `other players keep legacy hand appearance tone`() {
+        assertEquals(
+            HandAppearanceTone.TONE_1,
+            resolveKnockHandAppearanceTone(
+                playerIndex = 1,
+                localPlayerIndex = 2,
+                selectedTone = HandAppearanceTone.TONE_4,
             ),
         )
     }

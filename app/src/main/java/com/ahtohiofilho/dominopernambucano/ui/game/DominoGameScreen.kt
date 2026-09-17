@@ -26,6 +26,7 @@ import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
+import com.ahtohiofilho.dominopernambucano.ui.personalization.HandAppearanceTone
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import kotlinx.coroutines.delay
@@ -33,6 +34,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun DominoGameScreen(
     uiState: DominoGameUiState,
+    handAppearanceTone: HandAppearanceTone =
+        HandAppearanceTone.TONE_1,
     onBackToMenuClick: () -> Unit,
     onOnlineTrace: (
         OnlineTraceType,
@@ -615,6 +618,7 @@ fun DominoGameScreen(
             PassTurnKnockAnimationOverlay(
                 playerIndex = presentingPassPhase.playerIndex,
                 localPlayerIndex = uiState.localPlayerIndex,
+                handAppearanceTone = handAppearanceTone,
                 presentationId = uiState.onlinePresentationId,
                 onAnimationTrace = { type, attributes ->
                     traceUi(

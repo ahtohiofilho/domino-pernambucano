@@ -488,9 +488,11 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="identity_hub_edit_profile">Edit profile</string>
     <string name="identity_hub_edit_profile_support">Public name and short name</string>
     <string name="identity_hub_personalization_section">Personalization</string>
-    <string name="identity_hub_hand_appearance">Hand appearance</string>
-    <string name="identity_hub_hand_appearance_support">Tone used in animations</string>
-    <string name="identity_hub_hand_appearance_pending">Default</string>
+    <string name="identity_hub_hand_appearance">Hand</string>
+    <string name="identity_hub_hand_appearance_support">Choose yours</string>
+    <string name="identity_hub_hand_appearance_dialog_title">Choose your hand</string>
+    <string name="identity_hub_hand_appearance_confirm">Confirm</string>
+    <string name="identity_hub_hand_choice_accessibility">Hand option %1$d</string>
     <string name="identity_hub_account_section">Account</string>
     <string name="identity_hub_account_support">Manage access and online identity</string>
     <string name="identity_profile_sign_in">Sign in</string>

@@ -22,12 +22,15 @@ import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidPassKnockSoundPlayer
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidTilePlacementSoundPlayer
 import com.ahtohiofilho.dominopernambucano.ui.audio.MatchResultAudioTransitionTracker
 import com.ahtohiofilho.dominopernambucano.ui.audio.TilePlacementAudioTransitionTracker
+import com.ahtohiofilho.dominopernambucano.ui.personalization.HandAppearanceTone
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
 @Composable
 fun DominoGameRoute(
     matchCoordinator: DominoMatchCoordinator,
+    handAppearanceTone: HandAppearanceTone =
+        HandAppearanceTone.TONE_1,
     onBackToMenuClick: () -> Unit,
     onMatchFinished: () -> Unit = {},
     onMatchFinishedTransition: ((() -> Unit) -> Unit) = { continuation ->
@@ -223,6 +226,7 @@ fun DominoGameRoute(
             onlineSnapshotRevision = onlineUiTraceContext?.snapshotRevision,
             postMatchStatistics = postMatchStatisticsState.value,
         ),
+        handAppearanceTone = handAppearanceTone,
         onBackToMenuClick = {
             if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
                 onMatchFinishedTransition(

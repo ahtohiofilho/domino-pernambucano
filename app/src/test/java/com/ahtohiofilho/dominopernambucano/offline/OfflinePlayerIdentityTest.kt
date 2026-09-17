@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.offline
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -73,6 +74,97 @@ class OfflinePlayerIdentityTest {
         )
         assertFalse(isValidOfflineTableCode("J\u00D51"))
         assertTrue(isValidOfflineTableCode("J01"))
+    }
+
+    @Test
+    fun connected_profile_wins_over_saved_guest_identity() {
+        val resolved = resolveLocalMatchPlayerIdentity(
+            accountConnected = true,
+            connectedDisplayName = "  Antônio Celular  ",
+            connectedTableCode = " ant ",
+            storedOfflineIdentity = OfflinePlayerIdentity(
+                displayName = "Convidado",
+                tableCode = "G01",
+            ),
+        )
+
+        assertEquals(
+            OfflinePlayerIdentity(
+                displayName = "Antônio Celular",
+                tableCode = "ANT",
+            ),
+            resolved,
+        )
+    }
+
+    @Test
+    fun connected_profile_works_without_saved_guest_identity() {
+        val resolved = resolveLocalMatchPlayerIdentity(
+            accountConnected = true,
+            connectedDisplayName = "Antônio Celular",
+            connectedTableCode = "ANT",
+            storedOfflineIdentity = null,
+        )
+
+        assertEquals(
+            OfflinePlayerIdentity(
+                displayName = "Antônio Celular",
+                tableCode = "ANT",
+            ),
+            resolved,
+        )
+    }
+
+    @Test
+    fun disconnected_player_keeps_saved_guest_identity() {
+        val guestIdentity = OfflinePlayerIdentity(
+            displayName = "Convidado",
+            tableCode = "G01",
+        )
+
+        val resolved = resolveLocalMatchPlayerIdentity(
+            accountConnected = false,
+            connectedDisplayName = "Conta ignorada",
+            connectedTableCode = "ACC",
+            storedOfflineIdentity = guestIdentity,
+        )
+
+        assertEquals(
+            guestIdentity,
+            resolved,
+        )
+    }
+
+    @Test
+    fun invalid_connected_profile_falls_back_to_saved_guest_identity() {
+        val guestIdentity = OfflinePlayerIdentity(
+            displayName = "Convidado",
+            tableCode = "G01",
+        )
+
+        val resolved = resolveLocalMatchPlayerIdentity(
+            accountConnected = true,
+            connectedDisplayName = "Conta",
+            connectedTableCode = "AB",
+            storedOfflineIdentity = guestIdentity,
+        )
+
+        assertEquals(
+            guestIdentity,
+            resolved,
+        )
+    }
+
+    @Test
+    fun disconnected_player_without_guest_identity_requires_setup() {
+        val resolved = resolveLocalMatchPlayerIdentity(
+            accountConnected = false,
+            connectedDisplayName = "Conta ignorada",
+            connectedTableCode = "ACC",
+            storedOfflineIdentity = null,
+        )
+
+        assertNull(resolved)
     }
 
 }

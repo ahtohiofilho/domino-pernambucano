@@ -488,9 +488,11 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="identity_hub_edit_profile">Editar perfil</string>
     <string name="identity_hub_edit_profile_support">Nombre público y nombre corto</string>
     <string name="identity_hub_personalization_section">Personalización</string>
-    <string name="identity_hub_hand_appearance">Apariencia de la mano</string>
-    <string name="identity_hub_hand_appearance_support">Tono usado en las animaciones</string>
-    <string name="identity_hub_hand_appearance_pending">Predeterminado</string>
+    <string name="identity_hub_hand_appearance">Mano</string>
+    <string name="identity_hub_hand_appearance_support">Elige la tuya</string>
+    <string name="identity_hub_hand_appearance_dialog_title">Elige tu mano</string>
+    <string name="identity_hub_hand_appearance_confirm">Confirmar</string>
+    <string name="identity_hub_hand_choice_accessibility">Opción de mano %1$d</string>
     <string name="identity_hub_account_section">Cuenta</string>
     <string name="identity_hub_account_support">Gestiona el acceso y la identidad online</string>
     <string name="identity_profile_sign_in">Iniciar sesión</string>

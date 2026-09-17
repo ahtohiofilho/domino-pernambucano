@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.ui.personalization.HandAppearanceTone
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenLayout
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoScreenScaffold
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
@@ -89,6 +90,8 @@ internal data class IdentityHubUiState(
     val tableName: String,
     val accountState: IdentityHubAccountState,
     val profilePhotoUri: String? = null,
+    val handAppearanceTone: HandAppearanceTone =
+        HandAppearanceTone.TONE_1,
 ) {
     val avatarLabel: String?
         get() = identityHubAvatarLabel(
@@ -547,9 +550,7 @@ internal fun IdentityHubScreen(
                     R.string.identity_hub_hand_appearance_support,
                 ),
                 icon = IdentityHubRowIcon.Personalization,
-                trailingText = stringResource(
-                    R.string.identity_hub_hand_appearance_pending,
-                ),
+
                 onClick = onHandAppearanceClick,
             )
 

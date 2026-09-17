@@ -55,6 +55,36 @@ fun buildOfflinePlayerTableCodes(
     return listOf(identity.tableCode) + botCodes
 }
 
+fun resolveLocalMatchPlayerIdentity(
+    accountConnected: Boolean,
+    connectedDisplayName: String,
+    connectedTableCode: String,
+    storedOfflineIdentity: OfflinePlayerIdentity?,
+): OfflinePlayerIdentity? {
+    if (accountConnected) {
+        val normalizedDisplayName =
+            normalizeOfflineDisplayName(
+                connectedDisplayName,
+            )
+        val normalizedTableCode =
+            normalizeOfflineTableCode(
+                connectedTableCode,
+            )
+
+        if (
+            normalizedDisplayName.isNotBlank() &&
+            isValidOfflineTableCode(normalizedTableCode)
+        ) {
+            return OfflinePlayerIdentity(
+                displayName = normalizedDisplayName,
+                tableCode = normalizedTableCode,
+            )
+        }
+    }
+
+    return storedOfflineIdentity
+}
+
 class SharedPreferencesOfflinePlayerIdentityStore(
     context: Context,
     private val preferencesName: String = OFFLINE_IDENTITY_PREFERENCES_NAME,
