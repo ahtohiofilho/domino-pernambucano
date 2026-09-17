@@ -171,6 +171,7 @@ fun OnlineAccountDialog(
     emailCodeRequested: Boolean = false,
     emailActionInProgress: Boolean = false,
     emailFeedbackMessage: String? = null,
+    profileOnly: Boolean = false,
     profileState: OnlineAccountProfileUiState,
     onPublicDisplayNameChange: (String) -> Unit,
     onTableNameChange: (String) -> Unit,
@@ -289,7 +290,11 @@ fun OnlineAccountDialog(
                     .semantics {
                         heading()
                     },
-                text = stringResource(R.string.account_title),
+                text = if (profileOnly) {
+                    stringResource(R.string.identity_hub_edit_profile)
+                } else {
+                    stringResource(R.string.account_title)
+                },
             )
         },
         text = {
@@ -298,7 +303,9 @@ fun OnlineAccountDialog(
                     MaterialTheme.dominoSpacing.sm,
                 ),
             ) {
-                Text(text = presentation.message)
+                if (!profileOnly) {
+                    Text(text = presentation.message)
+                }
 
                 visibleFeedbackMessage?.let { message ->
                     Text(
@@ -318,25 +325,28 @@ fun OnlineAccountDialog(
                     )
                 }
 
-                OnlineEmailAccountContent(
-                    status = status,
-                    emailAvailable = emailAvailable,
-                    emailAddress = emailAddress,
-                    emailCode = emailCode,
-                    emailIntent = emailIntent,
-                    emailCodeRequested = emailCodeRequested,
-                    actionInProgress = emailActionInProgress,
-                    onEmailAddressChange = onEmailAddressChange,
-                    onEmailCodeChange = onEmailCodeChange,
-                    onEmailStartLinkClick = onEmailStartLinkClick,
-                    onEmailStartRecoverClick =
-                        onEmailStartRecoverClick,
-                    onEmailConfirmCodeClick =
-                        onEmailConfirmCodeClick,
-                    onEmailResetClick = onEmailResetClick,
-                )
+                if (!profileOnly) {
+                    OnlineEmailAccountContent(
+                        status = status,
+                        emailAvailable = emailAvailable,
+                        emailAddress = emailAddress,
+                        emailCode = emailCode,
+                        emailIntent = emailIntent,
+                        emailCodeRequested = emailCodeRequested,
+                        actionInProgress = emailActionInProgress,
+                        onEmailAddressChange = onEmailAddressChange,
+                        onEmailCodeChange = onEmailCodeChange,
+                        onEmailStartLinkClick = onEmailStartLinkClick,
+                        onEmailStartRecoverClick =
+                            onEmailStartRecoverClick,
+                        onEmailConfirmCodeClick =
+                            onEmailConfirmCodeClick,
+                        onEmailResetClick = onEmailResetClick,
+                    )
+                }
 
                 if (
+                    !profileOnly &&
                     googleAvailable &&
                     emailAvailable &&
                     !emailCodeRequested &&

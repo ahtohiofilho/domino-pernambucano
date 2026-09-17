@@ -1,7 +1,9 @@
 package com.ahtohiofilho.dominopernambucano.ui.account
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class IdentityHubScreenPresentationTest {
@@ -152,6 +154,30 @@ class IdentityHubScreenPresentationTest {
     }
 
     @Test
+    fun only_connected_account_exposes_disconnect_action() {
+        assertTrue(
+            identityHubAccountSupportsDisconnect(
+                IdentityHubAccountState.CONNECTED,
+            ),
+        )
+        assertFalse(
+            identityHubAccountSupportsDisconnect(
+                IdentityHubAccountState.DISCONNECTED,
+            ),
+        )
+        assertFalse(
+            identityHubAccountSupportsDisconnect(
+                IdentityHubAccountState.RECOVERY_REQUIRED,
+            ),
+        )
+        assertFalse(
+            identityHubAccountSupportsDisconnect(
+                IdentityHubAccountState.UNAVAILABLE,
+            ),
+        )
+    }
+
+    @Test
     fun disconnected_state_hides_cached_identity_from_header() {
         val state = IdentityHubUiState(
             displayName = "Maria Silva",
@@ -188,5 +214,59 @@ class IdentityHubScreenPresentationTest {
         assertEquals("MS", state.headerAvatarLabel)
         assertEquals("Maria Silva", state.headerDisplayName)
         assertEquals("MAS", state.headerTableName)
+    }
+
+    @Test
+    fun connected_state_exposes_normalized_https_profile_photo() {
+        val state = IdentityHubUiState(
+            displayName = "Maria Silva",
+            tableName = "MAS",
+            accountState = IdentityHubAccountState.CONNECTED,
+            profilePhotoUri =
+                " https://example.test/profile.jpg ",
+        )
+
+        assertEquals(
+            "https://example.test/profile.jpg",
+            state.headerProfilePhotoUri,
+        )
+    }
+
+    @Test
+    fun disconnected_state_hides_cached_profile_photo() {
+        val state = IdentityHubUiState(
+            displayName = "Maria Silva",
+            tableName = "MAS",
+            accountState = IdentityHubAccountState.DISCONNECTED,
+            profilePhotoUri =
+                "https://example.test/profile.jpg",
+        )
+
+        assertNull(state.headerProfilePhotoUri)
+    }
+
+    @Test
+    fun profile_photo_accepts_only_https_remote_urls() {
+        assertEquals(
+            "https://example.test/profile.jpg",
+            identityHubUsableProfilePhotoUri(
+                " https://example.test/profile.jpg ",
+            ),
+        )
+        assertNull(
+            identityHubUsableProfilePhotoUri(
+                "http://example.test/profile.jpg",
+            ),
+        )
+        assertNull(
+            identityHubUsableProfilePhotoUri(
+                "file:///tmp/profile.jpg",
+            ),
+        )
+        assertNull(
+            identityHubUsableProfilePhotoUri(
+                "not a uri",
+            ),
+        )
     }
 }

@@ -103,6 +103,7 @@ fun MainMenuScreen(
     onlineEmailFeedbackMessage: String? = null,
     onlineAccountDisplayName: String? = null,
     onlineAccountTableName: String? = null,
+    onlineAccountProfilePhotoUri: String? = null,
     onProfileClick: () -> Unit = {},
     onlineAccountProfileUiState: OnlineAccountProfileUiState =
         OnlineAccountProfileUiState.NotAvailable,
@@ -441,6 +442,11 @@ fun MainMenuScreen(
         } else {
             null
         }
+        val profilePhotoUri = if (connectedProfile) {
+            onlineAccountProfilePhotoUri
+        } else {
+            null
+        }
         val profileLabel = when (onlineGoogleAccountStatus) {
             OnlineGoogleAccountStatus.CONNECTED ->
                 profileDisplayName
@@ -491,6 +497,7 @@ fun MainMenuScreen(
             IdentityAvatar(
                 label = profileAvatarLabel,
                 size = 38.dp,
+                profilePhotoUri = profilePhotoUri,
             )
 
             Spacer(

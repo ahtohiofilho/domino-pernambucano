@@ -127,7 +127,7 @@
     <string name="ranked_auth_invalid_email">Escribe un correo válido.</string>
     <string name="ranked_auth_invalid_password">La contraseña debe tener al menos 8 caracteres.</string>
     <string name="ranked_auth_invalid_code">Escribe el código de 6 dígitos enviado por correo.</string>
-    <string name="ranked_auth_invalid_credentials">El correo o la contraseña son incorrectos.</string>
+    <string name="ranked_auth_invalid_credentials">Correo electrónico o contraseña incorrectos. Si usas esta cuenta con Google y nunca creaste una contraseña, usa Continuar con Google.</string>
     <string name="ranked_auth_account_exists">Ya existe una cuenta con este correo. Entra o recupera tu contraseña.</string>
     <string name="ranked_auth_account_not_found">No encontramos una cuenta para este correo.</string>
     <string name="ranked_auth_rate_limited">Demasiados intentos en poco tiempo. Espera e inténtalo de nuevo.</string>
@@ -502,4 +502,9 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="identity_hub_account_signed_out_support">Aún no has iniciado sesión en una cuenta.</string>
     <string name="identity_hub_account_recovery_support">Tu cuenta necesita recuperación.</string>
     <string name="identity_hub_account_heading">Tu cuenta</string>
+    <string name="identity_hub_disconnect_confirm_title">¿Desconectar la cuenta?</string>
+    <string name="identity_hub_disconnect_confirm_body">Tu perfil y tu historial en línea se conservarán. Podrás conectar la cuenta nuevamente cuando quieras.</string>
+    <string name="identity_hub_disconnect_confirm_action">Desconectar</string>
+    <string name="identity_hub_disconnect_cancel">Cancelar</string>
+    <string name="identity_hub_disconnect_failed">No fue posible desconectar la cuenta ahora. Inténtalo de nuevo.</string>
 </resources>

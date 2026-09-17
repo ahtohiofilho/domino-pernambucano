@@ -2,12 +2,14 @@ package com.ahtohiofilho.dominopernambucano.ui.account
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -15,16 +17,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -69,10 +78,17 @@ internal enum class IdentityHubAccountState {
     RECOVERY_REQUIRED,
 }
 
+internal fun identityHubAccountSupportsDisconnect(
+    state: IdentityHubAccountState,
+): Boolean {
+    return state == IdentityHubAccountState.CONNECTED
+}
+
 internal data class IdentityHubUiState(
     val displayName: String,
     val tableName: String,
     val accountState: IdentityHubAccountState,
+    val profilePhotoUri: String? = null,
 ) {
     val avatarLabel: String?
         get() = identityHubAvatarLabel(
@@ -92,6 +108,13 @@ internal data class IdentityHubUiState(
             tableName = tableName,
         )
 
+    val headerProfilePhotoUri: String?
+        get() = identityHubUsableProfilePhotoUri(
+            profilePhotoUri,
+        ).takeIf {
+            accountState == IdentityHubAccountState.CONNECTED
+        }
+
     val headerAvatarLabel: String?
         get() = avatarLabel.takeIf {
             accountState == IdentityHubAccountState.CONNECTED
@@ -109,7 +132,7 @@ internal data class IdentityHubUiState(
 }
 
 /**
- * Compact avatar fallback used until photo support arrives in C35.D.
+ * Compact avatar fallback used whenever a profile photo is absent or fails.
  *
  * When a meaningful personal name has at least two significant words, the
  * avatar uses the first and last meaningful initials (for example, Antônio
@@ -265,7 +288,11 @@ internal fun IdentityAvatar(
     label: String?,
     size: Dp,
     modifier: Modifier = Modifier,
+    profilePhotoUri: String? = null,
 ) {
+    val profilePhotoBitmap =
+        rememberIdentityProfilePhotoBitmap(profilePhotoUri)
+
     Surface(
         modifier = modifier.size(size),
         shape = CircleShape,
@@ -279,7 +306,14 @@ internal fun IdentityAvatar(
         Box(
             contentAlignment = Alignment.Center,
         ) {
-            if (!label.isNullOrBlank()) {
+            if (profilePhotoBitmap != null) {
+                Image(
+                    bitmap = profilePhotoBitmap,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else if (!label.isNullOrBlank()) {
                 Text(
                     text = label.take(2),
                     style = if (size >= 64.dp) {
@@ -347,8 +381,15 @@ internal fun IdentityHubScreen(
     state: IdentityHubUiState,
     onBackClick: () -> Unit,
     onManageProfileClick: () -> Unit,
+    onDisconnectClick: () -> Boolean,
     onHandAppearanceClick: (() -> Unit)? = null,
 ) {
+    var disconnectConfirmationVisible by remember {
+        mutableStateOf(false)
+    }
+    var disconnectConfirmationFailed by remember {
+        mutableStateOf(false)
+    }
     val profileActionTitle = when (state.accountState) {
         IdentityHubAccountState.CONNECTED ->
             stringResource(R.string.identity_hub_edit_profile)
@@ -383,9 +424,14 @@ internal fun IdentityHubScreen(
             stringResource(R.string.identity_hub_account_signed_out_support)
     }
     val accountAction = if (
-        state.accountState == IdentityHubAccountState.CONNECTED
+        identityHubAccountSupportsDisconnect(
+            state.accountState,
+        )
     ) {
-        onManageProfileClick
+        {
+            disconnectConfirmationFailed = false
+            disconnectConfirmationVisible = true
+        }
     } else {
         null
     }
@@ -420,6 +466,8 @@ internal fun IdentityHubScreen(
                 modifier = Modifier.testTag(
                     IdentityHubAvatarTag,
                 ),
+                profilePhotoUri =
+                    state.headerProfilePhotoUri,
             )
 
             Text(
@@ -523,6 +571,72 @@ internal fun IdentityHubScreen(
                 onClick = accountAction,
             )
         }
+    }
+
+    if (disconnectConfirmationVisible) {
+        AlertDialog(
+            onDismissRequest = {
+                disconnectConfirmationVisible = false
+                disconnectConfirmationFailed = false
+            },
+            title = {
+                Text(
+                    text = stringResource(
+                        R.string.identity_hub_disconnect_confirm_title,
+                    ),
+                )
+            },
+            text = {
+                Text(
+                    text = if (disconnectConfirmationFailed) {
+                        stringResource(
+                            R.string.identity_hub_disconnect_failed,
+                        )
+                    } else {
+                        stringResource(
+                            R.string.identity_hub_disconnect_confirm_body,
+                        )
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (onDisconnectClick()) {
+                            disconnectConfirmationVisible = false
+                            disconnectConfirmationFailed = false
+                        } else {
+                            disconnectConfirmationFailed = true
+                        }
+                    },
+                ) {
+                    Text(
+                        text = stringResource(
+                            R.string.identity_hub_disconnect_confirm_action,
+                        ),
+                        color = DominoSemanticColors.dialogAction,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        disconnectConfirmationVisible = false
+                        disconnectConfirmationFailed = false
+                    },
+                ) {
+                    Text(
+                        text = stringResource(
+                            R.string.identity_hub_disconnect_cancel,
+                        ),
+                        color = DominoSemanticColors.dialogDismissAction,
+                    )
+                }
+            },
+            containerColor = DominoSemanticColors.dialogSurface,
+            titleContentColor = DominoSemanticColors.dialogTitle,
+            textContentColor = DominoSemanticColors.dialogBody,
+        )
     }
 }
 

@@ -127,7 +127,7 @@
     <string name="ranked_auth_invalid_email">Enter a valid email address.</string>
     <string name="ranked_auth_invalid_password">Password must have at least 8 characters.</string>
     <string name="ranked_auth_invalid_code">Enter the 6-digit code sent by email.</string>
-    <string name="ranked_auth_invalid_credentials">Email or password is incorrect.</string>
+    <string name="ranked_auth_invalid_credentials">Incorrect email or password. If you use this account with Google and never created a password, use Continue with Google.</string>
     <string name="ranked_auth_account_exists">An account already exists for this email. Sign in or reset your password.</string>
     <string name="ranked_auth_account_not_found">We could not find an account for this email.</string>
     <string name="ranked_auth_rate_limited">Too many attempts in a short time. Wait and try again.</string>
@@ -502,4 +502,9 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="identity_hub_account_signed_out_support">You are not signed in to an account yet.</string>
     <string name="identity_hub_account_recovery_support">Your account needs recovery.</string>
     <string name="identity_hub_account_heading">Your account</string>
+    <string name="identity_hub_disconnect_confirm_title">Disconnect account?</string>
+    <string name="identity_hub_disconnect_confirm_body">Your online profile and history will be preserved. You can connect the account again whenever you want.</string>
+    <string name="identity_hub_disconnect_confirm_action">Disconnect</string>
+    <string name="identity_hub_disconnect_cancel">Cancel</string>
+    <string name="identity_hub_disconnect_failed">Your account could not be disconnected right now. Please try again.</string>
 </resources>

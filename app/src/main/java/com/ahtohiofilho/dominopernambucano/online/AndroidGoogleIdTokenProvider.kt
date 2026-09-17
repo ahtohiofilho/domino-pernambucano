@@ -12,10 +12,30 @@ import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 
+data class GoogleIdentityCredential(
+    val idToken: String,
+    val profilePictureUri: String? = null,
+)
+
 interface GoogleIdTokenProvider {
     suspend fun requestIdToken(): String
 
     suspend fun requestAuthorizedIdTokenOrNull(): String? = null
+
+    suspend fun requestIdentityCredential(): GoogleIdentityCredential {
+        return GoogleIdentityCredential(
+            idToken = requestIdToken(),
+        )
+    }
+
+    suspend fun requestAuthorizedIdentityCredentialOrNull():
+        GoogleIdentityCredential? {
+        return requestAuthorizedIdTokenOrNull()?.let { idToken ->
+            GoogleIdentityCredential(
+                idToken = idToken,
+            )
+        }
+    }
 }
 
 class GoogleCredentialSelectionCancelledException(
@@ -36,6 +56,14 @@ class AndroidGoogleIdTokenProvider(
         CredentialManager.create(activityContext),
 ) : GoogleIdTokenProvider {
     override suspend fun requestIdToken(): String {
+        return requestIdentityCredential().idToken
+    }
+
+    override suspend fun requestAuthorizedIdTokenOrNull(): String? {
+        return requestAuthorizedIdentityCredentialOrNull()?.idToken
+    }
+
+    override suspend fun requestIdentityCredential(): GoogleIdentityCredential {
         check(config.isConfigured) {
             "O login Google não está configurado neste build."
         }
@@ -48,13 +76,14 @@ class AndroidGoogleIdTokenProvider(
             .addCredentialOption(googleOption)
             .build()
 
-        return requestGoogleIdToken(
+        return requestGoogleIdentityCredential(
             request = request,
             noCredentialIsError = true,
         ) ?: throw GoogleCredentialUnavailableException()
     }
 
-    override suspend fun requestAuthorizedIdTokenOrNull(): String? {
+    override suspend fun requestAuthorizedIdentityCredentialOrNull():
+        GoogleIdentityCredential? {
         if (!config.isConfigured) {
             return null
         }
@@ -69,16 +98,16 @@ class AndroidGoogleIdTokenProvider(
             .addCredentialOption(googleOption)
             .build()
 
-        return requestGoogleIdToken(
+        return requestGoogleIdentityCredential(
             request = request,
             noCredentialIsError = false,
         )
     }
 
-    private suspend fun requestGoogleIdToken(
+    private suspend fun requestGoogleIdentityCredential(
         request: GetCredentialRequest,
         noCredentialIsError: Boolean,
-    ): String? {
+    ): GoogleIdentityCredential? {
         val response = try {
             credentialManager.getCredential(
                 context = activityContext,
@@ -129,13 +158,21 @@ class AndroidGoogleIdTokenProvider(
             }
         }
 
-        return googleCredential.idToken
+        val idToken = googleCredential.idToken
             .trim()
             .takeIf(String::isNotBlank)
-            ?: if (noCredentialIsError) {
+            ?: return if (noCredentialIsError) {
                 throw GoogleCredentialUnavailableException()
             } else {
                 null
             }
+
+        return GoogleIdentityCredential(
+            idToken = idToken,
+            profilePictureUri = googleCredential.profilePictureUri
+                ?.toString()
+                ?.trim()
+                ?.takeIf(String::isNotBlank),
+        )
     }
 }

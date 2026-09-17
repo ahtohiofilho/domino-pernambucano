@@ -31,6 +31,8 @@ class OnlineGoogleAccountManager(
     private val googleIdentityRepository: OnlineGoogleIdentityRepository?,
     private val sessionCredentialRepository:
         OnlineSessionCredentialRepository,
+    private val profileEnrichmentStore:
+        OnlineProfileEnrichmentStore? = null,
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
@@ -96,11 +98,20 @@ class OnlineGoogleAccountManager(
 
         return try {
             withTimeoutOrNull(connectionTimeoutMillis) {
-                val idToken = tokenProvider
-                    .requestAuthorizedIdTokenOrNull()
+                val googleCredential = tokenProvider
+                    .requestAuthorizedIdentityCredentialOrNull()
                     ?: return@withTimeoutOrNull false
 
-                identityRepository.recoverGoogleAccount(idToken)
+                val accountCredential =
+                    identityRepository.recoverGoogleAccount(
+                        googleCredential.idToken,
+                    )
+
+                persistGoogleProfileEnrichment(
+                    googleCredential = googleCredential,
+                    accountCredential = accountCredential,
+                )
+
                 currentStatus() == OnlineGoogleAccountStatus.CONNECTED
             } ?: false
         } catch (error: CancellationException) {
@@ -122,8 +133,19 @@ class OnlineGoogleAccountManager(
 
         return try {
             val connected = withTimeoutOrNull(connectionTimeoutMillis) {
-                val idToken = tokenProvider.requestIdToken()
-                identityRepository.connectGoogleIdentity(idToken)
+                val googleCredential =
+                    tokenProvider.requestIdentityCredential()
+
+                val accountCredential =
+                    identityRepository.connectGoogleIdentity(
+                        googleCredential.idToken,
+                    )
+
+                persistGoogleProfileEnrichment(
+                    googleCredential = googleCredential,
+                    accountCredential = accountCredential,
+                )
+
                 true
             } ?: false
 
@@ -153,6 +175,41 @@ class OnlineGoogleAccountManager(
             OnlineGoogleAccountActionResult.Failure(
                 message = "Não foi possível conectar sua conta agora. Tente novamente.",
             )
+        }
+    }
+
+    private fun persistGoogleProfileEnrichment(
+        googleCredential: GoogleIdentityCredential,
+        accountCredential: OnlineSessionCredential,
+    ) {
+        val store = profileEnrichmentStore ?: return
+
+        if (accountCredential.sessionKind != OnlineSessionKind.ACCOUNT) {
+            return
+        }
+
+        val accountId = accountCredential.accountId
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+            ?: return
+
+        val playerId = accountCredential.playerId
+            .trim()
+            .takeIf(String::isNotBlank)
+            ?: return
+
+        try {
+            store.writeGoogleProfile(
+                accountId = accountId,
+                playerId = playerId,
+                profilePhotoUri = googleCredential.profilePictureUri,
+            )
+        } catch (_: Throwable) {
+            /*
+             * Profile enrichment is deliberately non-authoritative.
+             * A local photo-cache failure must never turn successful
+             * authentication into an authentication failure.
+             */
         }
     }
 }

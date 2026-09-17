@@ -49,6 +49,7 @@ import com.ahtohiofilho.dominopernambucano.online.normalizeOnlinePublicDisplayNa
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineSessionCredentialStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineParticipationBindingStore
 import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlinePlayerIdentityStore
+import com.ahtohiofilho.dominopernambucano.online.SharedPreferencesOnlineProfileEnrichmentStore
 import com.ahtohiofilho.dominopernambucano.online.observability.AndroidLogcatOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.CompositeOnlineTraceSink
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceBatchUploader
@@ -69,6 +70,7 @@ import com.ahtohiofilho.dominopernambucano.ui.account.accountManagementIdentityH
 import com.ahtohiofilho.dominopernambucano.ui.account.mainMenuProfileIdentityHubRequest
 import com.ahtohiofilho.dominopernambucano.ui.account.rankedIdentityHubRequest
 import com.ahtohiofilho.dominopernambucano.ui.account.surface
+import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountDialog
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiCoordinator
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileStrings
 import com.ahtohiofilho.dominopernambucano.ui.account.OnlineAccountProfileUiState
@@ -256,6 +258,10 @@ fun DominoPernambucanoApp(
         mutableStateOf(false)
     }
 
+    var identityHubProfileDialogVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+
     var accountDialogReturnsToPlayMode by rememberSaveable {
         mutableStateOf(false)
     }
@@ -375,11 +381,20 @@ fun DominoPernambucanoApp(
         )
     }
 
+    val onlineProfileEnrichmentStore = remember(
+        context.applicationContext,
+    ) {
+        SharedPreferencesOnlineProfileEnrichmentStore(
+            context = context.applicationContext,
+        )
+    }
+
     val onlineGoogleAccountManager = remember(
         context,
         googleSignInConfig,
         googleIdentityApiClient,
         onlineSessionCredentialRepository,
+        onlineProfileEnrichmentStore,
     ) {
         val googleIdentityRepository = googleIdentityApiClient?.let {
                 apiClient ->
@@ -410,6 +425,8 @@ fun DominoPernambucanoApp(
             googleIdentityRepository = googleIdentityRepository,
             sessionCredentialRepository =
                 onlineSessionCredentialRepository,
+            profileEnrichmentStore =
+                onlineProfileEnrichmentStore,
         )
     }
 
@@ -650,16 +667,41 @@ fun DominoPernambucanoApp(
         )
     }
 
-    val onlineGoogleAccountStatus =
+    var onlineAccountSessionRevision by remember {
+        mutableStateOf(0)
+    }
+
+    val onlineGoogleAccountStatus = run {
+        /*
+         * The credential repository is intentionally not Compose State.
+         * Reading this revision makes explicit local session changes trigger
+         * a fresh account-status/photo derivation without changing storage.
+         */
+        onlineAccountSessionRevision
+
         if (onlineEmailAccountManager.isAvailable) {
             onlineEmailAccountManager.currentStatus()
         } else {
             onlineGoogleAccountManager.currentStatus()
         }
+    }
 
     val onlineAccountConnected =
         onlineGoogleAccountStatus ==
             OnlineGoogleAccountStatus.CONNECTED
+
+    val onlineProfilePhotoUri =
+        if (onlineAccountConnected) {
+            onlineProfileEnrichmentStore
+                .read()
+                .googleProfilePhotoUriFor(
+                    credential =
+                        onlineSessionCredentialRepository
+                            .getStoredCredentialOrNull(),
+                )
+        } else {
+            null
+        }
 
     fun requestOnlineAccountProfile() {
         val coordinator = onlineAccountProfileUiCoordinator
@@ -1198,15 +1240,23 @@ fun DominoPernambucanoApp(
                     onAuthenticated = {
                         when (activeIdentityHubRequest.returnIntent) {
                             IdentityHubReturnIntent.MAIN_MENU -> {
+                                /*
+                                 * Password authentication mutates the session
+                                 * repository outside Compose state.
+                                 */
+                                onlineAccountSessionRevision += 1
                                 launchAccountProfileSyncAfterAuthentication(
                                     scope = menuCoroutineScope,
                                 ) {
                                     synchronizeOnlineAccountProfileAfterAuthentication()
                                 }
-                                identityHubLaunchRequest = null
+                                identityHubLaunchRequest =
+                                    activeIdentityHubRequest
+                                        .afterAuthentication()
+                                identityHubProfileDialogVisible = false
                                 rankedAccountEntryMode =
                                     RankedAccountEntryMode.SIGN_IN
-                                openAccountDialogOnNextMainMenu = true
+                                openAccountDialogOnNextMainMenu = false
                             }
 
                             IdentityHubReturnIntent.RESUME_RANKED_ENTRY -> {
@@ -1221,11 +1271,15 @@ fun DominoPernambucanoApp(
                                     activeIdentityHubRequest.returnIntent
                                 ) {
                                     IdentityHubReturnIntent.MAIN_MENU -> {
-                                        identityHubLaunchRequest = null
+                                        identityHubLaunchRequest =
+                                            activeIdentityHubRequest
+                                                .afterAuthentication()
+                                        identityHubProfileDialogVisible =
+                                            false
                                         rankedAccountEntryMode =
                                             RankedAccountEntryMode.SIGN_IN
                                         openAccountDialogOnNextMainMenu =
-                                            true
+                                            false
                                     }
 
                                     IdentityHubReturnIntent.RESUME_RANKED_ENTRY -> {
@@ -1282,8 +1336,11 @@ fun DominoPernambucanoApp(
                             OnlineGoogleAccountStatus.RECOVERY_REQUIRED ->
                                 IdentityHubAccountState.RECOVERY_REQUIRED
                         },
+                        profilePhotoUri =
+                            onlineProfilePhotoUri,
                     ),
                     onBackClick = {
+                        identityHubProfileDialogVisible = false
                         identityHubLaunchRequest = null
                     },
                     onManageProfileClick = {
@@ -1291,8 +1348,9 @@ fun DominoPernambucanoApp(
 
                         when (onlineGoogleAccountStatus) {
                             OnlineGoogleAccountStatus.CONNECTED -> {
-                                identityHubLaunchRequest = null
-                                openAccountDialogOnNextMainMenu = true
+                                requestOnlineAccountProfile()
+                                identityHubProfileDialogVisible = true
+                                openAccountDialogOnNextMainMenu = false
                             }
 
                             OnlineGoogleAccountStatus.UNAVAILABLE,
@@ -1307,7 +1365,120 @@ fun DominoPernambucanoApp(
                             }
                         }
                     },
+                    onDisconnectClick = {
+                        val cleared =
+                            onlineSessionCredentialRepository.clear()
+
+                        if (cleared) {
+                            identityHubProfileDialogVisible = false
+                            onlineAccountSessionRevision += 1
+                            onlineAccountProfileUiState =
+                                OnlineAccountProfileUiState.NotAvailable
+                            onlineGoogleAccountFeedbackMessage = null
+                            onlineEmailFeedbackMessage = null
+                            onlineEmailAddress = ""
+                            onlineEmailCode = ""
+                            onlineEmailIntent = null
+                            onlineEmailCodeRequested = false
+                            openAccountDialogOnNextMainMenu = false
+                            accountDialogReturnsToPlayMode = false
+                            rankedAccountEntryMode =
+                                RankedAccountEntryMode.SIGN_IN
+                        }
+
+                        cleared
+                    },
                 )
+
+                if (
+                    identityHubProfileDialogVisible &&
+                    onlineGoogleAccountStatus ==
+                        OnlineGoogleAccountStatus.CONNECTED
+                ) {
+                    OnlineAccountDialog(
+                        status = onlineGoogleAccountStatus,
+                        actionInProgress =
+                            onlineGoogleAccountActionInProgress,
+                        feedbackMessage =
+                            onlineGoogleAccountFeedbackMessage,
+                        googleAvailable =
+                            googleSignInConfig.isConfigured &&
+                                googleIdentityApiClient != null,
+                        profileOnly = true,
+                        profileState =
+                            onlineAccountProfileUiState,
+                        onPublicDisplayNameChange = {
+                                publicDisplayName ->
+                            val editor =
+                                onlineAccountProfileUiState as?
+                                    OnlineAccountProfileUiState.Editing
+
+                            if (editor != null) {
+                                onlineAccountProfileUiState =
+                                    editor.withPublicDisplayName(
+                                        value = publicDisplayName,
+                                    )
+                            }
+                        },
+                        onTableNameChange = { tableName ->
+                            val editor =
+                                onlineAccountProfileUiState as?
+                                    OnlineAccountProfileUiState.Editing
+
+                            if (editor != null) {
+                                onlineAccountProfileUiState =
+                                    editor.withTableName(
+                                        value = tableName,
+                                    )
+                            }
+                        },
+                        onSaveProfileClick = {
+                            val editor =
+                                onlineAccountProfileUiState as?
+                                    OnlineAccountProfileUiState.Editing
+                            val coordinator =
+                                onlineAccountProfileUiCoordinator
+
+                            if (
+                                editor != null &&
+                                coordinator != null &&
+                                editor.saveEnabled
+                            ) {
+                                onlineAccountProfileUiState =
+                                    editor.copy(
+                                        actionInProgress = true,
+                                        feedbackMessage = null,
+                                    )
+
+                                menuCoroutineScope.launch {
+                                    val outcome =
+                                        coordinator.save(editor)
+
+                                    onlineAccountProfileUiState =
+                                        outcome.state
+
+                                    outcome.synchronizedIdentity?.let {
+                                            synchronizedIdentity ->
+                                        onlinePlayerIdentity =
+                                            synchronizedIdentity
+                                    }
+
+                                    if (outcome.state.saveSucceeded) {
+                                        identityHubProfileDialogVisible =
+                                            false
+                                    }
+                                }
+                            }
+                        },
+                        onRetryProfileClick = {
+                            requestOnlineAccountProfile()
+                        },
+                        onConnectGoogleClick = {},
+                        onDismissRequest = {
+                            identityHubProfileDialogVisible = false
+                        },
+                    )
+                }
             }
         }
 
@@ -1409,6 +1580,8 @@ fun DominoPernambucanoApp(
                     onlinePlayerIdentity.displayName,
                 onlineAccountTableName =
                     onlinePlayerIdentity.tableName,
+                onlineAccountProfilePhotoUri =
+                    onlineProfilePhotoUri,
                 onProfileClick = {
                     identityHubLaunchRequest =
                         mainMenuProfileIdentityHubRequest()

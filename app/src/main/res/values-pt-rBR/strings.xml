@@ -466,7 +466,7 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="ranked_auth_invalid_email">Informe um e-mail válido.</string>
     <string name="ranked_auth_invalid_password">A senha deve ter pelo menos 8 caracteres.</string>
     <string name="ranked_auth_invalid_code">Informe o código de 6 dígitos enviado por e-mail.</string>
-    <string name="ranked_auth_invalid_credentials">E-mail ou senha incorretos.</string>
+    <string name="ranked_auth_invalid_credentials">E-mail ou senha incorretos. Se você usa esta conta pelo Google e nunca criou uma senha, use Continuar com Google.</string>
     <string name="ranked_auth_account_exists">Já existe uma conta com este e-mail. Entre ou recupere sua senha.</string>
     <string name="ranked_auth_account_not_found">Não encontramos uma conta para este e-mail.</string>
     <string name="ranked_auth_rate_limited">Muitas tentativas em pouco tempo. Aguarde e tente novamente.</string>
@@ -506,4 +506,9 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="identity_hub_account_signed_out_support">Você ainda não entrou em uma conta.</string>
     <string name="identity_hub_account_recovery_support">Sua conta precisa de recuperação.</string>
     <string name="identity_hub_account_heading">Sua conta</string>
+    <string name="identity_hub_disconnect_confirm_title">Desconectar conta?</string>
+    <string name="identity_hub_disconnect_confirm_body">Seu perfil e seu histórico online serão preservados. Você poderá conectar a conta novamente quando quiser.</string>
+    <string name="identity_hub_disconnect_confirm_action">Desconectar</string>
+    <string name="identity_hub_disconnect_cancel">Cancelar</string>
+    <string name="identity_hub_disconnect_failed">Não foi possível desconectar a conta agora. Tente novamente.</string>
 </resources>
