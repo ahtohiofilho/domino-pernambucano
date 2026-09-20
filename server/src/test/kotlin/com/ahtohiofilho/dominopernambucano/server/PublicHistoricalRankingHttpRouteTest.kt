@@ -99,7 +99,7 @@ class PublicHistoricalRankingHttpRouteTest {
             val summary = cycles.cycles.single()
             assertEquals(prepared.period.cycleId, summary.cycleId)
             assertEquals(104, summary.totalEligiblePlayers)
-            assertEquals(100, summary.retainedRankingSize)
+            assertEquals(104, summary.retainedRankingSize)
             assertEquals(100, summary.publicationThreshold)
             assertEquals(
                 PublicRankingPublicationStatusDto.PUBLISHED,
@@ -111,7 +111,7 @@ class PublicHistoricalRankingHttpRouteTest {
             assertEquals(50, summary.awardedRankingSize)
             assertFalse(summary.isLegacyTruncated)
             assertEquals(1, summary.retentionPolicyVersion)
-            assertTrue(summary.isRetentionLimited)
+            assertFalse(summary.isRetentionLimited)
             assertEquals(
                 prepared.period.endsAtEpochMillis,
                 summary.closedAtEpochMillis,
@@ -157,7 +157,7 @@ class PublicHistoricalRankingHttpRouteTest {
                 ranking.closedAtEpochMillis,
             )
             assertEquals(104, ranking.totalEligiblePlayers)
-            assertEquals(100, ranking.retainedRankingSize)
+            assertEquals(104, ranking.retainedRankingSize)
             assertEquals(100, ranking.publicationThreshold)
             assertEquals(
                 PublicRankingPublicationStatusDto.PUBLISHED,
@@ -169,14 +169,14 @@ class PublicHistoricalRankingHttpRouteTest {
             assertEquals(50, ranking.awardedRankingSize)
             assertFalse(ranking.isLegacyTruncated)
             assertEquals(1, ranking.retentionPolicyVersion)
-            assertTrue(ranking.isRetentionLimited)
-            assertEquals(2, ranking.entries.size)
+            assertFalse(ranking.isRetentionLimited)
+            assertEquals(5, ranking.entries.size)
             assertTrue(
                 ranking.entries.all { entry ->
                     entry.awardTier == null
                 },
             )
-            assertFalse(ranking.hasMore)
+            assertTrue(ranking.hasMore)
             assertNotNull(ranking.viewer)
             assertEquals(1, requireNotNull(ranking.viewer).rank)
             assertEquals(

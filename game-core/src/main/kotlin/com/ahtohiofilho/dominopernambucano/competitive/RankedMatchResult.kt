@@ -8,11 +8,11 @@ const val RANKING_RULE_VERSION_V1 = 1
 const val RANKING_RULE_VERSION_V2 = 2
 
 /*
- * O V2 permanece preparado, mas ainda não é ativado como regra corrente
- * neste subciclo. A ativação só acontece depois da migração de
- * persistência/API/histórico.
+ * O V2 é a regra corrente a partir do corte competitivo C39.C.
+ * O V1 continua suportado para partidas iniciadas antes do corte e para
+ * consulta/materialização do histórico legado.
  */
-const val CURRENT_RANKING_RULE_VERSION = RANKING_RULE_VERSION_V1
+const val CURRENT_RANKING_RULE_VERSION = RANKING_RULE_VERSION_V2
 
 @Serializable
 enum class RankedMatchClassification {

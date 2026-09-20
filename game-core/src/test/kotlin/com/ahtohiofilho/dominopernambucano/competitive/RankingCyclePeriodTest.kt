@@ -26,7 +26,7 @@ class RankingCyclePeriodTest {
         )
 
         assertEquals(
-            "ranking-v1:daily:2026-07-25",
+            "ranking-v$CURRENT_RANKING_RULE_VERSION:daily:2026-07-25",
             period.cycleId,
         )
         assertEquals(
@@ -57,7 +57,7 @@ class RankingCyclePeriodTest {
         )
 
         assertEquals(
-            "ranking-v1:weekly:2026-07-20",
+            "ranking-v$CURRENT_RANKING_RULE_VERSION:weekly:2026-07-20",
             period.cycleId,
         )
         assertEquals(
@@ -75,7 +75,7 @@ class RankingCyclePeriodTest {
         )
 
         assertEquals(
-            "ranking-v1:weekly:2026-07-27",
+            "ranking-v$CURRENT_RANKING_RULE_VERSION:weekly:2026-07-27",
             nextMonday.cycleId,
         )
     }
@@ -102,7 +102,7 @@ class RankingCyclePeriodTest {
         )
 
         assertEquals(
-            "ranking-v1:monthly:2026-12",
+            "ranking-v$CURRENT_RANKING_RULE_VERSION:monthly:2026-12",
             monthly.cycleId,
         )
         assertEquals(
@@ -110,7 +110,7 @@ class RankingCyclePeriodTest {
             monthly.endsAtEpochMillis,
         )
         assertEquals(
-            "ranking-v1:annual:2026",
+            "ranking-v$CURRENT_RANKING_RULE_VERSION:annual:2026",
             annual.cycleId,
         )
         assertEquals(

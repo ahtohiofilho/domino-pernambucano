@@ -28,7 +28,7 @@ import org.junit.Test
 
 class OnlineServerRankedCycleSnapshotTest {
     @Test
-    fun closed_daily_cycle_is_materialized_once_with_versioned_top_n() {
+    fun closed_daily_v2_cycle_preserves_ties_across_top_n_boundary() {
         val day = epochMillis(
             year = 2026,
             month = 7,
@@ -74,7 +74,7 @@ class OnlineServerRankedCycleSnapshotTest {
             snapshot.totalEligiblePlayers,
         )
         assertEquals(
-            100,
+            results.size * 4,
             snapshot.retainedRankingSize,
         )
         assertEquals(
@@ -82,14 +82,26 @@ class OnlineServerRankedCycleSnapshotTest {
             snapshot.standings.size,
         )
         assertEquals(
-            (1..100).toList(),
-            snapshot.standings.map { standing ->
-                standing.rank
+            listOf(1, 53),
+            snapshot.standings
+                .map { standing -> standing.rank }
+                .distinct(),
+        )
+        assertEquals(
+            results.size * 2,
+            snapshot.standings.count { standing ->
+                standing.rank == 1
             },
         )
-        assertFalse(snapshot.hasCompleteStandings)
+        assertEquals(
+            results.size * 2,
+            snapshot.standings.count { standing ->
+                standing.rank == 53
+            },
+        )
+        assertTrue(snapshot.hasCompleteStandings)
         assertFalse(snapshot.isLegacyTruncated)
-        assertTrue(snapshot.isRetentionLimited)
+        assertFalse(snapshot.isRetentionLimited)
         assertEquals(
             CURRENT_RANKING_RETENTION_POLICY_VERSION,
             snapshot.retentionPolicyVersion,

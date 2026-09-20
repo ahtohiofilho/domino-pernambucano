@@ -106,7 +106,7 @@ class RankedCycleLadderTest {
         val otherVersion = result(
             matchId = "other-version",
             completedAtEpochMillis = included.completedAtEpochMillis,
-            rankingRuleVersion = 2,
+            rankingRuleVersion = RANKING_RULE_VERSION_V1,
         )
 
         val ladder = buildRankedCycleLadder(

@@ -1,6 +1,8 @@
 package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.CURRENT_RANKING_RULE_VERSION
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerResult
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
@@ -75,6 +77,73 @@ class OnlineServerRankedCycleLadderQueryTest {
         )
     }
 
+    @Test
+    fun current_v2_ladder_starts_fresh_while_v1_results_remain_preserved() {
+        val day = epochMillis(
+            year = 2026,
+            month = 9,
+            day = 20,
+            hour = 12,
+        )
+        val legacyV1 = result(
+            matchId = "legacy-v1",
+            completedAtEpochMillis = day,
+            rankingRuleVersion = RANKING_RULE_VERSION_V1,
+        )
+        val freshV2 = result(
+            matchId = "fresh-v2",
+            completedAtEpochMillis = day,
+            rankingRuleVersion = RANKING_RULE_VERSION_V2,
+        )
+        val store = InMemoryOnlineServerStore()
+
+        store.restorePersistentState(
+            OnlineServerStoreState(
+                rankedResults = listOf(
+                    legacyV1,
+                    freshV2,
+                ),
+            ),
+        )
+
+        val authoritativeStore: OnlineServerStore = store
+        val currentLadder = authoritativeStore.getRankedCycleLadder(
+            kind = RankingCycleKind.DAILY,
+            completedAtEpochMillis = day,
+        )
+        val legacyLadder = authoritativeStore.getRankedCycleLadder(
+            kind = RankingCycleKind.DAILY,
+            completedAtEpochMillis = day,
+            rankingRuleVersion = RANKING_RULE_VERSION_V1,
+        )
+
+        assertEquals(
+            RANKING_RULE_VERSION_V2,
+            CURRENT_RANKING_RULE_VERSION,
+        )
+        assertEquals(
+            RANKING_RULE_VERSION_V2,
+            currentLadder.period.rankingRuleVersion,
+        )
+        assertEquals(1, currentLadder.resultCount)
+
+        assertEquals(
+            RANKING_RULE_VERSION_V1,
+            legacyLadder.period.rankingRuleVersion,
+        )
+        assertEquals(1, legacyLadder.resultCount)
+
+        assertEquals(
+            setOf(
+                createRankedMatchResultId("legacy-v1"),
+                createRankedMatchResultId("fresh-v2"),
+            ),
+            store.snapshotPersistentState()
+                .rankedResults
+                .map { rankedResult -> rankedResult.resultId }
+                .toSet(),
+        )
+    }
     @Test
     fun persistent_query_is_read_only_and_matches_in_memory_semantics() {
         val root = temporaryRoot()

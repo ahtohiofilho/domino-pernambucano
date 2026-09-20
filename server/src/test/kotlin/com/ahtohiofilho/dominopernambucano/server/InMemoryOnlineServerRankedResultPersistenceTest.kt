@@ -121,7 +121,29 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
     }
 
     @Test
-    fun restored_ranked_match_materializes_result_with_frozen_rule_version() {
+    fun new_ranked_match_freezes_current_v2_rule_version() {
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+        val room = startFourHumanMatch(
+            store = store,
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+        )
+        val matchId = requireNotNull(room.matchId)
+
+        assertEquals(
+            RANKING_RULE_VERSION_V2,
+            store.snapshotPersistentState()
+                .matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .rankingRuleVersion,
+        )
+    }
+
+    @Test
+    fun restored_legacy_v1_match_finishes_as_v1_after_v2_activation() {
         val originalStore = InMemoryOnlineServerStore(
             nowEpochMillis = { 1_000L },
         )
@@ -130,23 +152,23 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
             matchMode = DominoMatchMode.PUBLIC_RANKED,
         )
         val matchId = requireNotNull(room.matchId)
-        val originalState = originalStore.snapshotPersistentState()
+        val currentState = originalStore.snapshotPersistentState()
 
         assertEquals(
-            RANKING_RULE_VERSION_V1,
-            originalState.matches
+            RANKING_RULE_VERSION_V2,
+            currentState.matches
                 .single { storedMatch ->
                     storedMatch.matchId == matchId
                 }
                 .rankingRuleVersion,
         )
 
-        val simulatedFutureV2State = originalState.copy(
-            matches = originalState.matches.map { storedMatch ->
+        val simulatedPreCutoverV1State = currentState.copy(
+            matches = currentState.matches.map { storedMatch ->
                 if (storedMatch.matchId == matchId) {
                     storedMatch.copy(
                         rankingRuleVersion =
-                            RANKING_RULE_VERSION_V2,
+                            RANKING_RULE_VERSION_V1,
                     )
                 } else {
                     storedMatch
@@ -158,11 +180,11 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
         )
 
         restartedStore.restorePersistentState(
-            simulatedFutureV2State,
+            simulatedPreCutoverV1State,
         )
 
         assertEquals(
-            RANKING_RULE_VERSION_V2,
+            RANKING_RULE_VERSION_V1,
             restartedStore.snapshotPersistentState()
                 .matches
                 .single { storedMatch ->
@@ -178,7 +200,7 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
         )
 
         assertEquals(
-            RANKING_RULE_VERSION_V2,
+            RANKING_RULE_VERSION_V1,
             requireNotNull(
                 restartedStore.getRankedMatchResult(matchId),
             ).rankingRuleVersion,

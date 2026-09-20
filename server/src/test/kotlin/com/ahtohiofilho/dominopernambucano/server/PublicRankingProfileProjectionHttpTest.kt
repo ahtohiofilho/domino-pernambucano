@@ -127,15 +127,15 @@ class PublicRankingProfileProjectionHttpTest {
                     .first { entry -> entry.rank == 2 }
                     .displayName,
             )
-            assertNull(
+            assertEquals(
+                listOf(null, null),
                 ranking.entries
-                    .first { entry -> entry.rank == 3 }
-                    .displayName,
+                    .drop(2)
+                    .map { entry -> entry.displayName },
             )
-            assertNull(
-                ranking.entries
-                    .first { entry -> entry.rank == 4 }
-                    .displayName,
+            assertEquals(
+                listOf(1, 2, 3, 3),
+                ranking.entries.map { entry -> entry.rank },
             )
             assertFalse(body.contains("account-a"))
             assertFalse(body.contains("player-a"))
