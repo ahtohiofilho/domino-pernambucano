@@ -73,9 +73,26 @@ Nao execute mais de um container contra o mesmo arquivo. O lock exclusivo deve
 continuar falhando fechado. Escala horizontal so pode ser habilitada depois de
 substituir `PersistentOnlineServerStore` por um store transacional compartilhado.
 
-## Proximo gate
+## Baseline atual de producao
 
-Depois do `PASS` local, a mesma imagem sera implantada inicialmente em uma
-instancia AWS de baixo custo com disco separado, HTTPS, snapshot e alarme. Esse
-passo sera entregue em pacote separado e exigira confirmacao antes de criar
-qualquer recurso potencialmente cobrado.
+O ciclo `R8.B.8.C39.D` foi validado em producao em 20/09/2026. O baseline
+operacional auditado e:
+
+- imagem `domino-server:approved-c39d-769e760b`;
+- image ID `sha256:e6c03cdd7dcbd99091cf15b4111ba5de553d4e382b6c9701b1d5563ea1dd4ba6`;
+- revisao `769e760b2b1b695f2c917482249bedbd51a63627`;
+- estado autoritativo em schema 13;
+- `GET /health` e `GET /ready` validados publicamente;
+- ranking corrente usando regra V2;
+- historico V1 preservado e consultavel por ciclo versionado.
+
+O deploy preservou o container anterior parado com `restart=no` e um backup
+pre-deploy do estado em schema 12. Como a imagem anterior aceita no maximo
+schema 12, um rollback para ela exige restaurar primeiro esse backup; nunca
+religue a imagem anterior diretamente contra um estado schema 13.
+
+O snapshot de rollback criado no cutover teve SHA-256
+`aa78f00a733517aab3c8edd263e71651be6d7c52d33a914aee8833ec99992244`.
+A remocao futura desse backup e do container de rollback deve ser tratada como
+um gate operacional separado, depois de janela de observacao e autorizacao
+explicita.

@@ -80,3 +80,22 @@ Uma escrita persistente bem-sucedida permite que o sinal do store se recupere
 de uma falha transitória. Uma falha do ticker exige reinício do processo, pois
 o avanço autoritativo não deve ser anunciado como saudável depois que sua
 coroutine terminou.
+## Schema 13 e cutover do Ranking V2
+
+O baseline produtivo do ciclo `R8.B.8.C39.D`, validado em 20/09/2026, usa
+schema 13. A migracao a partir dos schemas 10, 11 e 12 e feita no carregamento
+do estado pelo servidor atual.
+
+O cutover do ranking e versionado. Resultados e snapshots V1 persistidos antes
+da ativacao permanecem V1 e continuam consultaveis pelos identificadores de
+ciclo versionados. Novas partidas rankeadas criadas depois da ativacao congelam
+a regra corrente V2 no momento de criacao da partida. Assim, uma partida
+legada V1 restaurada apos o cutover continua materializando resultado V1.
+
+O ranking corrente usa a regra V2. O inicio da V2 e intencionalmente um novo
+ciclo competitivo corrente: dados V1 nao sao reinterpretados como V2. O
+historico V1 continua preservado separadamente.
+
+Para rollback para uma imagem cujo schema maximo seja 12, restaure antes o
+backup pre-deploy em schema 12. Nao inicialize uma imagem antiga contra um
+arquivo que ja tenha sido persistido como schema 13.
