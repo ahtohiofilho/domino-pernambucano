@@ -1,6 +1,8 @@
 package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
@@ -14,7 +16,14 @@ import com.ahtohiofilho.dominopernambucano.online.createOnlineStartNextRoundActi
 import com.ahtohiofilho.dominopernambucano.online.toRuntimeState
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -37,6 +46,144 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
         assertNull(store.getRankedMatchResult(matchId))
     }
 
+    @Test
+    fun schema_twelve_ranked_match_without_rule_version_restores_as_v1() {
+        val originalStore = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+        val room = startFourHumanMatch(
+            store = originalStore,
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+        )
+        val matchId = requireNotNull(room.matchId)
+        val json = Json {
+            encodeDefaults = true
+        }
+        val encodedState = json.encodeToJsonElement(
+            originalStore.snapshotPersistentState(),
+        ).jsonObject
+        val legacyRoot = encodedState.toMutableMap().apply {
+            this["schemaVersion"] = JsonPrimitive(12)
+            this["matches"] = JsonArray(
+                getValue("matches").jsonArray.map { matchElement ->
+                    JsonObject(
+                        matchElement.jsonObject
+                            .toMutableMap()
+                            .apply {
+                                remove("rankingRuleVersion")
+                            },
+                    )
+                },
+            )
+        }
+        val legacyState =
+            json.decodeFromJsonElement<OnlineServerStoreState>(
+                JsonObject(legacyRoot),
+            )
+
+        assertEquals(12, legacyState.schemaVersion)
+        assertEquals(
+            RANKING_RULE_VERSION_V1,
+            legacyState.matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .rankingRuleVersion,
+        )
+
+        val restartedStore = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+
+        restartedStore.restorePersistentState(legacyState)
+
+        val normalizedState = restartedStore.snapshotPersistentState()
+        val restoredMatch = normalizedState.matches.single { storedMatch ->
+            storedMatch.matchId == matchId
+        }
+
+        assertEquals(
+            ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+            normalizedState.schemaVersion,
+        )
+        assertEquals(
+            DominoMatchMode.PUBLIC_RANKED,
+            restoredMatch.matchMode,
+        )
+        assertEquals(
+            RankedMatchClassification.RANKED,
+            restoredMatch.classification,
+        )
+        assertEquals(
+            RANKING_RULE_VERSION_V1,
+            restoredMatch.rankingRuleVersion,
+        )
+    }
+
+    @Test
+    fun restored_ranked_match_materializes_result_with_frozen_rule_version() {
+        val originalStore = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+        val room = startFourHumanMatch(
+            store = originalStore,
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+        )
+        val matchId = requireNotNull(room.matchId)
+        val originalState = originalStore.snapshotPersistentState()
+
+        assertEquals(
+            RANKING_RULE_VERSION_V1,
+            originalState.matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .rankingRuleVersion,
+        )
+
+        val simulatedFutureV2State = originalState.copy(
+            matches = originalState.matches.map { storedMatch ->
+                if (storedMatch.matchId == matchId) {
+                    storedMatch.copy(
+                        rankingRuleVersion =
+                            RANKING_RULE_VERSION_V2,
+                    )
+                } else {
+                    storedMatch
+                }
+            },
+        )
+        val restartedStore = InMemoryOnlineServerStore(
+            nowEpochMillis = { 1_000L },
+        )
+
+        restartedStore.restorePersistentState(
+            simulatedFutureV2State,
+        )
+
+        assertEquals(
+            RANKING_RULE_VERSION_V2,
+            restartedStore.snapshotPersistentState()
+                .matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .rankingRuleVersion,
+        )
+
+        playUntilMatchFinished(
+            store = restartedStore,
+            room = room,
+            matchId = matchId,
+        )
+
+        assertEquals(
+            RANKING_RULE_VERSION_V2,
+            requireNotNull(
+                restartedStore.getRankedMatchResult(matchId),
+            ).rankingRuleVersion,
+        )
+    }
     @Test
     fun accumulator_survives_json_restart() {
         val store = InMemoryOnlineServerStore(

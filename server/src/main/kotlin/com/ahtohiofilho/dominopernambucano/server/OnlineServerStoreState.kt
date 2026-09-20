@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.server
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.online.OnlineActionResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
@@ -11,7 +12,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
-const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 12
+const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 13
 const val MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
 
 @Serializable
@@ -110,6 +111,7 @@ data class OnlineServerStoredMatch(
         DominoMatchMode.PRIVATE_UNRANKED,
     val classification: RankedMatchClassification =
         matchMode.rankedMatchClassification,
+    val rankingRuleVersion: Int = RANKING_RULE_VERSION_V1,
     val rankedMetricAccumulator: RankedMatchMetricAccumulator? = null,
 )
 

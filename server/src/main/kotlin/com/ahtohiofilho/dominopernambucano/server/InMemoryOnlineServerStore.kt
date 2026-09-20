@@ -10,6 +10,9 @@ import com.ahtohiofilho.dominopernambucano.competitive.resolveRankingCycles
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchMetricAccumulator
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerIdentity
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
+import com.ahtohiofilho.dominopernambucano.competitive.CURRENT_RANKING_RULE_VERSION
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
 import com.ahtohiofilho.dominopernambucano.competitive.accumulateRankedMatchTransition
 import com.ahtohiofilho.dominopernambucano.competitive.buildRankedMatchResult
 import com.ahtohiofilho.dominopernambucano.competitive.createRankedMatchResultId
@@ -122,6 +125,7 @@ class InMemoryOnlineServerStore(
         val developmentBotSeatIndexes: Set<Int> = emptySet(),
         val matchMode: DominoMatchMode,
         val classification: RankedMatchClassification,
+        val rankingRuleVersion: Int,
         val rankedPlayerIdentitiesBySeat:
             List<RankedMatchPlayerIdentity>,
         var rankedMetricAccumulator: RankedMatchMetricAccumulator,
@@ -2495,6 +2499,8 @@ class InMemoryOnlineServerStore(
                                 matchRecord.developmentBotSeatIndexes.sorted(),
                             matchMode = matchRecord.matchMode,
                             classification = matchRecord.classification,
+                            rankingRuleVersion =
+                                matchRecord.rankingRuleVersion,
                             rankedMetricAccumulator =
                                 matchRecord.rankedMetricAccumulator,
                         )
@@ -2576,6 +2582,8 @@ class InMemoryOnlineServerStore(
                         .toSet(),
                     matchMode = storedMatch.matchMode,
                     classification = storedMatch.classification,
+                    rankingRuleVersion =
+                        storedMatch.rankingRuleVersion,
                     rankedPlayerIdentitiesBySeat =
                         if (storedMatch.matchMode.contributesToRanking) {
                             resolveRankedPlayerIdentitiesBySeat(
@@ -2653,7 +2661,7 @@ class InMemoryOnlineServerStore(
             return state
         }
 
-        if (state.schemaVersion in 10..11) {
+        if (state.schemaVersion in 10..12) {
             return state.copy(
                 schemaVersion =
                     ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
@@ -2996,6 +3004,14 @@ class InMemoryOnlineServerStore(
                 storedMatch.classification ==
                     storedMatch.matchMode.rankedMatchClassification
             )
+            require(
+                storedMatch.rankingRuleVersion ==
+                    RANKING_RULE_VERSION_V1 ||
+                    storedMatch.rankingRuleVersion ==
+                    RANKING_RULE_VERSION_V2
+            ) {
+                "Partida persistida contém versão de ranking inválida."
+            }
 
             storedMatch.rankedMetricAccumulator?.let { accumulator ->
                 require(
@@ -3117,6 +3133,13 @@ class InMemoryOnlineServerStore(
                     require(!matchFinished || result != null)
 
                     result?.let { rankedResult ->
+                        require(
+                            rankedResult.rankingRuleVersion ==
+                                storedMatch.rankingRuleVersion
+                        ) {
+                            "Resultado ranqueado diverge da versão congelada da partida."
+                        }
+
                         val room = requireNotNull(
                             roomsByPersistedId[
                                 storedMatch.roomId
@@ -3901,6 +3924,7 @@ class InMemoryOnlineServerStore(
                 .toSet(),
             matchMode = matchMode,
             classification = classification,
+            rankingRuleVersion = CURRENT_RANKING_RULE_VERSION,
             rankedPlayerIdentitiesBySeat =
                 rankedPlayerIdentitiesBySeat,
             rankedMetricAccumulator =
@@ -4944,6 +4968,7 @@ class InMemoryOnlineServerStore(
             finalState = finalState,
             playerIdentitiesBySeat = playerIdentitiesBySeat,
             accumulator = matchRecord.rankedMetricAccumulator,
+            rankingRuleVersion = matchRecord.rankingRuleVersion,
         )
 
         check(
