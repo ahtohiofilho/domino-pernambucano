@@ -11,6 +11,7 @@ data class RankedLadderStats(
     val touchesGiven: Long = 0L,
     val automaticRounds: Long = 0L,
     val automaticPlays: Long = 0L,
+    val timeoutRounds: Long = 0L,
 ) {
     init {
         require(victories >= 0L)
@@ -21,6 +22,7 @@ data class RankedLadderStats(
         require(touchesGiven >= 0L)
         require(automaticRounds >= 0L)
         require(automaticPlays >= 0L)
+        require(timeoutRounds >= 0L)
     }
 
     val isEligible: Boolean
@@ -100,6 +102,12 @@ fun compareRankedLadderEntries(
                 right = right,
             )
 
+        RANKING_RULE_VERSION_V3 ->
+            compareRankedLadderEntriesV3(
+                left = left,
+                right = right,
+            )
+
         else -> error("Versão de ranking não suportada.")
     }
 }
@@ -115,6 +123,12 @@ fun areRankedLadderEntriesPubliclyTied(
         RANKING_RULE_VERSION_V1 -> false
         RANKING_RULE_VERSION_V2 ->
             compareRankedLadderV2Criteria(
+                left = left.stats,
+                right = right.stats,
+            ) == 0
+
+        RANKING_RULE_VERSION_V3 ->
+            compareRankedLadderV3Criteria(
                 left = left.stats,
                 right = right.stats,
             ) == 0
@@ -219,6 +233,62 @@ private fun compareRankedLadderV2Criteria(
     )
 }
 
+private fun compareRankedLadderEntriesV3(
+    left: RankedLadderEntry,
+    right: RankedLadderEntry,
+): Int {
+    val criteriaComparison = compareRankedLadderV3Criteria(
+        left = left.stats,
+        right = right.stats,
+    )
+
+    if (criteriaComparison != 0) {
+        return criteriaComparison
+    }
+
+    return left.technicalId.compareTo(right.technicalId)
+}
+
+private fun compareRankedLadderV3Criteria(
+    left: RankedLadderStats,
+    right: RankedLadderStats,
+): Int {
+    compareDescending(
+        left = left.victoryBalance,
+        right = right.victoryBalance,
+    ).takeIf { comparison -> comparison != 0 }
+        ?.let { comparison -> return comparison }
+
+    compareDescending(
+        left = left.teamBalance,
+        right = right.teamBalance,
+    ).takeIf { comparison -> comparison != 0 }
+        ?.let { comparison -> return comparison }
+
+    compareDescending(
+        left = left.individualPoints,
+        right = right.individualPoints,
+    ).takeIf { comparison -> comparison != 0 }
+        ?.let { comparison -> return comparison }
+
+    compareDescending(
+        left = left.assists,
+        right = right.assists,
+    ).takeIf { comparison -> comparison != 0 }
+        ?.let { comparison -> return comparison }
+
+    compareDescending(
+        left = left.touchesGiven,
+        right = right.touchesGiven,
+    ).takeIf { comparison -> comparison != 0 }
+        ?.let { comparison -> return comparison }
+
+    return compareAscending(
+        left = left.timeoutRounds,
+        right = right.timeoutRounds,
+    )
+}
+
 private fun compareRankedScores(
     left: RankedLadderStats,
     right: RankedLadderStats,
@@ -236,7 +306,8 @@ private fun requireSupportedRankingRuleVersion(
 ) {
     require(
         rankingRuleVersion == RANKING_RULE_VERSION_V1 ||
-            rankingRuleVersion == RANKING_RULE_VERSION_V2,
+            rankingRuleVersion == RANKING_RULE_VERSION_V2 ||
+            rankingRuleVersion == RANKING_RULE_VERSION_V3,
     ) {
         "Versão de ranking não suportada: $rankingRuleVersion"
     }

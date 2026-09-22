@@ -1,5 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.ranking
 
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V3
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -32,8 +34,12 @@ class RankingV2UiPresentationTest {
         )
 
         assertEquals(
-            PublicRankingV2TiebreakCriterion.ASSISTS,
-            publicV2TiebreakCriterion(previous, current),
+            PublicRankingTiebreakCriterion.ASSISTS,
+            publicRankingTiebreakCriterion(
+                previous = previous,
+                current = current,
+                rankingRuleVersion = RANKING_RULE_VERSION_V2,
+            ),
         )
     }
 
@@ -52,8 +58,12 @@ class RankingV2UiPresentationTest {
         )
 
         assertEquals(
-            PublicRankingV2TiebreakCriterion.TOUCHES,
-            publicV2TiebreakCriterion(previous, current),
+            PublicRankingTiebreakCriterion.TOUCHES,
+            publicRankingTiebreakCriterion(
+                previous = previous,
+                current = current,
+                rankingRuleVersion = RANKING_RULE_VERSION_V2,
+            ),
         )
     }
 
@@ -72,8 +82,12 @@ class RankingV2UiPresentationTest {
         )
 
         assertEquals(
-            PublicRankingV2TiebreakCriterion.AUTOMATIC_PLAYS,
-            publicV2TiebreakCriterion(previous, current),
+            PublicRankingTiebreakCriterion.AUTOMATIC_PLAYS,
+            publicRankingTiebreakCriterion(
+                previous = previous,
+                current = current,
+                rankingRuleVersion = RANKING_RULE_VERSION_V2,
+            ),
         )
     }
 
@@ -90,7 +104,11 @@ class RankingV2UiPresentationTest {
         )
 
         assertNull(
-            publicV2TiebreakCriterion(previous, current),
+            publicRankingTiebreakCriterion(
+                previous = previous,
+                current = current,
+                rankingRuleVersion = RANKING_RULE_VERSION_V2,
+            ),
         )
     }
 
@@ -102,7 +120,54 @@ class RankingV2UiPresentationTest {
         )
 
         assertNull(
-            publicV2TiebreakCriterion(previous, current),
+            publicRankingTiebreakCriterion(
+                previous = previous,
+                current = current,
+                rankingRuleVersion = RANKING_RULE_VERSION_V2,
+            ),
+        )
+    }
+
+    @Test
+    fun v3_uses_timeout_rounds_instead_of_automatic_plays() {
+        val previous = entry(
+            automaticPlays = 999,
+            timeoutRounds = 1,
+        )
+        val current = entry(
+            competitorId = "competitor-b",
+            automaticPlays = 0,
+            timeoutRounds = 2,
+        )
+
+        assertEquals(
+            PublicRankingTiebreakCriterion.TIMEOUT_ROUNDS,
+            publicRankingTiebreakCriterion(
+                previous = previous,
+                current = current,
+                rankingRuleVersion = RANKING_RULE_VERSION_V3,
+            ),
+        )
+    }
+
+    @Test
+    fun v3_ignores_automatic_play_count_when_timeout_rounds_tie() {
+        val previous = entry(
+            automaticPlays = 1,
+            timeoutRounds = 2,
+        )
+        val current = entry(
+            competitorId = "competitor-b",
+            automaticPlays = 999,
+            timeoutRounds = 2,
+        )
+
+        assertNull(
+            publicRankingTiebreakCriterion(
+                previous = previous,
+                current = current,
+                rankingRuleVersion = RANKING_RULE_VERSION_V3,
+            ),
         )
     }
 
@@ -115,6 +180,7 @@ class RankingV2UiPresentationTest {
         assists: Long = 5,
         touches: Long = 4,
         automaticPlays: Long = 3,
+        timeoutRounds: Long = 0,
     ): PublicRankingEntryDto {
         return PublicRankingEntryDto(
             rank = 1,
@@ -130,6 +196,7 @@ class RankingV2UiPresentationTest {
             automaticRounds = 0,
             assists = assists,
             automaticPlays = automaticPlays,
+            timeoutRounds = timeoutRounds,
         )
     }
 }

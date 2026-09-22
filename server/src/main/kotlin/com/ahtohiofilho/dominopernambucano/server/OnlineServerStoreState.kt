@@ -12,7 +12,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import kotlinx.serialization.Serializable
 
-const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 13
+const val ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 14
 const val MINIMUM_SUPPORTED_ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION = 1
 
 @Serializable
@@ -106,6 +106,7 @@ data class OnlineServerStoredMatch(
     val revisionHistory: List<OnlineMatchSnapshotDto>,
     val automaticSeatIndexes: List<Int> = emptyList(),
     val automaticRoundSeatIndexes: List<Int> = emptyList(),
+    val timeoutRoundSeatIndexes: List<Int> = emptyList(),
     val applicationSeatIndexes: List<Int> = emptyList(),
     val matchMode: DominoMatchMode =
         DominoMatchMode.PRIVATE_UNRANKED,

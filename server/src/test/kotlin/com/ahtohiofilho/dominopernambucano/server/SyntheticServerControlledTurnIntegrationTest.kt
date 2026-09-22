@@ -265,6 +265,12 @@ class SyntheticServerControlledTurnIntegrationTest {
                             seat.automaticRounds == 0
                         },
                     )
+                    assertTrue(
+                        "Normal server-controlled play must not become timeoutRounds.",
+                        metrics.seatMetrics.all { seat ->
+                            seat.timeoutRounds == 0
+                        },
+                    )
                     return
                 }
 

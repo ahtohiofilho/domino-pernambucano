@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.server
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCyclePeriod
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V3
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleStanding
 import com.ahtohiofilho.dominopernambucano.competitive.RankedLadderStats
 import com.ahtohiofilho.dominopernambucano.online.areValidPublicRankingPageRanks
@@ -21,6 +22,7 @@ data class RankedCycleStandingSnapshot(
     val automaticRounds: Long,
     val assists: Long = 0L,
     val automaticPlays: Long = 0L,
+    val timeoutRounds: Long = 0L,
 ) {
     init {
         require(rank > 0)
@@ -33,6 +35,7 @@ data class RankedCycleStandingSnapshot(
         require(automaticRounds >= 0L)
         require(assists >= 0L)
         require(automaticPlays >= 0L)
+        require(timeoutRounds >= 0L)
     }
 
     internal fun toRankedCycleStanding(): RankedCycleStanding {
@@ -48,6 +51,7 @@ data class RankedCycleStandingSnapshot(
                 touchesGiven = touchesGiven,
                 automaticRounds = automaticRounds,
                 automaticPlays = automaticPlays,
+                timeoutRounds = timeoutRounds,
             ),
         )
     }
@@ -67,6 +71,7 @@ data class RankedCycleStandingSnapshot(
                 automaticRounds = standing.stats.automaticRounds,
                 assists = standing.stats.assists,
                 automaticPlays = standing.stats.automaticPlays,
+                timeoutRounds = standing.stats.timeoutRounds,
             )
         }
     }
@@ -141,7 +146,10 @@ internal fun RankedCycleLadder.toClosedSnapshot(
 
     val retentionLimit = retentionPolicy.limitFor(period.kind)
     val retainedStandings = (
-        if (period.rankingRuleVersion == RANKING_RULE_VERSION_V2) {
+        if (
+            period.rankingRuleVersion == RANKING_RULE_VERSION_V2 ||
+            period.rankingRuleVersion == RANKING_RULE_VERSION_V3
+        ) {
             /*
              * In V2, a retention limit is a public-rank boundary rather
              * than a hard row count. This prevents an exact tie from

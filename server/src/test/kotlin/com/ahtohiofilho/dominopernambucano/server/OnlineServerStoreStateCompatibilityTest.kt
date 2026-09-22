@@ -56,6 +56,7 @@ class OnlineServerStoreStateCompatibilityTest {
                             .toMutableMap()
                             .apply {
                                 remove("automaticRoundSeatIndexes")
+                                remove("timeoutRoundSeatIndexes")
                                 remove("matchMode")
                                 remove("classification")
                                 remove("rankedMetricAccumulator")

@@ -193,5 +193,9 @@ private fun RankedLadderStats.accumulate(
             automaticPlays,
             result.automaticPlays.toLong(),
         ),
+        timeoutRounds = Math.addExact(
+            timeoutRounds,
+            result.timeoutRounds.toLong(),
+        ),
     )
 }

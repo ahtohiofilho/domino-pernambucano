@@ -24,6 +24,7 @@ data class RankedSeatMatchMetrics(
     val automaticRounds: Int = 0,
     val assists: Int = 0,
     val automaticPlays: Int = 0,
+    val timeoutRounds: Int = 0,
 ) {
     init {
         require(individualPoints >= 0)
@@ -31,6 +32,7 @@ data class RankedSeatMatchMetrics(
         require(automaticRounds >= 0)
         require(assists >= 0)
         require(automaticPlays >= 0)
+        require(timeoutRounds >= 0)
     }
 }
 
@@ -46,6 +48,7 @@ data class RankedSeatResultDelta(
     val automaticRoundsDelta: Int,
     val assistsDelta: Int = 0,
     val automaticPlaysDelta: Int = 0,
+    val timeoutRoundsDelta: Int = 0,
 )
 
 fun calculateRankedRoundMetricDelta(
@@ -187,6 +190,7 @@ fun buildRankedSeatResultDeltas(
             automaticRoundsDelta = metrics.automaticRounds,
             assistsDelta = metrics.assists,
             automaticPlaysDelta = metrics.automaticPlays,
+            timeoutRoundsDelta = metrics.timeoutRounds,
         )
     }
 }

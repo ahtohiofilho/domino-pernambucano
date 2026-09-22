@@ -49,6 +49,34 @@ class InMemoryOnlineServerRankedMetricAccumulatorTest {
             expiredSeatIndex in automaticSnapshot.automaticPlayerIndexes,
         )
 
+        val accumulatorAfterTimeout = requireNotNull(
+            store.getRankedMatchMetricAccumulator(matchId),
+        )
+        assertEquals(
+            1,
+            accumulatorAfterTimeout
+                .seatMetrics[expiredSeatIndex]
+                .timeoutRounds,
+        )
+        assertTrue(
+            accumulatorAfterTimeout.seatMetrics
+                .filterIndexed { index, _ ->
+                    index != expiredSeatIndex
+                }
+                .all { metrics ->
+                    metrics.timeoutRounds == 0
+                },
+        )
+        assertEquals(
+            listOf(expiredSeatIndex),
+            store.snapshotPersistentState()
+                .matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .timeoutRoundSeatIndexes,
+        )
+
         val reconnectResult = store.joinRoom(
             JoinOnlineRoomRequestDto(
                 roomCode = room.roomCode,
@@ -64,6 +92,15 @@ class InMemoryOnlineServerRankedMetricAccumulatorTest {
         assertTrue(
             expiredSeatIndex !in reclaimedSnapshot.automaticPlayerIndexes,
         )
+        assertEquals(
+            listOf(expiredSeatIndex),
+            store.snapshotPersistentState()
+                .matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .timeoutRoundSeatIndexes,
+        )
 
         playUntilRoundSummary(
             store = store,
@@ -77,6 +114,78 @@ class InMemoryOnlineServerRankedMetricAccumulatorTest {
         assertEquals(
             1,
             accumulator.seatMetrics[expiredSeatIndex].automaticRounds,
+        )
+        assertEquals(
+            1,
+            accumulator.seatMetrics[expiredSeatIndex].timeoutRounds,
+        )
+        assertTrue(
+            accumulator.seatMetrics
+                .filterIndexed { index, _ ->
+                    index != expiredSeatIndex
+                }
+                .all { metrics ->
+                    metrics.timeoutRounds == 0
+                },
+        )
+    }
+
+    @Test
+    fun two_distinct_players_can_each_receive_one_timeout_in_the_same_round() {
+        var now = 1_800_000_000_000L
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+        val room = startFourHumanMatch(store)
+        val matchId = requireNotNull(room.matchId)
+
+        releaseRoundIntroForTest(
+            store = store,
+            roomId = room.roomId,
+            matchId = matchId,
+        )
+
+        val firstSnapshot = requireNotNull(
+            store.getMatchSnapshot(matchId),
+        )
+        val firstSeat = firstSnapshot.gameState.currentPlayerIndex
+
+        now += 31_000L
+        assertTrue(store.advanceAuthoritativeTime())
+
+        val afterFirstTimeout = requireNotNull(
+            store.getMatchSnapshot(matchId),
+        )
+        val secondSeat =
+            afterFirstTimeout.gameState.currentPlayerIndex
+
+        assertTrue(secondSeat != firstSeat)
+
+        now += 31_000L
+        assertTrue(store.advanceAuthoritativeTime())
+
+        val accumulator = requireNotNull(
+            store.getRankedMatchMetricAccumulator(matchId),
+        )
+
+        assertEquals(
+            1,
+            accumulator.seatMetrics[firstSeat].timeoutRounds,
+        )
+        assertEquals(
+            1,
+            accumulator.seatMetrics[secondSeat].timeoutRounds,
+        )
+
+        assertEquals(
+            setOf(firstSeat, secondSeat),
+            store.snapshotPersistentState()
+                .matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .timeoutRoundSeatIndexes
+                .toSet(),
         )
     }
 

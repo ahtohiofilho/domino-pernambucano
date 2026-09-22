@@ -194,13 +194,23 @@ internal fun RankedCycleLadder.publicRankingRevision(): String {
         if (
             period.rankingRuleVersion ==
                 com.ahtohiofilho.dominopernambucano.competitive
-                    .RANKING_RULE_VERSION_V2
+                    .RANKING_RULE_VERSION_V2 ||
+            period.rankingRuleVersion ==
+                com.ahtohiofilho.dominopernambucano.competitive
+                    .RANKING_RULE_VERSION_V3
         ) {
             digest.updateCanonical(standing.stats.assists)
             digest.updateCanonical(standing.stats.automaticPlays)
         }
         digest.updateCanonical(standing.stats.touchesGiven)
         digest.updateCanonical(standing.stats.automaticRounds)
+        if (
+            period.rankingRuleVersion ==
+                com.ahtohiofilho.dominopernambucano.competitive
+                    .RANKING_RULE_VERSION_V3
+        ) {
+            digest.updateCanonical(standing.stats.timeoutRounds)
+        }
     }
 
     return digest.digest().joinToString(separator = "") { byte ->
@@ -251,6 +261,7 @@ private fun RankedCycleStanding.toPublicRankingEntry(
         automaticRounds = stats.automaticRounds,
         assists = stats.assists,
         automaticPlays = stats.automaticPlays,
+        timeoutRounds = stats.timeoutRounds,
         awardTier = awardTier,
     )
 }

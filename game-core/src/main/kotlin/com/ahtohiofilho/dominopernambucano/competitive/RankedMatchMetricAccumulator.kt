@@ -47,6 +47,31 @@ data class RankedMatchMetricAccumulator(
     }
 }
 
+fun recordRankedTimeoutRound(
+    accumulator: RankedMatchMetricAccumulator,
+    seatIndex: Int,
+): RankedMatchMetricAccumulator {
+    require(seatIndex in accumulator.seatMetrics.indices)
+
+    return accumulator.copy(
+        seatMetrics = accumulator.seatMetrics.mapIndexed {
+                index,
+                metrics,
+            ->
+            if (index == seatIndex) {
+                metrics.copy(
+                    timeoutRounds = Math.addExact(
+                        metrics.timeoutRounds,
+                        1,
+                    ),
+                )
+            } else {
+                metrics
+            }
+        },
+    )
+}
+
 
 fun didRankedSeatPlayPiece(
     previousState: DominoGameState,

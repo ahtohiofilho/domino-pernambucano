@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.server
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchClassification
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V3
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
@@ -121,7 +122,7 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
     }
 
     @Test
-    fun new_ranked_match_freezes_current_v2_rule_version() {
+    fun new_ranked_match_freezes_current_v3_rule_version() {
         val store = InMemoryOnlineServerStore(
             nowEpochMillis = { 1_000L },
         )
@@ -132,7 +133,7 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
         val matchId = requireNotNull(room.matchId)
 
         assertEquals(
-            RANKING_RULE_VERSION_V2,
+            RANKING_RULE_VERSION_V3,
             store.snapshotPersistentState()
                 .matches
                 .single { storedMatch ->
@@ -143,9 +144,10 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
     }
 
     @Test
-    fun restored_legacy_v1_match_finishes_as_v1_after_v2_activation() {
+    fun restored_legacy_v1_match_finishes_as_v1_after_v3_activation() {
+        val now = 1_800_000_000_000L
         val originalStore = InMemoryOnlineServerStore(
-            nowEpochMillis = { 1_000L },
+            nowEpochMillis = { now },
         )
         val room = startFourHumanMatch(
             store = originalStore,
@@ -155,7 +157,7 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
         val currentState = originalStore.snapshotPersistentState()
 
         assertEquals(
-            RANKING_RULE_VERSION_V2,
+            RANKING_RULE_VERSION_V3,
             currentState.matches
                 .single { storedMatch ->
                     storedMatch.matchId == matchId
@@ -176,7 +178,7 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
             },
         )
         val restartedStore = InMemoryOnlineServerStore(
-            nowEpochMillis = { 1_000L },
+            nowEpochMillis = { now },
         )
 
         restartedStore.restorePersistentState(
@@ -206,6 +208,73 @@ class InMemoryOnlineServerRankedResultPersistenceTest {
             ).rankingRuleVersion,
         )
     }
+
+    @Test
+    fun restored_v2_match_finishes_as_v2_after_v3_activation() {
+        val now = 1_800_000_000_000L
+        val originalStore = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+        val room = startFourHumanMatch(
+            store = originalStore,
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+        )
+        val matchId = requireNotNull(room.matchId)
+        val currentState = originalStore.snapshotPersistentState()
+
+        assertEquals(
+            RANKING_RULE_VERSION_V3,
+            currentState.matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .rankingRuleVersion,
+        )
+
+        val simulatedPreCutoverV2State = currentState.copy(
+            matches = currentState.matches.map { storedMatch ->
+                if (storedMatch.matchId == matchId) {
+                    storedMatch.copy(
+                        rankingRuleVersion =
+                            RANKING_RULE_VERSION_V2,
+                    )
+                } else {
+                    storedMatch
+                }
+            },
+        )
+        val restartedStore = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+
+        restartedStore.restorePersistentState(
+            simulatedPreCutoverV2State,
+        )
+
+        assertEquals(
+            RANKING_RULE_VERSION_V2,
+            restartedStore.snapshotPersistentState()
+                .matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .rankingRuleVersion,
+        )
+
+        playUntilMatchFinished(
+            store = restartedStore,
+            room = room,
+            matchId = matchId,
+        )
+
+        assertEquals(
+            RANKING_RULE_VERSION_V2,
+            requireNotNull(
+                restartedStore.getRankedMatchResult(matchId),
+            ).rankingRuleVersion,
+        )
+    }
+
     @Test
     fun accumulator_survives_json_restart() {
         val store = InMemoryOnlineServerStore(

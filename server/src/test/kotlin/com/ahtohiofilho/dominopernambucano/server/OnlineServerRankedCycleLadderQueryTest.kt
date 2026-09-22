@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.server
 import com.ahtohiofilho.dominopernambucano.competitive.CURRENT_RANKING_RULE_VERSION
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V3
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchPlayerResult
 import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
@@ -78,11 +79,11 @@ class OnlineServerRankedCycleLadderQueryTest {
     }
 
     @Test
-    fun current_v2_ladder_starts_fresh_while_v1_results_remain_preserved() {
+    fun current_v3_ladder_starts_fresh_while_v1_and_v2_results_remain_preserved() {
         val day = epochMillis(
             year = 2026,
             month = 9,
-            day = 20,
+            day = 22,
             hour = 12,
         )
         val legacyV1 = result(
@@ -90,10 +91,15 @@ class OnlineServerRankedCycleLadderQueryTest {
             completedAtEpochMillis = day,
             rankingRuleVersion = RANKING_RULE_VERSION_V1,
         )
-        val freshV2 = result(
-            matchId = "fresh-v2",
+        val legacyV2 = result(
+            matchId = "legacy-v2",
             completedAtEpochMillis = day,
             rankingRuleVersion = RANKING_RULE_VERSION_V2,
+        )
+        val freshV3 = result(
+            matchId = "fresh-v3",
+            completedAtEpochMillis = day,
+            rankingRuleVersion = RANKING_RULE_VERSION_V3,
         )
         val store = InMemoryOnlineServerStore()
 
@@ -101,7 +107,8 @@ class OnlineServerRankedCycleLadderQueryTest {
             OnlineServerStoreState(
                 rankedResults = listOf(
                     legacyV1,
-                    freshV2,
+                    legacyV2,
+                    freshV3,
                 ),
             ),
         )
@@ -111,32 +118,34 @@ class OnlineServerRankedCycleLadderQueryTest {
             kind = RankingCycleKind.DAILY,
             completedAtEpochMillis = day,
         )
-        val legacyLadder = authoritativeStore.getRankedCycleLadder(
+        val legacyV2Ladder = authoritativeStore.getRankedCycleLadder(
+            kind = RankingCycleKind.DAILY,
+            completedAtEpochMillis = day,
+            rankingRuleVersion = RANKING_RULE_VERSION_V2,
+        )
+        val legacyV1Ladder = authoritativeStore.getRankedCycleLadder(
             kind = RankingCycleKind.DAILY,
             completedAtEpochMillis = day,
             rankingRuleVersion = RANKING_RULE_VERSION_V1,
         )
 
         assertEquals(
-            RANKING_RULE_VERSION_V2,
+            RANKING_RULE_VERSION_V3,
             CURRENT_RANKING_RULE_VERSION,
         )
         assertEquals(
-            RANKING_RULE_VERSION_V2,
+            RANKING_RULE_VERSION_V3,
             currentLadder.period.rankingRuleVersion,
         )
         assertEquals(1, currentLadder.resultCount)
-
-        assertEquals(
-            RANKING_RULE_VERSION_V1,
-            legacyLadder.period.rankingRuleVersion,
-        )
-        assertEquals(1, legacyLadder.resultCount)
+        assertEquals(1, legacyV2Ladder.resultCount)
+        assertEquals(1, legacyV1Ladder.resultCount)
 
         assertEquals(
             setOf(
                 createRankedMatchResultId("legacy-v1"),
-                createRankedMatchResultId("fresh-v2"),
+                createRankedMatchResultId("legacy-v2"),
+                createRankedMatchResultId("fresh-v3"),
             ),
             store.snapshotPersistentState()
                 .rankedResults

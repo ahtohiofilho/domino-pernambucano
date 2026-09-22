@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.ranking
 
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V3
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
@@ -66,8 +67,9 @@ internal fun PublicRankingEntryDto.publicDecimalScoreText(): String {
     )
 }
 
-internal fun PublicRankingResponseDto.usesV2RankingPresentation(): Boolean {
-    return rankingRuleVersion == RANKING_RULE_VERSION_V2
+internal fun PublicRankingResponseDto.usesModernRankingPresentation(): Boolean {
+    return rankingRuleVersion == RANKING_RULE_VERSION_V2 ||
+        rankingRuleVersion == RANKING_RULE_VERSION_V3
 }
 
 internal fun PublicRankingEntryDto.publicVictoryBalance(): Long {
@@ -81,16 +83,18 @@ internal fun PublicRankingEntryDto.publicDefeats(): Long {
     return Math.subtractExact(games, victories)
 }
 
-internal enum class PublicRankingV2TiebreakCriterion {
+internal enum class PublicRankingTiebreakCriterion {
     ASSISTS,
     TOUCHES,
     AUTOMATIC_PLAYS,
+    TIMEOUT_ROUNDS,
 }
 
-internal fun publicV2TiebreakCriterion(
+internal fun publicRankingTiebreakCriterion(
     previous: PublicRankingEntryDto?,
     current: PublicRankingEntryDto,
-): PublicRankingV2TiebreakCriterion? {
+    rankingRuleVersion: Int,
+): PublicRankingTiebreakCriterion? {
     previous ?: return null
 
     if (
@@ -102,20 +106,32 @@ internal fun publicV2TiebreakCriterion(
         return null
     }
 
-    return when {
-        previous.assists != current.assists ->
-            PublicRankingV2TiebreakCriterion.ASSISTS
+    if (previous.assists != current.assists) {
+        return PublicRankingTiebreakCriterion.ASSISTS
+    }
 
-        previous.touchesGiven != current.touchesGiven ->
-            PublicRankingV2TiebreakCriterion.TOUCHES
+    if (previous.touchesGiven != current.touchesGiven) {
+        return PublicRankingTiebreakCriterion.TOUCHES
+    }
 
-        previous.automaticPlays != current.automaticPlays ->
-            PublicRankingV2TiebreakCriterion.AUTOMATIC_PLAYS
+    return when (rankingRuleVersion) {
+        RANKING_RULE_VERSION_V2 ->
+            if (previous.automaticPlays != current.automaticPlays) {
+                PublicRankingTiebreakCriterion.AUTOMATIC_PLAYS
+            } else {
+                null
+            }
+
+        RANKING_RULE_VERSION_V3 ->
+            if (previous.timeoutRounds != current.timeoutRounds) {
+                PublicRankingTiebreakCriterion.TIMEOUT_ROUNDS
+            } else {
+                null
+            }
 
         else -> null
     }
 }
-
 internal fun PublicRankingEntryDto.publicDisplayName(
     fallback: String,
 ): String {

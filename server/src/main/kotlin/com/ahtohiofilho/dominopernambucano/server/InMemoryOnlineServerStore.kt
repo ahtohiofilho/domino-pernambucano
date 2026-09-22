@@ -13,7 +13,9 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedMatchResult
 import com.ahtohiofilho.dominopernambucano.competitive.CURRENT_RANKING_RULE_VERSION
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V3
 import com.ahtohiofilho.dominopernambucano.competitive.accumulateRankedMatchTransition
+import com.ahtohiofilho.dominopernambucano.competitive.recordRankedTimeoutRound
 import com.ahtohiofilho.dominopernambucano.competitive.buildRankedMatchResult
 import com.ahtohiofilho.dominopernambucano.competitive.createRankedMatchResultId
 import com.ahtohiofilho.dominopernambucano.competitive.didRankedSeatPlayPiece
@@ -122,6 +124,7 @@ class InMemoryOnlineServerStore(
         val revisionHistory: ArrayDeque<OnlineMatchSnapshotDto> = ArrayDeque(),
         val automaticSeatIndexes: MutableSet<Int> = mutableSetOf(),
         val automaticRoundSeatIndexes: MutableSet<Int> = mutableSetOf(),
+        val timeoutRoundSeatIndexes: MutableSet<Int> = mutableSetOf(),
         val developmentBotSeatIndexes: Set<Int> = emptySet(),
         val matchMode: DominoMatchMode,
         val classification: RankedMatchClassification,
@@ -2495,6 +2498,10 @@ class InMemoryOnlineServerStore(
                                 matchRecord
                                     .automaticRoundSeatIndexes
                                     .sorted(),
+                            timeoutRoundSeatIndexes =
+                                matchRecord
+                                    .timeoutRoundSeatIndexes
+                                    .sorted(),
                             applicationSeatIndexes =
                                 matchRecord.developmentBotSeatIndexes.sorted(),
                             matchMode = matchRecord.matchMode,
@@ -2576,6 +2583,9 @@ class InMemoryOnlineServerStore(
                         .toMutableSet(),
                     automaticRoundSeatIndexes = storedMatch
                         .automaticRoundSeatIndexes
+                        .toMutableSet(),
+                    timeoutRoundSeatIndexes = storedMatch
+                        .timeoutRoundSeatIndexes
                         .toMutableSet(),
                     developmentBotSeatIndexes = storedMatch
                         .applicationSeatIndexes
@@ -2999,6 +3009,11 @@ class InMemoryOnlineServerStore(
                     index in 0..3
                 }
             )
+            require(
+                storedMatch.timeoutRoundSeatIndexes.all { index ->
+                    index in 0..3
+                }
+            )
             require(room.matchMode == storedMatch.matchMode)
             require(
                 storedMatch.classification ==
@@ -3008,7 +3023,9 @@ class InMemoryOnlineServerStore(
                 storedMatch.rankingRuleVersion ==
                     RANKING_RULE_VERSION_V1 ||
                     storedMatch.rankingRuleVersion ==
-                    RANKING_RULE_VERSION_V2
+                    RANKING_RULE_VERSION_V2 ||
+                    storedMatch.rankingRuleVersion ==
+                    RANKING_RULE_VERSION_V3
             ) {
                 "Partida persistida contém versão de ranking inválida."
             }
@@ -4061,6 +4078,7 @@ class InMemoryOnlineServerStore(
                 is OnlineMatchActionReduction.Accepted -> {
                     matchRecord.automaticSeatIndexes.clear()
                     matchRecord.automaticRoundSeatIndexes.clear()
+                    matchRecord.timeoutRoundSeatIndexes.clear()
 
                     publishMatchSnapshot(
                         matchRecord = matchRecord,
@@ -4136,6 +4154,11 @@ class InMemoryOnlineServerStore(
                         currentPlayerIndex in matchRecord.automaticSeatIndexes
 
             if (currentPlayerBecameAutomatic) {
+                registerRankedTimeoutRoundIfNeeded(
+                    matchRecord = matchRecord,
+                    seatIndex = currentPlayerIndex,
+                )
+
                 trace(
                     level = OnlineTraceLevel.WARN,
                     source = traceSource,
@@ -4219,6 +4242,23 @@ class InMemoryOnlineServerStore(
             trigger = "$trigger:server_controlled_participant",
             traceSource = traceSource,
         )
+
+        return true
+    }
+
+    private fun registerRankedTimeoutRoundIfNeeded(
+        matchRecord: MatchRecord,
+        seatIndex: Int,
+    ): Boolean {
+        if (!matchRecord.timeoutRoundSeatIndexes.add(seatIndex)) {
+            return false
+        }
+
+        matchRecord.rankedMetricAccumulator =
+            recordRankedTimeoutRound(
+                accumulator = matchRecord.rankedMetricAccumulator,
+                seatIndex = seatIndex,
+            )
 
         return true
     }
@@ -4450,6 +4490,10 @@ class InMemoryOnlineServerStore(
         val runtimeState = currentSnapshot.toRuntimeState(
             localPlayerIndex = seatIndex,
         )
+        val currentPlayerIndex = runtimeState.gameState.currentPlayerIndex
+        val automaticSeatIndexesBefore =
+            matchRecord.automaticSeatIndexes.toSet()
+
         val clockReduction = reduceClockAndRegisterAutomaticPlayer(
             runtimeState = runtimeState,
             automaticSeatIndexes = matchRecord.automaticSeatIndexes,
@@ -4460,6 +4504,17 @@ class InMemoryOnlineServerStore(
                 nowEpochMillis = now,
             ),
         )
+
+        val currentPlayerBecameAutomatic =
+            currentPlayerIndex !in automaticSeatIndexesBefore &&
+                currentPlayerIndex in matchRecord.automaticSeatIndexes
+
+        if (currentPlayerBecameAutomatic) {
+            registerRankedTimeoutRoundIfNeeded(
+                matchRecord = matchRecord,
+                seatIndex = currentPlayerIndex,
+            )
+        }
 
         if (clockReduction.turnWasResolved) {
             val automaticResult = publishMatchSnapshot(
@@ -4531,6 +4586,7 @@ class InMemoryOnlineServerStore(
                  */
                 matchRecord.automaticSeatIndexes.clear()
                 matchRecord.automaticRoundSeatIndexes.clear()
+                matchRecord.timeoutRoundSeatIndexes.clear()
 
                 publishMatchSnapshot(
                     matchRecord = matchRecord,
@@ -4575,6 +4631,7 @@ class InMemoryOnlineServerStore(
             is OnlineMatchActionReduction.Accepted -> {
                 matchRecord.automaticSeatIndexes.clear()
                 matchRecord.automaticRoundSeatIndexes.clear()
+                matchRecord.timeoutRoundSeatIndexes.clear()
                 matchRecord.rankedMetricAccumulator =
                     RankedMatchMetricAccumulator.empty(
                         playerCount = reduction

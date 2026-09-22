@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.online
 
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V3
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -41,6 +42,7 @@ data class PublicRankingEntryDto(
     val automaticRounds: Long,
     val assists: Long = 0L,
     val automaticPlays: Long = 0L,
+    val timeoutRounds: Long = 0L,
     val awardTier: PublicRankingAwardTierDto? = null,
 )
 
@@ -48,7 +50,8 @@ fun isSupportedPublicRankingRuleVersion(
     rankingRuleVersion: Int,
 ): Boolean {
     return rankingRuleVersion == RANKING_RULE_VERSION_V1 ||
-        rankingRuleVersion == RANKING_RULE_VERSION_V2
+        rankingRuleVersion == RANKING_RULE_VERSION_V2 ||
+        rankingRuleVersion == RANKING_RULE_VERSION_V3
 }
 
 fun areValidPublicRankingPageRanks(
@@ -80,7 +83,8 @@ fun areValidPublicRankingPageRanks(
                 }
             }
 
-            RANKING_RULE_VERSION_V2 -> {
+            RANKING_RULE_VERSION_V2,
+            RANKING_RULE_VERSION_V3 -> {
                 if (index == 0) {
                     if (offset == 0 && rank != 1) {
                         return false

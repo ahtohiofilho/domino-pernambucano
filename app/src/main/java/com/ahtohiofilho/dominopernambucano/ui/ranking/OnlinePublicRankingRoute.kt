@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -52,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V3
 import com.ahtohiofilho.dominopernambucano.advertising.AdvertisingPlacement
 import com.ahtohiofilho.dominopernambucano.advertising.DominoBannerAd
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingClient
@@ -75,6 +78,8 @@ internal const val RankingTitleTag = "ranking_title"
 internal const val RankingCycleSelectorTag = "ranking_cycle_selector"
 internal const val RankingScopeSelectorTag = "ranking_scope_selector"
 internal const val RankingPublicationPendingTag = "ranking_publication_pending"
+internal const val RankingExplanationButtonTag = "ranking_explanation_button"
+internal const val RankingExplanationDialogTag = "ranking_explanation_dialog"
 
 @Composable
 fun OnlinePublicRankingRoute(
@@ -447,7 +452,7 @@ internal fun OnlinePublicRankingScreen(
             }
 
             latestResponse?.let { response ->
-                RankingOverviewCard(
+                RankingOverviewCompact(
                     response = response,
                     locale = locale,
                 )
@@ -798,9 +803,112 @@ private fun ClosedRankingCycleSelector(
     }
 }
 @Composable
-private fun RankingOverviewCard(
+private fun RankingOverviewCompact(
     response: PublicRankingResponseDto,
     locale: java.util.Locale,
+) {
+    var showExplanation by remember(
+        response.cycleId,
+        response.rankingRuleVersion,
+    ) {
+        mutableStateOf(false)
+    }
+    val period = response.publicPeriodLabel(
+        locale = locale,
+    )
+    val contextText = stringResource(
+        if (response.isClosed) {
+            R.string.ranking_context_closed
+        } else {
+            R.string.ranking_context_current
+        },
+        period,
+    )
+    val summaryText = stringResource(
+        R.string.ranking_summary,
+        response.totalEligiblePlayers,
+        response.resultCount,
+    )
+    val awardStatusText = when {
+        response.isOfficialRankingPending() && response.isClosed ->
+            stringResource(
+                R.string.ranking_awards_compact_closed,
+                response.totalEligiblePlayers,
+                response.publicationThreshold,
+            )
+
+        response.isOfficialRankingPending() ->
+            stringResource(
+                R.string.ranking_awards_compact_current,
+                response.totalEligiblePlayers,
+                response.publicationThreshold,
+                response.eligiblePlayersRemaining,
+            )
+
+        else ->
+            stringResource(
+                R.string.ranking_awards_compact_enabled,
+            )
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Text(
+                text = contextText,
+                color = DominoSemanticColors.brandText,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = summaryText,
+                color = DominoSemanticColors.brandSupportingText,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = awardStatusText,
+                color = DominoSemanticColors.brandSupportingText,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+
+        TextButton(
+            modifier = Modifier.testTag(RankingExplanationButtonTag),
+            onClick = {
+                showExplanation = true
+            },
+        ) {
+            Text(
+                text = stringResource(
+                    R.string.ranking_help_action,
+                ),
+                color = DominoSemanticColors.brandText,
+            )
+        }
+    }
+
+    if (showExplanation) {
+        RankingExplanationDialog(
+            response = response,
+            locale = locale,
+            onDismiss = {
+                showExplanation = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun RankingExplanationDialog(
+    response: PublicRankingResponseDto,
+    locale: java.util.Locale,
+    onDismiss: () -> Unit,
 ) {
     val period = response.publicPeriodLabel(
         locale = locale,
@@ -839,92 +947,124 @@ private fun RankingOverviewCard(
                 R.string.ranking_awards_compact_enabled,
             )
     }
-    val progressFraction = if (response.publicationThreshold > 0) {
-        (
-            response.totalEligiblePlayers.toFloat() /
-                response.publicationThreshold.toFloat()
-        ).coerceIn(0f, 1f)
-    } else {
-        1f
-    }
-    val showProgressBar =
-        response.isOfficialRankingPending() &&
-            progressFraction >= 0.10f
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = DominoBrandShapes.card,
-        colors = CardDefaults.cardColors(
-            containerColor =
-                DominoSemanticColors.brandSurfaceElevated.copy(
-                    alpha = 0.96f,
+    AlertDialog(
+        modifier = Modifier.testTag(
+            RankingExplanationDialogTag,
+        ),
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(
+                    R.string.ranking_help_title,
                 ),
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = DominoSemanticColors.brandBorder.copy(
-                alpha = 0.82f,
-            ),
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            Text(
-                text = contextText,
-                color = DominoSemanticColors.brandText,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
             )
-
-            Text(
-                text = summaryText,
-                color = DominoSemanticColors.brandSupportingText,
-                style = MaterialTheme.typography.bodySmall,
-            )
-
-            if (response.usesV2RankingPresentation()) {
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(
+                    rememberScrollState(),
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(
-                    text = stringResource(
-                        R.string.ranking_v2_order_help,
-                    ),
-                    color =
-                        DominoSemanticColors.brandSupportingText,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
+                    text = contextText,
+                    fontWeight = FontWeight.Bold,
                 )
-            }
+                Text(text = summaryText)
+                Text(text = awardsText)
 
-            Text(
-                text = awardsText,
-                color = DominoSemanticColors.brandText,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-
-            if (showProgressBar) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .background(
-                            DominoSemanticColors.brandBorder.copy(
-                                alpha = 0.55f,
-                            ),
+                if (response.isOfficialRankingPending()) {
+                    Text(
+                        text = stringResource(
+                            if (response.isClosed) {
+                                R.string
+                                    .ranking_publication_pending_closed_notice
+                            } else {
+                                R.string
+                                    .ranking_publication_pending_current_notice
+                            },
                         ),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(progressFraction)
-                            .height(4.dp)
-                            .background(
-                                DominoSemanticColors.brandEnergy,
+                    )
+                }
+
+                when (response.rankingRuleVersion) {
+                    RANKING_RULE_VERSION_V2 -> {
+                        Text(
+                            text = stringResource(
+                                R.string.ranking_v2_order_help,
                             ),
+                            fontWeight = FontWeight.Bold,
+                        )
+                        RankingExplanationMetricLines(
+                            timeMetricRes =
+                                R.string.ranking_help_ja,
+                        )
+                    }
+
+                    RANKING_RULE_VERSION_V3 -> {
+                        Text(
+                            text = stringResource(
+                                R.string.ranking_v3_order_help,
+                            ),
+                            fontWeight = FontWeight.Bold,
+                        )
+                        RankingExplanationMetricLines(
+                            timeMetricRes =
+                                R.string.ranking_help_et,
+                        )
+                    }
+
+                    else -> {
+                        Text(
+                            text = stringResource(
+                                R.string.ranking_help_v1,
+                            ),
+                        )
+                    }
+                }
+
+                if (response.usesModernRankingPresentation()) {
+                    Text(
+                        text = stringResource(
+                            R.string.ranking_help_order_note,
+                        ),
+                        color =
+                            DominoSemanticColors.brandSupportingText,
                     )
                 }
             }
-        }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismiss,
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.ranking_help_close,
+                    ),
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun RankingExplanationMetricLines(
+    timeMetricRes: Int,
+) {
+    listOf(
+        R.string.ranking_help_sv,
+        R.string.ranking_help_sp,
+        R.string.ranking_help_pf,
+        R.string.ranking_help_ast,
+        R.string.ranking_help_tq,
+        timeMetricRes,
+    ).forEach { resourceId ->
+        Text(
+            text = stringResource(resourceId),
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 @Composable
@@ -1013,10 +1153,14 @@ private fun RankingEntries(
             val rankingRuleVersion =
                 latestResponse?.rankingRuleVersion ?: 1
             val tiebreakCriterion =
-                if (rankingRuleVersion == RANKING_RULE_VERSION_V2) {
-                    publicV2TiebreakCriterion(
+                if (
+                    rankingRuleVersion == RANKING_RULE_VERSION_V2 ||
+                    rankingRuleVersion == RANKING_RULE_VERSION_V3
+                ) {
+                    publicRankingTiebreakCriterion(
                         previous = entries.getOrNull(index - 1),
                         current = entry,
+                        rankingRuleVersion = rankingRuleVersion,
                     )
                 } else {
                     null
@@ -1077,7 +1221,7 @@ private fun RankingEntryCard(
     entry: PublicRankingEntryDto,
     locale: java.util.Locale,
     rankingRuleVersion: Int,
-    tiebreakCriterion: PublicRankingV2TiebreakCriterion? = null,
+    tiebreakCriterion: PublicRankingTiebreakCriterion? = null,
     highlighted: Boolean = false,
     historical: Boolean = false,
 ) {
@@ -1090,7 +1234,9 @@ private fun RankingEntryCard(
             entry.rank,
         ),
     )
-    val isV2 = rankingRuleVersion == RANKING_RULE_VERSION_V2
+    val isV3 = rankingRuleVersion == RANKING_RULE_VERSION_V3
+    val usesMetricGrid =
+        rankingRuleVersion == RANKING_RULE_VERSION_V2 || isV3
     val featured = entry.rank == 1
     val podium = entry.rank in 1..3
     val featuredAccent =
@@ -1187,7 +1333,7 @@ private fun RankingEntryCard(
                     )
                 }
 
-                if (!isV2) {
+                if (!usesMetricGrid) {
                     Column(
                         horizontalAlignment = Alignment.End,
                     ) {
@@ -1217,7 +1363,7 @@ private fun RankingEntryCard(
                 }
             }
 
-            if (isV2) {
+            if (usesMetricGrid) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1252,7 +1398,7 @@ private fun RankingEntryCard(
             }
 
             if (expanded) {
-                if (isV2) {
+                if (usesMetricGrid) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1269,8 +1415,12 @@ private fun RankingEntryCard(
                         )
                         RankingV2MetricCell(
                             modifier = Modifier.weight(1f),
-                            label = "JA",
-                            value = entry.automaticPlays,
+                            label = if (isV3) "ET" else "JA",
+                            value = if (isV3) {
+                                entry.timeoutRounds
+                            } else {
+                                entry.automaticPlays
+                            },
                         )
                     }
 
@@ -1348,14 +1498,16 @@ private fun RankingV2MetricCell(
     }
 }
 
-private fun PublicRankingV2TiebreakCriterion.publicLabelRes(): Int {
+private fun PublicRankingTiebreakCriterion.publicLabelRes(): Int {
     return when (this) {
-        PublicRankingV2TiebreakCriterion.ASSISTS ->
+        PublicRankingTiebreakCriterion.ASSISTS ->
             R.string.ranking_v2_tiebreak_assists
-        PublicRankingV2TiebreakCriterion.TOUCHES ->
+        PublicRankingTiebreakCriterion.TOUCHES ->
             R.string.ranking_v2_tiebreak_touches
-        PublicRankingV2TiebreakCriterion.AUTOMATIC_PLAYS ->
+        PublicRankingTiebreakCriterion.AUTOMATIC_PLAYS ->
             R.string.ranking_v2_tiebreak_automatic_plays
+        PublicRankingTiebreakCriterion.TIMEOUT_ROUNDS ->
+            R.string.ranking_v3_tiebreak_timeout_rounds
     }
 }
 @Composable

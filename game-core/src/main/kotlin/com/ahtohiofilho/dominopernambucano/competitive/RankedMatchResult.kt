@@ -6,13 +6,14 @@ import kotlinx.serialization.Serializable
 
 const val RANKING_RULE_VERSION_V1 = 1
 const val RANKING_RULE_VERSION_V2 = 2
+const val RANKING_RULE_VERSION_V3 = 3
 
 /*
- * O V2 é a regra corrente a partir do corte competitivo C39.C.
- * O V1 continua suportado para partidas iniciadas antes do corte e para
- * consulta/materialização do histórico legado.
+ * V3 is current from C41.D.
+ * V1 and V2 remain supported for immutable historical results and matches
+ * that were already started before the V3 cutover.
  */
-const val CURRENT_RANKING_RULE_VERSION = RANKING_RULE_VERSION_V2
+const val CURRENT_RANKING_RULE_VERSION = RANKING_RULE_VERSION_V3
 
 @Serializable
 enum class RankedMatchClassification {
@@ -46,6 +47,7 @@ data class RankedMatchPlayerResult(
     val automaticRounds: Int,
     val assists: Int = 0,
     val automaticPlays: Int = 0,
+    val timeoutRounds: Int = 0,
 ) {
     init {
         require(playerId.isNotBlank())
@@ -59,6 +61,7 @@ data class RankedMatchPlayerResult(
         require(automaticRounds >= 0)
         require(assists >= 0)
         require(automaticPlays >= 0)
+        require(timeoutRounds >= 0)
     }
 }
 
@@ -163,6 +166,7 @@ fun buildRankedMatchResult(
                 automaticRounds = delta.automaticRoundsDelta,
                 assists = delta.assistsDelta,
                 automaticPlays = delta.automaticPlaysDelta,
+                timeoutRounds = delta.timeoutRoundsDelta,
             )
         },
     )

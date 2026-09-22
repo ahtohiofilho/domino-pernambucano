@@ -2,6 +2,7 @@ package com.ahtohiofilho.dominopernambucano.online
 
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V1
 import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V2
+import com.ahtohiofilho.dominopernambucano.competitive.RANKING_RULE_VERSION_V3
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -89,13 +90,15 @@ class PublicRankingV2RemoteContractTest {
 
         assertEquals(0L, entry.assists)
         assertEquals(0L, entry.automaticPlays)
+        assertEquals(0L, entry.timeoutRounds)
     }
 
     @Test
-    fun only_v1_and_v2_are_supported_by_this_contract() {
+    fun v1_v2_and_v3_are_supported_by_this_contract() {
         assertTrue(isSupportedPublicRankingRuleVersion(RANKING_RULE_VERSION_V1))
         assertTrue(isSupportedPublicRankingRuleVersion(RANKING_RULE_VERSION_V2))
-        assertFalse(isSupportedPublicRankingRuleVersion(3))
+        assertTrue(isSupportedPublicRankingRuleVersion(RANKING_RULE_VERSION_V3))
+        assertFalse(isSupportedPublicRankingRuleVersion(4))
         assertFalse(isSupportedPublicRankingRuleVersion(0))
     }
 }
