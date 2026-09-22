@@ -356,6 +356,7 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="post_match_draw">EMPATE</string>
     <string name="post_match_local_rounds">Partida local • %1$d rodadas</string>
     <string name="post_match_online_rounds">Partida online • %1$d rodadas</string>
+    <string name="post_match_ranked_rounds">Partida ranqueada • %1$d rodadas</string>
     <string name="post_match_your_team">SUA DUPLA</string>
     <string name="post_match_opponents">ADVERSÁRIOS</string>
     <string name="post_match_points_value">%1$d PONTOS</string>

@@ -2,6 +2,7 @@
 
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 
 data class DominoGameUiState(
@@ -14,6 +15,7 @@ data class DominoGameUiState(
     val playerClockReserveMillis: List<Long>,
     val isTurnClockEnabled: Boolean,
     val turnClockTotalMillis: Long,
+    val matchMode: DominoMatchMode = DominoMatchMode.OFFLINE_LOCAL,
     val onlinePresentationId: String? = null,
     val onlineSnapshotRevision: Long? = null,
     val postMatchStatistics: PostMatchStatistics? = null,

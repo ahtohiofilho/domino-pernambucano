@@ -45,7 +45,7 @@ class MainMenuScreenTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun ready_participation_without_completed_recoverable_inspection_shows_verification_only() {
+    fun ready_participation_waits_for_automatic_gate_without_manual_card() {
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation = readyParticipation(),
@@ -60,16 +60,68 @@ class MainMenuScreenTest {
         }
 
         composeRule
-            .onNodeWithText("Verificar participação online")
-            .assertIsDisplayed()
+            .onAllNodesWithText("Verificar participação online")
+            .assertCountEquals(0)
 
         composeRule
             .onAllNodesWithText("Retomar partida online")
             .assertCountEquals(0)
+
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsNotEnabled()
     }
 
     @Test
-    fun completed_recoverable_inspection_shows_resume_and_hides_verification() {
+    fun transient_inspection_failure_exposes_manual_verification_retry_only() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.Completed(
+                        result =
+                            OnlinePendingParticipationRemoteInspection
+                                .TemporarilyUnavailable(
+                                    reason = "offline",
+                                ),
+                    ),
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "Não foi possível verificar agora. Tente novamente.",
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("Verificar participação online")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+
+        composeRule
+            .onAllNodesWithText("Retomar partida online")
+            .assertCountEquals(0)
+
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsNotEnabled()
+    }
+    @Test
+    fun completed_recoverable_inspection_uses_automatic_resume_without_manual_card() {
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation = readyParticipation(),
@@ -84,16 +136,27 @@ class MainMenuScreenTest {
         }
 
         composeRule
-            .onNodeWithText("Retomar partida online")
+            .onNodeWithText("Participação online confirmada.")
             .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText("Retomar partida online")
+            .assertCountEquals(0)
 
         composeRule
             .onAllNodesWithText("Verificar participação online")
             .assertCountEquals(0)
-    }
 
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsNotEnabled()
+    }
     @Test
-    fun completed_recoverable_waiting_inspection_shows_resume_room_and_hides_resume_match() {
+    fun completed_recoverable_waiting_inspection_uses_automatic_room_return_without_manual_card() {
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation = readyWaitingParticipation(),
@@ -115,8 +178,8 @@ class MainMenuScreenTest {
             .assertIsDisplayed()
 
         composeRule
-            .onNodeWithText("Retomar sala online")
-            .assertIsDisplayed()
+            .onAllNodesWithText("Retomar sala online")
+            .assertCountEquals(0)
 
         composeRule
             .onAllNodesWithText("Retomar partida online")
@@ -125,8 +188,15 @@ class MainMenuScreenTest {
         composeRule
             .onAllNodesWithText("Verificar participação online")
             .assertCountEquals(0)
-    }
 
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsNotEnabled()
+    }
     @Test
     fun remote_session_rejected_resume_feedback_hides_resume_and_shows_explicit_discard() {
         var discardClickCount = 0
@@ -184,52 +254,7 @@ class MainMenuScreenTest {
     }
 
     @Test
-    fun remote_session_rejected_inspection_shows_specific_message_without_resume() {
-        composeRule.setContent {
-            MainMenuScreen(
-                pendingOnlineParticipation = readyParticipation(),
-                pendingOnlineParticipationInspection =
-                    OnlinePendingParticipationInspectionState.Completed(
-                        result =
-                            OnlinePendingParticipationRemoteInspection
-                                .RemoteSessionRejected,
-                    ),
-                pendingOnlineMatchResumeInProgress = false,
-                onPlayClick = {},
-                onRankingClick = {},
-                onInspectPendingOnlineParticipationClick = {},
-                onResumePendingOnlineMatchClick = {},
-            )
-        }
-
-        composeRule
-            .onNodeWithText(
-                "N\u00e3o foi poss\u00edvel verificar a participa\u00e7\u00e3o: " +
-                        "a sess\u00e3o online deste dispositivo foi rejeitada.",
-            )
-            .assertIsDisplayed()
-
-        composeRule
-            .onAllNodesWithText("Participa\u00e7\u00e3o online confirmada.")
-            .assertCountEquals(0)
-
-        composeRule
-            .onAllNodesWithText("Retomar partida online")
-            .assertCountEquals(0)
-
-        composeRule
-            .onNodeWithText("Verificar participa\u00e7\u00e3o online")
-            .assertIsDisplayed()
-            .assertIsEnabled()
-
-        composeRule
-            .onNodeWithText("Jogar")
-            .assertIsDisplayed()
-            .assertIsEnabled()
-    }
-
-    @Test
-    fun rejected_binding_shows_explicit_discard_only_when_it_matches_pending_participation() {
+    fun remote_session_rejected_inspection_requires_explicit_discard_and_blocks_primary_actions() {
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation = readyParticipation(),
@@ -255,27 +280,86 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText(
-                "Remover participa\u00e7\u00e3o online rejeitada",
+                "Não foi possível verificar a participação: " +
+                        "a sessão online deste dispositivo foi rejeitada.",
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onAllNodesWithText("Retomar partida online")
+            .assertCountEquals(0)
+
+        composeRule
+            .onAllNodesWithText("Verificar participação online")
+            .assertCountEquals(0)
+
+        composeRule
+            .onNodeWithText(
+                "Remover participação online rejeitada",
             )
             .assertIsDisplayed()
             .assertIsEnabled()
 
         composeRule
-            .onNodeWithText("Verificar participa\u00e7\u00e3o online")
-            .assertIsDisplayed()
-            .assertIsEnabled()
+            .onNodeWithText("Jogar")
+            .assertIsNotEnabled()
 
         composeRule
-            .onNodeWithText("Jogar")
-            .assertIsDisplayed()
-            .assertIsEnabled()
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsNotEnabled()
     }
-
     @Test
-    fun completed_non_recoverable_inspection_does_not_show_resume() {
+    fun rejected_binding_discard_is_hidden_when_rejection_does_not_match_pending_participation() {
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.Completed(
+                        result =
+                            OnlinePendingParticipationRemoteInspection
+                                .RemoteSessionRejected,
+                    ),
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .RemoteSessionRejected(
+                            binding = readyBinding().copy(
+                                roomId = "different-room",
+                            ),
+                        ),
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onDiscardRejectedPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onAllNodesWithText(
+                "Remover participação online rejeitada",
+            )
+            .assertCountEquals(0)
+
+        composeRule
+            .onAllNodesWithText("Verificar participação online")
+            .assertCountEquals(0)
+
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsNotEnabled()
+    }
+    @Test
+    fun completed_non_recoverable_inspection_releases_continuity_gate() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
                 pendingOnlineParticipationInspection =
                     OnlinePendingParticipationInspectionState.Completed(
                         result =
@@ -299,12 +383,19 @@ class MainMenuScreenTest {
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText("Verificar participação online")
-            .assertIsDisplayed()
-    }
+            .onAllNodesWithText("Verificar participação online")
+            .assertCountEquals(0)
 
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsEnabled()
+
+        composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsEnabled()
+    }
     @Test
-    fun resume_callback_runs_only_after_explicit_resume_click() {
+    fun recoverable_resume_failure_exposes_manual_resume_retry() {
         var resumeClickCount = 0
 
         composeRule.setContent {
@@ -313,6 +404,8 @@ class MainMenuScreenTest {
                 pendingOnlineParticipationInspection =
                     recoverableInspection(),
                 pendingOnlineMatchResumeInProgress = false,
+                pendingOnlineMatchResumeFeedbackMessage =
+                    "Não foi possível retomar agora. Tente novamente.",
                 onPlayClick = {},
                 onRankingClick = {},
                 onInspectPendingOnlineParticipationClick = {},
@@ -322,15 +415,16 @@ class MainMenuScreenTest {
             )
         }
 
-        composeRule.runOnIdle {
-            assertEquals(
-                0,
-                resumeClickCount,
+        composeRule
+            .onNodeWithText(
+                "Não foi possível retomar agora. Tente novamente.",
             )
-        }
+            .assertIsDisplayed()
 
         composeRule
             .onNodeWithText("Retomar partida online")
+            .assertIsDisplayed()
+            .assertIsEnabled()
             .performClick()
 
         composeRule.runOnIdle {
@@ -339,10 +433,17 @@ class MainMenuScreenTest {
                 resumeClickCount,
             )
         }
-    }
 
+        composeRule
+            .onNodeWithText("Jogar")
+            .assertIsNotEnabled()
+
+        composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsNotEnabled()
+    }
     @Test
-    fun resume_in_progress_blocks_resume_and_play_actions() {
+    fun automatic_resume_in_progress_blocks_primary_actions_without_manual_resume_card() {
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation = readyParticipation(),
@@ -357,15 +458,21 @@ class MainMenuScreenTest {
         }
 
         composeRule
-            .onNodeWithText("Retomando...")
-            .assertIsDisplayed()
-            .assertIsNotEnabled()
+            .onAllNodesWithText("Retomar partida online")
+            .assertCountEquals(0)
+
+        composeRule
+            .onAllNodesWithText("Verificar participação online")
+            .assertCountEquals(0)
 
         composeRule
             .onNodeWithText("Jogar")
             .assertIsNotEnabled()
-    }
 
+        composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsNotEnabled()
+    }
     @Test
     fun menu_omits_generic_copy_and_preserves_product_name_and_core_actions() {
         composeRule.setContent {

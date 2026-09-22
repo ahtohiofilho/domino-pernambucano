@@ -1407,12 +1407,36 @@ private enum class ActiveReadRefreshOutcome {
         }
     }
 
+    override fun acknowledgeCompletedMatchPresentedLocally(
+        binding: OnlineParticipationBinding,
+    ) {
+        val cleared =
+            onlineParticipationBindingRepository
+                ?.clearIfMatches(
+                    binding = binding,
+                )
+                ?: false
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.ROOM_LEFT,
+            roomId = binding.roomId,
+            matchId = binding.matchId,
+            playerId = binding.playerId,
+            localSeatIndex = binding.localSeatIndex,
+            attributes = mapOf(
+                "source" to
+                    "completed_match_terminal_presentation_acknowledged",
+                "bindingCleared" to cleared.toString(),
+                "remoteActionSubmitted" to "false",
+            ),
+        )
+    }
+
     override fun releaseCompletedMatchLocally() {
         val client = apiClient
         val currentSnapshot = mutableMatchSnapshot.value
         val currentRoom = mutableRoomSnapshot.value
-
-        onlineParticipationBindingRepository?.clear()
 
         stopPolling(
             reason = "completed_match_local_release",

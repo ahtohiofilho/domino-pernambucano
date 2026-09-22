@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.ahtohiofilho.dominopernambucano.BuildConfig
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.online.AndroidGoogleIdTokenProvider
 import com.ahtohiofilho.dominopernambucano.online.GoogleSignInConfig
 import com.ahtohiofilho.dominopernambucano.online.GoogleSignInEnvironment
@@ -40,6 +41,8 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepo
 import com.ahtohiofilho.dominopernambucano.online.OnlinePasswordAccountManager
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueRemoteClient
+import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueClientResult
+import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueState
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationLocalResolution
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatchResumeActivation
 import com.ahtohiofilho.dominopernambucano.online.OnlinePendingParticipationMatchResumePreparation
@@ -719,6 +722,175 @@ fun DominoPernambucanoApp(
         }
     }
 
+    var pendingOnlineStartupCredentialRecoveryAttemptedRevision by remember {
+        mutableStateOf<Int?>(null)
+    }
+
+    /*
+     * Startup continuity credential recovery.
+     *
+     * A ranked WAITING state lives only on the backend and has no local
+     * OnlineParticipationBinding yet. Therefore an expired saved ACCOUNT must
+     * be recoverable even when there is no persisted room/match binding.
+     *
+     * This only asks Credential Manager for an already-authorized account.
+     * It does not create a new anonymous player or silently choose a new
+     * identity.
+     */
+    LaunchedEffect(
+        onlineAccountSessionRevision,
+        onlineGoogleAccountStatus,
+        sessionState,
+    ) {
+        if (
+            sessionCoordinator.currentState
+                !is DominoSessionState.MainMenu
+        ) {
+            return@LaunchedEffect
+        }
+
+        val revision = onlineAccountSessionRevision
+
+        if (
+            pendingOnlineStartupCredentialRecoveryAttemptedRevision ==
+                revision
+        ) {
+            return@LaunchedEffect
+        }
+
+        when (onlineGoogleAccountStatus) {
+            OnlineGoogleAccountStatus.RECOVERY_REQUIRED -> {
+                pendingOnlineStartupCredentialRecoveryAttemptedRevision =
+                    revision
+
+                val restored =
+                    onlineGoogleAccountManager
+                        .restoreAuthorizedAccount()
+
+                if (!restored) {
+                    return@LaunchedEffect
+                }
+
+                onlineAccountSessionRevision += 1
+
+                sessionCoordinator
+                    .refreshPendingOnlineParticipationFromLocalState()
+            }
+
+            OnlineGoogleAccountStatus.CONNECTED,
+            OnlineGoogleAccountStatus.VISITOR -> {
+                val mainMenuState =
+                    sessionCoordinator.currentState as?
+                        DominoSessionState.MainMenu
+                        ?: return@LaunchedEffect
+
+                if (
+                    mainMenuState.pendingOnlineParticipation !is
+                        OnlinePendingParticipationLocalResolution
+                            .BlockedByMissingValidAnonymousSession
+                ) {
+                    return@LaunchedEffect
+                }
+
+                pendingOnlineStartupCredentialRecoveryAttemptedRevision =
+                    revision
+
+                sessionCoordinator
+                    .refreshPendingOnlineParticipationFromLocalState()
+            }
+
+            OnlineGoogleAccountStatus.UNAVAILABLE,
+            OnlineGoogleAccountStatus.NO_LOCAL_CREDENTIAL -> Unit
+        }
+    }
+
+    var pendingOnlineRankedQueueStartupInspectionAttemptedRevision by
+        remember {
+            mutableStateOf<Int?>(null)
+        }
+
+    /*
+     * Ranked queue continuity is a distinct bootstrap channel from persisted
+     * room/match participation.
+     *
+     * OnlineRankedQueueController.open() already knows how to resume WAITING,
+     * keep polling, and activate MATCHED. This startup effect only performs a
+     * read-only queue status probe. If the backend says WAITING or MATCHED,
+     * navigation enters the existing ranked route and that controller remains
+     * authoritative.
+     *
+     * Persisted room/match participation has priority. We never probe the
+     * ranked queue while an OnlineParticipationBinding is present.
+     */
+    LaunchedEffect(
+        onlineAccountSessionRevision,
+        onlineGoogleAccountStatus,
+        sessionState,
+    ) {
+        val mainMenuState =
+            sessionCoordinator.currentState as?
+                DominoSessionState.MainMenu
+                ?: return@LaunchedEffect
+
+        val queueClient =
+            onlineRankedQueueRemoteClient
+                ?: return@LaunchedEffect
+
+        val initialAction =
+            resolvePendingOnlineRankedQueueStartupRecoveryAction(
+                accountStatus =
+                    onlineGoogleAccountStatus,
+                pendingParticipation =
+                    mainMenuState.pendingOnlineParticipation,
+                queueResult = null,
+            )
+
+        if (
+            initialAction !=
+                PendingOnlineRankedQueueStartupRecoveryAction
+                    .INSPECT_REMOTE_QUEUE
+        ) {
+            return@LaunchedEffect
+        }
+
+        val revision = onlineAccountSessionRevision
+
+        if (
+            pendingOnlineRankedQueueStartupInspectionAttemptedRevision ==
+                revision
+        ) {
+            return@LaunchedEffect
+        }
+
+        pendingOnlineRankedQueueStartupInspectionAttemptedRevision =
+            revision
+
+        val queueResult = queueClient.resume()
+
+        val currentMainMenuState =
+            sessionCoordinator.currentState as?
+                DominoSessionState.MainMenu
+                ?: return@LaunchedEffect
+
+        val resolvedAction =
+            resolvePendingOnlineRankedQueueStartupRecoveryAction(
+                accountStatus =
+                    onlineGoogleAccountManager.currentStatus(),
+                pendingParticipation =
+                    currentMainMenuState.pendingOnlineParticipation,
+                queueResult = queueResult,
+            )
+
+        if (
+            resolvedAction ==
+                PendingOnlineRankedQueueStartupRecoveryAction
+                    .OPEN_RANKED_QUEUE
+        ) {
+            sessionCoordinator.dispatch(
+                DominoSessionCommand.OpenOnlineRankedQueue,
+            )
+        }
+    }
     val onlineAccountConnected =
         onlineGoogleAccountStatus ==
             OnlineGoogleAccountStatus.CONNECTED
@@ -1600,8 +1772,277 @@ fun DominoPernambucanoApp(
         return
     }
 
+    suspend fun resumePendingOnlineParticipationFromMainMenu(
+        state: DominoSessionState.MainMenu,
+    ) {
+        val pendingParticipation =
+            state.pendingOnlineParticipation
+
+        val completedInspection =
+            state.pendingOnlineParticipationInspection
+                    as? OnlinePendingParticipationInspectionState
+                .Completed
+
+        val hasRecoverableInspection =
+            completedInspection?.result is
+                OnlinePendingParticipationRemoteInspection
+                    .Recoverable
+
+        val hasRemoteSessionRejection =
+            state.pendingOnlineParticipationSessionRejection is
+                OnlinePendingParticipationSessionRejection
+                    .RemoteSessionRejected
+
+        if (
+            pendingOnlineMatchResumeInProgress ||
+            pendingParticipation !is
+                OnlinePendingParticipationLocalResolution
+                    .ReadyForRemoteReconciliation ||
+            !hasRecoverableInspection ||
+            hasRemoteSessionRejection
+        ) {
+            return
+        }
+
+        pendingOnlineMatchResumeInProgress = true
+        pendingOnlineMatchResumeFeedbackMessage = null
+
+        var createdMatchCoordinator:
+            OnlineDominoMatchCoordinator? = null
+
+        try {
+            when (
+                val preparation =
+                    onlineRoomRepository
+                        .preparePendingParticipationMatchResume(
+                            binding =
+                                pendingParticipation.binding,
+                        )
+            ) {
+                OnlinePendingParticipationMatchResumePreparation
+                    .RemoteSessionRejected -> {
+                    sessionCoordinator
+                        .recordPendingOnlineParticipationRemoteSessionRejected(
+                            binding =
+                                pendingParticipation.binding,
+                        )
+
+                    pendingOnlineMatchResumeFeedbackMessage =
+                        resumeParticipationSessionRejected
+                }
+
+                is OnlinePendingParticipationMatchResumePreparation
+                    .NotAttempted -> {
+                    sessionCoordinator
+                        .invalidatePendingOnlineParticipationRemoteConfirmation(
+                            binding =
+                                pendingParticipation.binding,
+                        )
+
+                    pendingOnlineMatchResumeFeedbackMessage =
+                        resumeParticipationDeviceFailed
+                }
+
+                is OnlinePendingParticipationMatchResumePreparation
+                    .NoLongerRecoverable -> {
+                    sessionCoordinator
+                        .discardNoLongerRecoverablePendingOnlineParticipation(
+                            binding =
+                                pendingParticipation.binding,
+                        )
+
+                    pendingOnlineMatchResumeFeedbackMessage =
+                        resumeParticipationExpired
+                }
+
+                is OnlinePendingParticipationMatchResumePreparation
+                    .TemporarilyUnavailable -> {
+                    pendingOnlineMatchResumeFeedbackMessage =
+                        resumeParticipationRetry
+                }
+
+                is OnlinePendingParticipationMatchResumePreparation
+                    .WaitingForPlayers -> {
+                    when (
+                        val activation =
+                            onlineRoomRepository
+                                .activatePendingParticipationRoomResume(
+                                    preparation = preparation,
+                                )
+                    ) {
+                        OnlinePendingParticipationMatchResumeActivation
+                            .Activated -> {
+                            sessionCoordinator.dispatch(
+                                DominoSessionCommand
+                                    .OpenResumedOnlineRoom(
+                                        binding =
+                                            preparation.binding,
+                                    ),
+                            )
+                        }
+
+                        is OnlinePendingParticipationMatchResumeActivation
+                            .NotAttempted -> {
+                            sessionCoordinator
+                                .invalidatePendingOnlineParticipationRemoteConfirmation(
+                                    binding =
+                                        preparation.binding,
+                                )
+
+                            pendingOnlineMatchResumeFeedbackMessage =
+                                reopenRoomDeviceFailed
+                        }
+
+                        is OnlinePendingParticipationMatchResumeActivation
+                            .TemporarilyUnavailable -> {
+                            pendingOnlineMatchResumeFeedbackMessage =
+                                reopenRoomRetry
+                        }
+                    }
+                }
+
+                is OnlinePendingParticipationMatchResumePreparation
+                    .Ready -> {
+                    val matchCoordinator =
+                        OnlineDominoMatchCoordinator(
+                            repository = onlineRoomRepository,
+                            roomId =
+                                preparation.roomSnapshot.roomId,
+                            matchId =
+                                preparation.matchSnapshot.matchId,
+                            localPlayerId =
+                                preparation.binding.playerId,
+                            localPlayerIndex =
+                                preparation.binding.localSeatIndex,
+                            initialSnapshot =
+                                preparation.matchSnapshot,
+                            matchMode =
+                                preparation.roomSnapshot.matchMode,
+                            traceLogger = onlineTraceLogger,
+                        )
+
+                    createdMatchCoordinator = matchCoordinator
+
+                    when (
+                        val activation =
+                            onlineRoomRepository
+                                .activatePendingParticipationMatchResume(
+                                    preparation = preparation,
+                                )
+                    ) {
+                        OnlinePendingParticipationMatchResumeActivation
+                            .Activated -> {
+                            sessionCoordinator.dispatch(
+                                DominoSessionCommand.StartOnlineMatch(
+                                    matchCoordinator = matchCoordinator,
+                                ),
+                            )
+
+                            createdMatchCoordinator = null
+                        }
+
+                        is OnlinePendingParticipationMatchResumeActivation
+                            .NotAttempted -> {
+                            sessionCoordinator
+                                .invalidatePendingOnlineParticipationRemoteConfirmation(
+                                    binding =
+                                        preparation.binding,
+                                )
+
+                            pendingOnlineMatchResumeFeedbackMessage =
+                                resumeMatchDeviceFailed
+                        }
+
+                        is OnlinePendingParticipationMatchResumeActivation
+                            .TemporarilyUnavailable -> {
+                            pendingOnlineMatchResumeFeedbackMessage =
+                                resumeMatchRetry
+                        }
+                    }
+                }
+            }
+        } finally {
+            createdMatchCoordinator?.dispose()
+            pendingOnlineMatchResumeInProgress = false
+        }
+    }
     when (val state = sessionState) {
         is DominoSessionState.MainMenu -> {
+            val automaticRecoveryAction =
+                resolvePendingOnlineParticipationAutomaticRecoveryAction(
+                    pendingParticipation =
+                        state.pendingOnlineParticipation,
+                    inspectionState =
+                        state.pendingOnlineParticipationInspection,
+                    sessionRejection =
+                        state.pendingOnlineParticipationSessionRejection,
+                )
+
+            /*
+             * Do not key this effect by inspection state.
+             *
+             * inspectPendingOnlineParticipation() owns the transition
+             * NotRequested -> InProgress -> Completed. If InProgress is an
+             * effect key, Compose cancels this coroutine because of the state
+             * change caused by the coroutine itself. The coordinator then
+             * rolls cancellation back to NotRequested, creating a visible
+             * inspect/cancel/retry oscillation.
+             *
+             * One coroutine now owns the complete automatic sequence:
+             * inspect once, re-read the authoritative MainMenu state, and
+             * resume only if that completed inspection is recoverable.
+             */
+            LaunchedEffect(
+                state.pendingOnlineParticipation,
+                state.pendingOnlineParticipationSessionRejection,
+            ) {
+                when (automaticRecoveryAction) {
+                    PendingOnlineParticipationAutomaticRecoveryAction
+                        .INSPECT -> {
+                        sessionCoordinator
+                            .inspectPendingOnlineParticipation()
+
+                        val refreshedMainMenuState =
+                            sessionCoordinator.currentState as?
+                                DominoSessionState.MainMenu
+                                ?: return@LaunchedEffect
+
+                        val refreshedAction =
+                            resolvePendingOnlineParticipationAutomaticRecoveryAction(
+                                pendingParticipation =
+                                    refreshedMainMenuState
+                                        .pendingOnlineParticipation,
+                                inspectionState =
+                                    refreshedMainMenuState
+                                        .pendingOnlineParticipationInspection,
+                                sessionRejection =
+                                    refreshedMainMenuState
+                                        .pendingOnlineParticipationSessionRejection,
+                            )
+
+                        if (
+                            refreshedAction ==
+                                PendingOnlineParticipationAutomaticRecoveryAction
+                                    .RESUME
+                        ) {
+                            resumePendingOnlineParticipationFromMainMenu(
+                                state = refreshedMainMenuState,
+                            )
+                        }
+                    }
+
+                    PendingOnlineParticipationAutomaticRecoveryAction
+                        .RESUME -> {
+                        resumePendingOnlineParticipationFromMainMenu(
+                            state = state,
+                        )
+                    }
+
+                    PendingOnlineParticipationAutomaticRecoveryAction
+                        .NONE -> Unit
+                }
+            }
+
             MainMenuScreen(
                 pendingOnlineParticipation =
                     state.pendingOnlineParticipation,
@@ -1758,6 +2199,9 @@ fun DominoPernambucanoApp(
                 onPlayClick = {
                     if (
                         !pendingOnlineMatchResumeInProgress &&
+                        state.pendingOnlineParticipation !is
+                            OnlinePendingParticipationLocalResolution
+                                .ReadyForRemoteReconciliation &&
                         state.pendingOnlineParticipationInspection
                                 !is OnlinePendingParticipationInspectionState
                         .InProgress
@@ -1768,7 +2212,12 @@ fun DominoPernambucanoApp(
                     }
                 },
                 onRankingClick = {
-                    if (!pendingOnlineMatchResumeInProgress) {
+                    if (
+                        !pendingOnlineMatchResumeInProgress &&
+                        state.pendingOnlineParticipation !is
+                            OnlinePendingParticipationLocalResolution
+                                .ReadyForRemoteReconciliation
+                    ) {
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.OpenPublicRanking,
                         )
@@ -1796,197 +2245,12 @@ fun DominoPernambucanoApp(
                         .discardRemoteSessionRejectedPendingOnlineParticipation()
                 },
                 onResumePendingOnlineMatchClick = {
-                    val pendingParticipation =
-                        state.pendingOnlineParticipation
-
-                    val completedInspection =
-                        state.pendingOnlineParticipationInspection
-                                as? OnlinePendingParticipationInspectionState
-                        .Completed
-
-                    val hasRecoverableInspection =
-                        completedInspection?.result is
-                                OnlinePendingParticipationRemoteInspection
-                                .Recoverable
-
-                    val hasRemoteSessionRejection =
-                        state.pendingOnlineParticipationSessionRejection is
-                                OnlinePendingParticipationSessionRejection
-                                .RemoteSessionRejected
-
-                    if (
-                        !pendingOnlineMatchResumeInProgress &&
-                        pendingParticipation is
-                                OnlinePendingParticipationLocalResolution
-                                .ReadyForRemoteReconciliation &&
-                        hasRecoverableInspection &&
-                        !hasRemoteSessionRejection
-                    ) {
-                        pendingOnlineMatchResumeInProgress = true
-                        pendingOnlineMatchResumeFeedbackMessage = null
-
-                        menuCoroutineScope.launch {
-                            var createdMatchCoordinator:
-                                    OnlineDominoMatchCoordinator? = null
-
-                            try {
-                                when (
-                                    val preparation =
-                                        onlineRoomRepository
-                                            .preparePendingParticipationMatchResume(
-                                                binding =
-                                                    pendingParticipation.binding,
-                                            )
-                                ) {
-                                    OnlinePendingParticipationMatchResumePreparation
-                                        .RemoteSessionRejected -> {
-                                        sessionCoordinator
-                                            .recordPendingOnlineParticipationRemoteSessionRejected(
-                                                binding =
-                                                    pendingParticipation.binding,
-                                            )
-
-                                        pendingOnlineMatchResumeFeedbackMessage =
-                                            resumeParticipationSessionRejected
-                                    }
-
-                                    is OnlinePendingParticipationMatchResumePreparation
-                                        .NotAttempted -> {
-                                        sessionCoordinator
-                                            .invalidatePendingOnlineParticipationRemoteConfirmation(
-                                                binding =
-                                                    pendingParticipation.binding,
-                                            )
-
-                                        pendingOnlineMatchResumeFeedbackMessage =
-                                            resumeParticipationDeviceFailed
-                                    }
-
-                                    is OnlinePendingParticipationMatchResumePreparation
-                                        .NoLongerRecoverable -> {
-                                        sessionCoordinator
-                                            .discardNoLongerRecoverablePendingOnlineParticipation(
-                                                binding =
-                                                    pendingParticipation.binding,
-                                            )
-
-                                        pendingOnlineMatchResumeFeedbackMessage =
-                                            resumeParticipationExpired
-                                    }
-
-                                    is OnlinePendingParticipationMatchResumePreparation
-                                        .TemporarilyUnavailable -> {
-                                        pendingOnlineMatchResumeFeedbackMessage =
-                                            resumeParticipationRetry
-                                    }
-
-                                    is OnlinePendingParticipationMatchResumePreparation
-                                        .WaitingForPlayers -> {
-                                        when (
-                                            val activation =
-                                                onlineRoomRepository
-                                                    .activatePendingParticipationRoomResume(
-                                                        preparation = preparation,
-                                                    )
-                                        ) {
-                                            OnlinePendingParticipationMatchResumeActivation
-                                                .Activated -> {
-                                                sessionCoordinator.dispatch(
-                                                    DominoSessionCommand
-                                                        .OpenResumedOnlineRoom(
-                                                            binding =
-                                                                preparation.binding,
-                                                        ),
-                                                )
-                                            }
-
-                                            is OnlinePendingParticipationMatchResumeActivation
-                                                .NotAttempted -> {
-                                                sessionCoordinator
-                                                    .invalidatePendingOnlineParticipationRemoteConfirmation(
-                                                        binding =
-                                                            preparation.binding,
-                                                    )
-
-                                                pendingOnlineMatchResumeFeedbackMessage =
-                                                    reopenRoomDeviceFailed
-                                            }
-
-                                            is OnlinePendingParticipationMatchResumeActivation
-                                                .TemporarilyUnavailable -> {
-                                                pendingOnlineMatchResumeFeedbackMessage =
-                                                    reopenRoomRetry
-                                            }
-                                        }
-                                    }
-
-                                    is OnlinePendingParticipationMatchResumePreparation
-                                        .Ready -> {
-                                        val matchCoordinator =
-                                            OnlineDominoMatchCoordinator(
-                                                repository = onlineRoomRepository,
-                                                roomId =
-                                                    preparation.roomSnapshot.roomId,
-                                                matchId =
-                                                    preparation.matchSnapshot.matchId,
-                                                localPlayerId =
-                                                    preparation.binding.playerId,
-                                                localPlayerIndex =
-                                                    preparation.binding.localSeatIndex,
-                                                initialSnapshot =
-                                                    preparation.matchSnapshot,
-                                                traceLogger = onlineTraceLogger,
-                                            )
-
-                                        createdMatchCoordinator = matchCoordinator
-
-                                        when (
-                                            val activation =
-                                                onlineRoomRepository
-                                                    .activatePendingParticipationMatchResume(
-                                                        preparation = preparation,
-                                                    )
-                                        ) {
-                                            OnlinePendingParticipationMatchResumeActivation
-                                                .Activated -> {
-                                                sessionCoordinator.dispatch(
-                                                    DominoSessionCommand.StartOnlineMatch(
-                                                        matchCoordinator = matchCoordinator,
-                                                    ),
-                                                )
-
-                                                createdMatchCoordinator = null
-                                            }
-
-                                            is OnlinePendingParticipationMatchResumeActivation
-                                                .NotAttempted -> {
-                                                sessionCoordinator
-                                                    .invalidatePendingOnlineParticipationRemoteConfirmation(
-                                                        binding =
-                                                            preparation.binding,
-                                                    )
-
-                                                pendingOnlineMatchResumeFeedbackMessage =
-                                                    resumeMatchDeviceFailed
-                                            }
-
-                                            is OnlinePendingParticipationMatchResumeActivation
-                                                .TemporarilyUnavailable -> {
-                                                pendingOnlineMatchResumeFeedbackMessage =
-                                                    resumeMatchRetry
-                                            }
-                                        }
-                                    }
-                                }
-                            } finally {
-                                createdMatchCoordinator?.dispose()
-
-                                pendingOnlineMatchResumeInProgress = false
-                            }
-                        }
+                    menuCoroutineScope.launch {
+                        resumePendingOnlineParticipationFromMainMenu(
+                            state = state,
+                        )
                     }
-                },
-                onConnectGoogleAccountClick = {
+                },                onConnectGoogleAccountClick = {
                     connectOnlineGoogleAccount()
                 },
             )
@@ -2190,6 +2454,8 @@ fun DominoPernambucanoApp(
                                     activation.localSeatIndex,
                                 initialSnapshot =
                                     activation.initialSnapshot,
+                                matchMode =
+                                    DominoMatchMode.PUBLIC_RANKED,
                                 traceLogger = onlineTraceLogger,
                                 onMatchFinished = {
                                     onlinePublicRankingRemoteClient
@@ -2366,6 +2632,12 @@ fun DominoPernambucanoApp(
                 onMatchFinished = onMatchFinished,
                 onMatchFinishedTransition = onMatchFinishedTransition,
                 onlineUiTraceReporter = state.matchCoordinator,
+                matchMode = state.matchCoordinator.matchMode,
+                onRankedPlayAgain = {
+                    sessionCoordinator.dispatch(
+                        DominoSessionCommand.OpenOnlineRankedQueue,
+                    )
+                },
             )
         }
     }

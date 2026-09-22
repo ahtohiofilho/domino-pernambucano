@@ -206,6 +206,32 @@ class LocalDominoSessionCoordinator(
         }
     }
 
+    /*
+     * Re-resolves the persisted participation binding against the credential
+     * that exists NOW. This is needed after a saved ACCOUNT credential is
+     * silently recovered: the coordinator may have been created while that
+     * credential was still expired.
+     *
+     * No network call is made here and no valid binding is cleared.
+     */
+    fun refreshPendingOnlineParticipationFromLocalState() {
+        val mainMenuState = mutableState.value
+            as? DominoSessionState.MainMenu
+            ?: return
+
+        updateMainMenuState(
+            mainMenuState.copy(
+                pendingOnlineParticipation =
+                    resolvePendingOnlineParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState
+                        .NotRequested,
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .NotRejected,
+            ),
+        )
+    }
     fun recordPendingOnlineParticipationRemoteSessionRejected(
         binding: OnlineParticipationBinding,
     ) {

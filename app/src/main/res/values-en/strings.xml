@@ -405,6 +405,7 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="post_match_draw">DRAW</string>
     <string name="post_match_local_rounds">Local match • %1$d rounds</string>
     <string name="post_match_online_rounds">Online match • %1$d rounds</string>
+    <string name="post_match_ranked_rounds">Ranked match • %1$d rounds</string>
     <string name="post_match_your_team">YOUR TEAM</string>
     <string name="post_match_opponents">OPPONENTS</string>
     <string name="post_match_points_value">%1$d POINTS</string>

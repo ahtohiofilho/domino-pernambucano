@@ -8,6 +8,7 @@ import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.decrementPlayerClockMillis
@@ -77,6 +78,8 @@ class OnlineDominoMatchCoordinator(
     private val monotonicNowMillis: () -> Long = {
         System.nanoTime() / 1_000_000L
     },
+    val matchMode: DominoMatchMode =
+        DominoMatchMode.PRIVATE_UNRANKED,
     private val onMatchFinished: () -> Unit = {},
 ) : DominoMatchCoordinator, OnlineGameUiTraceReporter {
     private val coordinatorScope = CoroutineScope(
@@ -157,6 +160,7 @@ class OnlineDominoMatchCoordinator(
         MutableStateFlow<OnlineActiveMatchParticipationAuthorizationLossResolution?>(null)
 
     private var matchFinishedCallbackDispatched = false
+    private var completedMatchPresentationAcknowledged = false
 
     override val state: StateFlow<DominoMatchRuntimeState> =
         mutableState.asStateFlow()
@@ -410,6 +414,26 @@ class OnlineDominoMatchCoordinator(
                 submitStartNewMatch()
             }
         }
+    }
+
+    fun acknowledgeCompletedMatchPresented() {
+        if (
+            completedMatchPresentationAcknowledged ||
+            currentState.phase != DominoMatchPhase.MatchFinished
+        ) {
+            return
+        }
+
+        repository.acknowledgeCompletedMatchPresentedLocally(
+            binding = OnlineParticipationBinding(
+                roomId = roomId,
+                matchId = matchId,
+                playerId = localPlayerId,
+                localSeatIndex = localPlayerIndex,
+            ),
+        )
+
+        completedMatchPresentationAcknowledged = true
     }
 
     fun dispose() {

@@ -368,6 +368,26 @@ private fun isExactCohortCoolingDown(
         return false
     }
 
+    /*
+     * Exact-cohort cooldown is an anti-repeat/anti-collusion rule for human
+     * competitive matchmaking. Applying it to server-authorized SYNTHETIC
+     * fallback defeats the availability guarantee: one human plus the same
+     * three synthetic accounts can visibly fill the lobby while formation is
+     * blocked for the full cooldown window.
+     *
+     * Keep the protection intact for four-human cohorts. Mixed fallback
+     * cohorts may rematch immediately; seat planning still minimizes repeated
+     * partnerships independently.
+     */
+    if (
+        candidates.any { candidate ->
+            candidate.participantType !=
+                OnlineParticipantTypeDto.HUMAN
+        }
+    ) {
+        return false
+    }
+
     val accountIds = candidates
         .map { candidate -> candidate.accountId }
         .toSet()

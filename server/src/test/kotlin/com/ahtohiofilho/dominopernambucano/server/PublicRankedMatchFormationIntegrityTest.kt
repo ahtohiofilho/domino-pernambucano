@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -77,6 +78,77 @@ class PublicRankedMatchFormationIntegrityTest {
         )
 
         assertNull(plan)
+    }
+
+    @Test
+    fun synthetic_fallback_exact_cohort_can_rematch_during_human_cooldown() {
+        val candidates = listOf(
+            candidate(
+                number = 1,
+                participantType = OnlineParticipantTypeDto.HUMAN,
+            ),
+            candidate(
+                number = 2,
+                participantType = OnlineParticipantTypeDto.SYNTHETIC,
+            ),
+            candidate(
+                number = 3,
+                participantType = OnlineParticipantTypeDto.SYNTHETIC,
+            ),
+            candidate(
+                number = 4,
+                participantType = OnlineParticipantTypeDto.SYNTHETIC,
+            ),
+        )
+        val history = listOf(
+            historyEntry(
+                accountIdsBySeat = listOf(
+                    "account-1",
+                    "account-2",
+                    "account-3",
+                    "account-4",
+                ),
+                completedAtEpochMillis = 59_000L,
+            ),
+        )
+
+        val plan = planPublicRankedMatchFormation(
+            queuedCandidates = candidates,
+            recentHistory = history,
+            /*
+             * candidate(1) entered at t=1ms. For 1 HUMAN + 3 SYNTHETIC the
+             * fallback threshold is exactly 60_000ms, so t=60_001ms is the
+             * first eligible instant. R20 used 60_000ms here, producing an
+             * oldestHumanWaitMillis of 59_999ms and testing the fallback
+             * threshold instead of the cohort-cooldown behavior.
+             */
+            nowEpochMillis = 60_001L,
+            policy = OnlineServerStoreResourcePolicy(
+                publicRankedFormationLookaheadSize = 4,
+                publicRankedSyntheticFallbackInitialDelayMillis =
+                    20_000L,
+                publicRankedSyntheticFallbackAdditionalSeatDelayMillis =
+                    20_000L,
+                publicRankedExactCohortCooldownMillis =
+                    30L * 60L * 1_000L,
+            ),
+            entropy = SequenceEntropy(),
+        )
+
+        val requiredPlan = requireNotNull(plan)
+
+        assertEquals(1, requiredPlan.humanCount)
+        assertEquals(3, requiredPlan.syntheticCount)
+        assertEquals(
+            listOf(
+                "account-1",
+                "account-2",
+                "account-3",
+                "account-4",
+            ),
+            requiredPlan.selectedCandidatesInQueueOrder
+                .map { candidate -> candidate.accountId },
+        )
     }
 
     @Test
@@ -249,12 +321,17 @@ class PublicRankedMatchFormationIntegrityTest {
         playerNumber: Int,
     ): String = "P0$playerNumber"
 
-    private fun candidate(number: Int) =
+    private fun candidate(
+        number: Int,
+        participantType: OnlineParticipantTypeDto =
+            OnlineParticipantTypeDto.HUMAN,
+    ) =
         PublicRankedFormationCandidate(
             playerId = "player-$number",
             accountId = "account-$number",
             playerName = "Jogador $number",
             enqueuedAtEpochMillis = number.toLong(),
+            participantType = participantType,
         )
 
     private fun historyEntry(

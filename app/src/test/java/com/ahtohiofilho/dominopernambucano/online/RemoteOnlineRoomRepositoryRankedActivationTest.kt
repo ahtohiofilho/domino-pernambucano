@@ -74,7 +74,7 @@ class RemoteOnlineRoomRepositoryRankedActivationTest {
         }
 
     @Test
-    fun completed_ranked_match_local_release_clears_state_without_remote_action() =
+    fun completed_ranked_match_terminal_ack_then_local_release_clears_binding_and_state_without_remote_action() =
         runBlocking {
             val match = createMatchSnapshot()
             val room = createRoomSnapshot(
@@ -113,23 +113,53 @@ class RemoteOnlineRoomRepositoryRankedActivationTest {
                 localSeatIndex = 2,
             )
 
+            val expectedBinding =
+                OnlineParticipationBinding(
+                    roomId = match.roomId,
+                    matchId = match.matchId,
+                    playerId = "player-1",
+                    localSeatIndex = 2,
+                )
+
             assertTrue(
                 activation is OnlinePublicRankedMatchActivation.Ready,
+            )
+            assertEquals(
+                expectedBinding,
+                bindingStore.binding,
+            )
+
+            /*
+             * Seeing MatchFinished consumes only the matching persisted
+             * participation. The terminal screen keeps its in-memory snapshots
+             * until the coordinator is actually disposed.
+             */
+            repository.acknowledgeCompletedMatchPresentedLocally(
+                binding = expectedBinding,
+            )
+
+            assertEquals(
+                null,
+                bindingStore.binding,
+            )
+            assertEquals(
+                match,
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                room,
+                repository.roomSnapshot.value,
             )
             assertEquals(
                 "account-token",
                 api.bearerToken,
             )
             assertTrue(
-                bindingStore.binding != null,
+                api.submitActionRequests.isEmpty(),
             )
 
             repository.releaseCompletedMatchLocally()
 
-            assertEquals(
-                null,
-                bindingStore.binding,
-            )
             assertEquals(
                 null,
                 repository.matchSnapshot.value,
@@ -151,6 +181,86 @@ class RemoteOnlineRoomRepositoryRankedActivationTest {
             )
         }
 
+    @Test
+    fun completed_match_terminal_ack_and_release_do_not_clear_a_newer_binding() =
+        runBlocking {
+            val match = createMatchSnapshot()
+            val room = createRoomSnapshot(
+                roomId = match.roomId,
+                matchId = match.matchId,
+                playerId = "player-1",
+                localSeatIndex = 2,
+            )
+            val api = FakeRemoteApi(
+                room = room,
+                match = match,
+            )
+            val bindingStore = InMemoryBindingStore()
+            val repository = RemoteOnlineRoomRepository(
+                config = OnlineBackendConfig.remote(
+                    baseUrl = "http://localhost:8080",
+                ),
+                apiClient = api,
+                pollingPolicy = OnlineRemotePollingPolicy.Disabled,
+                coroutineDispatcher = Dispatchers.Unconfined,
+                sessionCredentialRepository =
+                    OnlineSessionCredentialRepository(
+                        store = InMemoryCredentialStore(
+                            credential = accountCredential(),
+                        ),
+                        nowEpochMillis = { 1_000L },
+                    ),
+                onlineParticipationBindingRepository =
+                    OnlineParticipationBindingRepository(
+                        store = bindingStore,
+                    ),
+            )
+
+            repository.activatePublicRankedMatch(
+                matchId = match.matchId,
+                localSeatIndex = 2,
+            )
+
+            val completedBinding = requireNotNull(
+                bindingStore.binding,
+            )
+            val newerBinding = completedBinding.copy(
+                roomId = "newer-room",
+                matchId = "newer-match",
+                localSeatIndex = 1,
+            )
+
+            bindingStore.write(
+                binding = newerBinding,
+            )
+
+            repository.acknowledgeCompletedMatchPresentedLocally(
+                binding = completedBinding,
+            )
+
+            assertEquals(
+                newerBinding,
+                bindingStore.binding,
+            )
+
+            repository.releaseCompletedMatchLocally()
+
+            assertEquals(
+                newerBinding,
+                bindingStore.binding,
+            )
+            assertEquals(
+                null,
+                repository.matchSnapshot.value,
+            )
+            assertEquals(
+                null,
+                repository.roomSnapshot.value,
+            )
+            assertTrue(
+                api.submitActionRequests.isEmpty(),
+            )
+        }
     @Test
     fun visitor_is_rejected_before_ranked_snapshot_fetch() = runBlocking {
         val api = FakeRemoteApi(

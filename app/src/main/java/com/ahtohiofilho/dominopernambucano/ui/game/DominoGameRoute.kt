@@ -1,4 +1,4 @@
-﻿package com.ahtohiofilho.dominopernambucano.ui.game
+package com.ahtohiofilho.dominopernambucano.ui.game
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -11,10 +11,12 @@ import androidx.compose.ui.platform.LocalContext
 import com.ahtohiofilho.dominopernambucano.domain.getPlayableMoves
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchRuntimeState
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
 import com.ahtohiofilho.dominopernambucano.match.LocalDominoMatchCoordinator
+import com.ahtohiofilho.dominopernambucano.online.OnlineDominoMatchCoordinator
 import com.ahtohiofilho.dominopernambucano.online.OnlineGameUiTraceReporter
 import com.ahtohiofilho.dominopernambucano.online.OnlineUiTraceContext
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMatchResultSoundPlayer
@@ -37,6 +39,10 @@ fun DominoGameRoute(
         continuation()
     },
     onlineUiTraceReporter: OnlineGameUiTraceReporter? = null,
+    matchMode: DominoMatchMode = DominoMatchMode.OFFLINE_LOCAL,
+    onRankedPlayAgain: () -> Unit = {
+        error("Ranked post-match play-again route is not configured.")
+    },
 ) {
     val runtimeState by matchCoordinator.state.collectAsState()
     val gameState = runtimeState.gameState
@@ -120,6 +126,23 @@ fun DominoGameRoute(
                 } else {
                     postMatchStatisticsTracker.accept(state.gameState)
                 }
+        }
+    }
+
+    LaunchedEffect(
+        matchCoordinator,
+        runtimeState.phase,
+    ) {
+        if (
+            runtimeState.phase == DominoMatchPhase.MatchFinished &&
+            matchCoordinator is OnlineDominoMatchCoordinator
+        ) {
+            /*
+             * The authoritative terminal state has reached the Compose
+             * presentation. From this point a later process restart must not
+             * reopen this already-seen result.
+             */
+            matchCoordinator.acknowledgeCompletedMatchPresented()
         }
     }
 
@@ -222,6 +245,7 @@ fun DominoGameRoute(
                 runtimeState.playerClockReserveMillis,
             isTurnClockEnabled = runtimeState.clockPolicy.enabled,
             turnClockTotalMillis = runtimeState.clockPolicy.playerRoundTimeMillis,
+            matchMode = matchMode,
             onlinePresentationId = onlineUiTraceContext?.presentationId,
             onlineSnapshotRevision = onlineUiTraceContext?.snapshotRevision,
             postMatchStatistics = postMatchStatisticsState.value,
@@ -285,13 +309,40 @@ fun DominoGameRoute(
         },
         onStartNewMatch = {
             onMatchFinishedTransition {
-                matchCoordinator.dispatch(
-                    DominoMatchCommand.StartNewMatch,
-                )
+                when (
+                    resolvePostMatchPlayAgainAction(
+                        matchMode = matchMode,
+                    )
+                ) {
+                    PostMatchPlayAgainAction.START_NEW_MATCH -> {
+                        matchCoordinator.dispatch(
+                            DominoMatchCommand.StartNewMatch,
+                        )
+                    }
+
+                    PostMatchPlayAgainAction.OPEN_RANKED_QUEUE -> {
+                        onRankedPlayAgain()
+                    }
+                }
             }
         },
     )
 }
+internal enum class PostMatchPlayAgainAction {
+    START_NEW_MATCH,
+    OPEN_RANKED_QUEUE,
+}
+
+internal fun resolvePostMatchPlayAgainAction(
+    matchMode: DominoMatchMode,
+): PostMatchPlayAgainAction {
+    return if (matchMode == DominoMatchMode.PUBLIC_RANKED) {
+        PostMatchPlayAgainAction.OPEN_RANKED_QUEUE
+    } else {
+        PostMatchPlayAgainAction.START_NEW_MATCH
+    }
+}
+
 internal fun shouldRecoverLocalBotTurn(
     runtimeState: DominoMatchRuntimeState,
 ): Boolean {

@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoPlayer
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoBackNavigationButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
@@ -158,11 +159,9 @@ private fun PostMatchSummaryOverlay(
 
             PostMatchPill(
                 text = stringResource(
-                    if (uiState.onlinePresentationId != null) {
-                        R.string.post_match_online_rounds
-                    } else {
-                        R.string.post_match_local_rounds
-                    },
+                    postMatchRoundsLabelResource(
+                        matchMode = uiState.matchMode,
+                    ),
                     completedRounds,
                 ),
             )
@@ -307,11 +306,9 @@ private fun PostMatchStatisticsOverlay(
 
             PostMatchPill(
                 text = stringResource(
-                    if (uiState.onlinePresentationId != null) {
-                        R.string.post_match_online_rounds
-                    } else {
-                        R.string.post_match_local_rounds
-                    },
+                    postMatchRoundsLabelResource(
+                        matchMode = uiState.matchMode,
+                    ),
                     completedRounds,
                 ),
             )
@@ -600,6 +597,22 @@ private fun CompactPlayerRow(
         ValueCell(value = stats?.touchesGiven?.toString() ?: "—")
         Spacer(modifier = Modifier.width(8.dp))
         ValueCell(value = stats?.automaticRounds?.toString() ?: "—")
+    }
+}
+
+internal fun postMatchRoundsLabelResource(
+    matchMode: DominoMatchMode,
+): Int {
+    return when (matchMode) {
+        DominoMatchMode.OFFLINE_LOCAL ->
+            R.string.post_match_local_rounds
+
+        DominoMatchMode.PUBLIC_RANKED ->
+            R.string.post_match_ranked_rounds
+
+        DominoMatchMode.PRIVATE_UNRANKED,
+        DominoMatchMode.PUBLIC_CASUAL ->
+            R.string.post_match_online_rounds
     }
 }
 

@@ -185,6 +185,37 @@ fun MainMenuScreen(
                 recoverablePendingOnlineParticipation != null &&
                 !discardRejectedPendingOnlineParticipationAvailable
 
+    val completedInspection =
+        pendingOnlineParticipationInspection
+            as? OnlinePendingParticipationInspectionState.Completed
+
+    val inspectionRetryAvailable =
+        pendingOnlineParticipation is
+                OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation &&
+                !discardRejectedPendingOnlineParticipationAvailable &&
+                (
+                    completedInspection?.result is
+                        OnlinePendingParticipationRemoteInspection
+                            .TemporarilyUnavailable ||
+                    completedInspection?.result is
+                        OnlinePendingParticipationRemoteInspection
+                            .NotAttempted
+                )
+
+    val resumeRetryAvailable =
+        resumePendingOnlineMatchAvailable &&
+                pendingOnlineMatchResumeFeedbackMessage != null
+
+    /*
+     * A persisted recoverable participation owns continuity until it is
+     * restored, proved obsolete, or explicitly discarded after rejection.
+     */
+    val continuityGateActive =
+        pendingOnlineParticipation is
+            OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation
+
     val menuActionInProgress =
         inspectionInProgress || pendingOnlineMatchResumeInProgress
 
@@ -299,12 +330,7 @@ fun MainMenuScreen(
                 ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (
-                    pendingOnlineParticipation is
-                            OnlinePendingParticipationLocalResolution
-                            .ReadyForRemoteReconciliation &&
-                    !resumePendingOnlineMatchAvailable
-                ) {
+                if (inspectionRetryAvailable) {
                     DominoCompactActionCard(
                         title = if (inspectionInProgress) {
                             stringResource(
@@ -325,7 +351,7 @@ fun MainMenuScreen(
                     )
                 }
 
-                if (resumePendingOnlineMatchAvailable) {
+                if (resumeRetryAvailable) {
                     val resumeTitle =
                         if (pendingOnlineMatchResumeInProgress) {
                             stringResource(
@@ -395,7 +421,9 @@ fun MainMenuScreen(
                     title = stringResource(R.string.main_menu_play),
                     supportingText = null,
                     onClick = onPlayClick,
-                    enabled = !menuActionInProgress,
+                    enabled =
+                        !menuActionInProgress &&
+                            !continuityGateActive,
                     leadingContent = {
                         BrandGlyph("▶")
                     },
@@ -413,7 +441,9 @@ fun MainMenuScreen(
                     ),
                     accent = DominoBrandAccent.Red,
                     onClick = onRankingClick,
-                    enabled = !menuActionInProgress,
+                    enabled =
+                        !menuActionInProgress &&
+                            !continuityGateActive,
                     elevated = true,
                     leadingContent = {
                         BrandGlyph("★")

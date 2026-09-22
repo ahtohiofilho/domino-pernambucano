@@ -152,6 +152,16 @@ interface OnlineRoomRepository {
     }
 
     /*
+     * Confirma apenas que a superfície terminal autoritativa foi efetivamente
+     * apresentada ao participante. A implementação deve remover somente o
+     * vínculo persistido correspondente àquela partida, sem descartar o
+     * snapshot que a tela final ainda está usando.
+     */
+    fun acknowledgeCompletedMatchPresentedLocally(
+        binding: OnlineParticipationBinding,
+    ) = Unit
+
+    /*
      * Libera apenas o estado local de uma partida online já concluída.
      * Não envia ação remota e não representa abandono de partida ativa.
      */

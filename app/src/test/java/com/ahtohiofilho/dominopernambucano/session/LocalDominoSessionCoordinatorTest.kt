@@ -71,6 +71,79 @@ class LocalDominoSessionCoordinatorTest {
     }
 
     @Test
+    fun refresh_pending_online_participation_after_local_credential_becomes_available_exposes_ready_binding() {
+        val binding = OnlineParticipationBinding(
+            roomId = "room-1",
+            matchId = "match-1",
+            playerId = "anonymous-player-1",
+            localSeatIndex = 2,
+        )
+        val bindingStore = TestOnlineParticipationBindingStore(
+            initialBinding = binding,
+        )
+        val anonymousSessionStore =
+            TestOnlineAnonymousSessionStore()
+        val anonymousSessionRepository =
+            OnlineAnonymousSessionRepository(
+                store = anonymousSessionStore,
+                nowEpochMillis = { 0L },
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = bindingStore,
+                ),
+            onlineAnonymousSessionRepository =
+                anonymousSessionRepository,
+        )
+
+        val initialMainMenu =
+            coordinator.currentState as DominoSessionState.MainMenu
+
+        assertTrue(
+            initialMainMenu.pendingOnlineParticipation is
+                OnlinePendingParticipationLocalResolution
+                    .BlockedByMissingValidAnonymousSession,
+        )
+
+        anonymousSessionStore.write(
+            OnlineAnonymousSessionDto(
+                playerId = binding.playerId,
+                accessToken = "test-access-token",
+                expiresAtEpochMillis = Long.MAX_VALUE,
+            ),
+        )
+
+        coordinator.refreshPendingOnlineParticipationFromLocalState()
+
+        val refreshedMainMenu =
+            coordinator.currentState as DominoSessionState.MainMenu
+
+        assertEquals(
+            OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation(
+                    binding = binding,
+                ),
+            refreshedMainMenu.pendingOnlineParticipation,
+        )
+        assertEquals(
+            OnlinePendingParticipationInspectionState.NotRequested,
+            refreshedMainMenu.pendingOnlineParticipationInspection,
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection.NotRejected,
+            refreshedMainMenu.pendingOnlineParticipationSessionRejection,
+        )
+        assertEquals(
+            binding,
+            bindingStore.storedBinding,
+        )
+        assertEquals(
+            0,
+            bindingStore.clearCallCount,
+        )
+    }
+    @Test
     fun initial_state_has_no_pending_online_participation_when_binding_is_absent() {
         val store = TestOnlineParticipationBindingStore()
 
