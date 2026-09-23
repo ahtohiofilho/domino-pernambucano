@@ -81,6 +81,13 @@ internal const val RankingPublicationPendingTag = "ranking_publication_pending"
 internal const val RankingExplanationButtonTag = "ranking_explanation_button"
 internal const val RankingExplanationDialogTag = "ranking_explanation_dialog"
 
+internal object RankingExplanationDialogColors {
+    val container = DominoSemanticColors.dialogSurface
+    val title = DominoSemanticColors.dialogTitle
+    val body = DominoSemanticColors.dialogBody
+    val action = DominoSemanticColors.dialogDismissAction
+}
+
 @Composable
 fun OnlinePublicRankingRoute(
     rankingClient: OnlinePublicRankingClient,
@@ -1030,7 +1037,7 @@ private fun RankingExplanationDialog(
                             R.string.ranking_help_order_note,
                         ),
                         color =
-                            DominoSemanticColors.brandSupportingText,
+                            RankingExplanationDialogColors.body,
                     )
                 }
             }
@@ -1043,9 +1050,13 @@ private fun RankingExplanationDialog(
                     text = stringResource(
                         R.string.ranking_help_close,
                     ),
+                    color = RankingExplanationDialogColors.action,
                 )
             }
         },
+        containerColor = RankingExplanationDialogColors.container,
+        titleContentColor = RankingExplanationDialogColors.title,
+        textContentColor = RankingExplanationDialogColors.body,
     )
 }
 
