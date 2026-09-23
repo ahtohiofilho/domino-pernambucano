@@ -73,46 +73,112 @@ class PassTurnKnockAnimationOverlayTest {
     }
 
     @Test
-    fun `three synthetic opponents use the three tones not selected locally`() {
-        val resolvedTones = (1..3).map { playerIndex ->
+    fun `same synthetic character keeps tone across seats and human choices`() {
+        val firstAppearance = resolveKnockHandAppearanceTone(
+            playerIndex = 1,
+            localPlayerIndex = 0,
+            participantType = DominoParticipantType.SYNTHETIC,
+            participantIdentityKey = "JAL",
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+            selectedTone = HandAppearanceTone.TONE_1,
+        )
+
+        val secondAppearance = resolveKnockHandAppearanceTone(
+            playerIndex = 0,
+            localPlayerIndex = 1,
+            participantType = DominoParticipantType.SYNTHETIC,
+            participantIdentityKey = "JAL",
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+            selectedTone = HandAppearanceTone.TONE_4,
+        )
+
+        assertEquals(
+            firstAppearance,
+            secondAppearance,
+        )
+    }
+
+    @Test
+    fun `all sixty synthetic characters keep fixed identity tones`() {
+        val syntheticIdentityKeys = listOf(
+            "JAL", "MCO", "RLI", "CRO", "BME", "LNU", "DRA", "PFR",
+            "TBA", "RMO", "ASA", "BTO", "FCA", "AGO", "LDA", "NPI",
+            "MTA", "SCO", "GLE", "HBR", "EFA", "JPR", "CME", "IDU",
+            "RAZ", "FLO", "MVI", "DMA", "VPA", "CNE", "LPE", "ARI",
+            "HMO", "BCO", "MCA", "PTE", "IVA", "LAR", "DPO", "GRE",
+            "SCA", "MFI", "AQZ", "PMO", "VSA", "RMA", "CAL", "LBA",
+            "FMO", "TOL", "AGU", "CRE", "JMA", "EBA", "WFE", "CAN",
+            "OCU", "MPA", "RBR", "VSI",
+        )
+
+        assertEquals(
+            60,
+            syntheticIdentityKeys.size,
+        )
+        assertEquals(
+            60,
+            syntheticIdentityKeys.distinct().size,
+        )
+
+        val firstAppearances = syntheticIdentityKeys.map { identityKey ->
             resolveKnockHandAppearanceTone(
-                playerIndex = playerIndex,
+                playerIndex = 1,
                 localPlayerIndex = 0,
                 participantType = DominoParticipantType.SYNTHETIC,
+                participantIdentityKey = identityKey,
                 matchMode = DominoMatchMode.PUBLIC_RANKED,
                 selectedTone = HandAppearanceTone.TONE_1,
             )
         }
 
-        assertEquals(
-            listOf(
-                HandAppearanceTone.TONE_2,
-                HandAppearanceTone.TONE_3,
-                HandAppearanceTone.TONE_4,
-            ),
-            resolvedTones,
-        )
-    }
-
-    @Test
-    fun `synthetic palette excludes a different locally selected tone`() {
-        val resolvedTones = (1..3).map { playerIndex ->
+        val secondAppearances = syntheticIdentityKeys.map { identityKey ->
             resolveKnockHandAppearanceTone(
-                playerIndex = playerIndex,
-                localPlayerIndex = 0,
+                playerIndex = 0,
+                localPlayerIndex = 1,
                 participantType = DominoParticipantType.SYNTHETIC,
+                participantIdentityKey = identityKey,
                 matchMode = DominoMatchMode.PUBLIC_RANKED,
-                selectedTone = HandAppearanceTone.TONE_3,
+                selectedTone = HandAppearanceTone.TONE_4,
             )
         }
 
         assertEquals(
-            listOf(
-                HandAppearanceTone.TONE_1,
-                HandAppearanceTone.TONE_2,
-                HandAppearanceTone.TONE_4,
-            ),
-            resolvedTones,
+            firstAppearances,
+            secondAppearances,
+        )
+        assertEquals(
+            HandAppearanceTone.entries.toSet(),
+            firstAppearances.toSet(),
+        )
+    }
+
+    @Test
+    fun `synthetic identity fallback never depends on human tone`() {
+        val firstAppearance = resolveKnockHandAppearanceTone(
+            playerIndex = 1,
+            localPlayerIndex = 0,
+            participantType = DominoParticipantType.SYNTHETIC,
+            participantIdentityKey = null,
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+            selectedTone = HandAppearanceTone.TONE_1,
+        )
+
+        val secondAppearance = resolveKnockHandAppearanceTone(
+            playerIndex = 0,
+            localPlayerIndex = 1,
+            participantType = DominoParticipantType.SYNTHETIC,
+            participantIdentityKey = "   ",
+            matchMode = DominoMatchMode.PUBLIC_RANKED,
+            selectedTone = HandAppearanceTone.TONE_4,
+        )
+
+        assertEquals(
+            HandAppearanceTone.TONE_1,
+            firstAppearance,
+        )
+        assertEquals(
+            firstAppearance,
+            secondAppearance,
         )
     }
 

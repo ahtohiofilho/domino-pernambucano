@@ -624,6 +624,9 @@ fun DominoGameScreen(
                     .getOrNull(presentingPassPhase.playerIndex)
                     ?.participantType
                     ?: DominoParticipantType.HUMAN,
+                participantIdentityKey = gameState.players
+                    .getOrNull(presentingPassPhase.playerIndex)
+                    ?.name,
                 matchMode = uiState.matchMode,
                 presentationId = uiState.onlinePresentationId,
                 onAnimationTrace = { type, attributes ->

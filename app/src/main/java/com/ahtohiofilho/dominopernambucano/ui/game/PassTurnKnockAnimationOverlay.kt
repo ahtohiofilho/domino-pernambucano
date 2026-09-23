@@ -30,6 +30,7 @@ import com.ahtohiofilho.dominopernambucano.ui.personalization.HandAppearanceTone
 import com.ahtohiofilho.dominopernambucano.ui.personalization.toKnockHandColorFilter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -59,6 +60,7 @@ fun PassTurnKnockAnimationOverlay(
     handAppearanceTone: HandAppearanceTone =
         HandAppearanceTone.TONE_1,
     participantType: DominoParticipantType,
+    participantIdentityKey: String?,
     matchMode: DominoMatchMode,
     presentationId: String?,
     onAnimationTrace: (OnlineTraceType, Map<String, String>) -> Unit,
@@ -76,6 +78,7 @@ fun PassTurnKnockAnimationOverlay(
             playerIndex = playerIndex,
             localPlayerIndex = localPlayerIndex,
             participantType = participantType,
+            participantIdentityKey = participantIdentityKey,
             matchMode = matchMode,
             selectedTone = handAppearanceTone,
         )
@@ -318,11 +321,18 @@ internal fun resolveKnockHandAppearanceTone(
     playerIndex: Int,
     localPlayerIndex: Int,
     participantType: DominoParticipantType,
+    participantIdentityKey: String? = null,
     matchMode: DominoMatchMode,
     selectedTone: HandAppearanceTone,
 ): HandAppearanceTone {
     if (playerIndex == localPlayerIndex) {
         return selectedTone
+    }
+
+    if (participantType == DominoParticipantType.SYNTHETIC) {
+        return resolveSyntheticCharacterHandAppearanceTone(
+            participantIdentityKey = participantIdentityKey,
+        )
     }
 
     val usesSyntheticPalette =
@@ -348,6 +358,26 @@ internal fun resolveKnockHandAppearanceTone(
     ) {
         HandAppearanceTone.TONE_1
     }
+}
+
+internal fun resolveSyntheticCharacterHandAppearanceTone(
+    participantIdentityKey: String?,
+): HandAppearanceTone {
+    val normalizedIdentityKey = participantIdentityKey
+        ?.trim()
+        ?.uppercase(Locale.ROOT)
+        .orEmpty()
+
+    if (normalizedIdentityKey.isBlank()) {
+        return HandAppearanceTone.TONE_1
+    }
+
+    val toneIndex = Math.floorMod(
+        normalizedIdentityKey.hashCode(),
+        HandAppearanceTone.entries.size,
+    )
+
+    return HandAppearanceTone.entries[toneIndex]
 }
 
 private fun expectedKnockDurationMillis(): Long {
