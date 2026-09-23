@@ -28,6 +28,74 @@ import org.junit.Test
 
 class OnlineServerRankedCycleSnapshotTest {
     @Test
+    fun schema_thirteen_to_fourteen_preserves_ranked_history() {
+        val day = epochMillis(
+            year = 2026,
+            month = 9,
+            day = 23,
+            hour = 12,
+        )
+        val period = resolveRankingCycle(
+            kind = RankingCycleKind.DAILY,
+            completedAtEpochMillis = day,
+        )
+        var now = day
+        val source = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+        source.restorePersistentState(
+            OnlineServerStoreState(
+                rankedResults = listOf(
+                    result(
+                        matchIndex = 13,
+                        completedAtEpochMillis = day,
+                    ),
+                ),
+            ),
+        )
+
+        now = period.endsAtEpochMillis
+        assertTrue(source.advanceAuthoritativeTime())
+
+        val beforeMigration = source.snapshotPersistentState()
+
+        assertEquals(1, beforeMigration.rankedResults.size)
+        assertEquals(1, beforeMigration.rankedCycleSnapshots.size)
+
+        val schemaThirteenState = beforeMigration.copy(
+            schemaVersion = 13,
+        )
+        val restored = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+
+        restored.restorePersistentState(schemaThirteenState)
+
+        val normalized = restored.snapshotPersistentState()
+
+        assertEquals(
+            ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+            normalized.schemaVersion,
+        )
+        assertEquals(
+            beforeMigration.rankedResults,
+            normalized.rankedResults,
+        )
+        assertEquals(
+            beforeMigration.rankedCycleSnapshots,
+            normalized.rankedCycleSnapshots,
+        )
+        assertEquals(
+            beforeMigration.accounts,
+            normalized.accounts,
+        )
+        assertEquals(
+            beforeMigration.publicRankedFormationHistory,
+            normalized.publicRankedFormationHistory,
+        )
+    }
+
+    @Test
     fun closed_daily_v2_cycle_preserves_ties_across_top_n_boundary() {
         val day = epochMillis(
             year = 2026,

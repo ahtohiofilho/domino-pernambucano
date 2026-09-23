@@ -2671,7 +2671,14 @@ class InMemoryOnlineServerStore(
             return state
         }
 
-        if (state.schemaVersion in 10..12) {
+        if (state.schemaVersion in 10..13) {
+            /*
+             * Schemas 10..13 are structurally forward-compatible with
+             * schema 14. Schema 14 only adds timeoutRoundSeatIndexes with
+             * an empty-list default, so historical ranked results and
+             * closed cycle snapshots must be preserved byte-for-byte at
+             * the model level during normalization.
+             */
             return state.copy(
                 schemaVersion =
                     ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
