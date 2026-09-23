@@ -1030,16 +1030,6 @@ private fun RankingExplanationDialog(
                         )
                     }
                 }
-
-                if (response.usesModernRankingPresentation()) {
-                    Text(
-                        text = stringResource(
-                            R.string.ranking_help_order_note,
-                        ),
-                        color =
-                            RankingExplanationDialogColors.body,
-                    )
-                }
             }
         },
         confirmButton = {
