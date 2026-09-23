@@ -6,9 +6,11 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 /**
  * Identity and control are separate concerns.
  *
- * HUMAN requires human input.
- * SYNTHETIC keeps persistent identity but is controlled by the server in play.
- * APPLICATION remains server-controlled for legacy development compatibility.
+ * HUMAN and SYNTHETIC both submit participant-originated actions.
+ * SYNTHETIC remains a distinct identity for ranking, presentation and audit,
+ * but the server must not choose a move merely because that identity is
+ * synthetic. APPLICATION remains server-controlled only for legacy
+ * development compatibility.
  */
 internal fun resolveServerControlledSeatIndexes(players: List<OnlineRoomPlayerDto>,
     legacyApplicationSeatIndexes: Set<Int> = emptySet(),
@@ -17,8 +19,6 @@ internal fun resolveServerControlledSeatIndexes(players: List<OnlineRoomPlayerDt
 
     players.forEach { player ->
         if (
-            player.participantType ==
-                OnlineParticipantTypeDto.SYNTHETIC ||
             player.participantType ==
                 OnlineParticipantTypeDto.APPLICATION
         ) {

@@ -17,7 +17,7 @@ import org.junit.Test
 
 class SyntheticServerControlledTurnIntegrationTest {
     @Test
-    fun matched_synthetic_takes_turn_without_client_action() {
+    fun matched_synthetic_waits_for_and_accepts_participant_action() {
         var now = 1_000L
         var accountSequence = 0
 
@@ -164,23 +164,46 @@ class SyntheticServerControlledTurnIntegrationTest {
                     val beforeGameState = before.gameState
 
                     assertFalse(
-                        "Synthetic turn must not resolve immediately.",
+                        "Synthetic identity must not be moved by the server immediately.",
                         store.advanceAuthoritativeTime(),
                     )
 
                     now +=
-                        DominoMatchTiming.BotDecisionDelayMillis - 1L
+                        DominoMatchTiming.BotDecisionDelayMillis
 
                     assertFalse(
-                        "Synthetic turn resolved before the local-bot cadence.",
+                        "Synthetic identity must still wait for its participant action after bot cadence.",
                         store.advanceAuthoritativeTime(),
                     )
 
-                    now += 1L
+                    val result = if (syntheticMove != null) {
+                        store.submitAction(
+                            createOnlinePlayMoveAction(
+                                roomId = room.roomId,
+                                matchId = matchId,
+                                playerId = currentPlayer.playerId,
+                                revision = beforeRevision,
+                                move = syntheticMove,
+                                actionId =
+                                    "synthetic-participant-$step-$beforeRevision",
+                            ),
+                        )
+                    } else {
+                        store.submitAction(
+                            createOnlinePassTurnAction(
+                                roomId = room.roomId,
+                                matchId = matchId,
+                                playerId = currentPlayer.playerId,
+                                revision = beforeRevision,
+                                actionId =
+                                    "synthetic-participant-pass-$step-$beforeRevision",
+                            ),
+                        )
+                    }
 
                     assertTrue(
-                        "Synthetic turn was not advanced by the server after the natural cadence.",
-                        store.advanceAuthoritativeTime(),
+                        "Synthetic participant action was rejected: ${result.reason}",
+                        result.accepted,
                     )
 
                     val after = requireNotNull(
@@ -188,88 +211,16 @@ class SyntheticServerControlledTurnIntegrationTest {
                     )
 
                     assertTrue(
-                        "Synthetic turn did not publish a new revision.",
+                        "Synthetic participant action did not publish a new revision.",
                         after.revision > beforeRevision,
                     )
                     assertTrue(
-                        "Synthetic turn did not change authoritative state.",
+                        "Synthetic participant action did not change authoritative state.",
                         after.gameState != beforeGameState,
                     )
                     assertTrue(
-                        "Synthetic identity must not be recorded as a timed-out human.",
+                        "Normal synthetic action must not become a timed-out human.",
                         currentSeat !in after.automaticPlayerIndexes,
-                    )
-
-                    /*
-                     * A pass keeps the existing no-reload rule. Continue until
-                     * a SYNTHETIC actually plays a piece so this regression
-                     * necessarily exercises reserve -> primary transfer.
-                     */
-                    if (syntheticMove == null) {
-                        return@repeat
-                    }
-
-                    val decrementedClock =
-                        decrementPlayerClockMillis(
-                            clocks = before.playerClockMillis,
-                            playerIndex = currentSeat,
-                            elapsedMillis =
-                                DominoMatchTiming.BotDecisionDelayMillis,
-                        )
-
-                    val expectedReload =
-                        reloadPlayerClockFromReserveMillis(
-                            clocks = decrementedClock,
-                            reserves =
-                                before.playerClockReserveMillis,
-                            playerIndex = currentSeat,
-                            playerRoundTimeMillis =
-                                runtime.clockPolicy
-                                    .playerRoundTimeMillis,
-                        )
-
-                    assertTrue(
-                        "Test fixture did not exercise reserve-to-primary transfer.",
-                        expectedReload.playerClockMillis[currentSeat] >
-                            decrementedClock[currentSeat],
-                    )
-
-                    assertEquals(
-                        "Synthetic primary clock was not reloaded from reserve.",
-                        expectedReload.playerClockMillis[currentSeat],
-                        after.playerClockMillis[currentSeat],
-                    )
-                    assertEquals(
-                        "Synthetic reserve was not debited by the reload.",
-                        expectedReload.playerClockReserveMillis[currentSeat],
-                        after.playerClockReserveMillis[currentSeat],
-                    )
-
-                    playUntilOneRankedRoundCompletes(
-                        store = store,
-                        roomId = room.roomId,
-                        matchId = matchId,
-                        roomPlayers = room.players,
-                        advanceSyntheticDecisionClock = {
-                            now +=
-                                DominoMatchTiming.BotDecisionDelayMillis
-                        },
-                    )
-
-                    val metrics = requireNotNull(
-                        store.getRankedMatchMetricAccumulator(matchId),
-                    )
-                    assertTrue(
-                        "Normal server-controlled play must not become automaticRounds.",
-                        metrics.seatMetrics.all { seat ->
-                            seat.automaticRounds == 0
-                        },
-                    )
-                    assertTrue(
-                        "Normal server-controlled play must not become timeoutRounds.",
-                        metrics.seatMetrics.all { seat ->
-                            seat.timeoutRounds == 0
-                        },
                     )
                     return
                 }

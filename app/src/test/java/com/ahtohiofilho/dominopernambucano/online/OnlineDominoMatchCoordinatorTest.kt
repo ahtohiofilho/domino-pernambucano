@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
@@ -582,6 +583,182 @@ class OnlineDominoMatchCoordinatorTest {
                 assertEquals(
                     8_000L,
                     coordinator.currentState.playerClockReserveMillis[0],
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+    @Test
+    fun round_intro_is_not_cut_short_by_gameplay_presentation_watchdog() =
+        runBlocking {
+            val initialRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            ).copy(
+                roundNumber = 1,
+            )
+
+            val nextRoundRuntimeState = initialRuntimeState.copy(
+                roundNumber = 2,
+                phase = DominoMatchPhase.WaitingForLocalMove,
+            )
+
+            val initialSnapshot = initialRuntimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialSnapshot,
+            )
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialSnapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+                traceLogger = OnlineTraceLogger(
+                    sink = traceBuffer,
+                    nowEpochMillis = { 1_000L },
+                ),
+                presentationWatchdogMillis = 25L,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                repository.publishMatchSnapshot(
+                    nextRoundRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.RoundIntro,
+                    coordinator.currentState.phase,
+                )
+
+                delay(100L)
+
+                assertEquals(
+                    DominoMatchPhase.RoundIntro,
+                    coordinator.currentState.phase,
+                )
+
+                assertTrue(
+                    traceBuffer.snapshot().none { entry ->
+                        entry.event.attributes["reason"] ==
+                            "presentation_watchdog_timeout"
+                    },
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+    @Test
+    fun stalled_move_presentation_is_recovered_by_coordinator_watchdog() =
+        runBlocking {
+            val openingPiece = DominoPiece(
+                left = 6,
+                right = 6,
+            )
+
+            val initialRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = listOf(
+                    listOf(openingPiece),
+                    emptyList(),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+
+            val remoteRuntimeState = createRuntimeState(
+                board = listOf(openingPiece),
+                boardChain = DominoBoardChain(
+                    openingPiece = openingPiece,
+                ),
+                currentPlayerIndex = 1,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            )
+
+            val initialSnapshot = initialRuntimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialSnapshot,
+            )
+            val traceBuffer = InMemoryOnlineTraceBuffer()
+
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialSnapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+                traceLogger = OnlineTraceLogger(
+                    sink = traceBuffer,
+                    nowEpochMillis = { 1_000L },
+                ),
+                presentationWatchdogMillis = 25L,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+
+                repository.publishMatchSnapshot(
+                    remoteRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                assertTrue(
+                    coordinator.currentState.phase
+                        is DominoMatchPhase.PresentingMove,
+                )
+
+                /*
+                 * Deliberately do not dispatch PresentationFinished. This is
+                 * the production failure reproduced in C45.A: the server keeps
+                 * advancing while the client presentation callback disappears.
+                 */
+                delay(100L)
+
+                assertEquals(
+                    remoteRuntimeState,
+                    coordinator.currentState,
+                )
+
+                val watchdogEvent = requireNotNull(
+                    traceBuffer.snapshot().singleOrNull { entry ->
+                        entry.event.type ==
+                            OnlineTraceType.INVARIANT_VIOLATION &&
+                            entry.event.attributes["reason"] ==
+                                "presentation_watchdog_timeout"
+                    },
+                ).event
+
+                assertEquals(
+                    "25",
+                    watchdogEvent.attributes["watchdogMillis"],
                 )
             } finally {
                 coordinator.dispose()

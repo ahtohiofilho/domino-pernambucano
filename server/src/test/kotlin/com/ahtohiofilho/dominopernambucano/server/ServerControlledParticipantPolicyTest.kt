@@ -7,7 +7,7 @@ import org.junit.Test
 
 class ServerControlledParticipantPolicyTest {
     @Test
-    fun synthetic_and_application_are_server_controlled_but_humans_are_not() {
+    fun only_application_is_server_controlled_by_identity() {
         val players = listOf(
             player(0, OnlineParticipantTypeDto.HUMAN),
             player(1, OnlineParticipantTypeDto.SYNTHETIC),
@@ -16,7 +16,7 @@ class ServerControlledParticipantPolicyTest {
         )
 
         assertEquals(
-            setOf(1, 2),
+            setOf(2),
             resolveServerControlledSeatIndexes(players),
         )
     }
@@ -31,7 +31,7 @@ class ServerControlledParticipantPolicyTest {
         )
 
         assertEquals(
-            setOf(1, 3),
+            setOf(3),
             resolveServerControlledSeatIndexes(
                 players = players,
                 legacyApplicationSeatIndexes = setOf(3),

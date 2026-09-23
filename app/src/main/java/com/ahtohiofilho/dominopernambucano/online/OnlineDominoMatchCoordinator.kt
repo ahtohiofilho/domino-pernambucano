@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,6 +72,7 @@ class OnlineDominoMatchCoordinator(
         OnlineTraceLogger(),
     private val catchUpPolicy: OnlinePresentationCatchUpPolicy =
         OnlinePresentationCatchUpPolicy(),
+    private val presentationWatchdogMillis: Long = 2_500L,
     /*
      * Production clock interpolation uses elapsed monotonic time instead of
      * summing UI heartbeat intervals. Tests can inject a deterministic source.
@@ -746,10 +748,60 @@ class OnlineDominoMatchCoordinator(
                 ),
             )
 
+            if (presentation.isGameplayPresentation()) {
+                schedulePresentationWatchdog(
+                    queuedRuntimeState = queuedRuntimeState,
+                )
+            }
+
             return
         }
     }
 
+    /*
+     * A presentation callback is a UI convenience, never an authority boundary.
+     * If Compose fails to start or finish an animation, the online coordinator
+     * must still converge to the authoritative snapshot instead of keeping an
+     * active presentation forever and accumulating every later server revision.
+     */
+    private fun schedulePresentationWatchdog(
+        queuedRuntimeState: QueuedOnlineRuntimeState,
+    ) {
+        val watchedRevision = queuedRuntimeState.revision
+
+        coordinatorScope.launch {
+            delay(presentationWatchdogMillis)
+
+            val activeRuntimeState =
+                activePresentationRuntimeState
+                    ?: return@launch
+
+            if (activeRuntimeState.revision != watchedRevision) {
+                return@launch
+            }
+
+            trace(
+                level = OnlineTraceLevel.WARN,
+                type = OnlineTraceType.INVARIANT_VIOLATION,
+                snapshotRevision = watchedRevision,
+                runtimeState = currentState,
+                automaticIndexes =
+                    activeRuntimeState.automaticPlayerIndexes,
+                attributes = mapOf(
+                    "reason" to "presentation_watchdog_timeout",
+                    "watchdogMillis" to
+                        presentationWatchdogMillis.toString(),
+                    "queueDepth" to
+                        pendingRemoteRuntimeStates.size.toString(),
+                    "stableRevision" to stableRevision.toString(),
+                ),
+            )
+
+            if (completeActivePresentation()) {
+                advancePresentationQueue()
+            }
+        }
+    }
     /*
      * Só apresentações de jogada e toque consomem o orçamento visual.
      * Enquanto a linha de revisões for contínua, mesmo uma dívida visual alta
