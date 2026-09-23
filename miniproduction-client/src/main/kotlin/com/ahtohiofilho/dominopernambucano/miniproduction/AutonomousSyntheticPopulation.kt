@@ -245,6 +245,10 @@ internal class AutonomousSyntheticPopulation(
                 currentStandbyProfileIndexes =
                     currentStandbyProfileIndexes,
                 targetSize = config.standbyPoolSize,
+                completedMatchesByProfileIndex =
+                    players.associate { player ->
+                        player.profile.index to player.completedMatches
+                    },
             )
 
         val newlyActivated = players.filter { player ->

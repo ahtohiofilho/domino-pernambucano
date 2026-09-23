@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
@@ -619,6 +620,11 @@ fun DominoGameScreen(
                 playerIndex = presentingPassPhase.playerIndex,
                 localPlayerIndex = uiState.localPlayerIndex,
                 handAppearanceTone = handAppearanceTone,
+                participantType = gameState.players
+                    .getOrNull(presentingPassPhase.playerIndex)
+                    ?.participantType
+                    ?: DominoParticipantType.HUMAN,
+                matchMode = uiState.matchMode,
                 presentationId = uiState.onlinePresentationId,
                 onAnimationTrace = { type, attributes ->
                     traceUi(

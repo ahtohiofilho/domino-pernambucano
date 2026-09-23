@@ -9,7 +9,11 @@ import org.junit.Test
 class SyntheticRosterTest {
     @Test
     fun roster_is_realistic_valid_and_unique() {
-        assertTrue(syntheticRoster.size >= DEFAULT_SYNTHETIC_POPULATION_SIZE)
+        assertEquals(60, syntheticRoster.size)
+        assertEquals(
+            DEFAULT_SYNTHETIC_POPULATION_SIZE,
+            syntheticRoster.size,
+        )
         assertEquals(
             syntheticRoster.size,
             syntheticRoster.map { profile -> profile.index }.distinct().size,

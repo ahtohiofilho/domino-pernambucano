@@ -64,7 +64,7 @@ class MiniProductionClientConfigTest {
     }
 
     @Test
-    fun environment_defaults_to_sixteen_accounts_on_isolated_local_port() {
+    fun environment_defaults_to_sixty_accounts_on_isolated_local_port() {
         val stateDirectory = Files.createTempDirectory("miniproduction-config")
         val values = mapOf(
             MINI_PRODUCTION_CLIENT_STATE_DIR_VARIABLE to
@@ -75,6 +75,7 @@ class MiniProductionClientConfigTest {
         val config = MiniProductionClientConfig.fromEnvironment(values::get)
 
         assertEquals("http://127.0.0.1:18080", config.normalizedBaseUrl)
+        assertEquals(60, config.populationSize)
         assertEquals(DEFAULT_SYNTHETIC_POPULATION_SIZE, config.populationSize)
         assertEquals(
             DEFAULT_SYNTHETIC_STANDBY_POOL_SIZE,

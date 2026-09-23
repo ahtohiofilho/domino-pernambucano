@@ -1,6 +1,6 @@
 # População sintética externa de produção
 
-Este incremento prepara, mas não ativa, os 16 participantes sintéticos no
+Este incremento prepara, mas não ativa, os 60 participantes sintéticos no
 ambiente remoto. A ativação continua sendo uma operação de produção separada,
 com imagem versionada, domínio confirmado, segredo provisionado e autorização
 explícita.
@@ -13,7 +13,7 @@ explícita.
   segredo sintético compartilhado;
 - o processo não contém Android, não renderiza anúncios e não emite eventos de
   publicidade;
-- as 16 identidades e seus dados históricos sobrevivem a reinícios e upgrades;
+- as 60 identidades e seus dados históricos sobrevivem a reinícios e upgrades;
 - a população roda em imagem separada, sem porta publicada;
 - `SIGTERM` produz encerramento coordenado;
 - ausência prolongada de interação bem-sucedida encerra o processo com erro,
@@ -25,6 +25,12 @@ O segredo configurado no servidor em
 cliente. O exemplo Compose usa Docker secret e entrega apenas o caminho do
 arquivo ao processo.
 
+A população total configurada é de 60 identidades. Para manter baixo o custo
+ocioso, apenas 6 participantes ficam simultaneamente em standby na fila.
+Quando um participante sintético entra em uma partida, um perfil dormente ocupa
+a vaga de standby. Entre perfis elegíveis para reposição, têm prioridade os que
+concluíram menos partidas no runtime atual, reduzindo a recorrência dos mesmos
+nomes sem colocar as 60 contas consultando a fila ao mesmo tempo.
 ## Construção
 
 Na raiz do repositório:
@@ -62,7 +68,7 @@ Antes de ativar em produção, confirmar em um ciclo próprio:
 3. backup e permissões do volume persistente;
 4. segredo forte configurado nas duas cargas;
 5. telemetria que distingue `SYNTHETIC` de `HUMAN` sem alterar o ranking;
-6. parada, reinício e recuperação das mesmas 16 contas;
+6. parada, reinício e recuperação das mesmas 60 contas;
 7. ausência de portas, SDKs e eventos de anúncios na imagem sintética.
 
 Este incremento não decide nem altera política de ranking, disclosure,

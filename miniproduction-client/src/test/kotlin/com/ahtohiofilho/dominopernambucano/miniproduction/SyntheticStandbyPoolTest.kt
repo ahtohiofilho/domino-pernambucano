@@ -48,6 +48,26 @@ class SyntheticStandbyPoolTest {
     }
 
     @Test
+    fun completed_profile_waits_while_unused_profiles_are_available() {
+        val selected = selectSyntheticStandbyProfileIndexes(
+            profileIndexesInPriorityOrder = (1..60).toList(),
+            matchedProfileIndexes = emptySet(),
+            currentStandbyProfileIndexes = setOf(2, 3, 4, 5, 6),
+            targetSize = 6,
+            completedMatchesByProfileIndex = mapOf(
+                1 to 1L,
+            ),
+        )
+
+        assertEquals(
+            setOf(2, 3, 4, 5, 6, 7),
+            selected,
+        )
+        assertFalse(1 in selected)
+        assertTrue(7 in selected)
+    }
+
+    @Test
     fun standby_pool_shrinks_safely_when_most_profiles_are_in_matches() {
         val selected = selectSyntheticStandbyProfileIndexes(
             profileIndexesInPriorityOrder = (1..16).toList(),

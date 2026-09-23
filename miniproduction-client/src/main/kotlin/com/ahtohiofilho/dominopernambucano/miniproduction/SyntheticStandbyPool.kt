@@ -5,6 +5,7 @@ internal fun selectSyntheticStandbyProfileIndexes(
     matchedProfileIndexes: Set<Int>,
     currentStandbyProfileIndexes: Set<Int>,
     targetSize: Int,
+    completedMatchesByProfileIndex: Map<Int, Long> = emptyMap(),
 ): Set<Int> {
     require(profileIndexesInPriorityOrder.isNotEmpty())
     require(
@@ -25,8 +26,21 @@ internal fun selectSyntheticStandbyProfileIndexes(
         }
         .take(resolvedTargetSize)
     val retainedSet = retainedStandby.toSet()
+    val priorityRankByProfileIndex =
+        profileIndexesInPriorityOrder
+            .withIndex()
+            .associate { indexedProfile ->
+                indexedProfile.value to indexedProfile.index
+            }
     val additions = availableProfileIndexes
         .filterNot { profileIndex -> profileIndex in retainedSet }
+        .sortedWith(
+            compareBy<Int> { profileIndex ->
+                completedMatchesByProfileIndex[profileIndex] ?: 0L
+            }.thenBy { profileIndex ->
+                priorityRankByProfileIndex.getValue(profileIndex)
+            },
+        )
         .take(resolvedTargetSize - retainedStandby.size)
 
     return (retainedStandby + additions).toSet()

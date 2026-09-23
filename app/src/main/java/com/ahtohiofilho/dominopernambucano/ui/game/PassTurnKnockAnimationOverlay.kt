@@ -23,6 +23,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
 import com.ahtohiofilho.dominopernambucano.ui.personalization.HandAppearanceTone
 import com.ahtohiofilho.dominopernambucano.ui.personalization.toKnockHandColorFilter
@@ -56,6 +58,8 @@ fun PassTurnKnockAnimationOverlay(
     localPlayerIndex: Int,
     handAppearanceTone: HandAppearanceTone =
         HandAppearanceTone.TONE_1,
+    participantType: DominoParticipantType,
+    matchMode: DominoMatchMode,
     presentationId: String?,
     onAnimationTrace: (OnlineTraceType, Map<String, String>) -> Unit,
     onKnockImpact: () -> Unit = {},
@@ -71,6 +75,8 @@ fun PassTurnKnockAnimationOverlay(
         resolveKnockHandAppearanceTone(
             playerIndex = playerIndex,
             localPlayerIndex = localPlayerIndex,
+            participantType = participantType,
+            matchMode = matchMode,
             selectedTone = handAppearanceTone,
         )
 
@@ -311,11 +317,35 @@ internal fun resolveKnockScreenPlayerIndex(
 internal fun resolveKnockHandAppearanceTone(
     playerIndex: Int,
     localPlayerIndex: Int,
+    participantType: DominoParticipantType,
+    matchMode: DominoMatchMode,
     selectedTone: HandAppearanceTone,
 ): HandAppearanceTone {
-    return if (playerIndex == localPlayerIndex) {
-        selectedTone
-    } else {
+    if (playerIndex == localPlayerIndex) {
+        return selectedTone
+    }
+
+    val usesSyntheticPalette =
+        matchMode == DominoMatchMode.OFFLINE_LOCAL ||
+            participantType != DominoParticipantType.HUMAN
+
+    if (!usesSyntheticPalette) {
+        return HandAppearanceTone.TONE_1
+    }
+
+    val screenPlayerIndex = resolveKnockScreenPlayerIndex(
+        playerIndex = playerIndex,
+        localPlayerIndex = localPlayerIndex,
+    )
+
+    val availableSyntheticTones =
+        HandAppearanceTone.entries.filterNot { tone ->
+            tone == selectedTone
+        }
+
+    return availableSyntheticTones.getOrElse(
+        index = screenPlayerIndex - 1,
+    ) {
         HandAppearanceTone.TONE_1
     }
 }
