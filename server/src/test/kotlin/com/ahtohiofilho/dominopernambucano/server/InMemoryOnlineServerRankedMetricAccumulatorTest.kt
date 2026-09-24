@@ -153,17 +153,82 @@ class InMemoryOnlineServerRankedMetricAccumulatorTest {
         now += 31_000L
         assertTrue(store.advanceAuthoritativeTime())
 
-        val afterFirstTimeout = requireNotNull(
-            store.getMatchSnapshot(matchId),
-        )
-        val secondSeat =
-            afterFirstTimeout.gameState.currentPlayerIndex
+        /*
+         * A distribuição das pedras é aleatória. Depois do primeiro timeout,
+         * o próximo assento pode entrar em PresentingPass; nesse caso o
+         * servidor resolve o passe obrigatório antes de avaliar o relógio.
+         * Portanto o teste deve procurar o próximo turno realmente elegível
+         * a expirar, em vez de presumir que o assento imediatamente seguinte
+         * sempre pode receber timeout.
+         */
+        var secondSeat: Int? = null
 
-        assertTrue(secondSeat != firstSeat)
+        for (attempt in 0 until 32) {
+            if (secondSeat != null) {
+                break
+            }
 
-        now += 31_000L
-        assertTrue(store.advanceAuthoritativeTime())
+            val snapshot = requireNotNull(
+                store.getMatchSnapshot(matchId),
+            )
+            val runtimeState = snapshot.toRuntimeState(
+                localPlayerIndex =
+                    snapshot.gameState.currentPlayerIndex,
+            )
 
+            if (
+                runtimeState.phase ==
+                    DominoMatchPhase.RoundSummary ||
+                runtimeState.phase ==
+                    DominoMatchPhase.MatchFinished
+            ) {
+                break
+            }
+
+            if (
+                runtimeState.phase is
+                    DominoMatchPhase.PresentingPass
+            ) {
+                assertTrue(store.advanceAuthoritativeTime())
+                continue
+            }
+
+            assertEquals(
+                DominoMatchPhase.WaitingForLocalMove,
+                runtimeState.phase,
+            )
+
+            val candidateSeat =
+                snapshot.gameState.currentPlayerIndex
+
+            if (candidateSeat == firstSeat) {
+                /*
+                 * O primeiro assento já ficou automático nesta rodada.
+                 * Apenas permita que a autoridade avance sua jogada.
+                 */
+                assertTrue(store.advanceAuthoritativeTime())
+                continue
+            }
+
+            now += 31_000L
+            assertTrue(store.advanceAuthoritativeTime())
+
+            val timeoutSeats = store.snapshotPersistentState()
+                .matches
+                .single { storedMatch ->
+                    storedMatch.matchId == matchId
+                }
+                .timeoutRoundSeatIndexes
+                .toSet()
+
+            if (candidateSeat in timeoutSeats) {
+                secondSeat = candidateSeat
+            }
+        }
+
+        val resolvedSecondSeat = requireNotNull(secondSeat) {
+            "Não foi encontrado um segundo turno elegível a timeout."
+        }
         val accumulator = requireNotNull(
             store.getRankedMatchMetricAccumulator(matchId),
         )
@@ -174,11 +239,13 @@ class InMemoryOnlineServerRankedMetricAccumulatorTest {
         )
         assertEquals(
             1,
-            accumulator.seatMetrics[secondSeat].timeoutRounds,
+            accumulator
+                .seatMetrics[resolvedSecondSeat]
+                .timeoutRounds,
         )
 
         assertEquals(
-            setOf(firstSeat, secondSeat),
+            setOf(firstSeat, resolvedSecondSeat),
             store.snapshotPersistentState()
                 .matches
                 .single { storedMatch ->
