@@ -387,6 +387,12 @@ class MainMenuScreenTest {
             .assertCountEquals(0)
 
         composeRule
+            .onAllNodesWithText(
+                "A participação online anterior não está mais disponível.",
+            )
+            .assertCountEquals(0)
+
+        composeRule
             .onNodeWithText("Jogar")
             .assertIsEnabled()
 

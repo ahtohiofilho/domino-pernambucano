@@ -391,9 +391,10 @@ class LocalDominoSessionCoordinatorTest {
                     .NoPendingParticipation,
             pendingOnlineParticipationInspection =
                 OnlinePendingParticipationInspectionState
-                    .Completed(
-                        result = inspection,
-                    ),
+                    .NotRequested,
+            pendingOnlineParticipationSessionRejection =
+                OnlinePendingParticipationSessionRejection
+                    .NotRejected,
         )
 
         assertEquals(
@@ -474,9 +475,10 @@ class LocalDominoSessionCoordinatorTest {
                         ),
                 pendingOnlineParticipationInspection =
                     OnlinePendingParticipationInspectionState
-                        .Completed(
-                            result = inspection,
-                        ),
+                        .NotRequested,
+                pendingOnlineParticipationSessionRejection =
+                    OnlinePendingParticipationSessionRejection
+                        .NotRejected,
             ),
             coordinator.currentState,
         )

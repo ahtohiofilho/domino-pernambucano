@@ -183,9 +183,18 @@ class LocalDominoSessionCoordinator(
                 inspection is OnlinePendingParticipationRemoteInspection
                     .NoLongerRecoverable
             ) {
-                onlineParticipationBindingRepository?.clearIfMatches(
+                /*
+                 * "Nada para recuperar" é um resultado terminal e silencioso.
+                 * O helper limpa somente o binding exato inspecionado. Se um
+                 * binding mais novo surgir durante a chamada remota, ele é
+                 * preservado e volta para NotRequested, permitindo uma nova
+                 * inspeção automática sem carregar o resultado antigo.
+                 */
+                discardNoLongerRecoverablePendingOnlineParticipation(
                     binding = readyParticipation.binding,
                 )
+
+                return@withLock
             }
 
             updateMainMenuState(

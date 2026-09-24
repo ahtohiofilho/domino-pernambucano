@@ -275,11 +275,7 @@ fun MainMenuScreen(
                     }
 
                     is OnlinePendingParticipationRemoteInspection
-                        .NoLongerRecoverable -> {
-                        stringResource(
-                            R.string.main_menu_participation_unavailable,
-                        )
-                    }
+                        .NoLongerRecoverable -> null
 
                     OnlinePendingParticipationRemoteInspection
                         .RemoteSessionRejected -> {
