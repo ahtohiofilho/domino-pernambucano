@@ -102,11 +102,11 @@ class OnlineDominoMatchCoordinator(
     private var stableRevision = initialSnapshot.revision
 
     /*
-     * RoundIntro continua sendo a fase autoritativa ate o servidor publicar
-     * a revisao seguinte. Este flag registra somente que a animacao local ja
-     * terminou, permitindo consumir essa revisao quando ela chegar.
+     * A presentation may finish locally while the authoritative server is
+     * already ahead. The revision key prevents that completion from leaking
+     * into the next stable presentation.
      */
-    private var roundIntroPresentationCompleted = false
+    private var completedStablePresentationRevision: Long? = null
 
     /*
      * Every visible online countdown is derived from the last promoted
@@ -378,6 +378,14 @@ class OnlineDominoMatchCoordinator(
                     )
             }
         }
+
+        /*
+         * Authority and presentation are deliberately decoupled:
+         * a client-driven fake pass may advance immediately while the visible
+         * pass animation remains protected by the presentation lifecycle gate.
+         */
+        submitClientDrivenMandatoryPassProgression()
+        scheduleStablePresentationWatchdogIfNeeded()
     }
 
     override fun dispatch(
@@ -599,32 +607,35 @@ class OnlineDominoMatchCoordinator(
     private fun handleRoundIntroFinished() {
         if (completeActivePresentation()) {
             advancePresentationQueue()
-        }
-
-        /*
-         * A UI terminou a intro, mas o estado autoritativo continua RoundIntro
-         * ate a revisao de liberacao chegar. A partir daqui, snapshots novos
-         * podem atravessar a fila sem serem bloqueados pela propria intro que
-         * acabou de terminar.
-         */
-        roundIntroPresentationCompleted = true
-        advancePresentationQueue()
-
-        /*
-         * Somente a autoridade visual envia REQUEST_SNAPSHOT. Os demais
-         * clientes apenas aguardam a mesma revisao autoritativa.
-         */
-        if (stableRuntimeState.phase == DominoMatchPhase.RoundIntro) {
-            if (shouldReleaseAuthoritativeRoundIntro()) {
-                submitClientDrivenSnapshotRequest()
-            }
             return
         }
 
-        mutableState.value = currentAuthoritativeDisplayRuntimeState()
+        if (
+            !markCurrentStablePresentationCompleted(
+                expectedKind = OnlinePresentationLifecycleKind.ROUND_INTRO,
+            )
+        ) {
+            return
+        }
 
         advancePresentationQueue()
-        submitClientDrivenMandatoryPassProgression()
+
+        /*
+         * If a later authoritative revision was already buffered, completing
+         * the local intro consumes that revision instead of asking the server
+         * for another transition.
+         */
+        if (
+            activePresentationRuntimeState != null ||
+            pendingRemoteRuntimeStates.isNotEmpty() ||
+            stableRuntimeState.phase != DominoMatchPhase.RoundIntro
+        ) {
+            return
+        }
+
+        if (shouldReleaseAuthoritativeRoundIntro()) {
+            submitClientDrivenSnapshotRequest()
+        }
     }
 
     private fun shouldReleaseAuthoritativeRoundIntro(): Boolean {
@@ -658,47 +669,39 @@ class OnlineDominoMatchCoordinator(
             return
         }
 
-        /*
-         * Uma passagem pode ser apresentada a partir de um snapshot já estável.
-         * Se a resolução autoritativa chegou durante essa animação, consuma-a
-         * antes de enviar uma nova ação ou pedir outro snapshot.
-         */
-        if (pendingRemoteRuntimeStates.isNotEmpty()) {
-            advancePresentationQueue(
-                allowCurrentPresentationCompletion = true,
+        val currentContract =
+            resolveOnlinePresentationLifecycleContract(
+                phase = currentState.phase,
+                gameplayWatchdogMillis = presentationWatchdogMillis,
             )
+                ?: return
+
+        if (
+            currentContract.kind != OnlinePresentationLifecycleKind.MOVE &&
+            currentContract.kind != OnlinePresentationLifecycleKind.PASS
+        ) {
             return
         }
 
-        when (val phase = currentState.phase) {
-            is DominoMatchPhase.PresentingMove -> Unit
-
-            /*
-             * O passe obrigatório é reduzido pelo servidor no ticker
-             * autoritativo. O cliente encerra apenas a apresentação visual.
-             */
-            is DominoMatchPhase.PresentingPass -> Unit
-
-            else -> Unit
+        if (
+            markCurrentStablePresentationCompleted(
+                expectedKind = currentContract.kind,
+            )
+        ) {
+            advancePresentationQueue()
         }
     }
 
-    private fun advancePresentationQueue(
-        allowCurrentPresentationCompletion: Boolean = false,
-    ) {
+    private fun advancePresentationQueue() {
         if (activePresentationRuntimeState != null) {
             return
         }
 
         if (
-            !allowCurrentPresentationCompletion &&
             isPresentationInProgress(
                 phase = currentState.phase,
             ) &&
-            !(
-                currentState.phase == DominoMatchPhase.RoundIntro &&
-                roundIntroPresentationCompleted
-            )
+            completedStablePresentationRevision != stableRevision
         ) {
             return
         }
@@ -725,13 +728,6 @@ class OnlineDominoMatchCoordinator(
 
             activePresentationRuntimeState = queuedRuntimeState
 
-            if (
-                presentation.presentationRuntimeState.phase ==
-                DominoMatchPhase.RoundIntro
-            ) {
-                roundIntroPresentationCompleted = false
-            }
-
             mutableState.value = presentation.presentationRuntimeState
 
             trace(
@@ -748,7 +744,11 @@ class OnlineDominoMatchCoordinator(
                 ),
             )
 
-            if (presentation.isGameplayPresentation()) {
+            if (
+                isPresentationInProgress(
+                    phase = presentation.presentationRuntimeState.phase,
+                )
+            ) {
                 schedulePresentationWatchdog(
                     queuedRuntimeState = queuedRuntimeState,
                 )
@@ -768,9 +768,15 @@ class OnlineDominoMatchCoordinator(
         queuedRuntimeState: QueuedOnlineRuntimeState,
     ) {
         val watchedRevision = queuedRuntimeState.revision
+        val contract = requireNotNull(
+            resolveOnlinePresentationLifecycleContract(
+                phase = currentState.phase,
+                gameplayWatchdogMillis = presentationWatchdogMillis,
+            ),
+        )
 
         coordinatorScope.launch {
-            delay(presentationWatchdogMillis)
+            delay(contract.watchdogMillis)
 
             val activeRuntimeState =
                 activePresentationRuntimeState
@@ -789,8 +795,9 @@ class OnlineDominoMatchCoordinator(
                     activeRuntimeState.automaticPlayerIndexes,
                 attributes = mapOf(
                     "reason" to "presentation_watchdog_timeout",
+                    "presentationKind" to contract.kind.name,
                     "watchdogMillis" to
-                        presentationWatchdogMillis.toString(),
+                        contract.watchdogMillis.toString(),
                     "queueDepth" to
                         pendingRemoteRuntimeStates.size.toString(),
                     "stableRevision" to stableRevision.toString(),
@@ -801,6 +808,113 @@ class OnlineDominoMatchCoordinator(
                 advancePresentationQueue()
             }
         }
+    }
+
+    private fun scheduleStablePresentationWatchdogIfNeeded() {
+        if (activePresentationRuntimeState != null) {
+            return
+        }
+
+        val contract =
+            resolveOnlinePresentationLifecycleContract(
+                phase = stableRuntimeState.phase,
+                gameplayWatchdogMillis = presentationWatchdogMillis,
+            )
+                ?: return
+
+        val watchedRevision = stableRevision
+        val watchedKind = contract.kind
+
+        coordinatorScope.launch {
+            delay(contract.watchdogMillis)
+
+            if (
+                stableRevision != watchedRevision ||
+                completedStablePresentationRevision == watchedRevision ||
+                activePresentationRuntimeState != null
+            ) {
+                return@launch
+            }
+
+            val currentContract =
+                resolveOnlinePresentationLifecycleContract(
+                    phase = currentState.phase,
+                    gameplayWatchdogMillis = presentationWatchdogMillis,
+                )
+
+            if (currentContract?.kind != watchedKind) {
+                return@launch
+            }
+
+            trace(
+                level = OnlineTraceLevel.WARN,
+                type = OnlineTraceType.INVARIANT_VIOLATION,
+                snapshotRevision = watchedRevision,
+                runtimeState = currentState,
+                attributes = mapOf(
+                    "reason" to "stable_presentation_watchdog_timeout",
+                    "presentationKind" to watchedKind.name,
+                    "watchdogMillis" to contract.watchdogMillis.toString(),
+                    "queueDepth" to
+                        pendingRemoteRuntimeStates.size.toString(),
+                ),
+            )
+
+            when (watchedKind) {
+                OnlinePresentationLifecycleKind.ROUND_INTRO ->
+                    handleRoundIntroFinished()
+
+                OnlinePresentationLifecycleKind.ROUND_SUMMARY ->
+                    submitStartNextRound()
+
+                OnlinePresentationLifecycleKind.MOVE,
+                OnlinePresentationLifecycleKind.PASS ->
+                    handlePresentationFinished()
+            }
+        }
+    }
+
+    private fun markCurrentStablePresentationCompleted(
+        expectedKind: OnlinePresentationLifecycleKind,
+    ): Boolean {
+        if (activePresentationRuntimeState != null) {
+            return false
+        }
+
+        val contract =
+            resolveOnlinePresentationLifecycleContract(
+                phase = currentState.phase,
+                gameplayWatchdogMillis = presentationWatchdogMillis,
+            )
+                ?: return false
+
+        if (
+            contract.kind != expectedKind ||
+            !contract.blocksSnapshotPromotionUntilUiCompletion
+        ) {
+            return false
+        }
+
+        if (completedStablePresentationRevision == stableRevision) {
+            return true
+        }
+
+        completedStablePresentationRevision = stableRevision
+
+        trace(
+            level = OnlineTraceLevel.INFO,
+            type = OnlineTraceType.PRESENTATION_FINISHED,
+            snapshotRevision = stableRevision,
+            runtimeState = currentState,
+            attributes = mapOf(
+                "presentationKind" to contract.kind.name,
+                "stablePresentation" to "true",
+                "queueDepthBeforeRelease" to
+                    pendingRemoteRuntimeStates.size.toString(),
+            ),
+        )
+
+        return true
     }
     /*
      * Só apresentações de jogada e toque consomem o orçamento visual.
@@ -963,13 +1077,7 @@ class OnlineDominoMatchCoordinator(
     ) {
         stableRuntimeState = queuedRuntimeState.runtimeState
         stableRevision = queuedRuntimeState.revision
-
-        if (
-            queuedRuntimeState.runtimeState.phase !=
-            DominoMatchPhase.RoundIntro
-        ) {
-            roundIntroPresentationCompleted = false
-        }
+        completedStablePresentationRevision = null
 
         automaticPlayerIndexes = queuedRuntimeState.automaticPlayerIndexes
         rankedMetricAccumulator = queuedRuntimeState.rankedMetricAccumulator
@@ -1006,14 +1114,16 @@ class OnlineDominoMatchCoordinator(
         )
 
         submitClientDrivenMandatoryPassProgression()
+        scheduleStablePresentationWatchdogIfNeeded()
     }
 
     private fun isPresentationInProgress(
         phase: DominoMatchPhase,
     ): Boolean {
-        return phase == DominoMatchPhase.RoundIntro ||
-                phase is DominoMatchPhase.PresentingMove ||
-                phase is DominoMatchPhase.PresentingPass
+        return resolveOnlinePresentationLifecycleContract(
+            phase = phase,
+            gameplayWatchdogMillis = presentationWatchdogMillis,
+        )?.blocksSnapshotPromotionUntilUiCompletion == true
     }
 
     private fun currentAuthoritativeDisplayRuntimeState():
@@ -1217,6 +1327,42 @@ class OnlineDominoMatchCoordinator(
     }
 
     private fun submitStartNextRound() {
+        if (currentState.phase != DominoMatchPhase.RoundSummary) {
+            traceActionSuppressed(
+                actionType = OnlinePlayerActionTypeDto.START_NEXT_ROUND,
+                reason = "wrong_phase",
+            )
+            return
+        }
+
+        if (
+            currentState.phase == DominoMatchPhase.RoundSummary &&
+            activePresentationRuntimeState == null &&
+            stableRuntimeState.phase == DominoMatchPhase.RoundSummary
+        ) {
+            if (
+                markCurrentStablePresentationCompleted(
+                    expectedKind =
+                        OnlinePresentationLifecycleKind.ROUND_SUMMARY,
+                )
+            ) {
+                advancePresentationQueue()
+            }
+
+            /*
+             * The server may already have advanced while the summary remained
+             * visible. In that case the buffered revision is now being
+             * presented and a duplicate START_NEXT_ROUND must not be sent.
+             */
+            if (
+                activePresentationRuntimeState != null ||
+                pendingRemoteRuntimeStates.isNotEmpty() ||
+                stableRuntimeState.phase != DominoMatchPhase.RoundSummary
+            ) {
+                return
+            }
+        }
+
         if (inFlightAction != null) {
             traceActionSuppressed(
                 actionType = OnlinePlayerActionTypeDto.START_NEXT_ROUND,

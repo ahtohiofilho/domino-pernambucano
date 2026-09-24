@@ -132,6 +132,8 @@ class OnlineDominoMatchCoordinatorTest {
                 playerHands = List(4) {
                     emptyList()
                 },
+            ).copy(
+                phase = DominoMatchPhase.RoundSummary,
             )
             val snapshot = runtimeState.toSnapshot(
                 revision = 1L,
@@ -206,6 +208,8 @@ class OnlineDominoMatchCoordinatorTest {
                 playerHands = List(4) {
                     emptyList()
                 },
+            ).copy(
+                phase = DominoMatchPhase.RoundSummary,
             )
             val snapshot = runtimeState.toSnapshot(
                 revision = 1L,
@@ -588,6 +592,213 @@ class OnlineDominoMatchCoordinatorTest {
                 coordinator.dispose()
             }
         }
+    @Test
+    fun round_summary_keeps_visible_frame_until_ui_completion_even_if_server_is_ahead() =
+        runBlocking {
+            val summaryRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            ).copy(
+                roundNumber = 1,
+                phase = DominoMatchPhase.RoundSummary,
+            )
+
+            val nextRoundRuntimeState = summaryRuntimeState.copy(
+                roundNumber = 2,
+                phase = DominoMatchPhase.WaitingForLocalMove,
+            )
+
+            val initialSnapshot = summaryRuntimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialSnapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialSnapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                repository.publishMatchSnapshot(
+                    nextRoundRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.RoundSummary,
+                    coordinator.currentState.phase,
+                )
+                assertTrue(
+                    repository.submittedActions.isEmpty(),
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.RoundIntro,
+                    coordinator.currentState.phase,
+                )
+                assertTrue(
+                    "A revisão já estava no buffer; não deve haver START_NEXT_ROUND duplicado.",
+                    repository.submittedActions.isEmpty(),
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+                yield()
+
+                assertEquals(
+                    nextRoundRuntimeState,
+                    coordinator.currentState,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun round_summary_completion_still_submits_transition_when_server_is_not_ahead() =
+        runBlocking {
+            val summaryRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            ).copy(
+                phase = DominoMatchPhase.RoundSummary,
+            )
+
+            val initialSnapshot = summaryRuntimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialSnapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialSnapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+                assertEquals(
+                    OnlinePlayerActionTypeDto.START_NEXT_ROUND,
+                    repository.submittedActions.single().type,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
+    @Test
+    fun stale_round_summary_completion_is_ignored_after_round_intro_started() =
+        runBlocking {
+            val summaryRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            ).copy(
+                roundNumber = 1,
+                phase = DominoMatchPhase.RoundSummary,
+            )
+
+            val nextRoundRuntimeState = summaryRuntimeState.copy(
+                roundNumber = 2,
+                phase = DominoMatchPhase.WaitingForLocalMove,
+            )
+
+            val initialSnapshot = summaryRuntimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialSnapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialSnapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                repository.publishMatchSnapshot(
+                    nextRoundRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.RoundIntro,
+                    coordinator.currentState.phase,
+                )
+                assertTrue(
+                    repository.submittedActions.isEmpty(),
+                )
+
+                /*
+                 * Simula um callback tardio da animação anterior. Ele não pode
+                 * atravessar o contrato da nova tela nem enviar ação ao servidor.
+                 */
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.RoundIntro,
+                    coordinator.currentState.phase,
+                )
+                assertTrue(
+                    repository.submittedActions.isEmpty(),
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
     @Test
     fun round_intro_is_not_cut_short_by_gameplay_presentation_watchdog() =
         runBlocking {
