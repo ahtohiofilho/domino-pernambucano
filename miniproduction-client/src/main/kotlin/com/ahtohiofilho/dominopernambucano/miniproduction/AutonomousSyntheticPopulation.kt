@@ -53,6 +53,7 @@ internal data class SyntheticDecisionCadenceResolution(
 
 private const val MIN_SYNTHETIC_DECISION_DELAY_MILLIS = 1_000L
 private const val MAX_SYNTHETIC_DECISION_DELAY_MILLIS = 4_000L
+private const val ROUND_SUMMARY_TRANSITION_HOLD_MILLIS = 4_000L
 
 /*
  * Each synthetic identity has a stable personal center between 1.8 and 3.2 s.
@@ -141,8 +142,10 @@ internal fun resolveSyntheticDecisionCadence(
         snapshot.phase.type ==
             OnlineMatchPhaseTypeDto.WAITING_FOR_LOCAL_MOVE &&
             snapshot.gameState.currentPlayerIndex == localSeatIndex
+    val isRoundSummary =
+        snapshot.phase.type == OnlineMatchPhaseTypeDto.ROUND_SUMMARY
 
-    if (!isLocalSyntheticTurn) {
+    if (!isLocalSyntheticTurn && !isRoundSummary) {
         return SyntheticDecisionCadenceResolution(
             state = null,
             readyToAct = true,
@@ -159,9 +162,15 @@ internal fun resolveSyntheticDecisionCadence(
     val scheduledState =
         currentState
             ?.takeIf { state -> state.turnKey == turnKey }
-            ?: resolveSyntheticDecisionDelayMillis(
-                identityKey = identityKey,
-                turnKey = turnKey,
+            ?: (
+                if (isRoundSummary) {
+                    ROUND_SUMMARY_TRANSITION_HOLD_MILLIS
+                } else {
+                    resolveSyntheticDecisionDelayMillis(
+                        identityKey = identityKey,
+                        turnKey = turnKey,
+                    )
+                }
             ).let { delayMillis ->
                 SyntheticDecisionCadenceState(
                     turnKey = turnKey,

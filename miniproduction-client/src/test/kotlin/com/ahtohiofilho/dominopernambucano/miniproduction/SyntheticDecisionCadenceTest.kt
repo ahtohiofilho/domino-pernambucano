@@ -201,23 +201,53 @@ class SyntheticDecisionCadenceTest {
     }
 
     @Test
-    fun round_summary_transition_is_not_artificially_delayed() {
-        val resolution = resolveSyntheticDecisionCadence(
-            currentState = null,
-            snapshot = snapshot(
-                revision = 15L,
-                phase = OnlineMatchPhaseTypeDto.ROUND_SUMMARY,
-                currentPlayerIndex = 1,
-                marker = 3,
-            ),
-            localSeatIndex = 1,
-            identityKey = "MCO",
-            nowEpochMillis = 5_000L,
+    fun round_summary_transition_waits_four_seconds_from_first_observation() {
+        val firstObservedAt = 5_000L
+        val summarySnapshot = snapshot(
+            revision = 15L,
+            phase = OnlineMatchPhaseTypeDto.ROUND_SUMMARY,
+            currentPlayerIndex = 1,
+            marker = 3,
         )
 
-        assertTrue(resolution.readyToAct)
-        assertNull(resolution.state)
-        assertNull(resolution.nextStepAtEpochMillis)
+        val first = resolveSyntheticDecisionCadence(
+            currentState = null,
+            snapshot = summarySnapshot,
+            localSeatIndex = 1,
+            identityKey = "MCO",
+            nowEpochMillis = firstObservedAt,
+        )
+
+        assertFalse(first.readyToAct)
+        val firstState = requireNotNull(first.state)
+        assertEquals(4_000L, firstState.delayMillis)
+        assertEquals(9_000L, firstState.readyAtEpochMillis)
+        assertEquals(9_000L, first.nextStepAtEpochMillis)
+
+        val sameSummaryNewRevision = summarySnapshot.copy(revision = 16L)
+        val justBefore = resolveSyntheticDecisionCadence(
+            currentState = firstState,
+            snapshot = sameSummaryNewRevision,
+            localSeatIndex = 1,
+            identityKey = "MCO",
+            nowEpochMillis = 8_999L,
+        )
+
+        assertFalse(justBefore.readyToAct)
+        assertEquals(firstState, justBefore.state)
+        assertEquals(9_000L, justBefore.nextStepAtEpochMillis)
+
+        val ready = resolveSyntheticDecisionCadence(
+            currentState = justBefore.state,
+            snapshot = sameSummaryNewRevision,
+            localSeatIndex = 1,
+            identityKey = "MCO",
+            nowEpochMillis = 9_000L,
+        )
+
+        assertTrue(ready.readyToAct)
+        assertEquals(firstState, ready.state)
+        assertNull(ready.nextStepAtEpochMillis)
     }
 
     private fun snapshot(
