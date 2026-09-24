@@ -1,9 +1,13 @@
 package com.ahtohiofilho.dominopernambucano.miniproduction
 
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
+import com.ahtohiofilho.dominopernambucano.online.OnlineDominoGameStateDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchPhaseTypeDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueHttpStatus
 import java.time.Duration
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 /*
@@ -27,6 +31,159 @@ internal fun resolveSyntheticLocalSeatIndex(
             }
         }
         .singleOrNull()
+}
+
+internal data class SyntheticDecisionTurnKey(
+    val roundNumber: Int,
+    val localSeatIndex: Int,
+    val gameState: OnlineDominoGameStateDto,
+)
+
+internal data class SyntheticDecisionCadenceState(
+    val turnKey: SyntheticDecisionTurnKey,
+    val delayMillis: Long,
+    val readyAtEpochMillis: Long,
+)
+
+internal data class SyntheticDecisionCadenceResolution(
+    val state: SyntheticDecisionCadenceState?,
+    val readyToAct: Boolean,
+    val nextStepAtEpochMillis: Long?,
+)
+
+private const val MIN_SYNTHETIC_DECISION_DELAY_MILLIS = 1_000L
+private const val MAX_SYNTHETIC_DECISION_DELAY_MILLIS = 4_000L
+
+/*
+ * Each synthetic identity has a stable personal center between 1.8 and 3.2 s.
+ * Per logical turn, a triangular jitter of roughly +/- 0.8 s is applied.
+ * Clamping keeps the final cadence within 1-4 s.
+ *
+ * The deterministic hash is deliberate: polling/recomposition cannot redraw a
+ * new delay. A given identity + logical turn always resolves to the same value.
+ */
+internal fun resolveSyntheticPersonalityBaseDelayMillis(
+    identityKey: String,
+): Long {
+    val normalizedIdentity = identityKey
+        .trim()
+        .uppercase(Locale.ROOT)
+
+    val personalitySpreadMillis = 1_400
+    val personalityOffsetMillis = Math.floorMod(
+        normalizedIdentity.hashCode(),
+        personalitySpreadMillis + 1,
+    )
+
+    return 1_800L + personalityOffsetMillis.toLong()
+}
+
+internal fun resolveSyntheticDecisionDelayMillis(
+    identityKey: String,
+    turnKey: SyntheticDecisionTurnKey,
+): Long {
+    val normalizedIdentity = identityKey
+        .trim()
+        .uppercase(Locale.ROOT)
+
+    val seedPrefix =
+        "$normalizedIdentity|" +
+            "${turnKey.roundNumber}|" +
+            "${turnKey.localSeatIndex}|" +
+            turnKey.gameState.hashCode()
+
+    /*
+     * Average two uniform samples to concentrate most turns near the player's
+     * personal center while still allowing occasional fast/slow decisions.
+     */
+    val sampleA = Math.floorMod(
+        "$seedPrefix|A".hashCode(),
+        1_601,
+    )
+    val sampleB = Math.floorMod(
+        "$seedPrefix|B".hashCode(),
+        1_601,
+    )
+    val triangularJitterMillis =
+        ((sampleA + sampleB) / 2) - 800
+
+    return (
+        resolveSyntheticPersonalityBaseDelayMillis(
+            identityKey = normalizedIdentity,
+        ) + triangularJitterMillis.toLong()
+    ).coerceIn(
+        MIN_SYNTHETIC_DECISION_DELAY_MILLIS,
+        MAX_SYNTHETIC_DECISION_DELAY_MILLIS,
+    )
+}
+
+/*
+ * Synthetic identities are externally controlled participants. The server
+ * remains authoritative, while the external process owns both the decision
+ * and its human-like cadence.
+ *
+ * This is scheduling, not sleeping: one synthetic waiting for its decision
+ * window must never block the other population actors.
+ *
+ * The turn key intentionally excludes revision and clocks. Poll/ticker
+ * revisions may change while the logical turn is still the same; only a
+ * changed game state starts a fresh decision window and therefore a fresh
+ * per-turn variation.
+ */
+internal fun resolveSyntheticDecisionCadence(
+    currentState: SyntheticDecisionCadenceState?,
+    snapshot: OnlineMatchSnapshotDto,
+    localSeatIndex: Int,
+    identityKey: String,
+    nowEpochMillis: Long,
+): SyntheticDecisionCadenceResolution {
+    val isLocalSyntheticTurn =
+        snapshot.phase.type ==
+            OnlineMatchPhaseTypeDto.WAITING_FOR_LOCAL_MOVE &&
+            snapshot.gameState.currentPlayerIndex == localSeatIndex
+
+    if (!isLocalSyntheticTurn) {
+        return SyntheticDecisionCadenceResolution(
+            state = null,
+            readyToAct = true,
+            nextStepAtEpochMillis = null,
+        )
+    }
+
+    val turnKey = SyntheticDecisionTurnKey(
+        roundNumber = snapshot.roundNumber,
+        localSeatIndex = localSeatIndex,
+        gameState = snapshot.gameState,
+    )
+
+    val scheduledState =
+        currentState
+            ?.takeIf { state -> state.turnKey == turnKey }
+            ?: resolveSyntheticDecisionDelayMillis(
+                identityKey = identityKey,
+                turnKey = turnKey,
+            ).let { delayMillis ->
+                SyntheticDecisionCadenceState(
+                    turnKey = turnKey,
+                    delayMillis = delayMillis,
+                    readyAtEpochMillis =
+                        nowEpochMillis + delayMillis,
+                )
+            }
+
+    val readyToAct =
+        nowEpochMillis >= scheduledState.readyAtEpochMillis
+
+    return SyntheticDecisionCadenceResolution(
+        state = scheduledState,
+        readyToAct = readyToAct,
+        nextStepAtEpochMillis =
+            if (readyToAct) {
+                null
+            } else {
+                scheduledState.readyAtEpochMillis
+            },
+    )
 }
 
 internal class AutonomousSyntheticPopulation(
@@ -122,18 +279,28 @@ internal class AutonomousSyntheticPopulation(
         now: Long,
     ) {
         try {
-            if (player.matchId == null) {
-                enterQueue(player)
-            } else {
-                advanceMatch(player)
-            }
+            val cadenceNextStepAtEpochMillis =
+                if (player.matchId == null) {
+                    enterQueue(player)
+                    null
+                } else {
+                    advanceMatch(
+                        player = player,
+                        now = now,
+                    )
+                }
+
             liveness.recordSuccessfulInteraction(now)
+
             val nextDelayMillis = if (player.matchId == null) {
                 config.standbyPollIntervalMillis
             } else {
                 config.pollIntervalMillis
             }
-            player.nextStepAtEpochMillis = now + nextDelayMillis
+
+            player.nextStepAtEpochMillis =
+                cadenceNextStepAtEpochMillis
+                    ?: (now + nextDelayMillis)
         } catch (failure: MiniProductionHttpException) {
             when {
                 failure.statusCode == 404 && player.matchId != null -> {
@@ -184,7 +351,8 @@ internal class AutonomousSyntheticPopulation(
 
     private fun advanceMatch(
         player: SyntheticPlayerRuntime,
-    ) {
+        now: Long,
+    ): Long? {
         val matchId = requireNotNull(player.matchId)
         val snapshot = gateway.fetchMatchSnapshot(
             accessToken = player.credential.accessToken,
@@ -194,7 +362,7 @@ internal class AutonomousSyntheticPopulation(
         if (snapshot.phase.type == OnlineMatchPhaseTypeDto.MATCH_FINISHED) {
             player.completedMatches++
             player.clearMatch()
-            return
+            return null
         }
 
         val localSeatIndex = player.localSeatIndex
@@ -208,11 +376,24 @@ internal class AutonomousSyntheticPopulation(
             )
         player.localSeatIndex = localSeatIndex
 
+        val cadence = resolveSyntheticDecisionCadence(
+            currentState = player.pendingDecisionCadence,
+            snapshot = snapshot,
+            localSeatIndex = localSeatIndex,
+            identityKey = player.profile.tableCode,
+            nowEpochMillis = now,
+        )
+        player.pendingDecisionCadence = cadence.state
+
+        if (!cadence.readyToAct) {
+            return requireNotNull(cadence.nextStepAtEpochMillis)
+        }
+
         val action = policy.chooseAction(
             snapshot = snapshot,
             localSeatIndex = localSeatIndex,
             playerId = player.credential.playerId,
-        ) ?: return
+        ) ?: return null
 
         val result = gateway.submitAction(
             accessToken = player.credential.accessToken,
@@ -221,9 +402,12 @@ internal class AutonomousSyntheticPopulation(
 
         if (result.accepted) {
             acceptedActions++
+            player.pendingDecisionCadence = null
         } else {
             rejectedActions++
         }
+
+        return null
     }
 
     private fun rebalanceStandby(
@@ -320,11 +504,14 @@ internal class AutonomousSyntheticPopulation(
         var nextStepAtEpochMillis: Long = 0L,
         var completedMatches: Long = 0L,
         var standbyEnabled: Boolean = false,
+        var pendingDecisionCadence:
+            SyntheticDecisionCadenceState? = null,
     ) {
         fun clearMatch() {
             matchId = null
             localSeatIndex = null
             standbyEnabled = false
+            pendingDecisionCadence = null
         }
     }
 
