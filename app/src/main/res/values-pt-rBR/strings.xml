@@ -48,7 +48,6 @@
     <string name="private_room_creating">Criando sala...</string>
     <string name="private_room_complete_table">Completar mesa</string>
     <string name="private_room_complete_support">Você pode aguardar convidados ou preencher os lugares vazios com jogadores automáticos.</string>
-    <string name="private_room_complete_hint">Preenche os lugares vazios com jogadores automáticos.</string>
     <string name="private_room_seat_release">Liberar</string>
     <string name="private_room_waiting_players">Aguardando jogadores...</string>
     <string name="private_room_complete_status">Sala completa</string>

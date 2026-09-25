@@ -48,7 +48,6 @@
     <string name="private_room_creating">Creating room...</string>
     <string name="private_room_complete_table">Fill table</string>
     <string name="private_room_complete_support">You can wait for guests or fill the empty seats with automatic players.</string>
-    <string name="private_room_complete_hint">Fills the empty seats with automatic players.</string>
     <string name="private_room_seat_release">Release</string>
     <string name="private_room_waiting_players">Waiting for players...</string>
     <string name="private_room_complete_status">Room full</string>

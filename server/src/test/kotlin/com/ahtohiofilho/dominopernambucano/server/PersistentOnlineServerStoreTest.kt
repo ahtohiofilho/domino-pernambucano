@@ -3,6 +3,9 @@ package com.ahtohiofilho.dominopernambucano.server
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomCompleteRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomRemoveAutomaticPlayerRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
@@ -22,6 +25,133 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PersistentOnlineServerStoreTest {
+    @Test
+    fun private_room_automatic_completion_delegates_and_persists() {
+        val root = temporaryRoot()
+        val stateFile = File(root, "authoritative-state.json")
+
+        try {
+            val firstStore = PersistentOnlineServerStore.open(
+                stateFile = stateFile,
+                nowEpochMillis = { 1_000L },
+            )
+
+            val room = requireNotNull(
+                firstStore.createRoom(
+                    CreateOnlineRoomRequestDto(
+                        localPlayerId = "host",
+                        playerName = "HST",
+                    ),
+                ).roomSnapshot,
+            )
+
+            val completed = firstStore.completePrivateRoom(
+                PrivateRoomCompleteRequestDto(
+                    roomId = room.roomId,
+                    localPlayerId = "host",
+                ),
+            )
+
+            assertTrue(completed.accepted)
+
+            val completedSnapshot =
+                requireNotNull(completed.roomSnapshot)
+
+            assertEquals(4, completedSnapshot.players.size)
+            assertEquals(
+                3,
+                completedSnapshot.players.count { player ->
+                    player.participantType ==
+                        OnlineParticipantTypeDto.APPLICATION
+                },
+            )
+
+            val automaticSeat = requireNotNull(
+                completedSnapshot.players.first { player ->
+                    player.participantType ==
+                        OnlineParticipantTypeDto.APPLICATION
+                }.seatIndex,
+            )
+
+            val released =
+                firstStore.removePrivateRoomAutomaticPlayer(
+                    PrivateRoomRemoveAutomaticPlayerRequestDto(
+                        roomId = room.roomId,
+                        localPlayerId = "host",
+                        targetSeatIndex = automaticSeat,
+                    ),
+                )
+
+            assertTrue(released.accepted)
+            assertEquals(
+                3,
+                requireNotNull(released.roomSnapshot).players.size,
+            )
+
+            firstStore.close()
+
+            val restartedStore = PersistentOnlineServerStore.open(
+                stateFile = stateFile,
+                nowEpochMillis = { 1_000L },
+            )
+
+            val restored = requireNotNull(
+                restartedStore.getRoomSnapshot(room.roomId),
+            )
+
+            assertEquals(3, restored.players.size)
+            assertEquals(
+                2,
+                restored.players.count { player ->
+                    player.participantType ==
+                        OnlineParticipantTypeDto.APPLICATION
+                },
+            )
+            assertTrue(
+                restored.players.none { player ->
+                    player.seatIndex == automaticSeat
+                },
+            )
+
+            val completedAgain =
+                restartedStore.completePrivateRoom(
+                    PrivateRoomCompleteRequestDto(
+                        roomId = room.roomId,
+                        localPlayerId = "host",
+                    ),
+                )
+
+            assertTrue(completedAgain.accepted)
+            assertEquals(
+                4,
+                requireNotNull(completedAgain.roomSnapshot).players.size,
+            )
+
+            restartedStore.close()
+
+            val secondRestart = PersistentOnlineServerStore.open(
+                stateFile = stateFile,
+                nowEpochMillis = { 1_000L },
+            )
+
+            val finalSnapshot = requireNotNull(
+                secondRestart.getRoomSnapshot(room.roomId),
+            )
+
+            assertEquals(4, finalSnapshot.players.size)
+            assertEquals(
+                3,
+                finalSnapshot.players.count { player ->
+                    player.participantType ==
+                        OnlineParticipantTypeDto.APPLICATION
+                },
+            )
+
+            secondRestart.close()
+        } finally {
+            root.deleteRecursively()
+        }
+    }
     @Test
     fun restart_restores_match_revision_history_and_action_idempotency() {
         val root = temporaryRoot()

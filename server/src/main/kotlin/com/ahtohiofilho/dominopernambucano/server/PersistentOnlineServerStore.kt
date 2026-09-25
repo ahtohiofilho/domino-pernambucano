@@ -5,6 +5,8 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomCompleteRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomRemoveAutomaticPlayerRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomLeaveRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomSeatChangeRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
@@ -250,6 +252,18 @@ class PersistentOnlineServerStore private constructor(
         request: PrivateRoomSeatChangeRequestDto,
     ): OnlineRoomOperationResultDto = mutate {
         delegate.movePrivateRoomSeat(request)
+    }
+
+    override fun completePrivateRoom(
+        request: PrivateRoomCompleteRequestDto,
+    ): OnlineRoomOperationResultDto = mutate {
+        delegate.completePrivateRoom(request)
+    }
+
+    override fun removePrivateRoomAutomaticPlayer(
+        request: PrivateRoomRemoveAutomaticPlayerRequestDto,
+    ): OnlineRoomOperationResultDto = mutate {
+        delegate.removePrivateRoomAutomaticPlayer(request)
     }
 
     override fun leavePrivateRoom(

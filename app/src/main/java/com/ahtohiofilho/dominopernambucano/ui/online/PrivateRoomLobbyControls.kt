@@ -345,15 +345,6 @@ internal fun PrivateRoomWaitingActions(
             text = stringResource(R.string.private_room_complete_table),
             onClick = onCompleteWithFakePlayersClick,
         )
-
-        Text(
-            text = stringResource(R.string.private_room_complete_hint),
-            color = DominoSemanticColors.primaryTextOnDark.copy(
-                alpha = 0.64f,
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            textAlign = TextAlign.Center,
-        )
     }
 
     if (isPrivateRoomHost(roomSnapshot, localPlayerId)) {
