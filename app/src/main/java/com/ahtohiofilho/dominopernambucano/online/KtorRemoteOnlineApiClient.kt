@@ -576,6 +576,48 @@ class KtorRemoteOnlineApiClient(
         }.body()
     }
 
+    override suspend fun completePrivateRoom(
+        request: PrivateRoomCompleteRequestDto,
+    ): OnlineRoomOperationResultDto {
+        setDevelopmentPlayerId(
+            playerId = request.localPlayerId,
+        )
+
+        return httpClient.post(
+            urlString = endpoint(
+                OnlineRemoteRoutes.PRIVATE_ROOM_COMPLETE,
+            ),
+        ) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            applyProtectedAuthentication(
+                developmentPlayerId = request.localPlayerId,
+            )
+            setBody(request)
+        }.body()
+    }
+
+    override suspend fun removePrivateRoomAutomaticPlayer(
+        request: PrivateRoomRemoveAutomaticPlayerRequestDto,
+    ): OnlineRoomOperationResultDto {
+        setDevelopmentPlayerId(
+            playerId = request.localPlayerId,
+        )
+
+        return httpClient.post(
+            urlString = endpoint(
+                OnlineRemoteRoutes.PRIVATE_ROOM_REMOVE_AUTOMATIC,
+            ),
+        ) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            applyProtectedAuthentication(
+                developmentPlayerId = request.localPlayerId,
+            )
+            setBody(request)
+        }.body()
+    }
+
     override suspend fun startPrivateRoom(
         request: PrivateRoomStartRequestDto,
     ): OnlineRoomOperationResultDto {

@@ -80,6 +80,22 @@ interface OnlineRoomRepository {
         )
     }
 
+    suspend fun completePrivateRoom(): OnlineRoomOperationResultDto {
+        return OnlineRoomOperationResultDto(
+            accepted = false,
+            reason = "Preenchimento automático não disponível neste repositório.",
+        )
+    }
+
+    suspend fun removePrivateRoomAutomaticPlayer(
+        targetSeatIndex: Int,
+    ): OnlineRoomOperationResultDto {
+        return OnlineRoomOperationResultDto(
+            accepted = false,
+            reason = "Liberação de lugar automático não disponível neste repositório.",
+        )
+    }
+
     suspend fun startPrivateRoom(): OnlineRoomOperationResultDto {
         return OnlineRoomOperationResultDto(
             accepted = false,

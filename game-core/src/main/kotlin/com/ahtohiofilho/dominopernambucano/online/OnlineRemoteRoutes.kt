@@ -15,6 +15,9 @@ object OnlineRemoteRoutes {
     const val CREATE_ROOM = "rooms"
     const val JOIN_ROOM = "rooms/join"
     const val PRIVATE_ROOM_SEAT = "rooms/private/seat"
+    const val PRIVATE_ROOM_COMPLETE = "rooms/private/complete"
+    const val PRIVATE_ROOM_REMOVE_AUTOMATIC =
+        "rooms/private/remove-automatic"
     const val PRIVATE_ROOM_START = "rooms/private/start"
     const val PRIVATE_ROOM_LEAVE = "rooms/private/leave"
     const val SUBMIT_ACTION = "matches/actions"

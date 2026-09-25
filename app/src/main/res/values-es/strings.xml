@@ -46,7 +46,10 @@
     <string name="ranked_queue_search_again">Buscar de nuevo</string>
     <string name="private_room_title">Sala en línea</string>
     <string name="private_room_creating">Creando sala...</string>
-    <string name="private_room_complete_table">Completar la mesa con jugadores de la aplicación</string>
+    <string name="private_room_complete_table">Completar mesa</string>
+    <string name="private_room_complete_support">Puedes esperar invitados o completar los lugares vacíos con jugadores automáticos.</string>
+    <string name="private_room_complete_hint">Completa los lugares vacíos con jugadores automáticos.</string>
+    <string name="private_room_seat_release">Liberar</string>
     <string name="private_room_waiting_players">Esperando jugadores...</string>
     <string name="private_room_complete_status">Sala completa</string>
     <string name="private_room_opening_match">Abriendo partida en línea...</string>
@@ -271,7 +274,7 @@
     <string name="online_match_created">Partida creada</string>
     <string name="online_match_finished">Partida finalizada</string>
     <string name="online_room_closed">Sala cerrada</string>
-    <string name="online_participant_app_controlled">Controlado por la aplicación</string>
+    <string name="online_participant_app_controlled">Automático</string>
     <string name="online_queue_checking">Verificando tu cola...</string>
     <string name="online_queue_position_format">Estás en la posición %1$d.</string>
     <string name="online_queue_cancelling">Cancelando la búsqueda...</string>

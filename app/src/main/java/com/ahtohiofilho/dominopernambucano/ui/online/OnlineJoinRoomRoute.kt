@@ -433,8 +433,7 @@ private fun OnlineJoinRoomScreen(
                 PrivateRoomWaitingActions(
                     roomSnapshot = roomSnapshot,
                     localPlayerId = localPlayerId,
-                    allowFakePlayerCompletion =
-                        allowFakePlayerCompletion,
+                    allowAutomaticPlayerCompletion = false,
                     onCompleteWithFakePlayersClick =
                         onCompleteWithFakePlayersClick,
                     onStartPrivateRoomClick =

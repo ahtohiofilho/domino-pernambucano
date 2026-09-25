@@ -10,6 +10,19 @@ data class PrivateRoomSeatChangeRequestDto(
 )
 
 @Serializable
+data class PrivateRoomCompleteRequestDto(
+    val roomId: String,
+    val localPlayerId: String,
+)
+
+@Serializable
+data class PrivateRoomRemoveAutomaticPlayerRequestDto(
+    val roomId: String,
+    val localPlayerId: String,
+    val targetSeatIndex: Int,
+)
+
+@Serializable
 data class PrivateRoomStartRequestDto(
     val roomId: String,
     val localPlayerId: String,

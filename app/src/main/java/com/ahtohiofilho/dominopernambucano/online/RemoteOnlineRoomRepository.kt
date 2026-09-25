@@ -325,6 +325,43 @@ private enum class ActiveReadRefreshOutcome {
         }
     }
 
+    override suspend fun completePrivateRoom():
+        OnlineRoomOperationResultDto {
+        return executePrivateLobbyOperation(
+            operation = "complete_private_room",
+        ) { client, roomId, playerId ->
+            client.completePrivateRoom(
+                request = PrivateRoomCompleteRequestDto(
+                    roomId = roomId,
+                    localPlayerId = playerId,
+                ),
+            )
+        }
+    }
+
+    override suspend fun removePrivateRoomAutomaticPlayer(
+        targetSeatIndex: Int,
+    ): OnlineRoomOperationResultDto {
+        if (targetSeatIndex !in 0..3) {
+            return rejectedRoomOperation(
+                reason = "Posição de mesa inválida.",
+            )
+        }
+
+        return executePrivateLobbyOperation(
+            operation = "remove_private_room_automatic",
+        ) { client, roomId, playerId ->
+            client.removePrivateRoomAutomaticPlayer(
+                request =
+                    PrivateRoomRemoveAutomaticPlayerRequestDto(
+                        roomId = roomId,
+                        localPlayerId = playerId,
+                        targetSeatIndex = targetSeatIndex,
+                    ),
+            )
+        }
+    }
+
     override suspend fun startPrivateRoom():
         OnlineRoomOperationResultDto {
         return executePrivateLobbyOperation(

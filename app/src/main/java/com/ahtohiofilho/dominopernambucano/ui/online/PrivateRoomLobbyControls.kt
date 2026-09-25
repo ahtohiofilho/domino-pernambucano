@@ -12,6 +12,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomStatusDto
 import com.ahtohiofilho.dominopernambucano.online.resolvedDisplayName
 import com.ahtohiofilho.dominopernambucano.ui.menu.PrimaryMenuButton
+import com.ahtohiofilho.dominopernambucano.ui.menu.SecondaryMenuButton
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
@@ -33,6 +35,7 @@ internal enum class PrivateRoomSeatUiAction {
     CURRENT,
     CHOOSE,
     SWAP,
+    RELEASE_AUTOMATIC,
     NONE,
 }
 
@@ -59,15 +62,37 @@ internal fun privateRoomSeatUiAction(
         return PrivateRoomSeatUiAction.CURRENT
     }
 
-    val targetOccupied = roomSnapshot.players.any { player ->
+    val targetPlayer = roomSnapshot.players.firstOrNull { player ->
         player.seatIndex == targetSeatIndex
     }
 
-    return if (targetOccupied) {
+    if (
+        roomSnapshot.hostPlayerId == localPlayerId &&
+        targetPlayer?.participantType ==
+            OnlineParticipantTypeDto.APPLICATION
+    ) {
+        return PrivateRoomSeatUiAction.RELEASE_AUTOMATIC
+    }
+
+    return if (targetPlayer != null) {
         PrivateRoomSeatUiAction.SWAP
     } else {
         PrivateRoomSeatUiAction.CHOOSE
     }
+}
+
+internal fun canCompletePrivateRoomWithAutomaticPlayers(
+    roomSnapshot: OnlineRoomSnapshotDto,
+    localPlayerId: String?,
+): Boolean {
+    return roomSnapshot.matchMode ==
+            DominoMatchMode.PRIVATE_UNRANKED &&
+        roomSnapshot.status ==
+            OnlineRoomStatusDto.WAITING_FOR_PLAYERS &&
+        roomSnapshot.matchId == null &&
+        !localPlayerId.isNullOrBlank() &&
+        roomSnapshot.hostPlayerId == localPlayerId &&
+        roomSnapshot.players.size < 4
 }
 
 internal fun isPrivateRoomFullAndReady(
@@ -195,7 +220,8 @@ private fun PrivateRoomSeatRow(
 ) {
     val actionable =
         action == PrivateRoomSeatUiAction.CHOOSE ||
-            action == PrivateRoomSeatUiAction.SWAP
+            action == PrivateRoomSeatUiAction.SWAP ||
+            action == PrivateRoomSeatUiAction.RELEASE_AUTOMATIC
 
     Row(
         modifier = Modifier
@@ -259,6 +285,9 @@ private fun PrivateRoomSeatRow(
                 PrivateRoomSeatUiAction.SWAP ->
                     stringResource(R.string.private_room_seat_swap)
 
+                PrivateRoomSeatUiAction.RELEASE_AUTOMATIC ->
+                    stringResource(R.string.private_room_seat_release)
+
                 PrivateRoomSeatUiAction.NONE -> {
                     if (player?.connected == true) {
                         stringResource(R.string.online_seat_online)
@@ -277,6 +306,9 @@ private fun PrivateRoomSeatRow(
                 PrivateRoomSeatUiAction.SWAP ->
                     DominoSemanticColors.primaryTextOnDark
 
+                PrivateRoomSeatUiAction.RELEASE_AUTOMATIC ->
+                    DominoSemanticColors.warningImpact
+
                 PrivateRoomSeatUiAction.NONE ->
                     DominoSemanticColors.primaryTextOnDark.copy(
                         alpha = 0.52f,
@@ -290,7 +322,7 @@ private fun PrivateRoomSeatRow(
 internal fun PrivateRoomWaitingActions(
     roomSnapshot: OnlineRoomSnapshotDto,
     localPlayerId: String?,
-    allowFakePlayerCompletion: Boolean,
+    allowAutomaticPlayerCompletion: Boolean,
     onCompleteWithFakePlayersClick: () -> Unit,
     onStartPrivateRoomClick: () -> Unit,
 ) {
@@ -306,12 +338,21 @@ internal fun PrivateRoomWaitingActions(
     }
 
     if (
-        allowFakePlayerCompletion &&
+        allowAutomaticPlayerCompletion &&
         roomSnapshot.players.size < 4
     ) {
-        PrimaryMenuButton(
+        SecondaryMenuButton(
             text = stringResource(R.string.private_room_complete_table),
             onClick = onCompleteWithFakePlayersClick,
+        )
+
+        Text(
+            text = stringResource(R.string.private_room_complete_hint),
+            color = DominoSemanticColors.primaryTextOnDark.copy(
+                alpha = 0.64f,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
         )
     }
 

@@ -2,7 +2,9 @@ package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomCompleteRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomLeaveRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomRemoveAutomaticPlayerRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomSeatChangeRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfileResponseDto
@@ -673,6 +675,44 @@ internal fun Route.onlineServerRoutes(
 
             call.respond(
                 store.leavePrivateRoom(
+                    request = request,
+                ),
+            )
+        }
+
+        post("/${OnlineRemoteRoutes.PRIVATE_ROOM_COMPLETE}") {
+            val identity = call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@post
+            val request =
+                call.receive<PrivateRoomCompleteRequestDto>()
+
+            if (identity.playerId != request.localPlayerId) {
+                call.respond(HttpStatusCode.Forbidden)
+                return@post
+            }
+
+            call.respond(
+                store.completePrivateRoom(
+                    request = request,
+                ),
+            )
+        }
+
+        post("/${OnlineRemoteRoutes.PRIVATE_ROOM_REMOVE_AUTOMATIC}") {
+            val identity = call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@post
+            val request =
+                call.receive<PrivateRoomRemoveAutomaticPlayerRequestDto>()
+
+            if (identity.playerId != request.localPlayerId) {
+                call.respond(HttpStatusCode.Forbidden)
+                return@post
+            }
+
+            call.respond(
+                store.removePrivateRoomAutomaticPlayer(
                     request = request,
                 ),
             )

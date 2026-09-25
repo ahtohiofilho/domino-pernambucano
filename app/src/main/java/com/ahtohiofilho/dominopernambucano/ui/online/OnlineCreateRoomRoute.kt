@@ -70,10 +70,6 @@ fun OnlineCreateRoomRoute(
     val developmentParticipantCompletion =
         roomRepository as? OnlineDevelopmentParticipantCompletion
 
-    val allowApplicationParticipantCompletion =
-        debugOptions.allowFakePlayerCompletion &&
-                developmentParticipantCompletion != null
-
     val localPlayerId = localPlayerIdentity.playerId
     val localPlayerName = localPlayerIdentity.displayName
 
@@ -88,8 +84,6 @@ fun OnlineCreateRoomRoute(
         stringResource(R.string.online_room_create_failed)
     val completeFailedMessage =
         stringResource(R.string.online_room_complete_failed)
-    val fillAppPlayersDisabledMessage =
-        stringResource(R.string.room_fill_app_players_disabled)
     val seatChangeFailedMessage =
         stringResource(R.string.private_room_seat_change_failed)
     val startPrivateRoomFailedMessage =
@@ -226,13 +220,40 @@ fun OnlineCreateRoomRoute(
         feedbackMessage = feedbackMessage,
         localPlayerId = participationPlayerId,
         isFakeBackend = debugOptions.allowDemoRoomCreation,
-        allowFakePlayerCompletion =
-            allowApplicationParticipantCompletion,
-        onSeatClick = { targetSeatIndex ->
-            coroutineScope.launch {
-                val result = roomRepository.movePrivateRoomSeat(
-                    targetSeatIndex = targetSeatIndex,
+        allowAutomaticPlayerCompletion =
+            roomSnapshot?.let { snapshot ->
+                canCompletePrivateRoomWithAutomaticPlayers(
+                    roomSnapshot = snapshot,
+                    localPlayerId = participationPlayerId,
                 )
+            } == true,
+        onSeatClick = { targetSeatIndex ->
+            val snapshot = roomSnapshot
+
+            coroutineScope.launch {
+                val action = snapshot?.let { room ->
+                    privateRoomSeatUiAction(
+                        roomSnapshot = room,
+                        localPlayerId = participationPlayerId,
+                        targetSeatIndex = targetSeatIndex,
+                    )
+                }
+
+                val result =
+                    if (
+                        action ==
+                        PrivateRoomSeatUiAction.RELEASE_AUTOMATIC
+                    ) {
+                        roomRepository
+                            .removePrivateRoomAutomaticPlayer(
+                                targetSeatIndex = targetSeatIndex,
+                            )
+                    } else {
+                        roomRepository.movePrivateRoomSeat(
+                            targetSeatIndex = targetSeatIndex,
+                        )
+                    }
+
                 feedbackMessage = if (result.accepted) {
                     null
                 } else {
@@ -258,8 +279,17 @@ fun OnlineCreateRoomRoute(
                 !debugOptions.allowFakePlayerCompletion ||
                 participantCompletion == null
             ) {
-                feedbackMessage =
-                    fillAppPlayersDisabledMessage
+                coroutineScope.launch {
+                    val result =
+                        roomRepository.completePrivateRoom()
+
+                    feedbackMessage = if (result.accepted) {
+                        null
+                    } else {
+                        result.reason ?: completeFailedMessage
+                    }
+                }
+
                 return@OnlineLobbyScreen
             }
 
@@ -323,7 +353,7 @@ private fun OnlineLobbyScreen(
     feedbackMessage: String?,
     localPlayerId: String?,
     isFakeBackend: Boolean,
-    allowFakePlayerCompletion: Boolean,
+    allowAutomaticPlayerCompletion: Boolean,
     onSeatClick: (Int) -> Unit,
     onStartPrivateRoomClick: () -> Unit,
     onCompleteWithFakePlayersClick: () -> Unit,
@@ -344,10 +374,10 @@ private fun OnlineLobbyScreen(
                             "automática da partida."
                 }
 
-                allowFakePlayerCompletion -> {
-                    "Sala conectada ao backend online remoto. Você pode " +
-                            "aguardar outros jogadores ou completar a mesa " +
-                            "com jogadores controlados pelo aplicativo."
+                allowAutomaticPlayerCompletion -> {
+                    stringResource(
+                        R.string.private_room_complete_support,
+                    )
                 }
 
                 else -> {
@@ -401,7 +431,7 @@ private fun OnlineLobbyScreen(
             PrivateRoomWaitingActions(
                 roomSnapshot = roomSnapshot,
                 localPlayerId = localPlayerId,
-                allowFakePlayerCompletion = allowFakePlayerCompletion,
+                allowAutomaticPlayerCompletion = allowAutomaticPlayerCompletion,
                 onCompleteWithFakePlayersClick =
                     onCompleteWithFakePlayersClick,
                 onStartPrivateRoomClick = onStartPrivateRoomClick,

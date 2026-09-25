@@ -5,7 +5,9 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomCompleteRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomLeaveRequestDto
+import com.ahtohiofilho.dominopernambucano.online.PrivateRoomRemoveAutomaticPlayerRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomSeatChangeRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomStartRequestDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineAccountProfile
@@ -229,6 +231,32 @@ interface OnlineServerStore : AutoCloseable {
     fun leavePrivateRoom(
         request: PrivateRoomLeaveRequestDto,
     ): OnlineRoomOperationResultDto
+
+    /**
+     * Fills only empty seats in a waiting PRIVATE_UNRANKED lobby with
+     * server-owned APPLICATION participants. Only the host may request it.
+     */
+    fun completePrivateRoom(
+        request: PrivateRoomCompleteRequestDto,
+    ): OnlineRoomOperationResultDto {
+        return OnlineRoomOperationResultDto(
+            accepted = false,
+            reason = "Preenchimento automático não disponível neste store.",
+        )
+    }
+
+    /**
+     * Releases one APPLICATION participant from a waiting private lobby.
+     * Only the host may request it.
+     */
+    fun removePrivateRoomAutomaticPlayer(
+        request: PrivateRoomRemoveAutomaticPlayerRequestDto,
+    ): OnlineRoomOperationResultDto {
+        return OnlineRoomOperationResultDto(
+            accepted = false,
+            reason = "Liberação de lugar automático não disponível neste store.",
+        )
+    }
 
     /**
      * Starts a waiting PRIVATE_UNRANKED room only when the requesting

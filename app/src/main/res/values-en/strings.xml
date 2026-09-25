@@ -46,7 +46,10 @@
     <string name="ranked_queue_search_again">Search again</string>
     <string name="private_room_title">Online room</string>
     <string name="private_room_creating">Creating room...</string>
-    <string name="private_room_complete_table">Fill the table with app players</string>
+    <string name="private_room_complete_table">Fill table</string>
+    <string name="private_room_complete_support">You can wait for guests or fill the empty seats with automatic players.</string>
+    <string name="private_room_complete_hint">Fills the empty seats with automatic players.</string>
+    <string name="private_room_seat_release">Release</string>
     <string name="private_room_waiting_players">Waiting for players...</string>
     <string name="private_room_complete_status">Room full</string>
     <string name="private_room_opening_match">Opening online match...</string>
@@ -285,7 +288,7 @@
     <string name="online_match_created">Match created</string>
     <string name="online_match_finished">Match finished</string>
     <string name="online_room_closed">Room closed</string>
-    <string name="online_participant_app_controlled">App-controlled</string>
+    <string name="online_participant_app_controlled">Automatic</string>
     <string name="online_queue_checking">Checking your queue...</string>
     <string name="online_queue_position_format">You are in position %1$d.</string>
     <string name="online_queue_cancelling">Cancelling search...</string>

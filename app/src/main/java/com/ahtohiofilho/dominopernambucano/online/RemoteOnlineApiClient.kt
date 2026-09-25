@@ -209,6 +209,22 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun completePrivateRoom(
+        request: PrivateRoomCompleteRequestDto,
+    ): OnlineRoomOperationResultDto {
+        throw UnsupportedOperationException(
+            "Preenchimento automático da sala privada não configurado.",
+        )
+    }
+
+    suspend fun removePrivateRoomAutomaticPlayer(
+        request: PrivateRoomRemoveAutomaticPlayerRequestDto,
+    ): OnlineRoomOperationResultDto {
+        throw UnsupportedOperationException(
+            "Liberação de lugar automático não configurada.",
+        )
+    }
+
     suspend fun startPrivateRoom(
         request: PrivateRoomStartRequestDto,
     ): OnlineRoomOperationResultDto {
