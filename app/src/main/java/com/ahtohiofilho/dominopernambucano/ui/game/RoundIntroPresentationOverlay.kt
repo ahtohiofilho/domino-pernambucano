@@ -44,7 +44,7 @@ import kotlin.math.roundToInt
 private const val ROUND_INTRO_ENTER_MILLIS = 620
 private const val ROUND_INTRO_SCORE_MILLIS = 520
 private const val ROUND_INTRO_HOLD_MILLIS = 1_050L
-private const val ROUND_INTRO_EXIT_MILLIS = 460
+
 
 private val ROUND_INTRO_PANEL_HORIZONTAL_PADDING = 22.dp
 private val ROUND_INTRO_PANEL_VERTICAL_PADDING = 24.dp
@@ -193,44 +193,10 @@ fun RoundIntroPresentationOverlay(
 
         delay(ROUND_INTRO_HOLD_MILLIS)
 
-        launch {
-            titleAlpha.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = ROUND_INTRO_EXIT_MILLIS,
-                    easing = FastOutSlowInEasing,
-                ),
-            )
-        }
-
-        launch {
-            centerAlpha.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = ROUND_INTRO_EXIT_MILLIS,
-                    easing = FastOutSlowInEasing,
-                ),
-            )
-        }
-
-        launch {
-            topProgress.animateTo(
-                targetValue = 1.15f,
-                animationSpec = tween(
-                    durationMillis = ROUND_INTRO_EXIT_MILLIS,
-                    easing = FastOutSlowInEasing,
-                ),
-            )
-        }
-
-        bottomProgress.animateTo(
-            targetValue = -1.15f,
-            animationSpec = tween(
-                durationMillis = ROUND_INTRO_EXIT_MILLIS,
-                easing = FastOutSlowInEasing,
-            ),
-        )
-
+        /*
+         * Do not fade to an empty overlay before authority catches up.
+         * Keep the final intro frame visible until the phase actually changes.
+         */
         onAnimationFinished()
     }
 

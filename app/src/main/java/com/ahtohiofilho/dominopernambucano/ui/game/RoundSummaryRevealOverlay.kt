@@ -32,12 +32,16 @@ import com.ahtohiofilho.dominopernambucano.R
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.RoundWinKind
-import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
+
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-private const val ROUND_SUMMARY_ENTER_MILLIS = 260
+internal const val ROUND_SUMMARY_ENTER_MILLIS = 260
+internal const val ROUND_SUMMARY_VISIBLE_HOLD_MILLIS = 1_400L
+internal const val ROUND_SUMMARY_EXPECTED_COMPLETION_MILLIS =
+    ROUND_SUMMARY_ENTER_MILLIS + ROUND_SUMMARY_VISIBLE_HOLD_MILLIS
 
 internal const val RoundSummaryOverlayTag = "round_summary_overlay"
 internal const val RoundSummaryTitleTag = "round_summary_title"
@@ -68,13 +72,20 @@ fun RoundSummaryRevealOverlay(
         alphaAnim.snapTo(0f)
         scaleAnim.snapTo(0.98f)
 
-        alphaAnim.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = ROUND_SUMMARY_ENTER_MILLIS,
-                easing = FastOutSlowInEasing,
-            ),
-        )
+        /*
+         * Alpha and scale form one entrance. The summary finishes well before
+         * the server's 3 s fallback so "CONTAGEM DE PONTOS" and every other
+         * round result have a deterministic player-visible window.
+         */
+        launch {
+            alphaAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = ROUND_SUMMARY_ENTER_MILLIS,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        }
 
         scaleAnim.animateTo(
             targetValue = 1f,
@@ -84,7 +95,7 @@ fun RoundSummaryRevealOverlay(
             ),
         )
 
-        delay(DominoMatchTiming.RoundSummaryAutoAdvanceMillis)
+        delay(ROUND_SUMMARY_VISIBLE_HOLD_MILLIS)
 
         onStartNextRound()
     }

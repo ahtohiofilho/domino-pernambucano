@@ -607,7 +607,19 @@ class OnlineDominoMatchCoordinator(
     private fun handleRoundIntroFinished() {
         if (completeActivePresentation()) {
             advancePresentationQueue()
-            return
+
+            /*
+             * A round-number bridge can promote an authoritative snapshot whose
+             * own phase is still RoundIntro. In that case the same UI completion
+             * must also release the newly promoted stable intro; returning here
+             * used to leave the overlay alive until the server/watchdog timeout.
+             */
+            if (
+                activePresentationRuntimeState != null ||
+                currentState.phase != DominoMatchPhase.RoundIntro
+            ) {
+                return
+            }
         }
 
         if (

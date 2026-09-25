@@ -7,6 +7,7 @@ import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPlayer
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import com.ahtohiofilho.dominopernambucano.domain.RoundWinKind
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchClockPolicy
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchCommand
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
@@ -592,6 +593,164 @@ class OnlineDominoMatchCoordinatorTest {
                 coordinator.dispose()
             }
         }
+    @Test
+    fun active_round_intro_bridge_completion_releases_promoted_stable_intro_without_timeout_wait() =
+        runBlocking {
+            val summaryRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            ).copy(
+                roundNumber = 1,
+                phase = DominoMatchPhase.RoundSummary,
+            )
+
+            val promotedRoundIntroRuntimeState = summaryRuntimeState.copy(
+                roundNumber = 2,
+                phase = DominoMatchPhase.RoundIntro,
+            )
+
+            val initialSnapshot = summaryRuntimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialSnapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialSnapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                repository.publishMatchSnapshot(
+                    promotedRoundIntroRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.RoundSummary,
+                    coordinator.currentState.phase,
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.RoundIntro,
+                    coordinator.currentState.phase,
+                )
+                assertTrue(
+                    repository.submittedActions.isEmpty(),
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.RoundIntroFinished,
+                )
+                yield()
+
+                assertEquals(
+                    1,
+                    repository.submittedActions.size,
+                )
+                assertEquals(
+                    OnlinePlayerActionTypeDto.REQUEST_SNAPSHOT,
+                    repository.submittedActions.single().type,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+    @Test
+    fun closed_point_count_summary_is_not_skipped_when_next_round_is_already_buffered() =
+        runBlocking {
+            val baseRuntimeState = createRuntimeState(
+                board = emptyList(),
+                boardChain = DominoBoardChain(),
+                currentPlayerIndex = 0,
+                playerHands = List(4) {
+                    emptyList()
+                },
+            )
+            val summaryRuntimeState = baseRuntimeState.copy(
+                gameState = baseRuntimeState.gameState.copy(
+                    roundWinKind = RoundWinKind.CLOSED,
+                    roundWinnerTeamIndex = 0,
+                    teamScores = listOf(1, 0),
+                ),
+                roundNumber = 1,
+                phase = DominoMatchPhase.RoundSummary,
+            )
+            val nextRoundRuntimeState = summaryRuntimeState.copy(
+                gameState = summaryRuntimeState.gameState.copy(
+                    roundWinKind = null,
+                    roundWinnerTeamIndex = null,
+                ),
+                roundNumber = 2,
+                phase = DominoMatchPhase.WaitingForLocalMove,
+            )
+
+            val initialSnapshot = summaryRuntimeState.toSnapshot(
+                revision = 1L,
+            )
+            val repository = TestOnlineRoomRepository(
+                initialSnapshot = initialSnapshot,
+            )
+            val coordinator = OnlineDominoMatchCoordinator(
+                repository = repository,
+                roomId = TEST_ROOM_ID,
+                matchId = TEST_MATCH_ID,
+                localPlayerId = TEST_PLAYER_ID,
+                localPlayerIndex = 0,
+                initialSnapshot = initialSnapshot,
+                coroutineDispatcher = Dispatchers.Unconfined,
+            )
+
+            try {
+                repository.publishMatchSnapshot(
+                    nextRoundRuntimeState.toSnapshot(
+                        revision = 2L,
+                    ),
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.RoundSummary,
+                    coordinator.currentState.phase,
+                )
+                assertEquals(
+                    RoundWinKind.CLOSED,
+                    coordinator.currentState.gameState.roundWinKind,
+                )
+                assertTrue(
+                    repository.submittedActions.isEmpty(),
+                )
+
+                coordinator.dispatch(
+                    DominoMatchCommand.StartNextRound,
+                )
+                yield()
+
+                assertEquals(
+                    DominoMatchPhase.RoundIntro,
+                    coordinator.currentState.phase,
+                )
+            } finally {
+                coordinator.dispose()
+            }
+        }
+
     @Test
     fun round_summary_keeps_visible_frame_until_ui_completion_even_if_server_is_ahead() =
         runBlocking {
