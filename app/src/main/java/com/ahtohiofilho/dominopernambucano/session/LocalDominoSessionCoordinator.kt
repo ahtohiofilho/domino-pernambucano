@@ -113,7 +113,8 @@ class LocalDominoSessionCoordinator(
             DominoSessionCommand.BackToMainMenu -> {
                 disposeCurrentOnlineCoordinatorIfNeeded()
 
-                mutableState.value = latestMainMenuState
+                mutableState.value =
+                    refreshMainMenuStateFromPersistence()
             }
 
             DominoSessionCommand.BackToPlayModeSelection -> {
@@ -529,6 +530,43 @@ class LocalDominoSessionCoordinator(
         return bindingCleared
     }
 
+    /*
+     * latestMainMenuState is a presentation cache, not the source of truth for
+     * recoverable online participation. A completed match can clear its exact
+     * persisted binding while the user is still on PlayModeSelection or inside
+     * a later offline match. Re-entering MainMenu must therefore reconcile the
+     * cache with persistence before automatic recovery is allowed to run.
+     *
+     * A still-valid pending binding is preserved unchanged. Inspection and
+     * session-rejection state are reset only when the persisted participation
+     * itself changed, preventing terminal matches from being resurrected while
+     * keeping genuine reconnection intact.
+     */
+    private fun refreshMainMenuStateFromPersistence():
+        DominoSessionState.MainMenu {
+        val persistedPendingParticipation =
+            resolvePendingOnlineParticipation()
+
+        if (
+            persistedPendingParticipation ==
+                latestMainMenuState.pendingOnlineParticipation
+        ) {
+            return latestMainMenuState
+        }
+
+        return latestMainMenuState.copy(
+            pendingOnlineParticipation =
+                persistedPendingParticipation,
+            pendingOnlineParticipationInspection =
+                OnlinePendingParticipationInspectionState
+                    .NotRequested,
+            pendingOnlineParticipationSessionRejection =
+                OnlinePendingParticipationSessionRejection
+                    .NotRejected,
+        ).also { refreshedState ->
+            latestMainMenuState = refreshedState
+        }
+    }
     private fun resolvePendingOnlineParticipation():
         OnlinePendingParticipationLocalResolution {
         return OnlinePendingParticipationLocalResolver(

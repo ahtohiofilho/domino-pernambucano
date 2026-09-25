@@ -871,6 +871,149 @@ class LocalDominoSessionCoordinatorTest {
         )
     }
 
+    @Test
+    fun back_to_main_menu_does_not_resurrect_cleared_completed_online_binding() {
+        val binding = createBinding()
+        val store = TestOnlineParticipationBindingStore(
+            initialBinding = binding,
+        )
+        val bindingRepository =
+            OnlineParticipationBindingRepository(
+                store = store,
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineAnonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    playerId = binding.playerId,
+                ),
+        )
+
+        coordinator.dispatch(
+            DominoSessionCommand.OpenPlayModeSelection,
+        )
+
+        assertTrue(
+            bindingRepository.clearIfMatches(
+                binding = binding,
+            ),
+        )
+
+        coordinator.dispatch(
+            DominoSessionCommand.BackToMainMenu,
+        )
+
+        val mainMenuState =
+            coordinator.currentState as DominoSessionState.MainMenu
+
+        assertEquals(
+            OnlinePendingParticipationLocalResolution
+                .NoPendingParticipation,
+            mainMenuState.pendingOnlineParticipation,
+        )
+        assertEquals(
+            OnlinePendingParticipationInspectionState
+                .NotRequested,
+            mainMenuState.pendingOnlineParticipationInspection,
+        )
+        assertEquals(
+            OnlinePendingParticipationSessionRejection
+                .NotRejected,
+            mainMenuState.pendingOnlineParticipationSessionRejection,
+        )
+        assertNull(store.storedBinding)
+    }
+
+    @Test
+    fun completed_online_binding_stays_cleared_after_later_offline_match_exit() {
+        val binding = createBinding()
+        val store = TestOnlineParticipationBindingStore(
+            initialBinding = binding,
+        )
+        val bindingRepository =
+            OnlineParticipationBindingRepository(
+                store = store,
+            )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                bindingRepository,
+            onlineAnonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    playerId = binding.playerId,
+                ),
+        )
+
+        coordinator.dispatch(
+            DominoSessionCommand.OpenPlayModeSelection,
+        )
+
+        assertTrue(
+            bindingRepository.clearIfMatches(
+                binding = binding,
+            ),
+        )
+
+        coordinator.dispatch(
+            DominoSessionCommand.StartLocalMatch,
+        )
+        coordinator.dispatch(
+            DominoSessionCommand.BackToPlayModeSelection,
+        )
+        coordinator.dispatch(
+            DominoSessionCommand.BackToMainMenu,
+        )
+
+        val mainMenuState =
+            coordinator.currentState as DominoSessionState.MainMenu
+
+        assertEquals(
+            OnlinePendingParticipationLocalResolution
+                .NoPendingParticipation,
+            mainMenuState.pendingOnlineParticipation,
+        )
+        assertNull(store.storedBinding)
+    }
+
+    @Test
+    fun back_to_main_menu_preserves_genuine_pending_online_binding() {
+        val binding = createBinding()
+        val store = TestOnlineParticipationBindingStore(
+            initialBinding = binding,
+        )
+        val coordinator = LocalDominoSessionCoordinator(
+            onlineParticipationBindingRepository =
+                OnlineParticipationBindingRepository(
+                    store = store,
+                ),
+            onlineAnonymousSessionRepository =
+                createAnonymousSessionRepository(
+                    playerId = binding.playerId,
+                ),
+        )
+
+        coordinator.dispatch(
+            DominoSessionCommand.OpenPlayModeSelection,
+        )
+        coordinator.dispatch(
+            DominoSessionCommand.BackToMainMenu,
+        )
+
+        val mainMenuState =
+            coordinator.currentState as DominoSessionState.MainMenu
+
+        assertEquals(
+            OnlinePendingParticipationLocalResolution
+                .ReadyForRemoteReconciliation(
+                    binding = binding,
+                ),
+            mainMenuState.pendingOnlineParticipation,
+        )
+        assertEquals(
+            binding,
+            store.storedBinding,
+        )
+    }
     private fun createReadyCoordinator(
         binding: OnlineParticipationBinding,
         store: TestOnlineParticipationBindingStore,

@@ -1,8 +1,11 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.match.AutomaticDecisionCadencePolicy
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipantTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomPlayerDto
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ServerControlledParticipantPolicyTest {
@@ -39,6 +42,96 @@ class ServerControlledParticipantPolicyTest {
         )
     }
 
+    @Test
+    fun private_application_uses_shared_variable_decision_cadence() {
+        val application =
+            player(
+                seatIndex = 2,
+                participantType =
+                    OnlineParticipantTypeDto.APPLICATION,
+            )
+        val roundNumber = 3
+        val gameStateHash = 123_456
+
+        val delayMillis = requireNotNull(
+            resolveServerControlledDecisionDelayMillis(
+                player = application,
+                roundNumber = roundNumber,
+                localSeatIndex = 2,
+                gameStateHash = gameStateHash,
+            ),
+        )
+
+        assertEquals(
+            AutomaticDecisionCadencePolicy
+                .resolveDecisionDelayMillis(
+                    identityKey = application.name,
+                    roundNumber = roundNumber,
+                    localSeatIndex = 2,
+                    gameStateHash = gameStateHash,
+                ),
+            delayMillis,
+        )
+        assertTrue(
+            delayMillis in
+                AutomaticDecisionCadencePolicy.MinDecisionDelayMillis..
+                    AutomaticDecisionCadencePolicy.MaxDecisionDelayMillis,
+        )
+
+        val turnStartedAt = 10_000L
+
+        assertTrue(
+            isServerControlledDecisionCoolingDown(
+                player = application,
+                roundNumber = roundNumber,
+                localSeatIndex = 2,
+                gameStateHash = gameStateHash,
+                turnStartedAtEpochMillis = turnStartedAt,
+                nowEpochMillis =
+                    turnStartedAt + delayMillis - 1L,
+            ),
+        )
+        assertFalse(
+            isServerControlledDecisionCoolingDown(
+                player = application,
+                roundNumber = roundNumber,
+                localSeatIndex = 2,
+                gameStateHash = gameStateHash,
+                turnStartedAtEpochMillis = turnStartedAt,
+                nowEpochMillis =
+                    turnStartedAt + delayMillis,
+            ),
+        )
+
+        assertEquals(
+            null,
+            resolveServerControlledDecisionDelayMillis(
+                player =
+                    player(
+                        seatIndex = 1,
+                        participantType =
+                            OnlineParticipantTypeDto.SYNTHETIC,
+                    ),
+                roundNumber = roundNumber,
+                localSeatIndex = 1,
+                gameStateHash = gameStateHash,
+            ),
+        )
+        assertEquals(
+            null,
+            resolveServerControlledDecisionDelayMillis(
+                player =
+                    player(
+                        seatIndex = 0,
+                        participantType =
+                            OnlineParticipantTypeDto.HUMAN,
+                    ),
+                roundNumber = roundNumber,
+                localSeatIndex = 0,
+                gameStateHash = gameStateHash,
+            ),
+        )
+    }
     private fun player(
         seatIndex: Int,
         participantType: OnlineParticipantTypeDto,

@@ -1,13 +1,12 @@
 package com.ahtohiofilho.dominopernambucano.miniproduction
 
-import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
+import com.ahtohiofilho.dominopernambucano.match.AutomaticDecisionCadencePolicy
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoGameStateDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineDominoPlayerDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchPhaseTypeDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankedQueueHttpStatus
 import java.time.Duration
-import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 /*
@@ -51,73 +50,29 @@ internal data class SyntheticDecisionCadenceResolution(
     val nextStepAtEpochMillis: Long?,
 )
 
-private const val MIN_SYNTHETIC_DECISION_DELAY_MILLIS = 1_000L
-private const val MAX_SYNTHETIC_DECISION_DELAY_MILLIS = 4_000L
 private const val ROUND_SUMMARY_TRANSITION_HOLD_MILLIS = 4_000L
 
-/*
- * Each synthetic identity has a stable personal center between 1.8 and 3.2 s.
- * Per logical turn, a triangular jitter of roughly +/- 0.8 s is applied.
- * Clamping keeps the final cadence within 1-4 s.
- *
- * The deterministic hash is deliberate: polling/recomposition cannot redraw a
- * new delay. A given identity + logical turn always resolves to the same value.
- */
 internal fun resolveSyntheticPersonalityBaseDelayMillis(
     identityKey: String,
 ): Long {
-    val normalizedIdentity = identityKey
-        .trim()
-        .uppercase(Locale.ROOT)
-
-    val personalitySpreadMillis = 1_400
-    val personalityOffsetMillis = Math.floorMod(
-        normalizedIdentity.hashCode(),
-        personalitySpreadMillis + 1,
-    )
-
-    return 1_800L + personalityOffsetMillis.toLong()
+    return AutomaticDecisionCadencePolicy
+        .resolvePersonalityBaseDelayMillis(
+            identityKey = identityKey,
+        )
 }
 
 internal fun resolveSyntheticDecisionDelayMillis(
     identityKey: String,
     turnKey: SyntheticDecisionTurnKey,
 ): Long {
-    val normalizedIdentity = identityKey
-        .trim()
-        .uppercase(Locale.ROOT)
-
-    val seedPrefix =
-        "$normalizedIdentity|" +
-            "${turnKey.roundNumber}|" +
-            "${turnKey.localSeatIndex}|" +
-            turnKey.gameState.hashCode()
-
-    /*
-     * Average two uniform samples to concentrate most turns near the player's
-     * personal center while still allowing occasional fast/slow decisions.
-     */
-    val sampleA = Math.floorMod(
-        "$seedPrefix|A".hashCode(),
-        1_601,
-    )
-    val sampleB = Math.floorMod(
-        "$seedPrefix|B".hashCode(),
-        1_601,
-    )
-    val triangularJitterMillis =
-        ((sampleA + sampleB) / 2) - 800
-
-    return (
-        resolveSyntheticPersonalityBaseDelayMillis(
-            identityKey = normalizedIdentity,
-        ) + triangularJitterMillis.toLong()
-    ).coerceIn(
-        MIN_SYNTHETIC_DECISION_DELAY_MILLIS,
-        MAX_SYNTHETIC_DECISION_DELAY_MILLIS,
-    )
+    return AutomaticDecisionCadencePolicy
+        .resolveDecisionDelayMillis(
+            identityKey = identityKey,
+            roundNumber = turnKey.roundNumber,
+            localSeatIndex = turnKey.localSeatIndex,
+            gameStateHash = turnKey.gameState.hashCode(),
+        )
 }
-
 /*
  * Synthetic identities are externally controlled participants. The server
  * remains authoritative, while the external process owns both the decision

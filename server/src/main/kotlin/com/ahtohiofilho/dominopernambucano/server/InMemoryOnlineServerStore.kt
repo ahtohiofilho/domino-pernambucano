@@ -4624,33 +4624,34 @@ class InMemoryOnlineServerStore(
             return runtimeState
         }
 
-        val currentParticipantType =
+        val currentParticipant =
             roomsById[matchRecord.roomId]
                 ?.players
                 ?.firstOrNull { player ->
                     player.seatIndex == currentPlayerIndex
                 }
-                ?.participantType
 
         /*
-         * SYNTHETIC participants keep the same natural decision cadence used by
-         * local bots, but the server remains the only authority that executes
-         * their move. The delay is measured from the authoritative snapshot
-         * that made this seat current. A legacy snapshot without server time is
-         * allowed to progress immediately instead of deadlocking.
+         * APPLICATION participants are server-controlled, but their decision
+         * timing must feel identical to the ranked SYNTHETIC population.
+         * Both paths consume AutomaticDecisionCadencePolicy: a stable
+         * personality center plus deterministic 1-4 s per-turn variation.
+         *
+         * A legacy snapshot without server time is allowed to progress
+         * immediately instead of deadlocking.
          */
-        val turnStartedAtEpochMillis =
-            matchRecord.snapshot.serverEpochMillis
-        val syntheticDecisionIsStillCoolingDown =
-            currentParticipantType ==
-                OnlineParticipantTypeDto.SYNTHETIC &&
-                turnStartedAtEpochMillis != null &&
-                (
-                    nowEpochMillis - turnStartedAtEpochMillis
-                ).coerceAtLeast(0L) <
-                DominoMatchTiming.BotDecisionDelayMillis
+        val serverControlledDecisionIsStillCoolingDown =
+            isServerControlledDecisionCoolingDown(
+                player = currentParticipant,
+                roundNumber = runtimeState.roundNumber,
+                localSeatIndex = currentPlayerIndex,
+                gameStateHash = gameState.hashCode(),
+                turnStartedAtEpochMillis =
+                    matchRecord.snapshot.serverEpochMillis,
+                nowEpochMillis = nowEpochMillis,
+            )
 
-        if (syntheticDecisionIsStillCoolingDown) {
+        if (serverControlledDecisionIsStillCoolingDown) {
             return runtimeState
         }
 

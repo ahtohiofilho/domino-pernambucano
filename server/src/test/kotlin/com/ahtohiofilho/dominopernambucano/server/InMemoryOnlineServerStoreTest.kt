@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.server
 
+import com.ahtohiofilho.dominopernambucano.match.AutomaticDecisionCadencePolicy
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.findBasicBotMove
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
@@ -439,9 +440,10 @@ class InMemoryOnlineServerStoreTest {
 
     @Test
     fun development_bot_advances_after_human_zero_finishes_a_turn() {
+        var now = 1_000L
         val store = InMemoryOnlineServerStore(
             autoFillDevelopmentBotsAfterTwoHumanPlayers = true,
-            nowEpochMillis = { 1_000L },
+            nowEpochMillis = { now },
         )
 
         val room = requireNotNull(
@@ -471,6 +473,11 @@ class InMemoryOnlineServerStoreTest {
             roomId = startedRoom.roomId,
             matchId = matchId,
             playerIndex = 0,
+            advanceServerControlledClock = {
+                now +=
+                    AutomaticDecisionCadencePolicy
+                        .MaxDecisionDelayMillis
+            },
         )
 
         val playerZeroAction = submitCurrentHumanAction(
@@ -481,6 +488,10 @@ class InMemoryOnlineServerStoreTest {
         )
 
         assertTrue(playerZeroAction.accepted)
+
+        now +=
+            AutomaticDecisionCadencePolicy
+                .MaxDecisionDelayMillis
 
         store.advanceAuthoritativeTime()
 
@@ -1233,6 +1244,7 @@ class InMemoryOnlineServerStoreTest {
         roomId: String,
         matchId: String,
         playerIndex: Int,
+        advanceServerControlledClock: () -> Unit = {},
     ): OnlineMatchSnapshotDto {
         repeat(80) {
             val snapshot = requireNotNull(
@@ -1274,6 +1286,7 @@ class InMemoryOnlineServerStoreTest {
 
                 assertTrue(actionResult.accepted)
             } else {
+                advanceServerControlledClock()
                 store.advanceAuthoritativeTime()
             }
         }
