@@ -3321,12 +3321,31 @@ class InMemoryOnlineServerStore(
         }
 
         val admitted = stage.admittedSyntheticAccountIds.toSet()
-        val nextSyntheticAccountId =
+        val eligibleSyntheticAccountIds =
             queuedPublicRankedAccountIds(
                 participantType = OnlineParticipantTypeDto.SYNTHETIC,
-            ).firstOrNull { accountId ->
-                accountId !in admitted
-            } ?: return false
+            ).filterNot { accountId ->
+                accountId in admitted
+            }
+
+        if (eligibleSyntheticAccountIds.isEmpty()) {
+            return false
+        }
+
+        /*
+         * HUMAN queue fairness remains FIFO and anchored by the oldest human.
+         * SYNTHETIC fallback identities do not own queue priority: choose one
+         * from the currently eligible standby accounts using the same secure
+         * server entropy already used by ranked formation. Selection is
+         * without replacement inside this fallback stage because admitted ids
+         * are excluded above.
+         */
+        val nextSyntheticAccountId =
+            eligibleSyntheticAccountIds[
+                publicRankedFormationEntropy.nextInt(
+                    eligibleSyntheticAccountIds.size,
+                )
+            ]
 
         stage.admittedSyntheticAccountIds +=
             nextSyntheticAccountId

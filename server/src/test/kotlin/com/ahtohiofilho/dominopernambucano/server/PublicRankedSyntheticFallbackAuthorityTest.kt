@@ -263,6 +263,136 @@ class PublicRankedSyntheticFallbackAuthorityTest {
     }
 
     @Test
+    fun synthetic_fallback_admission_uses_entropy_instead_of_fifo_order() {
+        var now = 1_000L
+        var accountSequence = 0
+        val store = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+            resourcePolicy = fallbackPolicy(),
+            accountIdFactory = {
+                accountSequence += 1
+                "account-$accountSequence"
+            },
+            /*
+             * Six standby synthetics are queued S01..S06.
+             * Admission picks:
+             *  - index 4 of 6 -> S05
+             *  - index 1 of remaining 5 -> S02
+             *  - index 2 of remaining 4 -> S04
+             * proving that fallback admission is no longer FIFO.
+             */
+            publicRankedFormationEntropy = SequenceEntropy(
+                values = listOf(4, 1, 2),
+            ),
+        )
+
+        val syntheticAccounts = (1..6).map { number ->
+            requireNotNull(
+                store.promoteSyntheticAccount(
+                    playerId = "variance-synthetic-$number",
+                    expectedAccountId = null,
+                ),
+            )
+        }
+
+        syntheticAccounts.forEachIndexed { index, account ->
+            val code = "S0${index + 1}"
+            configureAccount(
+                store = store,
+                account = account,
+                tableCode = code,
+            )
+            assertEquals(
+                PublicRankedQueueStatus.QUEUED,
+                store.enqueuePublicRanked(
+                    request = request(
+                        playerId = account.playerId,
+                        tableCode = code,
+                    ),
+                    identity = account.toRequestIdentity(),
+                ).status,
+            )
+        }
+
+        val humanAccount = requireNotNull(
+            store.promoteAccount(
+                playerId = "variance-human-1",
+            ),
+        )
+        configureAccount(
+            store = store,
+            account = humanAccount,
+            tableCode = "H01",
+        )
+        assertEquals(
+            PublicRankedQueueStatus.QUEUED,
+            store.enqueuePublicRanked(
+                request = request(
+                    playerId = humanAccount.playerId,
+                    tableCode = "H01",
+                ),
+                identity = humanAccount.toRequestIdentity(),
+            ).status,
+        )
+
+        now = 21_000L
+        assertTrue(store.advanceAuthoritativeTime())
+        assertEquals(
+            listOf("H01", "S05"),
+            store.getPublicRankedQueueStatus(
+                humanAccount.toRequestIdentity(),
+            ).participantCodes,
+        )
+
+        now = 41_000L
+        assertTrue(store.advanceAuthoritativeTime())
+        assertEquals(
+            listOf("H01", "S02", "S05"),
+            store.getPublicRankedQueueStatus(
+                humanAccount.toRequestIdentity(),
+            ).participantCodes,
+        )
+
+        now = 61_000L
+        assertTrue(store.advanceAuthoritativeTime())
+
+        val matched = store.getPublicRankedQueueStatus(
+            humanAccount.toRequestIdentity(),
+        )
+        assertEquals(
+            PublicRankedQueueStatus.MATCHED,
+            matched.status,
+        )
+
+        val room = requireNotNull(matched.roomSnapshot)
+        val syntheticCodes = room.players
+            .filter { player ->
+                player.participantType ==
+                    OnlineParticipantTypeDto.SYNTHETIC
+            }
+            .map { player -> player.name }
+            .toSet()
+
+        assertEquals(
+            setOf("S02", "S04", "S05"),
+            syntheticCodes,
+        )
+        assertEquals(
+            1,
+            room.players.count { player ->
+                player.participantType ==
+                    OnlineParticipantTypeDto.HUMAN
+            },
+        )
+        assertEquals(
+            "H01",
+            room.players.single { player ->
+                player.participantType ==
+                    OnlineParticipantTypeDto.HUMAN
+            }.name,
+        )
+    }
+    @Test
     fun new_human_arrival_resets_next_synthetic_admission_window() {
         var now = 1_000L
         var accountSequence = 0
@@ -479,6 +609,23 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             accountId = accountId,
         )
 
+    private class SequenceEntropy(
+        private val values: List<Int>,
+    ) : PublicRankedFormationEntropy {
+        private var index = 0
+
+        override fun nextInt(bound: Int): Int {
+            require(bound > 0)
+            val value = values.getOrElse(index) { 0 }
+            index += 1
+            return Math.floorMod(value, bound)
+        }
+
+        override fun nextNonceHex(byteCount: Int): String {
+            require(byteCount > 0)
+            return "ef".repeat(byteCount)
+        }
+    }
     private class ZeroEntropy : PublicRankedFormationEntropy {
         override fun nextInt(bound: Int): Int {
             require(bound > 0)
