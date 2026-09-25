@@ -58,6 +58,12 @@ class MainActivity : ComponentActivity() {
                             continuation = continuation,
                         )
                     },
+                    onOfflineMatchExitTransition = { continuation ->
+                        advertisingController.runAfterOfflineMatchExitTransition(
+                            activity = this@MainActivity,
+                            continuation = continuation,
+                        )
+                    },
                     privacyOptionsRequired = privacyOptionsRequired,
                     bannerAdsReady = adsReady,
                     onPrivacyOptionsClick = {

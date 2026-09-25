@@ -50,6 +50,26 @@ class AndroidAdvertisingController(
                 .apply()
         },
     )
+    private val interstitialCooldownGate =
+        AdvertisingInterstitialCooldownGate(
+            readLastShownEpochMillis = {
+                frequencyPreferences.getLong(
+                    LastInterstitialShownEpochMillisKey,
+                    0L,
+                )
+            },
+            writeLastShownEpochMillis = { value ->
+                frequencyPreferences.edit()
+                    .putLong(
+                        LastInterstitialShownEpochMillisKey,
+                        value,
+                    )
+                    .apply()
+            },
+            nowEpochMillis = {
+                System.currentTimeMillis()
+            },
+        )
 
     private val _privacyOptionsRequired =
         MutableStateFlow(false)
@@ -135,92 +155,132 @@ class AndroidAdvertisingController(
                 return@runOnMainThread
             }
 
-            transitionInFlight = true
-
             val shouldAttemptInterstitial =
                 pendingMatchOpportunity
 
             pendingMatchOpportunity = false
 
-            if (!shouldAttemptInterstitial) {
-                completeTransition(
-                    continuation = continuation,
-                )
+            runAfterInterstitialTransitionOnMainThread(
+                activity = activity,
+                shouldAttemptInterstitial =
+                    shouldAttemptInterstitial,
+                continuation = continuation,
+            )
+        }
+    }
+
+    fun runAfterOfflineMatchExitTransition(
+        activity: Activity,
+        continuation: () -> Unit,
+    ) {
+        runOnMainThread {
+            if (transitionInFlight) {
                 return@runOnMainThread
             }
 
-            if (!consentInformation.canRequestAds()) {
+            runAfterInterstitialTransitionOnMainThread(
+                activity = activity,
+                shouldAttemptInterstitial = true,
+                continuation = continuation,
+            )
+        }
+    }
+
+    private fun runAfterInterstitialTransitionOnMainThread(
+        activity: Activity,
+        shouldAttemptInterstitial: Boolean,
+        continuation: () -> Unit,
+    ) {
+        transitionInFlight = true
+
+        if (
+            !shouldAttemptInterstitial ||
+            !interstitialCooldownGate.canShowInterstitial()
+        ) {
+            completeTransition(
+                continuation = continuation,
+            )
+            return
+        }
+
+        if (!consentInformation.canRequestAds()) {
+            completeTransition(
+                continuation = continuation,
+            )
+            return
+        }
+
+        val ad = interstitialAd
+
+        if (ad == null) {
+            ensureInterstitialLoaded()
+            completeTransition(
+                continuation = continuation,
+            )
+            return
+        }
+
+        interstitialAd = null
+
+        val continuationConsumed =
+            AtomicBoolean(false)
+
+        fun continueOnce() {
+            if (
+                continuationConsumed.compareAndSet(
+                    false,
+                    true,
+                )
+            ) {
                 completeTransition(
                     continuation = continuation,
                 )
-                return@runOnMainThread
             }
+        }
 
-            val ad = interstitialAd
+        ad.adEventCallback =
+            object : InterstitialAdEventCallback {
+                override fun onAdShowedFullScreenContent() {
+                    runOnMainThread {
+                        interstitialCooldownGate
+                            .recordInterstitialShown()
+                    }
+                }
 
-            if (ad == null) {
-                ensureInterstitialLoaded()
-                completeTransition(
-                    continuation = continuation,
-                )
-                return@runOnMainThread
-            }
+                override fun onAdDismissedFullScreenContent() {
+                    runOnMainThread {
+                        continueOnce()
+                        ensureInterstitialLoaded()
+                    }
+                }
 
-            interstitialAd = null
-
-            val continuationConsumed =
-                AtomicBoolean(false)
-
-            fun continueOnce() {
-                if (
-                    continuationConsumed.compareAndSet(
-                        false,
-                        true,
-                    )
+                override fun onAdFailedToShowFullScreenContent(
+                    fullScreenContentError: FullScreenContentError,
                 ) {
-                    completeTransition(
-                        continuation = continuation,
+                    Log.w(
+                        LogTag,
+                        "Interstitial failed to show: " +
+                            fullScreenContentError.message,
                     )
+
+                    runOnMainThread {
+                        continueOnce()
+                        ensureInterstitialLoaded()
+                    }
                 }
             }
 
-            ad.adEventCallback =
-                object : InterstitialAdEventCallback {
-                    override fun onAdDismissedFullScreenContent() {
-                        runOnMainThread {
-                            continueOnce()
-                            ensureInterstitialLoaded()
-                        }
-                    }
+        try {
+            ad.show(activity)
+        } catch (error: RuntimeException) {
+            Log.w(
+                LogTag,
+                "Interstitial show threw an exception.",
+                error,
+            )
 
-                    override fun onAdFailedToShowFullScreenContent(
-                        fullScreenContentError: FullScreenContentError,
-                    ) {
-                        Log.w(
-                            LogTag,
-                            "Interstitial failed to show: " +
-                                fullScreenContentError.message,
-                        )
-
-                        runOnMainThread {
-                            continueOnce()
-                            ensureInterstitialLoaded()
-                        }
-                    }
-                }
-
-            try {
-                ad.show(activity)
-            } catch (error: RuntimeException) {
-                Log.w(
-                    LogTag,
-                    "Interstitial show threw an exception.",
-                    error,
-                )
-
-                continueOnce()
-                ensureInterstitialLoaded()
-            }
+            continueOnce()
+            ensureInterstitialLoaded()
         }
     }
 
@@ -375,5 +435,7 @@ class AndroidAdvertisingController(
             "domino_advertising_frequency"
         const val CompletedMatchesKey =
             "completed_matches"
+        const val LastInterstitialShownEpochMillisKey =
+            "last_interstitial_shown_epoch_millis"
     }
 }

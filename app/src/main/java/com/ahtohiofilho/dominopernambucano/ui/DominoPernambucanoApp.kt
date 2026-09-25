@@ -123,6 +123,9 @@ fun DominoPernambucanoApp(
     onMatchFinishedTransition: ((() -> Unit) -> Unit) = { continuation ->
         continuation()
     },
+    onOfflineMatchExitTransition: ((() -> Unit) -> Unit) = { continuation ->
+        continuation()
+    },
     privacyOptionsRequired: Boolean = false,
     onPrivacyOptionsClick: () -> Unit = {},
     bannerAdsReady: Boolean = false,
@@ -2416,6 +2419,8 @@ fun DominoPernambucanoApp(
                 },
                 onMatchFinished = onMatchFinished,
                 onMatchFinishedTransition = onMatchFinishedTransition,
+                onOfflineMatchExitTransition =
+                    onOfflineMatchExitTransition,
             )
         }
 

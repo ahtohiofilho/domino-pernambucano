@@ -83,6 +83,73 @@ class AdvertisingFrequencyGateTest {
         assertEquals(1, completedMatches)
     }
 
+    @Test
+    fun interstitial_without_previous_display_is_allowed() {
+        assertTrue(
+            isInterstitialCooldownSatisfied(
+                lastShownEpochMillis = 0L,
+                nowEpochMillis = 100_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun interstitial_is_suppressed_until_six_minutes_have_elapsed() {
+        val lastShown = 1_000_000L
+
+        assertFalse(
+            isInterstitialCooldownSatisfied(
+                lastShownEpochMillis = lastShown,
+                nowEpochMillis =
+                    lastShown +
+                        InterstitialCooldownMillis -
+                        1L,
+            ),
+        )
+
+        assertTrue(
+            isInterstitialCooldownSatisfied(
+                lastShownEpochMillis = lastShown,
+                nowEpochMillis =
+                    lastShown +
+                        InterstitialCooldownMillis,
+            ),
+        )
+    }
+
+    @Test
+    fun clock_rollback_does_not_bypass_interstitial_cooldown() {
+        assertFalse(
+            isInterstitialCooldownSatisfied(
+                lastShownEpochMillis = 2_000_000L,
+                nowEpochMillis = 1_900_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun shown_interstitial_persists_timestamp_and_blocks_immediate_repeat() {
+        var persisted = 0L
+        var now = 5_000_000L
+
+        val gate = AdvertisingInterstitialCooldownGate(
+            readLastShownEpochMillis = { persisted },
+            writeLastShownEpochMillis = { persisted = it },
+            nowEpochMillis = { now },
+        )
+
+        assertTrue(gate.canShowInterstitial())
+
+        gate.recordInterstitialShown()
+
+        assertEquals(now, persisted)
+        assertFalse(gate.canShowInterstitial())
+
+        now += InterstitialCooldownMillis
+
+        assertTrue(gate.canShowInterstitial())
+    }
+
     private fun gateFor(
         read: () -> Int,
         write: (Int) -> Unit,

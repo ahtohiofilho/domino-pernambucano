@@ -38,6 +38,9 @@ fun DominoGameRoute(
     onMatchFinishedTransition: ((() -> Unit) -> Unit) = { continuation ->
         continuation()
     },
+    onOfflineMatchExitTransition: ((() -> Unit) -> Unit) = { continuation ->
+        continuation()
+    },
     onlineUiTraceReporter: OnlineGameUiTraceReporter? = null,
     matchMode: DominoMatchMode = DominoMatchMode.OFFLINE_LOCAL,
     onRankedPlayAgain: () -> Unit = {
@@ -259,6 +262,17 @@ fun DominoGameRoute(
             } else {
                 onBackToMenuClick()
             }
+        },
+        onExitMatchClick = if (
+            matchMode == DominoMatchMode.OFFLINE_LOCAL
+        ) {
+            {
+                onOfflineMatchExitTransition(
+                    onBackToMenuClick,
+                )
+            }
+        } else {
+            null
         },
         onOnlineTrace = { type, presentationId, snapshotRevision, attributes ->
             onlineUiTraceReporter?.traceUiEvent(

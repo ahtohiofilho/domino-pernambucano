@@ -24,6 +24,7 @@ import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 import com.ahtohiofilho.dominopernambucano.match.DominoMatchTiming
 import com.ahtohiofilho.dominopernambucano.online.observability.OnlineTraceType
@@ -38,6 +39,7 @@ fun DominoGameScreen(
     handAppearanceTone: HandAppearanceTone =
         HandAppearanceTone.TONE_1,
     onBackToMenuClick: () -> Unit,
+    onExitMatchClick: (() -> Unit)? = null,
     onOnlineTrace: (
         OnlineTraceType,
         String?,
@@ -344,6 +346,16 @@ fun DominoGameScreen(
             ) {
                 DominoMatchHeader(
                     uiState = uiState,
+                    onExitMatchClick = if (
+                        shouldShowOfflineMatchExit(
+                            matchMode = uiState.matchMode,
+                            phase = uiState.phase,
+                        )
+                    ) {
+                        onExitMatchClick
+                    } else {
+                        null
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -664,6 +676,14 @@ fun DominoGameScreen(
             )
         }
     }
+}
+
+internal fun shouldShowOfflineMatchExit(
+    matchMode: DominoMatchMode,
+    phase: DominoMatchPhase,
+): Boolean {
+    return matchMode == DominoMatchMode.OFFLINE_LOCAL &&
+        phase != DominoMatchPhase.MatchFinished
 }
 
 private fun PlayableMove.toUiMoveTraceAttributes(): Map<String, String> {
