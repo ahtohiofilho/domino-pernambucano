@@ -79,7 +79,7 @@ fun OnlineJoinRoomRoute(
                 developmentParticipantCompletion != null
 
     val localPlayerId = localPlayerIdentity.playerId
-    val localPlayerName = localPlayerIdentity.displayName
+    val localPlayerName = localPlayerIdentity.tableName
 
     var roomCodeInput by remember {
         mutableStateOf("")
@@ -198,7 +198,7 @@ fun OnlineJoinRoomRoute(
                 val result = roomRepository.createRoom(
                     CreateOnlineRoomRequestDto(
                         localPlayerId = debugHostIdentity.playerId,
-                        playerName = debugHostIdentity.displayName,
+                        playerName = debugHostIdentity.tableName,
                     ),
                 )
 
@@ -311,7 +311,7 @@ fun OnlineJoinRoomRoute(
                             OnlineDevelopmentParticipantRequest(
                                 roomCode = workingSnapshot.roomCode,
                                 playerId = fakePlayerIdentity.playerId,
-                                playerName = fakePlayerIdentity.displayName,
+                                playerName = fakePlayerIdentity.tableName,
                             ),
                         )
 

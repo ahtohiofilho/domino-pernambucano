@@ -52,6 +52,7 @@ fun RankedTableIdentityConfirmationDialog(
     suggestedFromOffline: Boolean,
     actionInProgress: Boolean,
     feedbackMessage: String?,
+    showChangeLaterHint: Boolean = true,
     onConfirm: (String, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -287,15 +288,17 @@ fun RankedTableIdentityConfirmationDialog(
                     )
                 }
 
-                Text(
-                    text = stringResource(
-                        R.string.ranked_table_identity_change_later,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    color =
-                        DominoSemanticColors.brandSupportingText,
-                )
+                if (showChangeLaterHint) {
+                    Text(
+                        text = stringResource(
+                            R.string.ranked_table_identity_change_later,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        color =
+                            DominoSemanticColors.brandSupportingText,
+                    )
+                }
 
                 feedbackMessage
                     ?.takeIf { message -> message.isNotBlank() }

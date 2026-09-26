@@ -167,7 +167,7 @@ class OnlineAnonymousSessionRouteTest {
                     json.encodeToString(
                         CreateOnlineRoomRequestDto(
                             localPlayerId = session.playerId,
-                            playerName = "Sessão anônima",
+                            playerName = "ANO",
                         ),
                     ),
                 )

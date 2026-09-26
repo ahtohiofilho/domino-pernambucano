@@ -71,7 +71,7 @@ fun OnlineCreateRoomRoute(
         roomRepository as? OnlineDevelopmentParticipantCompletion
 
     val localPlayerId = localPlayerIdentity.playerId
-    val localPlayerName = localPlayerIdentity.displayName
+    val localPlayerName = localPlayerIdentity.tableName
 
 
     val resumeLoadFailedMessage =

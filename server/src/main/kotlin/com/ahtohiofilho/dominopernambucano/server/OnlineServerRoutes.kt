@@ -2,6 +2,8 @@ package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.CreateOnlineRoomRequestDto
 import com.ahtohiofilho.dominopernambucano.online.JoinOnlineRoomRequestDto
+import com.ahtohiofilho.dominopernambucano.online.isValidOnlineAccountTableCode
+import com.ahtohiofilho.dominopernambucano.online.normalizeOnlineAccountTableCodeInput
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomCompleteRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomLeaveRequestDto
 import com.ahtohiofilho.dominopernambucano.online.PrivateRoomRemoveAutomaticPlayerRequestDto
@@ -36,6 +38,16 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
+
+internal fun canonicalPrivateRoomTableCodeOrNull(
+    rawCode: String,
+): String? {
+    if (!isValidOnlineAccountTableCode(rawCode)) {
+        return null
+    }
+
+    return normalizeOnlineAccountTableCodeInput(rawCode)
+}
 
 internal fun Route.onlineServerRoutes(
     store: OnlineServerStore,
@@ -615,9 +627,21 @@ internal fun Route.onlineServerRoutes(
                 return@post
             }
 
+            val tableCode =
+                canonicalPrivateRoomTableCodeOrNull(
+                    request.playerName,
+                )
+
+            if (tableCode == null) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@post
+            }
+
             call.respond(
                 store.createRoom(
-                    request = request,
+                    request = request.copy(
+                        playerName = tableCode,
+                    ),
                 ),
             )
         }
@@ -635,9 +659,21 @@ internal fun Route.onlineServerRoutes(
                 return@post
             }
 
+            val tableCode =
+                canonicalPrivateRoomTableCodeOrNull(
+                    request.playerName,
+                )
+
+            if (tableCode == null) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@post
+            }
+
             call.respond(
                 store.joinRoom(
-                    request = request,
+                    request = request.copy(
+                        playerName = tableCode,
+                    ),
                 ),
             )
         }

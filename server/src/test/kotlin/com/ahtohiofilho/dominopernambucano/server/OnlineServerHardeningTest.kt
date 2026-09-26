@@ -206,7 +206,11 @@ class OnlineServerHardeningTest {
             json.encodeToString(
                 CreateOnlineRoomRequestDto(
                     localPlayerId = playerId,
-                    playerName = playerId,
+                    playerName = when (playerId) {
+                        "player-1" -> "P01"
+                        "player-2" -> "P02"
+                        else -> "TST"
+                    },
                 ),
             ),
         )

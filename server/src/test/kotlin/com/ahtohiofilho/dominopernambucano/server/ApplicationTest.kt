@@ -87,7 +87,7 @@ class ApplicationTest {
                     json.encodeToString(
                         CreateOnlineRoomRequestDto(
                             localPlayerId = "player-1",
-                            playerName = "Jogador 1",
+                            playerName = "P01",
                         ),
                     ),
                 )
@@ -195,7 +195,7 @@ class ApplicationTest {
                     json.encodeToString(
                         CreateOnlineRoomRequestDto(
                             localPlayerId = "player-2",
-                            playerName = "Jogador 2",
+                            playerName = "P02",
                         ),
                     ),
                 )
@@ -221,7 +221,7 @@ class ApplicationTest {
 
             val hostResult = createRoomThroughHttp(
                 playerId = "player-1",
-                playerName = "Jogador 1",
+                playerName = "P01",
             )
 
             assertTrue(hostResult.accepted)
@@ -243,19 +243,19 @@ class ApplicationTest {
             val secondPlayerResult = joinRoomThroughHttp(
                 roomCode = waitingRoom.roomCode,
                 playerId = "player-2",
-                playerName = "Jogador 2",
+                playerName = "P02",
             )
 
             val thirdPlayerResult = joinRoomThroughHttp(
                 roomCode = waitingRoom.roomCode,
                 playerId = "player-3",
-                playerName = "Jogador 3",
+                playerName = "P03",
             )
 
             val fourthPlayerResult = joinRoomThroughHttp(
                 roomCode = waitingRoom.roomCode,
                 playerId = "player-4",
-                playerName = "Jogador 4",
+                playerName = "P04",
             )
 
             assertTrue(secondPlayerResult.accepted)
@@ -382,10 +382,10 @@ class ApplicationTest {
 
             assertEquals(
                 listOf(
-                    "Jogador 1",
-                    "Jogador 2",
-                    "Jogador 3",
-                    "Jogador 4",
+                    "P01",
+                    "P02",
+                    "P03",
+                    "P04",
                 ),
                 matchSnapshot.gameState.players.map { player ->
                     player.name
@@ -472,6 +472,153 @@ class ApplicationTest {
 
             assertTrue(
                 latestMatchSnapshot.revision >= matchSnapshot.revision,
+            )
+        }
+
+    @Test
+    fun private_room_http_requires_three_character_player_selected_table_codes() =
+        testApplication {
+            application {
+                module(
+                    store = InMemoryOnlineServerStore(
+                        nowEpochMillis = { 1_000L },
+                    ),
+                    serverEnvironment =
+                        OnlineServerEnvironment.TEST,
+                )
+            }
+
+            val invalidCreate = client.post(
+                urlString =
+                    "/${OnlineRemoteRoutes.CREATE_ROOM}",
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "host-player",
+                )
+                contentType(ContentType.Application.Json)
+                setBody(
+                    json.encodeToString(
+                        CreateOnlineRoomRequestDto(
+                            localPlayerId = "host-player",
+                            playerName = "Antonio",
+                        ),
+                    ),
+                )
+            }
+
+            assertEquals(
+                HttpStatusCode.BadRequest,
+                invalidCreate.status,
+            )
+
+            val validCreate = client.post(
+                urlString =
+                    "/${OnlineRemoteRoutes.CREATE_ROOM}",
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "host-player",
+                )
+                contentType(ContentType.Application.Json)
+                setBody(
+                    json.encodeToString(
+                        CreateOnlineRoomRequestDto(
+                            localPlayerId = "host-player",
+                            playerName = "hst",
+                        ),
+                    ),
+                )
+            }
+
+            assertEquals(
+                HttpStatusCode.OK,
+                validCreate.status,
+            )
+
+            val created =
+                json.decodeFromString<
+                    OnlineRoomOperationResultDto
+                    >(
+                    validCreate.bodyAsText(),
+                )
+
+            val room = requireNotNull(
+                created.roomSnapshot,
+            )
+
+            assertEquals(
+                "HST",
+                room.players.single().name,
+            )
+
+            val invalidJoin = client.post(
+                urlString =
+                    "/${OnlineRemoteRoutes.JOIN_ROOM}",
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "guest-player",
+                )
+                contentType(ContentType.Application.Json)
+                setBody(
+                    json.encodeToString(
+                        JoinOnlineRoomRequestDto(
+                            roomCode = room.roomCode,
+                            localPlayerId =
+                                "guest-player",
+                            playerName = "Convidado",
+                        ),
+                    ),
+                )
+            }
+
+            assertEquals(
+                HttpStatusCode.BadRequest,
+                invalidJoin.status,
+            )
+
+            val validJoin = client.post(
+                urlString =
+                    "/${OnlineRemoteRoutes.JOIN_ROOM}",
+            ) {
+                header(
+                    OnlineRemoteHeaders.DEVELOPMENT_PLAYER_ID,
+                    "guest-player",
+                )
+                contentType(ContentType.Application.Json)
+                setBody(
+                    json.encodeToString(
+                        JoinOnlineRoomRequestDto(
+                            roomCode = room.roomCode,
+                            localPlayerId =
+                                "guest-player",
+                            playerName = "g02",
+                        ),
+                    ),
+                )
+            }
+
+            assertEquals(
+                HttpStatusCode.OK,
+                validJoin.status,
+            )
+
+            val joined =
+                json.decodeFromString<
+                    OnlineRoomOperationResultDto
+                    >(
+                    validJoin.bodyAsText(),
+                )
+
+            assertEquals(
+                "G02",
+                requireNotNull(joined.roomSnapshot)
+                    .players
+                    .single {
+                        it.playerId == "guest-player"
+                    }
+                    .name,
             )
         }
 

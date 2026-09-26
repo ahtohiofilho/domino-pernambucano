@@ -49,7 +49,7 @@ fun createDebugHostOnlinePlayerIdentity(): OnlinePlayerIdentity {
     return OnlinePlayerIdentity(
         playerId = "fake-host",
         displayName = displayName,
-        tableName = createDefaultOnlineTableName(displayName),
+        tableName = "DBG",
     )
 }
 
@@ -61,7 +61,14 @@ fun createDebugFakeOnlinePlayerIdentity(
     return OnlinePlayerIdentity(
         playerId = createDebugFakeOnlinePlayerId(fakePlayerNumber),
         displayName = displayName,
-        tableName = createDefaultOnlineTableName(displayName),
+        tableName =
+            "F" +
+                (fakePlayerNumber % 100)
+                    .toString()
+                    .padStart(
+                        length = 2,
+                        padChar = '0',
+                    ),
     )
 }
 
