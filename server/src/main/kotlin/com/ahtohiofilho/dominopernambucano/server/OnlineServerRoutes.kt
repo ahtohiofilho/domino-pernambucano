@@ -60,6 +60,8 @@ internal fun Route.onlineServerRoutes(
         DEFAULT_RANKING_PUBLICATION_POLICY,
     syntheticProvisioningPolicy: SyntheticProvisioningPolicy =
         SyntheticProvisioningPolicy.Disabled,
+    productionRankedClientGate: ProductionRankedClientGate =
+        ProductionRankedClientGate.Unrestricted,
     nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
@@ -582,6 +584,17 @@ internal fun Route.onlineServerRoutes(
             val identity = call.requirePublicRankedAccountIdentity(
                 identityResolver = identityResolver,
             ) ?: return@post
+
+            if (
+                !call.requireProductionRankedClientAccess(
+                    store = store,
+                    identity = identity,
+                    gate = productionRankedClientGate,
+                )
+            ) {
+                return@post
+            }
+
             val request =
                 call.receive<PublicRankedQueueEnterRequestDto>()
             val playerName = request.playerName.trim()
@@ -1292,6 +1305,41 @@ internal fun Route.onlineServerRoutes(
     }
 }
 
+
+private suspend fun ApplicationCall.requireProductionRankedClientAccess(
+    store: OnlineServerStore,
+    identity: OnlineRequestIdentity,
+    gate: ProductionRankedClientGate,
+): Boolean {
+    val syntheticAccount = identity.accountId
+        ?.let { accountId ->
+            store.findSyntheticAccount(
+                accountId = accountId,
+            )
+        }
+        ?.playerId == identity.playerId
+
+    return when (
+        gate.evaluate(
+            suppliedClientVersionCode = request.headers[
+                OnlineRemoteHeaders.CLIENT_VERSION_CODE,
+            ],
+            syntheticAccount = syntheticAccount,
+        )
+    ) {
+        ProductionRankedClientDecision.ALLOWED -> true
+
+        ProductionRankedClientDecision.MAINTENANCE -> {
+            respond(HttpStatusCode.ServiceUnavailable)
+            false
+        }
+
+        ProductionRankedClientDecision.UPDATE_REQUIRED -> {
+            respond(HttpStatusCode.UpgradeRequired)
+            false
+        }
+    }
+}
 
 private suspend fun ApplicationCall.requirePublicRankedAccountIdentity(
     identityResolver: OnlineRequestIdentityResolver,

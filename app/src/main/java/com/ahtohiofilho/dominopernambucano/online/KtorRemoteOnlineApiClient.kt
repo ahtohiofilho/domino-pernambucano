@@ -39,6 +39,9 @@ class KtorRemoteOnlineApiClient(
             "Remote backend baseUrl não configurada."
         }.trimEnd('/')
 
+    private val clientVersionCode: Int? =
+        config.clientVersionCode
+
     private var developmentPlayerId: String? = null
     private var bearerAccessToken: String? = null
 
@@ -262,6 +265,7 @@ class KtorRemoteOnlineApiClient(
                 applyProtectedAuthentication(
                     developmentPlayerId = null,
                 )
+                applyRankedClientVersion()
                 setBody(request)
             }
         }
@@ -282,6 +286,7 @@ class KtorRemoteOnlineApiClient(
                 applyProtectedAuthentication(
                     developmentPlayerId = null,
                 )
+                applyRankedClientVersion()
             }
         }
     }
@@ -301,6 +306,7 @@ class KtorRemoteOnlineApiClient(
                 applyProtectedAuthentication(
                     developmentPlayerId = null,
                 )
+                applyRankedClientVersion()
             }
         }
     }
@@ -761,6 +767,15 @@ class KtorRemoteOnlineApiClient(
                 developmentPlayerId = developmentPlayerId,
             )
         }.body()
+    }
+
+    private fun HttpRequestBuilder.applyRankedClientVersion() {
+        clientVersionCode?.let { versionCode ->
+            header(
+                OnlineRemoteHeaders.CLIENT_VERSION_CODE,
+                versionCode.toString(),
+            )
+        }
     }
 
     private fun HttpRequestBuilder.applyProtectedAuthentication(

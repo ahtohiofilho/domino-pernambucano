@@ -28,6 +28,10 @@ class KtorRemoteOnlineApiClientRankedQueueTest {
                         path = request.url.encodedPath,
                         authorization =
                             request.headers[HttpHeaders.Authorization],
+                        clientVersionCode =
+                            request.headers[
+                                OnlineRemoteHeaders.CLIENT_VERSION_CODE
+                            ],
                     )
 
                     val response = when (request.method) {
@@ -71,6 +75,7 @@ class KtorRemoteOnlineApiClientRankedQueueTest {
             val client = KtorRemoteOnlineApiClient(
                 config = OnlineBackendConfig.remote(
                     baseUrl = "http://localhost:8080",
+                    clientVersionCode = 321,
                 ),
                 httpClient = httpClient,
             )
@@ -106,6 +111,10 @@ class KtorRemoteOnlineApiClientRankedQueueTest {
                     "Bearer account-token",
                 ),
                 recorded.map { item -> item.authorization },
+            )
+            assertEquals(
+                listOf("321", "321", "321"),
+                recorded.map { item -> item.clientVersionCode },
             )
 
             httpClient.close()
@@ -197,5 +206,6 @@ class KtorRemoteOnlineApiClientRankedQueueTest {
         val method: HttpMethod,
         val path: String,
         val authorization: String?,
+        val clientVersionCode: String?,
     )
 }

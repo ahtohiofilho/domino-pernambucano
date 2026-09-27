@@ -97,6 +97,10 @@ private fun Application.module(
                 serverEnvironment.rankingPublicationPolicy,
             syntheticProvisioningPolicy =
                 SyntheticProvisioningPolicy.fromEnvironment(),
+            productionRankedClientGate =
+                ProductionRankedClientGate.fromEnvironment(
+                    serverEnvironment = serverEnvironment,
+                ),
             traceIngestionPolicy = traceIngestionPolicy,
             traceArchive = traceArchive,
             serverTraceSink = serverTraceSink,
@@ -134,6 +138,8 @@ internal fun Application.module(
         serverEnvironment.rankingPublicationPolicy,
     syntheticProvisioningPolicy: SyntheticProvisioningPolicy =
         SyntheticProvisioningPolicy.Disabled,
+    productionRankedClientGate: ProductionRankedClientGate =
+        ProductionRankedClientGate.Unrestricted,
     rateLimitPolicy: OnlineServerRateLimitPolicy =
         OnlineServerRateLimitPolicy.Default,
     nowEpochMillis: () -> Long = {
@@ -218,6 +224,7 @@ internal fun Application.module(
             emailVerificationService = emailVerificationService,
             rankingPublicationPolicy = rankingPublicationPolicy,
             syntheticProvisioningPolicy = syntheticProvisioningPolicy,
+            productionRankedClientGate = productionRankedClientGate,
             nowEpochMillis = nowEpochMillis,
         )
     }

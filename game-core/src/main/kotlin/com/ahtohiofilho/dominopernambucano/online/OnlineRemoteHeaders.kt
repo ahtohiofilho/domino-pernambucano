@@ -11,4 +11,6 @@ object OnlineRemoteHeaders {
     const val DEVELOPMENT_PLAYER_ID = "X-Domino-Development-Player-Id"
     const val SYNTHETIC_PROVISIONING_SECRET =
         "X-Domino-Synthetic-Provisioning-Secret"
+    const val CLIENT_VERSION_CODE =
+        "X-Domino-Client-Version-Code"
 }

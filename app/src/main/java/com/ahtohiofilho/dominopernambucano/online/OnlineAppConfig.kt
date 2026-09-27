@@ -32,6 +32,7 @@ data class OnlineAppConfig(
             return OnlineAppConfig(
                 backendConfig = OnlineBackendConfig.remote(
                     baseUrl = baseUrl,
+                    clientVersionCode = BuildConfig.VERSION_CODE,
                 ),
                 debugOptions = OnlineDebugOptions.RealBackend,
             )
