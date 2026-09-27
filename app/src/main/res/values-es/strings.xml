@@ -511,4 +511,21 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="identity_hub_disconnect_confirm_action">Desconectar</string>
     <string name="identity_hub_disconnect_cancel">Cancelar</string>
     <string name="identity_hub_disconnect_failed">No fue posible desconectar la cuenta ahora. Inténtalo de nuevo.</string>
+
+    <!-- C46.A: ranking/post-match locale parity required by lint -->
+    <string name="ranking_help_action">&#191;C&#243;mo funciona?</string>
+    <string name="ranking_help_title">&#191;C&#243;mo funciona la clasificaci&#243;n?</string>
+    <string name="ranking_help_close">Entendido</string>
+    <string name="ranking_v3_order_help">Criterios: SV &#8594; SP &#8594; PF &#8594; AST &#8594; TQ &#8594; menos ET</string>
+    <string name="ranking_help_sv">SV &#8212; Saldo de victorias: victorias menos derrotas.</string>
+    <string name="ranking_help_sp">SP &#8212; Saldo de puntos: puntos de tu pareja menos puntos de los adversarios.</string>
+    <string name="ranking_help_pf">PF &#8212; Puntos hechos: puntos de las rondas que finalizaste.</string>
+    <string name="ranking_help_ast">AST &#8212; Asistencias: puntos de las rondas en las que tu jugada prepar&#243; la finalizaci&#243;n de tu compa&#241;ero.</string>
+    <string name="ranking_help_tq">TQ &#8212; Toques dados: veces que tu jugada dej&#243; al siguiente adversario sin jugada.</string>
+    <string name="ranking_help_ja">JA &#8212; Jugadas autom&#225;ticas: cada ficha jugada autom&#225;ticamente cuenta.</string>
+    <string name="ranking_help_et">ET &#8212; Tiempo agotado: n&#250;mero de rondas en las que se agot&#243; tu reloj. Menor es mejor.</string>
+    <string name="ranking_help_order_note">Si hay empate en un criterio, se considera el siguiente.</string>
+    <string name="ranking_help_v1">Este per&#237;odo usa la regla hist&#243;rica V1: primero el &#237;ndice (victorias + 1) / (partidas + 2), luego saldo de puntos, puntos hechos, toques dados y menos rondas autom&#225;ticas.</string>
+    <string name="ranking_v3_tiebreak_timeout_rounds">Desempate: menos ET</string>
+    <string name="post_match_ranked_rounds">Partida clasificatoria &#8226; %1$d rondas</string>
 </resources>

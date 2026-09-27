@@ -461,7 +461,6 @@ internal fun OnlinePublicRankingScreen(
             latestResponse?.let { response ->
                 RankingOverviewCompact(
                     response = response,
-                    locale = locale,
                 )
 
                 val viewer = response.viewer
@@ -812,7 +811,6 @@ private fun ClosedRankingCycleSelector(
 @Composable
 private fun RankingOverviewCompact(
     response: PublicRankingResponseDto,
-    locale: java.util.Locale,
 ) {
     var showExplanation by remember(
         response.cycleId,
@@ -820,71 +818,11 @@ private fun RankingOverviewCompact(
     ) {
         mutableStateOf(false)
     }
-    val period = response.publicPeriodLabel(
-        locale = locale,
-    )
-    val contextText = stringResource(
-        if (response.isClosed) {
-            R.string.ranking_context_closed
-        } else {
-            R.string.ranking_context_current
-        },
-        period,
-    )
-    val summaryText = stringResource(
-        R.string.ranking_summary,
-        response.totalEligiblePlayers,
-        response.resultCount,
-    )
-    val awardStatusText = when {
-        response.isOfficialRankingPending() && response.isClosed ->
-            stringResource(
-                R.string.ranking_awards_compact_closed,
-                response.totalEligiblePlayers,
-                response.publicationThreshold,
-            )
-
-        response.isOfficialRankingPending() ->
-            stringResource(
-                R.string.ranking_awards_compact_current,
-                response.totalEligiblePlayers,
-                response.publicationThreshold,
-                response.eligiblePlayersRemaining,
-            )
-
-        else ->
-            stringResource(
-                R.string.ranking_awards_compact_enabled,
-            )
-    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.End,
     ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
-        ) {
-            Text(
-                text = contextText,
-                color = DominoSemanticColors.brandText,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = summaryText,
-                color = DominoSemanticColors.brandSupportingText,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                text = awardStatusText,
-                color = DominoSemanticColors.brandSupportingText,
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
-
         TextButton(
             modifier = Modifier.testTag(RankingExplanationButtonTag),
             onClick = {
@@ -903,7 +841,6 @@ private fun RankingOverviewCompact(
     if (showExplanation) {
         RankingExplanationDialog(
             response = response,
-            locale = locale,
             onDismiss = {
                 showExplanation = false
             },
@@ -914,47 +851,8 @@ private fun RankingOverviewCompact(
 @Composable
 private fun RankingExplanationDialog(
     response: PublicRankingResponseDto,
-    locale: java.util.Locale,
     onDismiss: () -> Unit,
 ) {
-    val period = response.publicPeriodLabel(
-        locale = locale,
-    )
-    val contextText = stringResource(
-        if (response.isClosed) {
-            R.string.ranking_context_closed
-        } else {
-            R.string.ranking_context_current
-        },
-        period,
-    )
-    val summaryText = stringResource(
-        R.string.ranking_summary,
-        response.totalEligiblePlayers,
-        response.resultCount,
-    )
-    val awardsText = when {
-        response.isOfficialRankingPending() && response.isClosed ->
-            stringResource(
-                R.string.ranking_awards_compact_closed,
-                response.totalEligiblePlayers,
-                response.publicationThreshold,
-            )
-
-        response.isOfficialRankingPending() ->
-            stringResource(
-                R.string.ranking_awards_compact_current,
-                response.totalEligiblePlayers,
-                response.publicationThreshold,
-                response.eligiblePlayersRemaining,
-            )
-
-        else ->
-            stringResource(
-                R.string.ranking_awards_compact_enabled,
-            )
-    }
-
     AlertDialog(
         modifier = Modifier.testTag(
             RankingExplanationDialogTag,
@@ -974,27 +872,6 @@ private fun RankingExplanationDialog(
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = contextText,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(text = summaryText)
-                Text(text = awardsText)
-
-                if (response.isOfficialRankingPending()) {
-                    Text(
-                        text = stringResource(
-                            if (response.isClosed) {
-                                R.string
-                                    .ranking_publication_pending_closed_notice
-                            } else {
-                                R.string
-                                    .ranking_publication_pending_current_notice
-                            },
-                        ),
-                    )
-                }
-
                 when (response.rankingRuleVersion) {
                     RANKING_RULE_VERSION_V2 -> {
                         Text(
@@ -1067,66 +944,14 @@ private fun RankingExplanationMetricLines(
             style = MaterialTheme.typography.bodySmall,
         )
     }
-}
-@Composable
-private fun RankingPublicationPendingContent(
-    response: PublicRankingResponseDto,
-    modifier: Modifier = Modifier,
-) {
-    val title = stringResource(
-        if (response.isClosed) {
-            R.string.ranking_publication_pending_closed_title
-        } else {
-            R.string.ranking_publication_pending_current_title
-        },
-    )
-    val progress = stringResource(
-        if (response.isClosed) {
-            R.string.ranking_publication_pending_closed_progress
-        } else {
-            R.string.ranking_publication_pending_current_progress
-        },
-        response.totalEligiblePlayers,
-        response.publicationThreshold,
-        response.eligiblePlayersRemaining,
-    )
-    val notice = stringResource(
-        if (response.isClosed) {
-            R.string.ranking_publication_pending_closed_notice
-        } else {
-            R.string.ranking_publication_pending_current_notice
-        },
-    )
 
-    RankingStateCard(
-        modifier = modifier.testTag(
-            RankingPublicationPendingTag,
+    Text(
+        text = stringResource(
+            R.string.ranking_help_order_note,
         ),
-    ) {
-        Text(
-            text = title,
-            color = DominoSemanticColors.brandText,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-        )
-
-        Text(
-            text = progress,
-            color = DominoSemanticColors.brandText,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-        )
-
-        Text(
-            text = notice,
-            color = DominoSemanticColors.brandSupportingText,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-        )
-    }
+        style = MaterialTheme.typography.bodySmall,
+    )
 }
-
 @Composable
 private fun RankingEntries(
     modifier: Modifier,
