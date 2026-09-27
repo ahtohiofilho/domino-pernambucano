@@ -45,6 +45,67 @@ class MainMenuScreenTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun champions_gallery_is_hidden_until_official_achievement_exists() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.NotRequested,
+                pendingOnlineMatchResumeInProgress = false,
+                achievementGalleryAvailable = false,
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onAllNodesWithTag(MainMenuAchievementGalleryActionTag)
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun champions_gallery_is_shown_below_ranking_when_available() {
+        var galleryClicks = 0
+
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution
+                        .NoPendingParticipation,
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.NotRequested,
+                pendingOnlineMatchResumeInProgress = false,
+                achievementGalleryAvailable = true,
+                onAchievementGalleryClick = {
+                    galleryClicks += 1
+                },
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithTag(MainMenuRankingActionTag)
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(MainMenuAchievementGalleryActionTag)
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(1, galleryClicks)
+        }
+    }
+
+    @Test
     fun ready_participation_waits_for_automatic_gate_without_manual_card() {
         composeRule.setContent {
             MainMenuScreen(

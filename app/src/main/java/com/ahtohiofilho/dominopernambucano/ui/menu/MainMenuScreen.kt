@@ -72,6 +72,8 @@ internal const val MainMenuContentGroupTag = "main_menu_content_group"
 internal const val MainMenuTitleTag = "main_menu_title"
 internal const val MainMenuActionsGroupTag = "main_menu_actions_group"
 internal const val MainMenuRankingActionTag = "main_menu_ranking_action"
+internal const val MainMenuAchievementGalleryActionTag =
+    "main_menu_achievement_gallery_action"
 internal const val MainMenuAccountActionTag = "main_menu_account_action"
 internal const val MainMenuProfileActionTag = "main_menu_profile_action"
 internal const val MainMenuStatusTag = "main_menu_status"
@@ -122,6 +124,8 @@ fun MainMenuScreen(
     onEmailConfirmCodeClick: () -> Unit = {},
     onEmailResetClick: () -> Unit = {},
     onAccountDialogDismissed: () -> Unit = {},
+    achievementGalleryAvailable: Boolean = false,
+    onAchievementGalleryClick: () -> Unit = {},
     onPlayClick: () -> Unit,
     onRankingClick: () -> Unit,
     onInspectPendingOnlineParticipationClick: () -> Unit,
@@ -445,6 +449,29 @@ fun MainMenuScreen(
                         BrandGlyph("★")
                     },
                 )
+
+                if (achievementGalleryAvailable) {
+                    DominoSecondaryActionCard(
+                        modifier = Modifier.testTag(
+                            MainMenuAchievementGalleryActionTag,
+                        ),
+                        title = stringResource(
+                            R.string.main_menu_achievement_gallery,
+                        ),
+                        supportingText = stringResource(
+                            R.string
+                                .main_menu_achievement_gallery_support,
+                        ),
+                        accent = DominoBrandAccent.Yellow,
+                        onClick = onAchievementGalleryClick,
+                        enabled =
+                            !menuActionInProgress &&
+                                !continuityGateActive,
+                        leadingContent = {
+                            BrandGlyph("◆")
+                        },
+                    )
+                }
 
             }
         }

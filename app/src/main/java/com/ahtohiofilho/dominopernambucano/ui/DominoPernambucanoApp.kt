@@ -38,6 +38,8 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineGoogleIdentityRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlineParticipationBindingRepository
 import com.ahtohiofilho.dominopernambucano.online.OnlinePasswordAccountManager
 import com.ahtohiofilho.dominopernambucano.online.OnlinePublicRankingRemoteClient
+import com.ahtohiofilho.dominopernambucano.online.OnlineRankingAchievementClientResult
+import com.ahtohiofilho.dominopernambucano.online.OnlineRankingAchievementRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueRemoteClient
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueClientResult
 import com.ahtohiofilho.dominopernambucano.online.OnlineRankedQueueState
@@ -97,6 +99,7 @@ import com.ahtohiofilho.dominopernambucano.ui.online.OnlineCreateRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineJoinRoomRoute
 import com.ahtohiofilho.dominopernambucano.ui.online.OnlineRankedQueueRoute
 import com.ahtohiofilho.dominopernambucano.ui.ranking.OnlinePublicRankingRoute
+import com.ahtohiofilho.dominopernambucano.ui.ranking.OnlineRankingAchievementGalleryScreen
 import com.ahtohiofilho.dominopernambucano.ui.settings.AndroidAppLanguageManager
 import com.ahtohiofilho.dominopernambucano.ui.settings.SettingsScreen
 import java.io.File
@@ -246,6 +249,14 @@ fun DominoPernambucanoApp(
     )
 
     var settingsVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var achievementGalleryVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var achievementGalleryAvailable by remember {
         mutableStateOf(false)
     }
 
@@ -480,6 +491,19 @@ fun DominoPernambucanoApp(
     ) {
         googleIdentityApiClient?.let { apiClient ->
             OnlinePublicRankingRemoteClient(
+                remoteApiClient = apiClient,
+                sessionCredentialRepository =
+                    onlineSessionCredentialRepository,
+            )
+        }
+    }
+
+    val onlineRankingAchievementClient = remember(
+        googleIdentityApiClient,
+        onlineSessionCredentialRepository,
+    ) {
+        googleIdentityApiClient?.let { apiClient ->
+            OnlineRankingAchievementRemoteClient(
                 remoteApiClient = apiClient,
                 sessionCredentialRepository =
                     onlineSessionCredentialRepository,
@@ -1974,6 +1998,20 @@ fun DominoPernambucanoApp(
         return
     }
 
+    if (
+        achievementGalleryVisible &&
+        onlineRankingAchievementClient != null
+    ) {
+        OnlineRankingAchievementGalleryScreen(
+            client = onlineRankingAchievementClient,
+            onBackClick = {
+                achievementGalleryVisible = false
+            },
+        )
+
+        return
+    }
+
 
     if (rulesHelpVisible) {
         RulesHelpScreen(
@@ -2228,6 +2266,26 @@ fun DominoPernambucanoApp(
     }
     when (val state = sessionState) {
         is DominoSessionState.MainMenu -> {
+            LaunchedEffect(
+                onlineRankingAchievementClient,
+                onlineAccountSessionRevision,
+            ) {
+                achievementGalleryAvailable =
+                    when (
+                        val result =
+                            onlineRankingAchievementClient?.fetch(
+                                offset = 0,
+                                limit = 1,
+                            )
+                    ) {
+                        is OnlineRankingAchievementClientResult.Success ->
+                            result.response.available
+
+                        is OnlineRankingAchievementClientResult.Failure,
+                        null -> false
+                    }
+            }
+
             val automaticRecoveryAction =
                 resolvePendingOnlineParticipationAutomaticRecoveryAction(
                     pendingParticipation =
@@ -2454,6 +2512,19 @@ fun DominoPernambucanoApp(
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.BackToPlayModeSelection,
                         )
+                    }
+                },
+                achievementGalleryAvailable =
+                    achievementGalleryAvailable,
+                onAchievementGalleryClick = {
+                    if (
+                        achievementGalleryAvailable &&
+                        !pendingOnlineMatchResumeInProgress &&
+                        state.pendingOnlineParticipation !is
+                            OnlinePendingParticipationLocalResolution
+                                .ReadyForRemoteReconciliation
+                    ) {
+                        achievementGalleryVisible = true
                     }
                 },
                 onPlayClick = {
