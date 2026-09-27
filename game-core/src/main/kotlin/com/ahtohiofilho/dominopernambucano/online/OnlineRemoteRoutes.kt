@@ -10,6 +10,7 @@ object OnlineRemoteRoutes {
     const val RANKED_QUEUE = "ranked-queue"
     const val RANKING = "ranking"
     const val RANKING_CYCLES = "ranking/cycles"
+    const val RANKING_ACHIEVEMENTS = "ranking/achievements"
     const val ACCOUNT_PROFILE = "accounts/profile"
     const val DELETE_ACCOUNT = "accounts/self"
     const val CREATE_ROOM = "rooms"

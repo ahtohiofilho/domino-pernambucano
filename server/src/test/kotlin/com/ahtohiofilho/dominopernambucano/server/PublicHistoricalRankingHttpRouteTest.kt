@@ -7,6 +7,7 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.competitive.createRankedMatchResultId
 import com.ahtohiofilho.dominopernambucano.competitive.resolveRankingCycle
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteRoutes
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingAchievementGalleryResponseDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingAwardTierDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCyclesResponseDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
@@ -270,6 +271,117 @@ class PublicHistoricalRankingHttpRouteTest {
                     entry.awardTier == null
                 },
             )
+        }
+
+    @Test
+    fun achievement_gallery_is_hidden_until_an_official_award_exists() =
+        testApplication {
+            val prepared = preparedClosedDailyRanking(
+                matchCount = 1,
+            )
+            val resolver = headerResolver(
+                "viewer" to OnlineRequestIdentity(
+                    playerId = "viewer-player",
+                    principalId = "viewer-principal",
+                    sessionId = "viewer-session",
+                    kind = OnlinePrincipalKind.ANONYMOUS,
+                    accountId = null,
+                ),
+            )
+
+            application {
+                module(
+                    store = prepared.store,
+                    serverEnvironment = OnlineServerEnvironment.TEST,
+                    identityResolver = resolver,
+                    nowEpochMillis = {
+                        prepared.period.endsAtEpochMillis
+                    },
+                )
+            }
+
+            val response = client.get(
+                "/${OnlineRemoteRoutes.RANKING_ACHIEVEMENTS}" +
+                    "?offset=0&limit=1",
+            ) {
+                header(TEST_IDENTITY_HEADER, "viewer")
+            }
+            val gallery = json.decodeFromString<
+                PublicRankingAchievementGalleryResponseDto
+            >(response.bodyAsText())
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertFalse(gallery.available)
+            assertEquals(0, gallery.totalAchievements)
+            assertEquals(0, gallery.totalChampionships)
+            assertEquals(0, gallery.totalAwardedPlayers)
+            assertFalse(gallery.hasMore)
+            assertTrue(gallery.achievements.isEmpty())
+        }
+
+    @Test
+    fun achievement_gallery_projects_official_awards_without_raw_identity() =
+        testApplication {
+            val prepared = preparedClosedDailyRanking()
+            val resolver = headerResolver(
+                "viewer" to OnlineRequestIdentity(
+                    playerId = "viewer-player",
+                    principalId = "viewer-principal",
+                    sessionId = "viewer-session",
+                    kind = OnlinePrincipalKind.ANONYMOUS,
+                    accountId = null,
+                ),
+            )
+
+            application {
+                module(
+                    store = prepared.store,
+                    serverEnvironment = OnlineServerEnvironment.TEST,
+                    identityResolver = resolver,
+                    nowEpochMillis = {
+                        prepared.period.endsAtEpochMillis
+                    },
+                )
+            }
+
+            val response = client.get(
+                "/${OnlineRemoteRoutes.RANKING_ACHIEVEMENTS}" +
+                    "?offset=0&limit=1",
+            ) {
+                header(TEST_IDENTITY_HEADER, "viewer")
+            }
+            val body = response.bodyAsText()
+            val gallery = json.decodeFromString<
+                PublicRankingAchievementGalleryResponseDto
+            >(body)
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(
+                "private, max-age=30, must-revalidate",
+                response.headers[HttpHeaders.CacheControl],
+            )
+            assertTrue(gallery.available)
+            assertEquals(52, gallery.totalAchievements)
+            assertEquals(52, gallery.totalChampionships)
+            assertEquals(52, gallery.totalAwardedPlayers)
+            assertTrue(gallery.hasMore)
+            assertEquals(1, gallery.achievements.size)
+
+            val first = gallery.achievements.single()
+            assertEquals(
+                PublicRankingAwardTierDto.DIAMOND,
+                first.awardTier,
+            )
+            assertEquals(1, first.rank)
+            assertEquals(1, first.awardRuleVersion)
+            assertEquals(1, first.diamondCount)
+            assertEquals(0, first.goldCount)
+            assertEquals(0, first.silverCount)
+            assertEquals(0, first.bronzeCount)
+            assertTrue(first.competitorId.startsWith("competitor-"))
+            assertFalse(body.contains("snapshot-account"))
+            assertFalse(body.contains("accountId"))
+            assertFalse(body.contains("playerId"))
         }
 
     @Test

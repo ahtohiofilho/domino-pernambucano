@@ -20,6 +20,11 @@ class OnlineRemoteRoutesTest {
             "matches/actions",
             OnlineRemoteRoutes.SUBMIT_ACTION,
         )
+
+        assertEquals(
+            "ranking/achievements",
+            OnlineRemoteRoutes.RANKING_ACHIEVEMENTS,
+        )
     }
 
     @Test

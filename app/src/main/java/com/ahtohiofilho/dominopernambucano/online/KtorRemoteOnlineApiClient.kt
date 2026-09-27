@@ -459,6 +459,42 @@ class KtorRemoteOnlineApiClient(
         return response.body()
     }
 
+    override suspend fun fetchPublicRankingAchievements(
+        offset: Int,
+        limit: Int,
+    ): PublicRankingAchievementGalleryResponseDto {
+        require(offset >= 0)
+        require(limit in 1..100)
+
+        val response = httpClient.get(
+            urlString = endpoint(
+                OnlineRemoteRoutes.RANKING_ACHIEVEMENTS,
+            ),
+        ) {
+            expectSuccess = false
+            parameter(
+                key = "offset",
+                value = offset,
+            )
+            parameter(
+                key = "limit",
+                value = limit,
+            )
+            accept(ContentType.Application.Json)
+            applyProtectedAuthentication(
+                developmentPlayerId = developmentPlayerId,
+            )
+        }
+
+        if (response.status.value !in 200..299) {
+            throw OnlinePublicRankingHttpException(
+                statusCode = response.status.value,
+            )
+        }
+
+        return response.body()
+    }
+
     override suspend fun fetchAccountProfile():
         OnlineAccountProfileResponseDto {
         return executeAccountProfileRequest {

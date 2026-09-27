@@ -168,3 +168,33 @@ data class PublicRankingCyclesResponseDto(
     val hasMore: Boolean,
     val cycles: List<PublicRankingCycleSummaryDto>,
 )
+
+@Serializable
+data class PublicRankingAchievementDto(
+    val competitorId: String,
+    val displayName: String? = null,
+    val cycle: PublicRankingCycleDto,
+    val cycleId: String,
+    val startsAtEpochMillis: Long,
+    val endsAtEpochMillis: Long,
+    val closedAtEpochMillis: Long,
+    val rank: Int,
+    val awardTier: PublicRankingAwardTierDto,
+    val awardRuleVersion: Int,
+    val diamondCount: Int,
+    val goldCount: Int,
+    val silverCount: Int,
+    val bronzeCount: Int,
+)
+
+@Serializable
+data class PublicRankingAchievementGalleryResponseDto(
+    val available: Boolean,
+    val totalAchievements: Int,
+    val totalChampionships: Int,
+    val totalAwardedPlayers: Int,
+    val offset: Int,
+    val limit: Int,
+    val hasMore: Boolean,
+    val achievements: List<PublicRankingAchievementDto>,
+)

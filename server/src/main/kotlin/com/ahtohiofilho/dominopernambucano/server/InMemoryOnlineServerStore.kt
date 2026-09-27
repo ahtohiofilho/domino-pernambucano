@@ -283,6 +283,13 @@ class InMemoryOnlineServerStore internal constructor(
         }
     }
 
+    override fun listAllClosedRankedCycleSnapshots():
+        List<RankedCycleSnapshot> {
+        return synchronized(lock) {
+            rankedCycleSnapshotsById.values.toList()
+        }
+    }
+
     private fun syntheticRankingAccountIds(): Set<String> {
         return accountsByPlayerId.values
             .asSequence()
@@ -2951,13 +2958,14 @@ class InMemoryOnlineServerStore internal constructor(
             return state
         }
 
-        if (state.schemaVersion in 10..13) {
+        if (state.schemaVersion in 10..14) {
             /*
-             * Schemas 10..13 are structurally forward-compatible with
-             * schema 14. Schema 14 only adds timeoutRoundSeatIndexes with
-             * an empty-list default, so historical ranked results and
-             * closed cycle snapshots must be preserved byte-for-byte at
-             * the model level during normalization.
+             * Schemas 10..14 are structurally forward-compatible with
+             * schema 15. Schema 14 added timeoutRoundSeatIndexes with an
+             * empty-list default. Schema 15 adds frozen publication/award
+             * metadata to closed cycle snapshots with nullable defaults.
+             * Existing schema-14 snapshots therefore remain legacy history:
+             * their frozen award fields stay null instead of being inferred.
              */
             return state.copy(
                 schemaVersion =
@@ -3405,10 +3413,13 @@ class InMemoryOnlineServerStore internal constructor(
                     (
                         snapshot.retentionPolicyVersion ==
                             LEGACY_RANKING_RETENTION_POLICY_VERSION ||
-                            snapshot.retainedRankingSize <=
-                            DEFAULT_RANKING_RETENTION_POLICY.limitFor(
-                                snapshot.period.kind,
-                            )
+                            snapshot.standings.all { standing ->
+                                standing.rank <=
+                                    DEFAULT_RANKING_RETENTION_POLICY
+                                        .limitFor(
+                                            snapshot.period.kind,
+                                        )
+                            }
                     )
             },
         ) {

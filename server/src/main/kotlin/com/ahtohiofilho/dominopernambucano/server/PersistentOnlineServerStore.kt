@@ -210,6 +210,11 @@ class PersistentOnlineServerStore private constructor(
         )
     }
 
+    override fun listAllClosedRankedCycleSnapshots():
+        List<RankedCycleSnapshot> = read {
+        delegate.listAllClosedRankedCycleSnapshots()
+    }
+
     override fun enqueuePublicRanked(
         request: CreateOnlineRoomRequestDto,
         identity: OnlineRequestIdentity,

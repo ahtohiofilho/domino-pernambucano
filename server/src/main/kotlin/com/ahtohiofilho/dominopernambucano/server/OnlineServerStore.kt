@@ -188,6 +188,24 @@ interface OnlineServerStore : AutoCloseable {
     ): RankedCycleSnapshotPage
 
     /**
+     * One logical read of the complete immutable closed-cycle inventory.
+     *
+     * Authoritative stores should override this method so callers that derive
+     * cross-cycle read models cannot observe different store revisions between
+     * cycle kinds.
+     */
+    fun listAllClosedRankedCycleSnapshots():
+        List<RankedCycleSnapshot> {
+        return RankingCycleKind.values().flatMap { kind ->
+            listClosedRankedCycleSnapshots(
+                kind = kind,
+                offset = 0,
+                limit = Int.MAX_VALUE,
+            ).snapshots
+        }
+    }
+
+    /**
      * Server-owned competitive admission boundary.
      *
      * Enters the FIFO queue for the single public ranked pool. The caller

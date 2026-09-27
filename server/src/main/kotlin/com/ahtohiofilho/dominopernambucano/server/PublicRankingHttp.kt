@@ -4,6 +4,8 @@ import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleLadder
 import com.ahtohiofilho.dominopernambucano.competitive.RankedCycleStanding
 import com.ahtohiofilho.dominopernambucano.competitive.RankingCycleKind
 import com.ahtohiofilho.dominopernambucano.online.OnlineRemoteHeaders
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingAchievementDto
+import com.ahtohiofilho.dominopernambucano.online.PublicRankingAchievementGalleryResponseDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingAwardTierDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
@@ -27,6 +29,7 @@ internal const val MAXIMUM_PUBLIC_RANKING_PAGE_SIZE = 100
 internal const val CURRENT_RANKING_CACHE_MAX_AGE_SECONDS = 300
 internal const val HISTORICAL_RANKING_CACHE_MAX_AGE_SECONDS = 300
 internal const val CLOSED_CYCLES_CACHE_MAX_AGE_SECONDS = 30
+internal const val RANKING_ACHIEVEMENTS_CACHE_MAX_AGE_SECONDS = 30
 
 private val publicRankingCacheJson = Json {
     encodeDefaults = true
@@ -50,6 +53,16 @@ internal fun PublicRankingCycleDto.toRankingCycleKind(): RankingCycleKind {
         PublicRankingCycleDto.WEEKLY -> RankingCycleKind.WEEKLY
         PublicRankingCycleDto.MONTHLY -> RankingCycleKind.MONTHLY
         PublicRankingCycleDto.ANNUAL -> RankingCycleKind.ANNUAL
+    }
+}
+
+private fun RankingCycleKind.toPublicRankingCycleDto():
+    PublicRankingCycleDto {
+    return when (this) {
+        RankingCycleKind.DAILY -> PublicRankingCycleDto.DAILY
+        RankingCycleKind.WEEKLY -> PublicRankingCycleDto.WEEKLY
+        RankingCycleKind.MONTHLY -> PublicRankingCycleDto.MONTHLY
+        RankingCycleKind.ANNUAL -> PublicRankingCycleDto.ANNUAL
     }
 }
 
@@ -416,6 +429,164 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
         canonicalJson = publicRankingCacheJson.encodeToString(response),
         maxAgeSeconds = CLOSED_CYCLES_CACHE_MAX_AGE_SECONDS,
     )
+}
+
+private data class RankingAchievementRecord(
+    val snapshot: RankedCycleSnapshot,
+    val standing: RankedCycleStandingSnapshot,
+    val tier: PublicRankingAwardTierDto,
+    val awardRuleVersion: Int,
+)
+
+private data class RankingAchievementCounts(
+    val diamond: Int,
+    val gold: Int,
+    val silver: Int,
+    val bronze: Int,
+)
+
+internal fun officialRankingAchievementAccountIds(
+    snapshots: List<RankedCycleSnapshot>,
+): Set<String> {
+    return buildOfficialRankingAchievementRecords(snapshots)
+        .mapTo(linkedSetOf()) { record ->
+            record.standing.accountId
+        }
+}
+
+internal suspend fun ApplicationCall.respondPublicRankingAchievements(
+    snapshots: List<RankedCycleSnapshot>,
+    publicDisplayNames: Map<String, String>,
+    offset: Int,
+    limit: Int,
+) {
+    if (offset < 0 || limit !in 1..MAXIMUM_PUBLIC_RANKING_PAGE_SIZE) {
+        respond(HttpStatusCode.BadRequest)
+        return
+    }
+
+    val records = buildOfficialRankingAchievementRecords(snapshots)
+        .sortedWith(
+            compareByDescending<RankingAchievementRecord> { record ->
+                record.snapshot.closedAtEpochMillis
+            }.thenByDescending { record ->
+                record.snapshot.period.endsAtEpochMillis
+            }.thenBy { record ->
+                record.snapshot.period.kind.ordinal
+            }.thenBy { record ->
+                record.standing.rank
+            }.thenBy { record ->
+                record.standing.accountId
+            },
+        )
+
+    val countsByAccount = records
+        .groupBy { record -> record.standing.accountId }
+        .mapValues { (_, accountRecords) ->
+            RankingAchievementCounts(
+                diamond = accountRecords.count { record ->
+                    record.tier == PublicRankingAwardTierDto.DIAMOND
+                },
+                gold = accountRecords.count { record ->
+                    record.tier == PublicRankingAwardTierDto.GOLD
+                },
+                silver = accountRecords.count { record ->
+                    record.tier == PublicRankingAwardTierDto.SILVER
+                },
+                bronze = accountRecords.count { record ->
+                    record.tier == PublicRankingAwardTierDto.BRONZE
+                },
+            )
+        }
+
+    val pageRecords = records
+        .drop(offset)
+        .take(limit)
+
+    val response = PublicRankingAchievementGalleryResponseDto(
+        available = records.isNotEmpty(),
+        totalAchievements = records.size,
+        totalChampionships = records.count { record ->
+            record.tier == PublicRankingAwardTierDto.DIAMOND
+        },
+        totalAwardedPlayers = countsByAccount.size,
+        offset = offset,
+        limit = limit,
+        hasMore =
+            offset.toLong() + pageRecords.size.toLong() <
+                records.size.toLong(),
+        achievements = pageRecords.map { record ->
+            val counts = requireNotNull(
+                countsByAccount[record.standing.accountId],
+            )
+
+            PublicRankingAchievementDto(
+                competitorId =
+                    createPublicCompetitorId(record.standing.accountId),
+                displayName =
+                    publicDisplayNames[record.standing.accountId],
+                cycle =
+                    record.snapshot.period.kind
+                        .toPublicRankingCycleDto(),
+                cycleId = record.snapshot.period.cycleId,
+                startsAtEpochMillis =
+                    record.snapshot.period.startsAtEpochMillis,
+                endsAtEpochMillis =
+                    record.snapshot.period.endsAtEpochMillis,
+                closedAtEpochMillis =
+                    record.snapshot.closedAtEpochMillis,
+                rank = record.standing.rank,
+                awardTier = record.tier,
+                awardRuleVersion = record.awardRuleVersion,
+                diamondCount = counts.diamond,
+                goldCount = counts.gold,
+                silverCount = counts.silver,
+                bronzeCount = counts.bronze,
+            )
+        },
+    )
+
+    respondPrivateCacheableRanking(
+        payload = response,
+        canonicalJson = publicRankingCacheJson.encodeToString(response),
+        maxAgeSeconds = RANKING_ACHIEVEMENTS_CACHE_MAX_AGE_SECONDS,
+    )
+}
+
+private fun buildOfficialRankingAchievementRecords(
+    snapshots: List<RankedCycleSnapshot>,
+): List<RankingAchievementRecord> {
+    return snapshots.flatMap { snapshot ->
+        val publicationThreshold =
+            snapshot.publicationThreshold ?: return@flatMap emptyList()
+        val awardRuleVersion =
+            snapshot.awardRuleVersion ?: return@flatMap emptyList()
+        val awardedRankingSize =
+            snapshot.awardedRankingSize ?: return@flatMap emptyList()
+
+        if (
+            snapshot.totalEligiblePlayers < publicationThreshold ||
+            awardedRankingSize <= 0
+        ) {
+            return@flatMap emptyList()
+        }
+
+        val decision = RankingAwardDecision(
+            awardRuleVersion = awardRuleVersion,
+            awardedRankingSize = awardedRankingSize,
+        )
+
+        snapshot.standings.mapNotNull { standing ->
+            decision.tierFor(standing.rank)?.let { tier ->
+                RankingAchievementRecord(
+                    snapshot = snapshot,
+                    standing = standing,
+                    tier = tier,
+                    awardRuleVersion = awardRuleVersion,
+                )
+            }
+        }
+    }
 }
 
 private suspend fun ApplicationCall.respondPrivateCacheableRanking(

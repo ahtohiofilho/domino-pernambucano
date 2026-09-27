@@ -1042,6 +1042,53 @@ internal fun Route.onlineServerRoutes(
             )
         }
 
+        get("/${OnlineRemoteRoutes.RANKING_ACHIEVEMENTS}") {
+            call.requireOnlineIdentity(
+                identityResolver = identityResolver,
+            ) ?: return@get
+
+            val rawOffset = call.request.queryParameters["offset"]
+            val parsedOffset = rawOffset?.toIntOrNull()
+            val rawLimit = call.request.queryParameters["limit"]
+            val parsedLimit = rawLimit?.toIntOrNull()
+
+            if (
+                (rawOffset != null && parsedOffset == null) ||
+                (rawLimit != null && parsedLimit == null)
+            ) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            val offset = parsedOffset ?: 0
+            val limit =
+                parsedLimit ?: DEFAULT_PUBLIC_RANKING_PAGE_SIZE
+
+            if (
+                offset < 0 ||
+                limit !in 1..MAXIMUM_PUBLIC_RANKING_PAGE_SIZE
+            ) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+
+            val snapshots =
+                store.listAllClosedRankedCycleSnapshots()
+
+            val awardedAccountIds =
+                officialRankingAchievementAccountIds(snapshots)
+
+            call.respondPublicRankingAchievements(
+                snapshots = snapshots,
+                publicDisplayNames =
+                    store.getPublicDisplayNames(
+                        accountIds = awardedAccountIds,
+                    ),
+                offset = offset,
+                limit = limit,
+            )
+        }
+
         get("/${OnlineRemoteRoutes.ACCOUNT_PROFILE}") {
             val identity = call.requirePublicRankedAccountIdentity(
                 identityResolver = identityResolver,

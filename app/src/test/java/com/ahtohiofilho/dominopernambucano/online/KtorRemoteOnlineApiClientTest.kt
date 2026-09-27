@@ -538,6 +538,89 @@ class KtorRemoteOnlineApiClientTest {
         }
 
     @Test
+    fun fetch_ranking_achievements_uses_protected_route_and_decodes_gallery() =
+        runBlocking {
+            val recordedRequests = mutableListOf<RecordedRequest>()
+            val recordedAuthorizationHeaders = mutableListOf<String?>()
+            val recordedUrls = mutableListOf<String>()
+
+            val apiClient = createApiClient(
+                responsesByPath = mapOf(
+                    "/ranking/achievements" to """
+                        {
+                          "available": true,
+                          "totalAchievements": 1,
+                          "totalChampionships": 1,
+                          "totalAwardedPlayers": 1,
+                          "offset": 0,
+                          "limit": 1,
+                          "hasMore": false,
+                          "achievements": [
+                            {
+                              "competitorId": "competitor-abc",
+                              "displayName": "Jogador",
+                              "cycle": "DAILY",
+                              "cycleId": "ranking-v3:daily:2026-09-26",
+                              "startsAtEpochMillis": 1000,
+                              "endsAtEpochMillis": 2000,
+                              "closedAtEpochMillis": 2001,
+                              "rank": 1,
+                              "awardTier": "DIAMOND",
+                              "awardRuleVersion": 1,
+                              "diamondCount": 1,
+                              "goldCount": 0,
+                              "silverCount": 0,
+                              "bronzeCount": 0
+                            }
+                          ]
+                        }
+                    """.trimIndent(),
+                ),
+                recordedRequests = recordedRequests,
+                recordedAuthorizationHeaders =
+                    recordedAuthorizationHeaders,
+                recordedUrls = recordedUrls,
+            )
+
+            apiClient.setBearerAccessToken(
+                accessToken = "gallery-access-token",
+            )
+
+            val gallery = apiClient.fetchPublicRankingAchievements(
+                offset = 0,
+                limit = 1,
+            )
+
+            assertTrue(gallery.available)
+            assertEquals(1, gallery.totalAchievements)
+            assertEquals(1, gallery.totalChampionships)
+            assertEquals(1, gallery.totalAwardedPlayers)
+            assertEquals(1, gallery.achievements.size)
+            assertEquals(
+                PublicRankingAwardTierDto.DIAMOND,
+                gallery.achievements.single().awardTier,
+            )
+            assertEquals(
+                listOf(
+                    RecordedRequest(
+                        method = HttpMethod.Get.value,
+                        path = "/ranking/achievements",
+                    ),
+                ),
+                recordedRequests,
+            )
+            assertEquals(
+                listOf("Bearer gallery-access-token"),
+                recordedAuthorizationHeaders,
+            )
+
+            val url = recordedUrls.single()
+            assertTrue(url.contains("/ranking/achievements"))
+            assertTrue(url.contains("offset=0"))
+            assertTrue(url.contains("limit=1"))
+        }
+
+    @Test
     fun create_room_throws_client_request_exception_when_backend_returns_unauthorized() =
         runBlocking {
             val recordedRequests = mutableListOf<RecordedRequest>()
@@ -696,9 +779,12 @@ class KtorRemoteOnlineApiClientTest {
             emptyMap(),
         recordedDevelopmentPlayerIds: MutableList<String?>? = null,
         recordedAuthorizationHeaders: MutableList<String?>? = null,
+        recordedUrls: MutableList<String>? = null,
     ): KtorRemoteOnlineApiClient {
         val mockEngine = MockEngine { request ->
             val path = request.url.encodedPath
+
+            recordedUrls?.add(request.url.toString())
 
             recordedRequests += RecordedRequest(
                 method = request.method.value,

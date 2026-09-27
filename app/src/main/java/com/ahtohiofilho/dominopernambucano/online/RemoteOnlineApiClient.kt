@@ -170,6 +170,15 @@ interface RemoteOnlineApiClient {
         )
     }
 
+    suspend fun fetchPublicRankingAchievements(
+        offset: Int = 0,
+        limit: Int = 50,
+    ): PublicRankingAchievementGalleryResponseDto {
+        throw UnsupportedOperationException(
+            "Consulta das conquistas oficiais nao configurada para este cliente remoto.",
+        )
+    }
+
     suspend fun fetchAccountProfile():
         OnlineAccountProfileResponseDto {
         throw UnsupportedOperationException(

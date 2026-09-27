@@ -28,7 +28,7 @@ import org.junit.Test
 
 class OnlineServerRankedCycleSnapshotTest {
     @Test
-    fun schema_thirteen_to_fourteen_preserves_ranked_history() {
+    fun schema_thirteen_to_current_preserves_ranked_history() {
         val day = epochMillis(
             year = 2026,
             month = 9,
@@ -92,6 +92,112 @@ class OnlineServerRankedCycleSnapshotTest {
         assertEquals(
             beforeMigration.publicRankedFormationHistory,
             normalized.publicRankedFormationHistory,
+        )
+    }
+
+    @Test
+    fun schema_fourteen_to_fifteen_preserves_legacy_award_nulls() {
+        val day = epochMillis(
+            year = 2026,
+            month = 9,
+            day = 24,
+            hour = 12,
+        )
+        val period = resolveRankingCycle(
+            kind = RankingCycleKind.DAILY,
+            completedAtEpochMillis = day,
+        )
+        var now = day
+        val source = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+        source.restorePersistentState(
+            OnlineServerStoreState(
+                rankedResults = (0 until 26).map { matchIndex ->
+                    result(
+                        matchIndex = matchIndex,
+                        completedAtEpochMillis = day + matchIndex,
+                    )
+                },
+            ),
+        )
+
+        now = period.endsAtEpochMillis
+        assertTrue(source.advanceAuthoritativeTime())
+
+        val json = Json {
+            encodeDefaults = true
+        }
+        val encoded = json.encodeToJsonElement(
+            source.snapshotPersistentState(),
+        ).jsonObject
+        val legacyRoot = encoded.toMutableMap().apply {
+            this["schemaVersion"] = JsonPrimitive(14)
+            this["rankedCycleSnapshots"] = JsonArray(
+                getValue("rankedCycleSnapshots").jsonArray.map {
+                        snapshotElement ->
+                    JsonObject(
+                        snapshotElement.jsonObject
+                            .toMutableMap()
+                            .apply {
+                                remove("publicationThreshold")
+                                remove("awardRuleVersion")
+                                remove("awardedRankingSize")
+                            },
+                    )
+                },
+            )
+        }
+        val legacyState =
+            json.decodeFromJsonElement<OnlineServerStoreState>(
+                JsonObject(legacyRoot),
+            )
+
+        assertEquals(14, legacyState.schemaVersion)
+        val legacySnapshot =
+            legacyState.rankedCycleSnapshots.single()
+        assertEquals(null, legacySnapshot.publicationThreshold)
+        assertEquals(null, legacySnapshot.awardRuleVersion)
+        assertEquals(null, legacySnapshot.awardedRankingSize)
+        assertTrue(
+            legacySnapshot.retainedRankingSize >
+                DEFAULT_RANKING_RETENTION_POLICY.limitFor(
+                    legacySnapshot.period.kind,
+                ),
+        )
+        assertTrue(
+            legacySnapshot.standings.all { standing ->
+                standing.rank <=
+                    DEFAULT_RANKING_RETENTION_POLICY.limitFor(
+                        legacySnapshot.period.kind,
+                    )
+            },
+        )
+
+        val restored = InMemoryOnlineServerStore(
+            nowEpochMillis = { now },
+        )
+        restored.restorePersistentState(legacyState)
+
+        val normalized = restored.snapshotPersistentState()
+        val normalizedSnapshot =
+            normalized.rankedCycleSnapshots.single()
+
+        assertEquals(
+            ONLINE_SERVER_STORE_STATE_SCHEMA_VERSION,
+            normalized.schemaVersion,
+        )
+        assertEquals(15, normalized.schemaVersion)
+        assertEquals(null, normalizedSnapshot.publicationThreshold)
+        assertEquals(null, normalizedSnapshot.awardRuleVersion)
+        assertEquals(null, normalizedSnapshot.awardedRankingSize)
+        assertEquals(
+            legacySnapshot.standings,
+            normalizedSnapshot.standings,
+        )
+        assertEquals(
+            legacySnapshot.retentionPolicyVersion,
+            normalizedSnapshot.retentionPolicyVersion,
         )
     }
 
