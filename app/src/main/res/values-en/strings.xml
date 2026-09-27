@@ -7,7 +7,7 @@
     <string name="main_menu_ranking">Leaderboard</string>
     <string name="main_menu_ranking_support">View your position and ranking cycles.</string>
     <string name="main_menu_achievement_gallery">Champions Gallery</string>
-    <string name="main_menu_achievement_gallery_support">Recorded official achievements.</string>
+    <string name="main_menu_achievement_gallery_support">Official achievements from closed cycles.</string>
     <string name="achievement_gallery_title">Champions Gallery</string>
     <string name="achievement_gallery_official_note">Achievements recorded after eligible ranking cycles close.</string>
     <string name="achievement_gallery_summary">%1$d official achievements · %2$d players</string>

@@ -98,11 +98,42 @@ class MainMenuScreenTest {
             .onNodeWithTag(MainMenuAchievementGalleryActionTag)
             .assertIsDisplayed()
             .assertIsEnabled()
+
+        composeRule
+            .onNodeWithText(
+                "Conquistas oficiais de ciclos encerrados.",
+            )
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithTag(MainMenuAchievementGalleryActionTag)
             .performClick()
 
         composeRule.runOnIdle {
             assertEquals(1, galleryClicks)
         }
+    }
+
+    @Test
+    fun champions_gallery_respects_pending_participation_gate() {
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation = readyParticipation(),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.NotRequested,
+                pendingOnlineMatchResumeInProgress = false,
+                achievementGalleryAvailable = true,
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithTag(MainMenuAchievementGalleryActionTag)
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
     }
 
     @Test

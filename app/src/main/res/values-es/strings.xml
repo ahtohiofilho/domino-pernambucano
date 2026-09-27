@@ -7,7 +7,7 @@
     <string name="main_menu_ranking">Clasificación</string>
     <string name="main_menu_ranking_support">Consulta tu posición y los ciclos.</string>
     <string name="main_menu_achievement_gallery">Galería de Campeones</string>
-    <string name="main_menu_achievement_gallery_support">Logros oficiales registrados.</string>
+    <string name="main_menu_achievement_gallery_support">Logros oficiales de ciclos cerrados.</string>
     <string name="achievement_gallery_title">Galería de Campeones</string>
     <string name="achievement_gallery_official_note">Logros registrados después del cierre de ciclos elegibles.</string>
     <string name="achievement_gallery_summary">%1$d logros oficiales · %2$d jugadores</string>
