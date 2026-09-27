@@ -115,12 +115,14 @@ internal fun applyServerRoundIntroAfterNextRound(
     }
 }
 
-class InMemoryOnlineServerStore(
+class InMemoryOnlineServerStore internal constructor(
     private val clockPolicy: DominoMatchClockPolicy =
         DominoMatchClockPolicy.OnlinePerPlayerRound,
     private val autoFillDevelopmentBotsAfterTwoHumanPlayers: Boolean = false,
     private val resourcePolicy: OnlineServerStoreResourcePolicy =
         OnlineServerStoreResourcePolicy.Default,
+    private val rankingPublicationPolicy: RankingPublicationPolicy =
+        DEFAULT_RANKING_PUBLICATION_POLICY,
     private val nowEpochMillis: () -> Long = {
         System.currentTimeMillis()
     },
@@ -348,6 +350,8 @@ class InMemoryOnlineServerStore(
                         .toClosedSnapshot(
                             closedAtEpochMillis =
                                 referenceEpochMillis,
+                            publicationPolicy =
+                                rankingPublicationPolicy,
                         )
                 materializedCount += 1
             }

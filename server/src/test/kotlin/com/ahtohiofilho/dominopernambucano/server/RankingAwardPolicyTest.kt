@@ -66,6 +66,52 @@ class RankingAwardPolicyTest {
     }
 
     @Test
+    fun version_one_tier_boundaries_are_historical_contract() {
+        val decision = RankingAwardDecision(
+            awardRuleVersion = RANKING_AWARD_RULE_VERSION_V1,
+            awardedRankingSize = 50,
+        )
+
+        assertEquals(
+            PublicRankingAwardTierDto.DIAMOND,
+            decision.tierFor(1),
+        )
+        assertEquals(
+            PublicRankingAwardTierDto.GOLD,
+            decision.tierFor(2),
+        )
+        assertEquals(
+            PublicRankingAwardTierDto.GOLD,
+            decision.tierFor(5),
+        )
+        assertEquals(
+            PublicRankingAwardTierDto.SILVER,
+            decision.tierFor(6),
+        )
+        assertEquals(
+            PublicRankingAwardTierDto.SILVER,
+            decision.tierFor(10),
+        )
+        assertEquals(
+            PublicRankingAwardTierDto.BRONZE,
+            decision.tierFor(11),
+        )
+        assertEquals(
+            PublicRankingAwardTierDto.BRONZE,
+            decision.tierFor(50),
+        )
+        assertNull(decision.tierFor(51))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun unsupported_award_rule_version_is_rejected() {
+        RankingAwardDecision(
+            awardRuleVersion = 999,
+            awardedRankingSize = 1,
+        )
+    }
+
+    @Test
     fun retained_ranking_bounds_awarded_size() {
         val decision = RankingAwardPolicy.evaluate(
             isClosed = true,

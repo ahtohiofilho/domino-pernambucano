@@ -974,6 +974,15 @@ internal fun Route.onlineServerRoutes(
                     historicalSnapshot
                         ?.isLegacyTruncated
                         ?: false,
+                frozenPublicationThreshold =
+                    historicalSnapshot
+                        ?.publicationThreshold,
+                frozenAwardRuleVersion =
+                    historicalSnapshot
+                        ?.awardRuleVersion,
+                frozenAwardedRankingSize =
+                    historicalSnapshot
+                        ?.awardedRankingSize,
                 expectedRankingRevision = rankingRevision,
                 offset = offset,
                 limit = limit,

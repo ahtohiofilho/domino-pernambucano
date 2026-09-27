@@ -2,15 +2,23 @@ package com.ahtohiofilho.dominopernambucano.server
 
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingAwardTierDto
 
-internal const val CURRENT_RANKING_AWARD_RULE_VERSION = 1
+internal const val RANKING_AWARD_RULE_VERSION_V1 = 1
+internal const val CURRENT_RANKING_AWARD_RULE_VERSION =
+    RANKING_AWARD_RULE_VERSION_V1
 internal const val MAXIMUM_AWARDED_RANKING_SIZE = 50
+
+internal fun isSupportedRankingAwardRuleVersion(
+    version: Int,
+): Boolean {
+    return version == RANKING_AWARD_RULE_VERSION_V1
+}
 
 internal data class RankingAwardDecision(
     val awardRuleVersion: Int,
     val awardedRankingSize: Int,
 ) {
     init {
-        require(awardRuleVersion > 0)
+        require(isSupportedRankingAwardRuleVersion(awardRuleVersion))
         require(awardedRankingSize >= 0)
         require(awardedRankingSize <= MAXIMUM_AWARDED_RANKING_SIZE)
     }
@@ -22,6 +30,20 @@ internal data class RankingAwardDecision(
             return null
         }
 
+        return when (awardRuleVersion) {
+            RANKING_AWARD_RULE_VERSION_V1 ->
+                tierForVersionOne(rank)
+
+            else -> error(
+                "Versao de regra de conquista nao suportada: " +
+                    awardRuleVersion,
+            )
+        }
+    }
+
+    private fun tierForVersionOne(
+        rank: Int,
+    ): PublicRankingAwardTierDto? {
         return when (rank) {
             1 -> PublicRankingAwardTierDto.DIAMOND
             in 2..5 -> PublicRankingAwardTierDto.GOLD

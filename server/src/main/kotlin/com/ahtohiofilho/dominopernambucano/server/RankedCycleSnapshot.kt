@@ -87,6 +87,13 @@ data class RankedCycleSnapshot(
     val retainedRankingSize: Int = standings.size,
     val retentionPolicyVersion: Int =
         LEGACY_RANKING_RETENTION_POLICY_VERSION,
+    /*
+     * Null means a legacy snapshot created before achievement policy facts
+     * became immutable. New closed cycles always persist all three values.
+     */
+    val publicationThreshold: Int? = null,
+    val awardRuleVersion: Int? = null,
+    val awardedRankingSize: Int? = null,
 ) {
     init {
         require(resultCount >= 0)
@@ -95,6 +102,30 @@ data class RankedCycleSnapshot(
         require(retainedRankingSize == standings.size)
         require(totalEligiblePlayers >= retainedRankingSize)
         require(retentionPolicyVersion >= 0)
+
+        val frozenAwardFacts = listOf(
+            publicationThreshold,
+            awardRuleVersion,
+            awardedRankingSize,
+        )
+        require(
+            frozenAwardFacts.all { value -> value == null } ||
+                frozenAwardFacts.all { value -> value != null },
+        ) {
+            "Os fatos historicos de conquista devem estar completos ou ausentes."
+        }
+        publicationThreshold?.let { threshold ->
+            require(threshold > 0)
+        }
+        awardRuleVersion?.let { version ->
+            require(isSupportedRankingAwardRuleVersion(version))
+        }
+        awardedRankingSize?.let { awardedSize ->
+            require(awardedSize >= 0)
+            require(awardedSize <= MAXIMUM_AWARDED_RANKING_SIZE)
+            require(awardedSize <= retainedRankingSize)
+        }
+
         require(
             areValidPublicRankingPageRanks(
                 rankingRuleVersion = period.rankingRuleVersion,
@@ -141,6 +172,8 @@ internal fun RankedCycleLadder.toClosedSnapshot(
     closedAtEpochMillis: Long,
     retentionPolicy: RankingRetentionPolicy =
         DEFAULT_RANKING_RETENTION_POLICY,
+    publicationPolicy: RankingPublicationPolicy =
+        DEFAULT_RANKING_PUBLICATION_POLICY,
 ): RankedCycleSnapshot {
     require(closedAtEpochMillis >= period.endsAtEpochMillis)
 
@@ -168,6 +201,16 @@ internal fun RankedCycleLadder.toClosedSnapshot(
         RankedCycleStandingSnapshot.from(standing)
     }
 
+    val publicationDecision = publicationPolicy.evaluate(
+        kind = period.kind,
+        totalEligiblePlayers = standings.size,
+    )
+    val awardDecision = RankingAwardPolicy.evaluate(
+        isClosed = true,
+        publicationDecision = publicationDecision,
+        retainedRankingSize = retainedStandings.size,
+    )
+
     return RankedCycleSnapshot(
         period = period,
         resultCount = resultCount,
@@ -176,6 +219,10 @@ internal fun RankedCycleLadder.toClosedSnapshot(
         totalEligiblePlayers = standings.size,
         retainedRankingSize = retainedStandings.size,
         retentionPolicyVersion = retentionPolicy.version,
+        publicationThreshold =
+            publicationDecision.publicationThreshold,
+        awardRuleVersion = awardDecision.awardRuleVersion,
+        awardedRankingSize = awardDecision.awardedRankingSize,
     )
 }
 

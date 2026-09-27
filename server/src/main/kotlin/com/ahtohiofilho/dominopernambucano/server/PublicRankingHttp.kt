@@ -64,6 +64,9 @@ internal suspend fun ApplicationCall.respondPublicRanking(
     retentionPolicyVersion: Int =
         LEGACY_RANKING_RETENTION_POLICY_VERSION,
     isLegacyTruncated: Boolean = false,
+    frozenPublicationThreshold: Int? = null,
+    frozenAwardRuleVersion: Int? = null,
+    frozenAwardedRankingSize: Int? = null,
     expectedRankingRevision: String? = null,
     offset: Int,
     limit: Int,
@@ -87,16 +90,53 @@ internal suspend fun ApplicationCall.respondPublicRanking(
         return
     }
 
-    val publicationDecision = publicationPolicy.evaluate(
-        kind = cycle.toRankingCycleKind(),
-        totalEligiblePlayers = totalEligiblePlayers,
-    )
     val isClosed = closedAtEpochMillis != null
-    val awardDecision = RankingAwardPolicy.evaluate(
-        isClosed = isClosed,
-        publicationDecision = publicationDecision,
-        retainedRankingSize = retainedRankingSize,
+    val frozenAwardFacts = listOf(
+        frozenPublicationThreshold,
+        frozenAwardRuleVersion,
+        frozenAwardedRankingSize,
     )
+    require(
+        frozenAwardFacts.all { value -> value == null } ||
+            frozenAwardFacts.all { value -> value != null },
+    )
+    require(
+        !frozenAwardFacts.any { value -> value != null } || isClosed,
+    )
+
+    val publicationDecision =
+        frozenPublicationThreshold?.let { threshold ->
+            RankingPublicationDecision(
+                publicationThreshold = threshold,
+                totalEligiblePlayers = totalEligiblePlayers,
+            )
+        } ?: publicationPolicy.evaluate(
+            kind = cycle.toRankingCycleKind(),
+            totalEligiblePlayers = totalEligiblePlayers,
+        )
+    val awardDecision =
+        if (
+            frozenAwardRuleVersion != null &&
+            frozenAwardedRankingSize != null
+        ) {
+            RankingAwardDecision(
+                awardRuleVersion = frozenAwardRuleVersion,
+                awardedRankingSize = frozenAwardedRankingSize,
+            ).also { decision ->
+                require(
+                    decision.awardedRankingSize <= retainedRankingSize,
+                )
+                if (!publicationDecision.isPublished) {
+                    require(decision.awardedRankingSize == 0)
+                }
+            }
+        } else {
+            RankingAwardPolicy.evaluate(
+                isClosed = isClosed,
+                publicationDecision = publicationDecision,
+                retainedRankingSize = retainedRankingSize,
+            )
+        }
     val entries = ladder.standings
         .drop(offset)
         .take(limit)
@@ -299,17 +339,37 @@ internal suspend fun ApplicationCall.respondPublicRankingCycles(
             limit = limit,
             hasMore = consumed < page.totalSnapshots.toLong(),
             cycles = page.snapshots.map { snapshot ->
-                val publicationDecision = publicationPolicy.evaluate(
-                    kind = snapshot.period.kind,
-                    totalEligiblePlayers =
-                        snapshot.totalEligiblePlayers,
-                )
-                val awardDecision = RankingAwardPolicy.evaluate(
-                    isClosed = true,
-                    publicationDecision = publicationDecision,
-                    retainedRankingSize =
-                        snapshot.retainedRankingSize,
-                )
+                val publicationDecision =
+                    snapshot.publicationThreshold?.let { threshold ->
+                        RankingPublicationDecision(
+                            publicationThreshold = threshold,
+                            totalEligiblePlayers =
+                                snapshot.totalEligiblePlayers,
+                        )
+                    } ?: publicationPolicy.evaluate(
+                        kind = snapshot.period.kind,
+                        totalEligiblePlayers =
+                            snapshot.totalEligiblePlayers,
+                    )
+                val awardDecision =
+                    if (
+                        snapshot.awardRuleVersion != null &&
+                        snapshot.awardedRankingSize != null
+                    ) {
+                        RankingAwardDecision(
+                            awardRuleVersion =
+                                snapshot.awardRuleVersion,
+                            awardedRankingSize =
+                                snapshot.awardedRankingSize,
+                        )
+                    } else {
+                        RankingAwardPolicy.evaluate(
+                            isClosed = true,
+                            publicationDecision = publicationDecision,
+                            retainedRankingSize =
+                                snapshot.retainedRankingSize,
+                        )
+                    }
 
                 PublicRankingCycleSummaryDto(
                     cycle = cycle,

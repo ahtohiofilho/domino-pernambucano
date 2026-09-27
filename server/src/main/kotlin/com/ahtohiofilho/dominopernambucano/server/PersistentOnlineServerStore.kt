@@ -433,13 +433,15 @@ class PersistentOnlineServerStore private constructor(
     }
 
     companion object {
-        fun open(
+        internal fun open(
             stateFile: File,
             clockPolicy: DominoMatchClockPolicy =
                 DominoMatchClockPolicy.OnlinePerPlayerRound,
             autoFillDevelopmentBotsAfterTwoHumanPlayers: Boolean = false,
             resourcePolicy: OnlineServerStoreResourcePolicy =
                 OnlineServerStoreResourcePolicy.Default,
+            rankingPublicationPolicy: RankingPublicationPolicy =
+                DEFAULT_RANKING_PUBLICATION_POLICY,
             nowEpochMillis: () -> Long = {
                 System.currentTimeMillis()
             },
@@ -458,6 +460,8 @@ class PersistentOnlineServerStore private constructor(
                 autoFillDevelopmentBotsAfterTwoHumanPlayers =
                     autoFillDevelopmentBotsAfterTwoHumanPlayers,
                 resourcePolicy = resourcePolicy,
+                rankingPublicationPolicy =
+                    rankingPublicationPolicy,
                 nowEpochMillis = nowEpochMillis,
                 accountIdFactory = accountIdFactory,
                 traceLogger = traceLogger,
@@ -471,6 +475,8 @@ class PersistentOnlineServerStore private constructor(
             autoFillDevelopmentBotsAfterTwoHumanPlayers: Boolean = false,
             resourcePolicy: OnlineServerStoreResourcePolicy =
                 OnlineServerStoreResourcePolicy.Default,
+            rankingPublicationPolicy: RankingPublicationPolicy =
+                DEFAULT_RANKING_PUBLICATION_POLICY,
             nowEpochMillis: () -> Long = {
                 System.currentTimeMillis()
             },
@@ -503,6 +509,8 @@ class PersistentOnlineServerStore private constructor(
                     autoFillDevelopmentBotsAfterTwoHumanPlayers =
                         autoFillDevelopmentBotsAfterTwoHumanPlayers,
                     resourcePolicy = resourcePolicy,
+                    rankingPublicationPolicy =
+                        rankingPublicationPolicy,
                     nowEpochMillis = nowEpochMillis,
                     accountIdFactory = accountIdFactory,
                     traceLogger = traceLogger,
@@ -565,6 +573,8 @@ internal fun createDefaultOnlineServerStore(
             autoFillDevelopmentBotsAfterTwoHumanPlayers =
                 autoFillDevelopmentBotsAfterTwoHumanPlayers,
             resourcePolicy = resourcePolicy,
+            rankingPublicationPolicy =
+                serverEnvironment.rankingPublicationPolicy,
             nowEpochMillis = nowEpochMillis,
             traceLogger = traceLogger,
         )
@@ -584,6 +594,8 @@ internal fun createDefaultOnlineServerStore(
         autoFillDevelopmentBotsAfterTwoHumanPlayers =
             autoFillDevelopmentBotsAfterTwoHumanPlayers,
         resourcePolicy = resourcePolicy,
+        rankingPublicationPolicy =
+            serverEnvironment.rankingPublicationPolicy,
         nowEpochMillis = nowEpochMillis,
         traceLogger = traceLogger,
     )

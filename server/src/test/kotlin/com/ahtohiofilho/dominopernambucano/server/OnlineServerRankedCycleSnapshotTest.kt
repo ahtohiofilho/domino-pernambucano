@@ -174,6 +174,12 @@ class OnlineServerRankedCycleSnapshotTest {
             CURRENT_RANKING_RETENTION_POLICY_VERSION,
             snapshot.retentionPolicyVersion,
         )
+        assertEquals(100, snapshot.publicationThreshold)
+        assertEquals(
+            CURRENT_RANKING_AWARD_RULE_VERSION,
+            snapshot.awardRuleVersion,
+        )
+        assertEquals(50, snapshot.awardedRankingSize)
 
         val historical = store.getRankedCycleLadder(
             kind = RankingCycleKind.DAILY,

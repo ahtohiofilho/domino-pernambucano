@@ -476,7 +476,6 @@ internal fun OnlinePublicRankingScreen(
                         locale = locale,
                         rankingRuleVersion = response.rankingRuleVersion,
                         highlighted = true,
-                        historical = response.isClosed,
                     )
                 }
             }
@@ -998,7 +997,6 @@ private fun RankingEntries(
                 rankingRuleVersion = rankingRuleVersion,
                 tiebreakCriterion = tiebreakCriterion,
                 highlighted = highlighted,
-                historical = latestResponse?.isClosed == true,
             )
         }
 
@@ -1049,7 +1047,6 @@ private fun RankingEntryCard(
     rankingRuleVersion: Int,
     tiebreakCriterion: PublicRankingTiebreakCriterion? = null,
     highlighted: Boolean = false,
-    historical: Boolean = false,
 ) {
     var expanded by remember(entry.competitorId) {
         mutableStateOf(false)
@@ -1066,7 +1063,7 @@ private fun RankingEntryCard(
     val featured = entry.rank == 1
     val podium = entry.rank in 1..3
     val featuredAccent =
-        androidx.compose.ui.graphics.Color(0xFFFFC107)
+        DominoSemanticColors.brandEnergy
     val containerColor = when {
         featured ->
             featuredAccent.copy(alpha = 0.14f)
@@ -1126,26 +1123,8 @@ private fun RankingEntryCard(
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement =
-                        Arrangement.spacedBy(
-                            if (featured) 2.dp else 0.dp,
-                        ),
+                        Arrangement.spacedBy(0.dp),
                 ) {
-                    if (featured) {
-                        Text(
-                            text = stringResource(
-                                if (historical) {
-                                    R.string.ranking_period_leader_badge
-                                } else {
-                                    R.string.ranking_leader_badge
-                                },
-                            ),
-                            color = featuredAccent,
-                            style =
-                                MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-
                     Text(
                         text = normalizedName,
                         color = DominoSemanticColors.brandText,
@@ -1344,7 +1323,7 @@ private fun RankingAvatarSlot(
     featured: Boolean,
 ) {
     val featuredAccent =
-        androidx.compose.ui.graphics.Color(0xFFFFC107)
+        DominoSemanticColors.brandEnergy
     val frameColor = when {
         featured -> featuredAccent
         highlighted -> DominoSemanticColors.brandPositive
