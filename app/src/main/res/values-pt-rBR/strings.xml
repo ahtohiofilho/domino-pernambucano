@@ -370,7 +370,7 @@ Se os 2 jogadores empatados com a menor contagem forem parceiros, a dupla vence 
     <string name="rules_help_online_title">Jogo online</string>
     <string name="rules_help_online_body">Partidas públicas ranqueadas exigem uma conta conectada. Salas privadas e partidas locais seguem as opções apresentadas no menu de jogo e não entram no ranking público.</string>
     <string name="rules_help_ranking_title">Ranking</string>
-    <string name="rules_help_ranking_body">O ranking público apresenta ciclos atuais e encerrados. A classificação e os detalhes exibidos na tela são atualizados conforme os resultados elegíveis registrados pelo serviço.</string>
+    <string name="rules_help_ranking_body">O ranking p&#250;blico apresenta ciclos atuais e encerrados. A regra atual usa os crit&#233;rios abaixo, na ordem indicada. Ciclos hist&#243;ricos preservam a regra vigente quando foram encerrados.</string>
     <string name="terms_title">Termos de Uso</string>
     <string name="terms_intro">Ao usar o Dominó PE, você concorda com estas condições de uso e com as políticas aplicáveis apresentadas no aplicativo.</string>
     <string name="terms_use_title">1. Uso do aplicativo</string>

@@ -78,6 +78,7 @@ fun RulesHelpScreen(
                 title = stringResource(R.string.rules_help_ranking_title),
                 body = stringResource(R.string.rules_help_ranking_body),
             )
+            RankingHelpDetails()
 
             DominoBannerAd(
                 placement = AdvertisingPlacement.RULES_HELP,
@@ -86,6 +87,44 @@ fun RulesHelpScreen(
 
 
         }
+    }
+}
+
+@Composable
+private fun RankingHelpDetails() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(
+            MaterialTheme.dominoSpacing.sm,
+        ),
+    ) {
+        Text(
+            text = stringResource(R.string.ranking_v3_order_help),
+            color = DominoSemanticColors.brandText,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+        )
+
+        listOf(
+            R.string.ranking_help_sv,
+            R.string.ranking_help_sp,
+            R.string.ranking_help_pf,
+            R.string.ranking_help_ast,
+            R.string.ranking_help_tq,
+            R.string.ranking_help_et,
+        ).forEach { resourceId ->
+            Text(
+                text = stringResource(resourceId),
+                color = DominoSemanticColors.brandSupportingText,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        Text(
+            text = stringResource(R.string.ranking_help_order_note),
+            color = DominoSemanticColors.brandSupportingText,
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
 

@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -78,15 +76,7 @@ internal const val RankingTitleTag = "ranking_title"
 internal const val RankingCycleSelectorTag = "ranking_cycle_selector"
 internal const val RankingScopeSelectorTag = "ranking_scope_selector"
 internal const val RankingPublicationPendingTag = "ranking_publication_pending"
-internal const val RankingExplanationButtonTag = "ranking_explanation_button"
-internal const val RankingExplanationDialogTag = "ranking_explanation_dialog"
 
-internal object RankingExplanationDialogColors {
-    val container = DominoSemanticColors.dialogSurface
-    val title = DominoSemanticColors.dialogTitle
-    val body = DominoSemanticColors.dialogBody
-    val action = DominoSemanticColors.dialogDismissAction
-}
 
 @Composable
 fun OnlinePublicRankingRoute(
@@ -459,9 +449,6 @@ internal fun OnlinePublicRankingScreen(
             }
 
             latestResponse?.let { response ->
-                RankingOverviewCompact(
-                    response = response,
-                )
 
                 val viewer = response.viewer
                 val viewerAlreadyVisible = viewer?.let { currentViewer ->
@@ -806,150 +793,6 @@ private fun ClosedRankingCycleSelector(
             }
         }
     }
-}
-@Composable
-private fun RankingOverviewCompact(
-    response: PublicRankingResponseDto,
-) {
-    var showExplanation by remember(
-        response.cycleId,
-        response.rankingRuleVersion,
-    ) {
-        mutableStateOf(false)
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
-    ) {
-        TextButton(
-            modifier = Modifier.testTag(RankingExplanationButtonTag),
-            onClick = {
-                showExplanation = true
-            },
-        ) {
-            Text(
-                text = stringResource(
-                    R.string.ranking_help_action,
-                ),
-                color = DominoSemanticColors.brandText,
-            )
-        }
-    }
-
-    if (showExplanation) {
-        RankingExplanationDialog(
-            response = response,
-            onDismiss = {
-                showExplanation = false
-            },
-        )
-    }
-}
-
-@Composable
-private fun RankingExplanationDialog(
-    response: PublicRankingResponseDto,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        modifier = Modifier.testTag(
-            RankingExplanationDialogTag,
-        ),
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = stringResource(
-                    R.string.ranking_help_title,
-                ),
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(
-                    rememberScrollState(),
-                ),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                when (response.rankingRuleVersion) {
-                    RANKING_RULE_VERSION_V2 -> {
-                        Text(
-                            text = stringResource(
-                                R.string.ranking_v2_order_help,
-                            ),
-                            fontWeight = FontWeight.Bold,
-                        )
-                        RankingExplanationMetricLines(
-                            timeMetricRes =
-                                R.string.ranking_help_ja,
-                        )
-                    }
-
-                    RANKING_RULE_VERSION_V3 -> {
-                        Text(
-                            text = stringResource(
-                                R.string.ranking_v3_order_help,
-                            ),
-                            fontWeight = FontWeight.Bold,
-                        )
-                        RankingExplanationMetricLines(
-                            timeMetricRes =
-                                R.string.ranking_help_et,
-                        )
-                    }
-
-                    else -> {
-                        Text(
-                            text = stringResource(
-                                R.string.ranking_help_v1,
-                            ),
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onDismiss,
-            ) {
-                Text(
-                    text = stringResource(
-                        R.string.ranking_help_close,
-                    ),
-                    color = RankingExplanationDialogColors.action,
-                )
-            }
-        },
-        containerColor = RankingExplanationDialogColors.container,
-        titleContentColor = RankingExplanationDialogColors.title,
-        textContentColor = RankingExplanationDialogColors.body,
-    )
-}
-
-@Composable
-private fun RankingExplanationMetricLines(
-    timeMetricRes: Int,
-) {
-    listOf(
-        R.string.ranking_help_sv,
-        R.string.ranking_help_sp,
-        R.string.ranking_help_pf,
-        R.string.ranking_help_ast,
-        R.string.ranking_help_tq,
-        timeMetricRes,
-    ).forEach { resourceId ->
-        Text(
-            text = stringResource(resourceId),
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
-
-    Text(
-        text = stringResource(
-            R.string.ranking_help_order_note,
-        ),
-        style = MaterialTheme.typography.bodySmall,
-    )
 }
 @Composable
 private fun RankingEntries(

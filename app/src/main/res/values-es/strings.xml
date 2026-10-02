@@ -405,7 +405,7 @@ Si los 2 jugadores empatados con el menor conteo son compañeros, su pareja gana
     <string name="rules_help_online_title">Juego en línea</string>
     <string name="rules_help_online_body">Las partidas públicas clasificatorias requieren una cuenta conectada. Las salas privadas y partidas locales siguen las opciones mostradas en el menú de juego y no entran en la clasificación pública.</string>
     <string name="rules_help_ranking_title">Clasificación</string>
-    <string name="rules_help_ranking_body">La clasificación pública muestra ciclos actuales y cerrados. Las posiciones y los detalles de la pantalla se actualizan conforme el servicio registra resultados elegibles.</string>
+    <string name="rules_help_ranking_body">La clasificaci&#243;n p&#250;blica muestra ciclos actuales y cerrados. La regla actual usa los criterios siguientes en el orden indicado. Los ciclos hist&#243;ricos conservan la regla vigente cuando se cerraron.</string>
     <string name="terms_title">Términos de Uso</string>
     <string name="terms_intro">Al usar Dominó PE, aceptas estas condiciones de uso y las políticas aplicables presentadas en la aplicación.</string>
     <string name="terms_use_title">1. Uso de la aplicación</string>

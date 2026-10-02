@@ -419,7 +419,7 @@ If the 2 players tied for the lowest count are partners, their team wins normall
     <string name="rules_help_online_title">Online play</string>
     <string name="rules_help_online_body">Public ranked matches require a connected account. Private rooms and local matches follow the options shown in the play menu and do not enter the public leaderboard.</string>
     <string name="rules_help_ranking_title">Leaderboard</string>
-    <string name="rules_help_ranking_body">The public leaderboard shows current and closed cycles. Standings and details shown on screen are updated as eligible results are recorded by the service.</string>
+    <string name="rules_help_ranking_body">The public leaderboard shows current and closed cycles. The current rule uses the criteria below in the order shown. Historical cycles keep the rule that was in effect when they closed.</string>
     <string name="terms_title">Terms of Use</string>
     <string name="terms_intro">By using Dominó PE, you agree to these conditions of use and to the applicable policies presented in the app.</string>
     <string name="terms_use_title">1. Use of the app</string>
