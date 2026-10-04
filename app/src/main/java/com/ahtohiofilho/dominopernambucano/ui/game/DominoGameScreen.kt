@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoParticipantType
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
@@ -62,6 +63,10 @@ fun DominoGameScreen(
         mutableStateOf<LocalDraggedPieceState?>(null)
     }
 
+    var tableMagnified by remember {
+        mutableStateOf(false)
+    }
+
     var dropTargetsInWindow by remember {
         mutableStateOf<List<DominoDropTargetInWindow>>(emptyList())
     }
@@ -102,6 +107,11 @@ fun DominoGameScreen(
     val isMatchFinishedPhase = uiState.phase == DominoMatchPhase.MatchFinished
 
     val shouldRevealRoundContext = isRoundSummaryPhase || isMatchFinishedPhase
+    val tableMagnificationEnabled = shouldAllowTableMagnification(
+        phase = uiState.phase,
+        boardHasPieces = !gameState.boardChain.isEmpty(),
+        dragActive = draggedPieceState != null,
+    )
 
     fun traceUi(
         type: OnlineTraceType,
@@ -127,6 +137,12 @@ fun DominoGameScreen(
     LaunchedEffect(uiState.phase) {
         if (uiState.phase !is DominoMatchPhase.PresentingMove) {
             localMoveSourcePositionInWindow = null
+        }
+    }
+
+    LaunchedEffect(tableMagnificationEnabled) {
+        if (!tableMagnificationEnabled) {
+            tableMagnified = false
         }
     }
 
@@ -424,6 +440,17 @@ fun DominoGameScreen(
                         bounds = bounds,
                     )
                 },
+                magnificationEnabled = tableMagnificationEnabled,
+                onMagnificationChanged = { requested ->
+                    tableMagnified =
+                        requested &&
+                        shouldAllowTableMagnification(
+                            phase = uiState.phase,
+                            boardHasPieces =
+                                !gameState.boardChain.isEmpty(),
+                            dragActive = draggedPieceState != null,
+                        )
+                },
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -463,6 +490,8 @@ fun DominoGameScreen(
                         localHandBoundsInWindow = bounds
                     },
                     onPieceDragStart = { piece, positionInWindow ->
+                        tableMagnified = false
+
                         if (uiState.phase != DominoMatchPhase.WaitingForLocalMove) {
                             traceUi(
                                 OnlineTraceType.UI_MOVE_INTENT_REJECTED,
@@ -583,8 +612,39 @@ fun DominoGameScreen(
 
         DominoTurnCountdownHud(
             uiState = uiState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(101f),
         )
+
+        if (tableMagnified && tableMagnificationEnabled) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(100f)
+                    .background(
+                        color =
+                            DominoSemanticColors.appBackground.copy(
+                                alpha = 0.98f,
+                            ),
+                    )
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                DominoTableArea(
+                    gameState = gameState,
+                    localPlayableMoves = emptyList(),
+                    showDropTargets = false,
+                    highlightedDropSide = null,
+                    animatedPlayableMove = null,
+                    animatedMovePresentationKey = null,
+                    onDropTargetsChanged = {},
+                    onAnimatedMoveTargetChanged = {},
+                    magnifiedVisuals = true,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
 
         DraggedPieceOverlay(
             draggedPieceState = if (

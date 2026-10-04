@@ -50,6 +50,7 @@ fun DominoBoard(
     highlightedDropSide: BoardSide? = null,
     animatedPlayableMove: PlayableMove? = null,
     animatedMovePresentationKey: DominoMovePresentationKey? = null,
+    magnifiedVisuals: Boolean = false,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit = {},
     onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow) -> Unit = {},
 ) {
@@ -66,10 +67,12 @@ fun DominoBoard(
         val responsiveMetrics = remember(
             maxWidth,
             maxHeight,
+            magnifiedVisuals,
         ) {
             buildResponsiveBoardVisualMetrics(
                 maxWidth = maxWidth,
                 maxHeight = maxHeight,
+                magnifiedVisuals = magnifiedVisuals,
             )
         }
 
@@ -293,6 +296,7 @@ fun DominoBoard(
 private fun buildResponsiveBoardVisualMetrics(
     maxWidth: Dp,
     maxHeight: Dp,
+    magnifiedVisuals: Boolean,
 ): ResponsiveBoardVisualMetrics {
     val shortSide = minOf(
         maxWidth.value,
@@ -307,24 +311,53 @@ private fun buildResponsiveBoardVisualMetrics(
     val compactBoard = shortSide < 230f
     val narrowBoard = maxWidth.value < 300f
 
-    val pieceWidthFactor = when {
-        compactBoard -> DominoGameVisualTokens.ResponsiveTablePieceWidthFactorCompact
-        narrowBoard -> DominoGameVisualTokens.ResponsiveTablePieceWidthFactorNarrow
-        else -> DominoGameVisualTokens.ResponsiveTablePieceWidthFactorDefault
+    val pieceWidthFactor = if (magnifiedVisuals) {
+        DominoGameVisualTokens.MagnifiedTablePieceWidthFactor
+    } else {
+        when {
+            compactBoard ->
+                DominoGameVisualTokens.ResponsiveTablePieceWidthFactorCompact
+            narrowBoard ->
+                DominoGameVisualTokens.ResponsiveTablePieceWidthFactorNarrow
+            else ->
+                DominoGameVisualTokens.ResponsiveTablePieceWidthFactorDefault
+        }
+    }
+
+    val pieceWidthMin = if (magnifiedVisuals) {
+        DominoGameVisualTokens.MagnifiedTablePieceWidthMin
+    } else {
+        DominoGameVisualTokens.ResponsiveTablePieceWidthMin
+    }
+    val pieceWidthMax = if (magnifiedVisuals) {
+        DominoGameVisualTokens.MagnifiedTablePieceWidthMax
+    } else {
+        DominoGameVisualTokens.ResponsiveTablePieceWidthMax
     }
 
     val pieceWidthValue = (shortSide * pieceWidthFactor)
         .coerceIn(
-            minimumValue = DominoGameVisualTokens.ResponsiveTablePieceWidthMin,
-            maximumValue = DominoGameVisualTokens.ResponsiveTablePieceWidthMax,
+            minimumValue = pieceWidthMin,
+            maximumValue = pieceWidthMax,
         )
+
+    val pieceHeightMin = if (magnifiedVisuals) {
+        DominoGameVisualTokens.MagnifiedTablePieceHeightMin
+    } else {
+        DominoGameVisualTokens.ResponsiveTablePieceHeightMin
+    }
+    val pieceHeightMax = if (magnifiedVisuals) {
+        DominoGameVisualTokens.MagnifiedTablePieceHeightMax
+    } else {
+        DominoGameVisualTokens.ResponsiveTablePieceHeightMax
+    }
 
     val pieceHeightValue = (
             pieceWidthValue * DominoGameVisualTokens.TablePieceHeightRatio
             )
         .coerceIn(
-            minimumValue = DominoGameVisualTokens.ResponsiveTablePieceHeightMin,
-            maximumValue = DominoGameVisualTokens.ResponsiveTablePieceHeightMax,
+            minimumValue = pieceHeightMin,
+            maximumValue = pieceHeightMax,
         )
 
     val safeMarginValue = (

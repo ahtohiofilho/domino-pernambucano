@@ -968,6 +968,10 @@ internal fun Route.onlineServerRoutes(
                     store.getPublicDisplayNames(
                         accountIds = pageAccountIds,
                     ),
+                publicTableNames =
+                    store.getPublicTableNames(
+                        accountIds = pageAccountIds,
+                    ),
                 totalEligiblePlayers =
                     historicalSnapshot
                         ?.totalEligiblePlayers

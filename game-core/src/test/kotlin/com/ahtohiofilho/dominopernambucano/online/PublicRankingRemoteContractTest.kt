@@ -68,6 +68,8 @@ class PublicRankingRemoteContractTest {
                 PublicRankingEntryDto(
                     rank = 1,
                     competitorId = "competitor-abc",
+                    displayName = "Maria Isabel",
+                    tableName = "ISA",
                     victories = 1,
                     games = 1,
                     scoreNumerator = 2,
@@ -96,7 +98,12 @@ class PublicRankingRemoteContractTest {
         assertFalse(decoded.awardsEligible)
         assertEquals(1, decoded.awardRuleVersion)
         assertEquals(0, decoded.awardedRankingSize)
-        assertNull(decoded.entries.single().displayName)
+        assertEquals(
+            "Maria Isabel",
+            decoded.entries.single().displayName,
+        )
+        assertEquals("ISA", decoded.entries.single().tableName)
+        assertTrue(encoded.contains("\"tableName\":\"ISA\""))
         assertNull(decoded.entries.single().awardTier)
         assertTrue(encoded.contains("awardRuleVersion"))
         assertTrue(encoded.contains("awardedRankingSize"))

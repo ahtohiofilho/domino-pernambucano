@@ -607,6 +607,9 @@ private fun PublicRankingEntryDto.requireValid(
 ) {
     require(rank > 0)
     require(competitorId.isNotBlank())
+    tableName?.let { value ->
+        require(isValidOnlineAccountTableCode(value))
+    }
     require(victories >= 0L)
     require(games > 0L)
     require(victories <= games)

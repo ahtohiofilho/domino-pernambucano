@@ -49,6 +49,36 @@ class TableIdentityIntentGateTest {
     }
 
     @Test
+    fun connected_valid_code_outranks_stale_offline_record_even_before_local_confirmation() {
+        val result = resolveTableIdentityGate(
+            accountConnected = true,
+            connectedCodeConfirmedByPlayer = false,
+            connectedTableCode = "isa",
+            storedOfflineTableCode = "jog",
+            displayName = "Isabel",
+        )
+
+        assertTrue(result.requiresConfirmation)
+        assertNull(result.confirmedCode)
+        assertEquals("ISA", result.suggestedCode)
+    }
+
+    @Test
+    fun connected_invalid_code_can_use_offline_value_only_as_a_suggestion() {
+        val result = resolveTableIdentityGate(
+            accountConnected = true,
+            connectedCodeConfirmedByPlayer = false,
+            connectedTableCode = "JOGADOR",
+            storedOfflineTableCode = "isa",
+            displayName = "Isabel",
+        )
+
+        assertTrue(result.requiresConfirmation)
+        assertNull(result.confirmedCode)
+        assertEquals("ISA", result.suggestedCode)
+    }
+
+    @Test
     fun valid_offline_code_is_an_existing_record() {
         val result = resolveTableIdentityGate(
             accountConnected = false,

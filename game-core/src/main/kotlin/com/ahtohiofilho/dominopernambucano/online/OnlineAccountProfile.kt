@@ -51,9 +51,6 @@ fun normalizeOnlinePublicDisplayName(
         .split(onlinePublicNameWhitespaceRegex)
         .filter { token -> token.isNotBlank() }
 
-    require(tokens.size >= 2) {
-        "Informe nome e sobrenome."
-    }
     require(
         tokens.all { token ->
             token.matches(onlinePublicNameTokenRegex)

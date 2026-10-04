@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.google.services)
 }
 
 fun String.toBuildConfigString(): String {
@@ -257,6 +258,9 @@ dependencies {
     implementation(libs.google.mobile.ads.nextgen)
     implementation(libs.google.user.messaging.platform)
     implementation(libs.kotlinx.serialization.json)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
 
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.android)

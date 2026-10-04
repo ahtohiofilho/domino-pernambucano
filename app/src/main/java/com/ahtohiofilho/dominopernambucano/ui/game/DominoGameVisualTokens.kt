@@ -81,6 +81,12 @@ object DominoGameVisualTokens {
     const val ResponsiveTablePieceHeightMin = 42f
     const val ResponsiveTablePieceHeightMax = 64f
 
+    const val MagnifiedTablePieceWidthMin = 32f
+    const val MagnifiedTablePieceWidthMax = 48f
+    const val MagnifiedTablePieceHeightMin = 59f
+    const val MagnifiedTablePieceHeightMax = 88f
+    const val MagnifiedTablePieceWidthFactor = 0.118f
+
     const val ResponsiveTableSafeMarginMin = 2f
     const val ResponsiveTableSafeMarginMax = 8f
 

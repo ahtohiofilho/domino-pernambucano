@@ -117,7 +117,7 @@ class OnlineAccountProfileUiCoordinatorTest {
                 "JOG",
                 outcome.synchronizedIdentity?.tableName,
             )
-            assertFalse(state.saveEnabled)
+            assertTrue(state.saveEnabled)
         }
 
     @Test

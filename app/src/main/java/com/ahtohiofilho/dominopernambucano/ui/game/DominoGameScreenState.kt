@@ -5,6 +5,7 @@ import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoBoardChain
 import com.ahtohiofilho.dominopernambucano.domain.DominoPiece
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchPhase
 
 val LOCAL_HAND_PIECE_WIDTH = DominoGameVisualTokens.LocalHandPieceWidth
 val LOCAL_HAND_PIECE_HEIGHT = DominoGameVisualTokens.LocalHandPieceHeight
@@ -50,3 +51,15 @@ data class LocalDraggedPieceState(
     val highlightedSide: BoardSide?,
     val isOverLocalHand: Boolean,
 )
+
+internal fun shouldAllowTableMagnification(
+    phase: DominoMatchPhase,
+    boardHasPieces: Boolean,
+    dragActive: Boolean,
+): Boolean {
+    @Suppress("UNUSED_VARIABLE")
+    val presentationPhaseDoesNotGateMagnification = phase
+
+    return boardHasPieces &&
+        !dragActive
+}

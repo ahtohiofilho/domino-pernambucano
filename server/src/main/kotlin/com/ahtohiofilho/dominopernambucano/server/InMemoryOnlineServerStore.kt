@@ -962,6 +962,37 @@ class InMemoryOnlineServerStore internal constructor(
         }
     }
 
+    override fun getPublicTableNames(
+        accountIds: Set<String>,
+    ): Map<String, String> {
+        return synchronized(lock) {
+            if (accountIds.isEmpty()) {
+                return@synchronized emptyMap()
+            }
+
+            val normalizedAccountIds = accountIds.map { accountId ->
+                requireStoreIdentifier(
+                    value = accountId,
+                    fieldName = "accountId",
+                )
+            }.toSet()
+
+            accountsByPlayerId.values
+                .asSequence()
+                .filter { account ->
+                    account.accountId in normalizedAccountIds
+                }
+                .mapNotNull { account ->
+                    account.tableName
+                        ?.takeIf(::isValidOnlineAccountTableCode)
+                        ?.let { tableName ->
+                            account.accountId to tableName
+                        }
+                }
+                .toMap()
+        }
+    }
+
     private fun resolveRankedTableCodeOrNull(
         identity: RankedMatchPlayerIdentity,
     ): String? {

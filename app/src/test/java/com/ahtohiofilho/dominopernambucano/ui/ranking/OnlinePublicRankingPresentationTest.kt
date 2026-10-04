@@ -241,22 +241,36 @@ class OnlinePublicRankingPresentationTest {
     }
 
     @Test
-    fun avatar_monogram_is_derived_locally_from_public_name() {
-        val named = entry(
+    fun avatar_monogram_prefers_chosen_table_code_with_legacy_fallback() {
+        val chosen = entry(
             rank = 1,
             competitorId = "competitor-secret",
-            displayName = "  Antonio Filho  ",
+            displayName = "Maria Isabel",
+            tableName = "ISA",
+        )
+        val legacy = entry(
+            rank = 2,
+            competitorId = "competitor-legacy",
+            displayName = "Maria Isabel",
+            tableName = null,
         )
         val fallback = entry(
             rank = 7,
             competitorId = "competitor-secret",
             displayName = null,
+            tableName = null,
         )
 
         assertEquals(
-            "ANT",
-            named.publicAvatarMonogram(
+            "ISA",
+            chosen.publicAvatarMonogram(
                 fallback = "Player 1",
+            ),
+        )
+        assertEquals(
+            "MAR",
+            legacy.publicAvatarMonogram(
+                fallback = "Player 2",
             ),
         )
         assertEquals(
@@ -397,11 +411,13 @@ class OnlinePublicRankingPresentationTest {
         rank: Int,
         competitorId: String,
         displayName: String?,
+        tableName: String? = null,
     ): PublicRankingEntryDto {
         return PublicRankingEntryDto(
             rank = rank,
             competitorId = competitorId,
             displayName = displayName,
+            tableName = tableName,
             victories = 1,
             games = 1,
             scoreNumerator = 2,

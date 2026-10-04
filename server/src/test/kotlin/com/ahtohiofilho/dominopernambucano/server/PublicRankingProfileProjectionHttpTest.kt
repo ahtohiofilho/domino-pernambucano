@@ -122,10 +122,22 @@ class PublicRankingProfileProjectionHttpTest {
                     .displayName,
             )
             assertEquals(
+                "AFI",
+                ranking.entries
+                    .first { entry -> entry.rank == 1 }
+                    .tableName,
+            )
+            assertEquals(
                 "Carlos Silva",
                 ranking.entries
                     .first { entry -> entry.rank == 2 }
                     .displayName,
+            )
+            assertEquals(
+                null,
+                ranking.entries
+                    .first { entry -> entry.rank == 2 }
+                    .tableName,
             )
             assertEquals(
                 listOf(null, null),

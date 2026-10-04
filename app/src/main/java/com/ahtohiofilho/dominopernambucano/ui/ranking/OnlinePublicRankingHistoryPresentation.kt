@@ -7,6 +7,8 @@ import com.ahtohiofilho.dominopernambucano.online.PublicRankingCycleSummaryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingEntryDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingPublicationStatusDto
 import com.ahtohiofilho.dominopernambucano.online.PublicRankingResponseDto
+import com.ahtohiofilho.dominopernambucano.online.isValidOnlineAccountTableCode
+import com.ahtohiofilho.dominopernambucano.online.normalizeOnlineAccountTableCodeInput
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -146,6 +148,14 @@ internal fun PublicRankingEntryDto.publicDisplayName(
 internal fun PublicRankingEntryDto.publicAvatarMonogram(
     fallback: String,
 ): String {
+    val preferredTableCode = tableName
+        ?.takeIf(::isValidOnlineAccountTableCode)
+        ?.let(::normalizeOnlineAccountTableCodeInput)
+
+    if (preferredTableCode != null) {
+        return preferredTableCode
+    }
+
     val compact = publicDisplayName(fallback)
         .filter { character ->
             character.isLetterOrDigit()

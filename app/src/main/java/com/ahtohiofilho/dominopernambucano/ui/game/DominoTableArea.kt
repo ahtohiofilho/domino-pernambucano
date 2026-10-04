@@ -3,6 +3,7 @@ package com.ahtohiofilho.dominopernambucano.ui.game
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -13,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.pointerInput
 import com.ahtohiofilho.dominopernambucano.domain.BoardSide
 import com.ahtohiofilho.dominopernambucano.domain.DominoGameState
 import com.ahtohiofilho.dominopernambucano.domain.PlayableMove
@@ -28,6 +30,9 @@ fun DominoTableArea(
     animatedMovePresentationKey: DominoMovePresentationKey?,
     onDropTargetsChanged: (List<DominoDropTargetInWindow>) -> Unit,
     onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow) -> Unit,
+    magnificationEnabled: Boolean = false,
+    onMagnificationChanged: (Boolean) -> Unit = {},
+    magnifiedVisuals: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val shouldShowBoard =
@@ -38,6 +43,24 @@ fun DominoTableArea(
     val tableShape = RoundedCornerShape(
         DominoGameVisualTokens.TableAreaCornerRadius,
     )
+
+    val holdToMagnifyModifier = if (magnificationEnabled) {
+        Modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    onMagnificationChanged(true)
+
+                    try {
+                        tryAwaitRelease()
+                    } finally {
+                        onMagnificationChanged(false)
+                    }
+                },
+            )
+        }
+    } else {
+        Modifier
+    }
 
     Box(
         modifier = modifier
@@ -63,6 +86,7 @@ fun DominoTableArea(
                 ),
                 shape = tableShape,
             )
+            .then(holdToMagnifyModifier)
             .padding(DominoGameVisualTokens.TableAreaContentPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -74,6 +98,7 @@ fun DominoTableArea(
                 highlightedDropSide = highlightedDropSide,
                 animatedPlayableMove = animatedPlayableMove,
                 animatedMovePresentationKey = animatedMovePresentationKey,
+                magnifiedVisuals = magnifiedVisuals,
                 onDropTargetsChanged = onDropTargetsChanged,
                 onAnimatedMoveTargetChanged = onAnimatedMoveTargetChanged,
                 modifier = Modifier.fillMaxSize(),

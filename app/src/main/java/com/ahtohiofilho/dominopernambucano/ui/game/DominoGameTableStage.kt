@@ -42,6 +42,8 @@ fun DominoGameTableStage(
     onTableBoundsChanged: (Rect?) -> Unit = {},
     onAnimatedMoveTargetChanged: (DominoMoveTargetInWindow) -> Unit,
     onPlayerSeatBoundsChanged: (Int, Rect?) -> Unit,
+    magnificationEnabled: Boolean = false,
+    onMagnificationChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val seatLayout = calculateDominoRelativeSeatLayout(
@@ -146,6 +148,8 @@ fun DominoGameTableStage(
                     animatedMovePresentationKey = animatedMovePresentationKey,
                     onDropTargetsChanged = onDropTargetsChanged,
                     onAnimatedMoveTargetChanged = onAnimatedMoveTargetChanged,
+                    magnificationEnabled = magnificationEnabled,
+                    onMagnificationChanged = onMagnificationChanged,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()

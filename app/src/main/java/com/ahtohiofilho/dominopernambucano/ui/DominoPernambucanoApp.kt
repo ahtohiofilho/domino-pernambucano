@@ -2467,6 +2467,13 @@ fun DominoPernambucanoApp(
                                 onlinePlayerIdentity =
                                     synchronizedIdentity
                             }
+
+                            if (outcome.state.saveSucceeded) {
+                                syncConfirmedTableIdentityLocally(
+                                    tableCode =
+                                        outcome.state.tableName,
+                                )
+                            }
                         }
                     }
                 },

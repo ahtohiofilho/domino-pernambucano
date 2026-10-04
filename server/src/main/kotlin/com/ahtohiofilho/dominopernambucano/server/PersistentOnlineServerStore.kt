@@ -178,6 +178,14 @@ class PersistentOnlineServerStore private constructor(
         )
     }
 
+    override fun getPublicTableNames(
+        accountIds: Set<String>,
+    ): Map<String, String> = read {
+        delegate.getPublicTableNames(
+            accountIds = accountIds,
+        )
+    }
+
     override fun getRankedCycleLadder(
         kind: RankingCycleKind,
         completedAtEpochMillis: Long,

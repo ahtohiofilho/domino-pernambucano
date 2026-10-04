@@ -16,6 +16,7 @@ import com.ahtohiofilho.dominopernambucano.online.OnlineMatchSnapshotDto
 import com.ahtohiofilho.dominopernambucano.online.OnlinePlayerActionDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomOperationResultDto
 import com.ahtohiofilho.dominopernambucano.online.OnlineRoomSnapshotDto
+import com.ahtohiofilho.dominopernambucano.online.isValidOnlineAccountTableCode
 
 enum class OnlineServerStoreReadiness {
     READY,
@@ -164,6 +165,25 @@ interface OnlineServerStore : AutoCloseable {
     fun getPublicDisplayNames(
         accountIds: Set<String>,
     ): Map<String, String>
+
+    /**
+     * Public ranking table-code projection.
+     *
+     * The default preserves compatibility for auxiliary stores. Authoritative
+     * stores override it with one batch read.
+     */
+    fun getPublicTableNames(
+        accountIds: Set<String>,
+    ): Map<String, String> {
+        return accountIds.mapNotNull { accountId ->
+            getAccountProfile(accountId)
+                ?.tableName
+                ?.takeIf(::isValidOnlineAccountTableCode)
+                ?.let { tableName ->
+                    accountId to tableName
+                }
+        }.toMap()
+    }
 
     /**
      * Derived competitive ladder for one canonical period.

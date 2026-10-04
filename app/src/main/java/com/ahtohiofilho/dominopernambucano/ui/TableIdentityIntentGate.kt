@@ -43,10 +43,18 @@ internal fun resolveTableIdentityGate(
         }
 
     val offlineRecord =
-        if (isValidOnlineAccountTableCode(storedOfflineTableCode)) {
+        if (
+            !accountConnected &&
+            isValidOnlineAccountTableCode(storedOfflineTableCode)
+        ) {
             normalizedOffline
         } else {
             null
+        }
+
+    val offlineSuggestion =
+        normalizedOffline.takeIf {
+            isValidOnlineAccountTableCode(storedOfflineTableCode)
         }
 
     val confirmed = connectedRecord ?: offlineRecord
@@ -56,6 +64,7 @@ internal fun resolveTableIdentityGate(
             .takeIf {
                 isValidOnlineAccountTableCode(connectedTableCode)
             }
+        ?: offlineSuggestion
         ?: suggestOnlineAccountTableCode(displayName)
 
     return TableIdentityGateResolution(

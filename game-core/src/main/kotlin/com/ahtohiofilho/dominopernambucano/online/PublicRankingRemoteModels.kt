@@ -32,6 +32,7 @@ data class PublicRankingEntryDto(
     val rank: Int,
     val competitorId: String,
     val displayName: String? = null,
+    val tableName: String? = null,
     val victories: Long,
     val games: Long,
     val scoreNumerator: Long,

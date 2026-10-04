@@ -6,6 +6,9 @@ internal const val PRODUCTION_RANKED_ACCESS_MODE_ENVIRONMENT_VARIABLE =
 internal const val PRODUCTION_REQUIRED_CLIENT_VERSION_CODE_ENVIRONMENT_VARIABLE =
     "DOMINO_PRODUCTION_REQUIRED_CLIENT_VERSION_CODE"
 
+internal const val PRODUCTION_ALLOWED_CLIENT_VERSION_CODES_ENVIRONMENT_VARIABLE =
+    "DOMINO_PRODUCTION_ALLOWED_CLIENT_VERSION_CODES"
+
 internal enum class ProductionRankedAccessMode {
     UNRESTRICTED,
     CLOSED,
@@ -21,6 +24,7 @@ internal enum class ProductionRankedClientDecision {
 internal class ProductionRankedClientGate private constructor(
     private val mode: ProductionRankedAccessMode,
     private val requiredClientVersionCode: Int?,
+    private val allowedClientVersionCodes: Set<Int>?,
 ) {
     fun evaluate(
         suppliedClientVersionCode: String?,
@@ -42,9 +46,15 @@ internal class ProductionRankedClientGate private constructor(
                             ?.trim()
                             ?.toIntOrNull()
 
+                    val explicitlyAllowedVersions =
+                        allowedClientVersionCodes
+                            ?: requiredClientVersionCode
+                                ?.let(::setOf)
+                            ?: emptySet()
+
                     if (
                         suppliedVersion != null &&
-                        suppliedVersion == requiredClientVersionCode
+                        suppliedVersion in explicitlyAllowedVersions
                     ) {
                         ProductionRankedClientDecision.ALLOWED
                     } else {
@@ -59,6 +69,7 @@ internal class ProductionRankedClientGate private constructor(
         val Unrestricted = ProductionRankedClientGate(
             mode = ProductionRankedAccessMode.UNRESTRICTED,
             requiredClientVersionCode = null,
+            allowedClientVersionCodes = null,
         )
 
         fun fromEnvironment(
@@ -82,28 +93,74 @@ internal class ProductionRankedClientGate private constructor(
                 "closed" -> ProductionRankedClientGate(
                     mode = ProductionRankedAccessMode.CLOSED,
                     requiredClientVersionCode = null,
+                    allowedClientVersionCodes = null,
                 )
 
                 "versioned" -> {
-                    val rawVersion = readEnvironmentVariable(
-                        PRODUCTION_REQUIRED_CLIENT_VERSION_CODE_ENVIRONMENT_VARIABLE,
+                    val rawAllowedVersions = readEnvironmentVariable(
+                        PRODUCTION_ALLOWED_CLIENT_VERSION_CODES_ENVIRONMENT_VARIABLE,
                     )
                         ?.trim()
                         ?.takeIf { value -> value.isNotBlank() }
-                        ?: throw IllegalStateException(
-                            "$PRODUCTION_REQUIRED_CLIENT_VERSION_CODE_ENVIRONMENT_VARIABLE " +
-                                "deve ser configurada no modo versioned.",
-                        )
 
-                    val versionCode = rawVersion.toIntOrNull()
-                    require(versionCode != null && versionCode > 0) {
-                        "$PRODUCTION_REQUIRED_CLIENT_VERSION_CODE_ENVIRONMENT_VARIABLE " +
-                            "deve ser um inteiro positivo."
+                    val allowedVersions = rawAllowedVersions?.let { raw ->
+                        raw.split(",")
+                            .map { token -> token.trim() }
+                            .also { tokens ->
+                                require(
+                                    tokens.isNotEmpty() &&
+                                        tokens.none(String::isBlank)
+                                ) {
+                                    "$PRODUCTION_ALLOWED_CLIENT_VERSION_CODES_ENVIRONMENT_VARIABLE " +
+                                        "deve conter inteiros positivos separados por virgula."
+                                }
+                            }
+                            .map { token ->
+                                token.toIntOrNull()
+                                    ?.takeIf { value -> value > 0 }
+                                    ?: throw IllegalArgumentException(
+                                        "$PRODUCTION_ALLOWED_CLIENT_VERSION_CODES_ENVIRONMENT_VARIABLE " +
+                                            "deve conter apenas inteiros positivos.",
+                                    )
+                            }
+                            .toSet()
+                            .also { values ->
+                                require(values.isNotEmpty()) {
+                                    "$PRODUCTION_ALLOWED_CLIENT_VERSION_CODES_ENVIRONMENT_VARIABLE " +
+                                        "nao pode ser vazia."
+                                }
+                            }
+                    }
+
+                    val rawVersion = if (allowedVersions == null) {
+                        readEnvironmentVariable(
+                            PRODUCTION_REQUIRED_CLIENT_VERSION_CODE_ENVIRONMENT_VARIABLE,
+                        )
+                            ?.trim()
+                            ?.takeIf { value -> value.isNotBlank() }
+                            ?: throw IllegalStateException(
+                                "$PRODUCTION_REQUIRED_CLIENT_VERSION_CODE_ENVIRONMENT_VARIABLE " +
+                                    "deve ser configurada no modo versioned quando " +
+                                    "$PRODUCTION_ALLOWED_CLIENT_VERSION_CODES_ENVIRONMENT_VARIABLE " +
+                                    "nao estiver definida.",
+                            )
+                    } else {
+                        null
+                    }
+
+                    val versionCode = rawVersion?.let { value ->
+                        value.toIntOrNull()
+                            ?.takeIf { parsed -> parsed > 0 }
+                            ?: throw IllegalArgumentException(
+                                "$PRODUCTION_REQUIRED_CLIENT_VERSION_CODE_ENVIRONMENT_VARIABLE " +
+                                    "deve ser um inteiro positivo.",
+                            )
                     }
 
                     ProductionRankedClientGate(
                         mode = ProductionRankedAccessMode.VERSIONED,
                         requiredClientVersionCode = versionCode,
+                        allowedClientVersionCodes = allowedVersions,
                     )
                 }
 
@@ -118,6 +175,7 @@ internal class ProductionRankedClientGate private constructor(
             ProductionRankedClientGate(
                 mode = ProductionRankedAccessMode.CLOSED,
                 requiredClientVersionCode = null,
+                allowedClientVersionCodes = null,
             )
 
         fun versionedForTest(
@@ -128,6 +186,7 @@ internal class ProductionRankedClientGate private constructor(
             return ProductionRankedClientGate(
                 mode = ProductionRankedAccessMode.VERSIONED,
                 requiredClientVersionCode = requiredClientVersionCode,
+                allowedClientVersionCodes = null,
             )
         }
     }

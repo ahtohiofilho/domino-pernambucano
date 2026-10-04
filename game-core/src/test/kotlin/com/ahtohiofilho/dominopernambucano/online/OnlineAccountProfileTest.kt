@@ -76,14 +76,15 @@ class OnlineAccountProfileTest {
     }
 
     @Test
-    fun public_name_requires_name_and_surname() {
-        assertThrows(IllegalArgumentException::class.java) {
-            createOnlineAccountProfile(
-                publicDisplayName = "Antônio",
-                tableName = "AFI",
-                updatedAtEpochMillis = 1_000L,
-            )
-        }
+    fun public_name_allows_a_single_valid_name() {
+        val profile = createOnlineAccountProfile(
+            publicDisplayName = "Alice",
+            tableName = "ALI",
+            updatedAtEpochMillis = 1_000L,
+        )
+
+        assertEquals("Alice", profile.publicDisplayName)
+        assertEquals("ALI", profile.tableName)
     }
 
     @Test

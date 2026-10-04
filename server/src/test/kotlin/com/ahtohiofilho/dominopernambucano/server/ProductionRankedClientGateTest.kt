@@ -76,6 +76,101 @@ class ProductionRankedClientGateTest {
     }
 
     @Test
+    fun versioned_mode_can_allow_exact_transitional_versions_32_and_33() {
+        val values = mapOf(
+            PRODUCTION_RANKED_ACCESS_MODE_ENVIRONMENT_VARIABLE to
+                "versioned",
+            PRODUCTION_REQUIRED_CLIENT_VERSION_CODE_ENVIRONMENT_VARIABLE to
+                "32",
+            PRODUCTION_ALLOWED_CLIENT_VERSION_CODES_ENVIRONMENT_VARIABLE to
+                "32,33",
+        )
+
+        val gate = ProductionRankedClientGate.fromEnvironment(
+            serverEnvironment = OnlineServerEnvironment.PRODUCTION,
+            readEnvironmentVariable = values::get,
+        )
+
+        assertEquals(
+            ProductionRankedClientDecision.UPDATE_REQUIRED,
+            gate.evaluate(
+                suppliedClientVersionCode = "31",
+                syntheticAccount = false,
+            ),
+        )
+        assertEquals(
+            ProductionRankedClientDecision.ALLOWED,
+            gate.evaluate(
+                suppliedClientVersionCode = "32",
+                syntheticAccount = false,
+            ),
+        )
+        assertEquals(
+            ProductionRankedClientDecision.ALLOWED,
+            gate.evaluate(
+                suppliedClientVersionCode = "33",
+                syntheticAccount = false,
+            ),
+        )
+        assertEquals(
+            ProductionRankedClientDecision.UPDATE_REQUIRED,
+            gate.evaluate(
+                suppliedClientVersionCode = "34",
+                syntheticAccount = false,
+            ),
+        )
+    }
+
+    @Test
+    fun transitional_allowlist_does_not_require_legacy_single_version_variable() {
+        val values = mapOf(
+            PRODUCTION_RANKED_ACCESS_MODE_ENVIRONMENT_VARIABLE to
+                "versioned",
+            PRODUCTION_ALLOWED_CLIENT_VERSION_CODES_ENVIRONMENT_VARIABLE to
+                "32, 33",
+        )
+
+        val gate = ProductionRankedClientGate.fromEnvironment(
+            serverEnvironment = OnlineServerEnvironment.PRODUCTION,
+            readEnvironmentVariable = values::get,
+        )
+
+        assertEquals(
+            ProductionRankedClientDecision.ALLOWED,
+            gate.evaluate(
+                suppliedClientVersionCode = "32",
+                syntheticAccount = false,
+            ),
+        )
+        assertEquals(
+            ProductionRankedClientDecision.ALLOWED,
+            gate.evaluate(
+                suppliedClientVersionCode = "33",
+                syntheticAccount = false,
+            ),
+        )
+    }
+
+    @Test
+    fun transitional_allowlist_rejects_invalid_values() {
+        val values = mapOf(
+            PRODUCTION_RANKED_ACCESS_MODE_ENVIRONMENT_VARIABLE to
+                "versioned",
+            PRODUCTION_ALLOWED_CLIENT_VERSION_CODES_ENVIRONMENT_VARIABLE to
+                "32,abc",
+        )
+
+        assertThrows(
+            IllegalArgumentException::class.java,
+        ) {
+            ProductionRankedClientGate.fromEnvironment(
+                serverEnvironment = OnlineServerEnvironment.PRODUCTION,
+                readEnvironmentVariable = values::get,
+            )
+        }
+    }
+
+    @Test
     fun versioned_mode_rejects_missing_required_version_configuration() {
         assertThrows(
             IllegalStateException::class.java,

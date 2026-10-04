@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "278769559847",
+    "project_id": "dominopernambucano-b2f41b97",
+    "storage_bucket": "dominopernambucano-b2f41b97.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:278769559847:android:491227e3b693ec5d2f6102",
+        "android_client_info": {
+          "package_name": "com.ahtohiofilho.dominopernambucano"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyASxqdZUKyzH0cB2XDEUG9eJuEZxN5BWhI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

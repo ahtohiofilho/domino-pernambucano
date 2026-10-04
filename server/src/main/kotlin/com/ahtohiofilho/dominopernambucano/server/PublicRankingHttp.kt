@@ -71,6 +71,7 @@ internal suspend fun ApplicationCall.respondPublicRanking(
     ladder: RankedCycleLadder,
     viewerAccountId: String?,
     publicDisplayNames: Map<String, String> = emptyMap(),
+    publicTableNames: Map<String, String> = emptyMap(),
     totalEligiblePlayers: Int = ladder.standings.size,
     retainedRankingSize: Int = ladder.standings.size,
     closedAtEpochMillis: Long? = null,
@@ -157,6 +158,8 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             standing.toPublicRankingEntry(
                 displayName =
                     publicDisplayNames[standing.accountId],
+                tableName =
+                    publicTableNames[standing.accountId],
                 awardTier =
                     awardDecision.tierFor(standing.rank),
             )
@@ -175,6 +178,8 @@ internal suspend fun ApplicationCall.respondPublicRanking(
             standing.toPublicRankingEntry(
                 displayName =
                     publicDisplayNames[standing.accountId],
+                tableName =
+                    publicTableNames[standing.accountId],
                 awardTier =
                     awardDecision.tierFor(standing.rank),
             )
@@ -298,12 +303,14 @@ private fun RankingPublicationStatus
 
 private fun RankedCycleStanding.toPublicRankingEntry(
     displayName: String?,
+    tableName: String?,
     awardTier: PublicRankingAwardTierDto?,
 ): PublicRankingEntryDto {
     return PublicRankingEntryDto(
         rank = rank,
         competitorId = createPublicCompetitorId(accountId),
         displayName = displayName,
+        tableName = tableName,
         victories = stats.victories,
         games = stats.games,
         scoreNumerator = Math.addExact(stats.victories, 1L),
