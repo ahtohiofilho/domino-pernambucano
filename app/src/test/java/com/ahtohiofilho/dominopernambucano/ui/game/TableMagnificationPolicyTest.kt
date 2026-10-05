@@ -48,4 +48,28 @@ class TableMagnificationPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun turn_countdown_is_elevated_only_while_magnified_table_is_visible() {
+        assertTrue(
+            shouldElevateTurnCountdownAboveOverlays(
+                tableMagnified = true,
+                magnificationEnabled = true,
+            ),
+        )
+
+        assertFalse(
+            shouldElevateTurnCountdownAboveOverlays(
+                tableMagnified = false,
+                magnificationEnabled = true,
+            ),
+        )
+
+        assertFalse(
+            shouldElevateTurnCountdownAboveOverlays(
+                tableMagnified = true,
+                magnificationEnabled = false,
+            ),
+        )
+    }
 }

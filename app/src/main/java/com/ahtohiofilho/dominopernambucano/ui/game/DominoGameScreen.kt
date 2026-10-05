@@ -614,7 +614,19 @@ fun DominoGameScreen(
             uiState = uiState,
             modifier = Modifier
                 .fillMaxSize()
-                .zIndex(101f),
+                .zIndex(
+                    if (
+                        shouldElevateTurnCountdownAboveOverlays(
+                            tableMagnified = tableMagnified,
+                            magnificationEnabled =
+                                tableMagnificationEnabled,
+                        )
+                    ) {
+                        101f
+                    } else {
+                        0f
+                    },
+                ),
         )
 
         if (tableMagnified && tableMagnificationEnabled) {

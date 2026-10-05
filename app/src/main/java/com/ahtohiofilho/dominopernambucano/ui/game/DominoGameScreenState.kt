@@ -63,3 +63,10 @@ internal fun shouldAllowTableMagnification(
     return boardHasPieces &&
         !dragActive
 }
+
+internal fun shouldElevateTurnCountdownAboveOverlays(
+    tableMagnified: Boolean,
+    magnificationEnabled: Boolean,
+): Boolean {
+    return tableMagnified && magnificationEnabled
+}
