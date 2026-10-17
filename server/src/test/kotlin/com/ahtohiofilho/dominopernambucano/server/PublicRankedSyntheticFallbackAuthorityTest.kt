@@ -15,7 +15,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
         val plan = plan(
             humanCount = 0,
             syntheticCount = 4,
-            nowEpochMillis = 120_000L,
+            nowEpochMillis = 115_000L,
         )
 
         assertNull(plan)
@@ -37,12 +37,12 @@ class PublicRankedSyntheticFallbackAuthorityTest {
     }
 
     @Test
-    fun synthetic_fallback_unlocks_one_seat_at_20_seconds() {
+    fun synthetic_fallback_unlocks_one_seat_at_15_seconds() {
         assertNull(
             plan(
                 humanCount = 3,
                 syntheticCount = 1,
-                nowEpochMillis = 19_999L,
+                nowEpochMillis = 14_999L,
             ),
         )
 
@@ -50,7 +50,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             plan(
                 humanCount = 3,
                 syntheticCount = 1,
-                nowEpochMillis = 20_000L,
+                nowEpochMillis = 15_000L,
             ),
         )
 
@@ -59,12 +59,12 @@ class PublicRankedSyntheticFallbackAuthorityTest {
     }
 
     @Test
-    fun synthetic_fallback_unlocks_two_seats_at_40_seconds() {
+    fun synthetic_fallback_unlocks_two_seats_at_30_seconds() {
         assertNull(
             plan(
                 humanCount = 2,
                 syntheticCount = 2,
-                nowEpochMillis = 39_999L,
+                nowEpochMillis = 29_999L,
             ),
         )
 
@@ -72,7 +72,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             plan(
                 humanCount = 2,
                 syntheticCount = 2,
-                nowEpochMillis = 40_000L,
+                nowEpochMillis = 30_000L,
             ),
         )
 
@@ -81,12 +81,12 @@ class PublicRankedSyntheticFallbackAuthorityTest {
     }
 
     @Test
-    fun synthetic_fallback_unlocks_three_seats_at_60_seconds() {
+    fun synthetic_fallback_unlocks_three_seats_at_45_seconds() {
         assertNull(
             plan(
                 humanCount = 1,
                 syntheticCount = 3,
-                nowEpochMillis = 59_999L,
+                nowEpochMillis = 44_999L,
             ),
         )
 
@@ -94,7 +94,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             plan(
                 humanCount = 1,
                 syntheticCount = 3,
-                nowEpochMillis = 60_000L,
+                nowEpochMillis = 45_000L,
             ),
         )
 
@@ -210,10 +210,10 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             humanQueued.participantCodes,
         )
 
-        now = 20_999L
+        now = 15_999L
         assertFalse(store.advanceAuthoritativeTime())
 
-        now = 21_000L
+        now = 16_000L
         assertTrue(store.advanceAuthoritativeTime())
         assertEquals(
             listOf("H01", "S01"),
@@ -222,10 +222,10 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             ).participantCodes,
         )
 
-        now = 40_999L
+        now = 30_999L
         assertFalse(store.advanceAuthoritativeTime())
 
-        now = 41_000L
+        now = 31_000L
         assertTrue(store.advanceAuthoritativeTime())
         assertEquals(
             listOf("H01", "S01", "S02"),
@@ -234,10 +234,10 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             ).participantCodes,
         )
 
-        now = 60_999L
+        now = 45_999L
         assertFalse(store.advanceAuthoritativeTime())
 
-        now = 61_000L
+        now = 46_000L
         assertTrue(store.advanceAuthoritativeTime())
 
         val matched = store.getPublicRankedQueueStatus(
@@ -335,7 +335,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             ).status,
         )
 
-        now = 21_000L
+        now = 16_000L
         assertTrue(store.advanceAuthoritativeTime())
         assertEquals(
             listOf("H01", "S05"),
@@ -344,7 +344,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             ).participantCodes,
         )
 
-        now = 41_000L
+        now = 31_000L
         assertTrue(store.advanceAuthoritativeTime())
         assertEquals(
             listOf("H01", "S02", "S05"),
@@ -353,7 +353,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             ).participantCodes,
         )
 
-        now = 61_000L
+        now = 46_000L
         assertTrue(store.advanceAuthoritativeTime())
 
         val matched = store.getPublicRankedQueueStatus(
@@ -452,7 +452,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             ).status,
         )
 
-        now = 21_000L
+        now = 16_000L
         assertTrue(store.advanceAuthoritativeTime())
         assertEquals(
             listOf("H01", "S01"),
@@ -486,7 +486,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             secondHumanQueued.participantCodes,
         )
 
-        now = 44_999L
+        now = 39_999L
         assertFalse(store.advanceAuthoritativeTime())
         assertEquals(
             PublicRankedQueueStatus.QUEUED,
@@ -495,7 +495,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             ).status,
         )
 
-        now = 45_000L
+        now = 40_000L
         assertTrue(store.advanceAuthoritativeTime())
 
         val matched = store.getPublicRankedQueueStatus(
@@ -572,10 +572,10 @@ class PublicRankedSyntheticFallbackAuthorityTest {
     )
 
     private fun fallbackPolicy() = OnlineServerStoreResourcePolicy(
-        publicRankedSyntheticFallbackInitialDelayMillis = 20_000L,
-        publicRankedSyntheticFallbackAdditionalSeatDelayMillis = 20_000L,
+        publicRankedSyntheticFallbackInitialDelayMillis = 15_000L,
+        publicRankedSyntheticFallbackAdditionalSeatDelayMillis = 15_000L,
         publicRankedExactCohortCooldownMillis = 0L,
-        pruneIntervalMillis = 60_000L,
+        pruneIntervalMillis = 45_000L,
     )
 
     private fun configureAccount(
