@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.ahtohiofilho.dominopernambucano.R
-import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoColorTokens
 import com.ahtohiofilho.dominopernambucano.ui.theme.DominoSemanticColors
 
@@ -106,10 +103,7 @@ fun PostMatchRecoveryScreen(
             )
             Text(
                 text = stringResource(
-                    postMatchRoundsLabelResource(
-                        if (receipt.isRanked) DominoMatchMode.PUBLIC_RANKED
-                        else DominoMatchMode.OFFLINE_LOCAL,
-                    ),
+                    postMatchRoundsLabelResource(receipt.matchMode),
                     receipt.completedRounds,
                 ),
                 color = DominoSemanticColors.primaryTextOnDark,
@@ -119,12 +113,12 @@ fun PostMatchRecoveryScreen(
             if (showDetails) {
                 RecoveryTeamDetails(
                     title = stringResource(R.string.post_match_your_team),
-                    players = receipt.players.filter { it.seatIndex % 2 == 0 },
+                    players = receipt.players.filter { it.seatIndex % 2 == receipt.localTeamIndex },
                     receipt = receipt,
                 )
                 RecoveryTeamDetails(
                     title = stringResource(R.string.post_match_opponents),
-                    players = receipt.players.filter { it.seatIndex % 2 == 1 },
+                    players = receipt.players.filter { it.seatIndex % 2 != receipt.localTeamIndex },
                     receipt = receipt,
                 )
             }
@@ -169,6 +163,16 @@ private fun RecoveryTeamDetails(
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
         )
+        val teamIndex = players.firstOrNull()?.seatIndex?.rem(2)
+        if (teamIndex != null) {
+            val balance = receipt.teamBalanceDeltaByTeam.getOrElse(teamIndex) { 0 }
+            Text(
+                text = stringResource(R.string.post_match_team_balance) +
+                    ": " + (if (balance > 0) "+" else "") + balance,
+                color = DominoSemanticColors.primaryTextOnDark,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
         players.forEach { player ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
