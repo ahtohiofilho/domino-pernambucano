@@ -17,7 +17,8 @@ data class PostMatchRecoveryPlayer(
 
 data class PostMatchRecoverySnapshot(
     val recordedAtEpochMillis: Long,
-    val isRanked: Boolean,
+    val matchMode: DominoMatchMode,
+    val localTeamIndex: Int,
     val localTeamWon: Boolean?,
     val localScore: Int,
     val opponentScore: Int,
@@ -38,7 +39,8 @@ internal fun createPostMatchRecoverySnapshot(
 
     return PostMatchRecoverySnapshot(
         recordedAtEpochMillis = 0L, // Filled at first presentation by the ads controller.
-        isRanked = state.matchMode == DominoMatchMode.PUBLIC_RANKED,
+        matchMode = state.matchMode,
+        localTeamIndex = localTeamIndex,
         localTeamWon = when (winner) {
             localTeamIndex -> true
             opponentTeamIndex -> false
