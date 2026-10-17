@@ -165,7 +165,8 @@ class AndroidAdvertisingController(
 
             if (
                 pendingMatchOpportunity &&
-                interstitialCooldownGate.canShowInterstitial()
+                interstitialCooldownGate.canShowInterstitial() &&
+                consentInformation.canRequestAds()
             ) {
                 postMatchRecoveryStore.save(
                     receipt.copy(
