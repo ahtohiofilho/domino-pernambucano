@@ -13,6 +13,7 @@ import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
 import com.google.android.libraries.ads.mobile.sdk.initialization.InitializationConfig
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd
+import com.ahtohiofilho.dominopernambucano.ui.game.PostMatchRecoverySnapshot
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdEventCallback
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
@@ -34,6 +35,7 @@ class AndroidAdvertisingController(
             FrequencyPreferencesName,
             Context.MODE_PRIVATE,
         )
+    private val postMatchRecoveryStore = PostMatchRecoveryStore(frequencyPreferences)
     private val frequencyGate = AdvertisingFrequencyGate(
         readCompletedMatchCount = {
             frequencyPreferences.getInt(
@@ -88,6 +90,7 @@ class AndroidAdvertisingController(
     private var interstitialLoadInProgress = false
     private var interstitialAd: InterstitialAd? = null
     private var pendingMatchOpportunity = false
+    private var restoredMatchOpportunity = false
     private var transitionInFlight = false
 
     fun start(
@@ -138,11 +141,41 @@ class AndroidAdvertisingController(
         }
     }
 
-    fun recordMatchFinished() {
+    /**
+     * Return a genuine final-result receipt after a fast restart. This method
+     * does not display an advertisement on application startup.
+     */
+    fun restorePendingPostMatch(): PostMatchRecoverySnapshot? {
+        val receipt = postMatchRecoveryStore.readValid() ?: return null
+        if (!interstitialCooldownGate.canShowInterstitial()) {
+            postMatchRecoveryStore.clear()
+            return null
+        }
+        pendingMatchOpportunity = true
+        restoredMatchOpportunity = true
+        return receipt
+    }
+
+    fun recordMatchFinished(receipt: PostMatchRecoverySnapshot) {
         runOnMainThread {
             transitionInFlight = false
+            restoredMatchOpportunity = false
             pendingMatchOpportunity =
                 frequencyGate.recordCompletedMatch()
+
+            if (
+                pendingMatchOpportunity &&
+                interstitialCooldownGate.canShowInterstitial() &&
+                consentInformation.canRequestAds()
+            ) {
+                postMatchRecoveryStore.save(
+                    receipt.copy(
+                        recordedAtEpochMillis = System.currentTimeMillis(),
+                    ),
+                )
+            } else {
+                postMatchRecoveryStore.clear()
+            }
         }
     }
 
@@ -156,15 +189,23 @@ class AndroidAdvertisingController(
             }
 
             val shouldAttemptInterstitial =
-                pendingMatchOpportunity
+                pendingMatchOpportunity &&
+                (
+                    !restoredMatchOpportunity ||
+                        postMatchRecoveryStore.readValid() != null
+                )
 
             pendingMatchOpportunity = false
+            restoredMatchOpportunity = false
 
             runAfterInterstitialTransitionOnMainThread(
                 activity = activity,
                 shouldAttemptInterstitial =
                     shouldAttemptInterstitial,
-                continuation = continuation,
+                continuation = {
+                    postMatchRecoveryStore.clear()
+                    continuation()
+                },
             )
         }
     }
@@ -244,6 +285,9 @@ class AndroidAdvertisingController(
                     runOnMainThread {
                         interstitialCooldownGate
                             .recordInterstitialShown()
+                        // A shown ad has already satisfied the opportunity,
+                        // even when the process is killed before dismissal.
+                        postMatchRecoveryStore.clear()
                     }
                 }
 

@@ -34,7 +34,7 @@ fun DominoGameRoute(
     handAppearanceTone: HandAppearanceTone =
         HandAppearanceTone.TONE_1,
     onBackToMenuClick: () -> Unit,
-    onMatchFinished: () -> Unit = {},
+    onMatchFinished: (PostMatchRecoverySnapshot) -> Unit = { _ -> },
     onMatchFinishedTransition: ((() -> Unit) -> Unit) = { continuation ->
         continuation()
     },
@@ -133,23 +133,6 @@ fun DominoGameRoute(
     }
 
     LaunchedEffect(
-        matchCoordinator,
-        runtimeState.phase,
-    ) {
-        if (
-            runtimeState.phase == DominoMatchPhase.MatchFinished &&
-            matchCoordinator is OnlineDominoMatchCoordinator
-        ) {
-            /*
-             * The authoritative terminal state has reached the Compose
-             * presentation. From this point a later process restart must not
-             * reopen this already-seen result.
-             */
-            matchCoordinator.acknowledgeCompletedMatchPresented()
-        }
-    }
-
-    LaunchedEffect(
         runtimeState.phase,
         gameState.gameWinnerTeamIndex,
         runtimeState.localPlayerIndex,
@@ -163,14 +146,6 @@ fun DominoGameRoute(
                 runtimeState.localPlayerIndex,
         )?.let { outcome ->
             matchResultSoundPlayer.play(outcome)
-        }
-    }
-
-    LaunchedEffect(
-        runtimeState.phase,
-    ) {
-        if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
-            onMatchFinished()
         }
     }
 
@@ -236,8 +211,7 @@ fun DominoGameRoute(
         emptyList()
     }
 
-    DominoGameScreen(
-        uiState = DominoGameUiState(
+    val finalUiState = DominoGameUiState(
             gameState = gameState,
             roundNumber = runtimeState.roundNumber,
             localPlayerIndex = runtimeState.localPlayerIndex,
@@ -252,7 +226,24 @@ fun DominoGameRoute(
             onlinePresentationId = onlineUiTraceContext?.presentationId,
             onlineSnapshotRevision = onlineUiTraceContext?.snapshotRevision,
             postMatchStatistics = postMatchStatisticsState.value,
-        ),
+    )
+
+    LaunchedEffect(matchCoordinator, runtimeState.phase) {
+        if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
+            try {
+                // Persist the authentic post-match receipt BEFORE consuming
+                // the already-presented online participation binding.
+                onMatchFinished(createPostMatchRecoverySnapshot(finalUiState))
+            } finally {
+                if (matchCoordinator is OnlineDominoMatchCoordinator) {
+                    matchCoordinator.acknowledgeCompletedMatchPresented()
+                }
+            }
+        }
+    }
+
+    DominoGameScreen(
+        uiState = finalUiState,
         handAppearanceTone = handAppearanceTone,
         onBackToMenuClick = {
             if (runtimeState.phase == DominoMatchPhase.MatchFinished) {

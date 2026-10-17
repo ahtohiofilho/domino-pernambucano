@@ -7,10 +7,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.ahtohiofilho.dominopernambucano.advertising.AndroidAdvertisingController
+import com.ahtohiofilho.dominopernambucano.ui.game.PostMatchRecoverySnapshot
+import com.ahtohiofilho.dominopernambucano.ui.game.PostMatchRecoveryScreen
 import com.ahtohiofilho.dominopernambucano.ui.DominoPernambucanoApp
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMenuMusicController
 import com.ahtohiofilho.dominopernambucano.ui.settings.AndroidAppLanguageManager
@@ -18,6 +22,7 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var advertisingController: AndroidAdvertisingController
+    private var restoredPostMatch by mutableStateOf<PostMatchRecoverySnapshot?>(null)
 
     override fun attachBaseContext(
         newBase: Context,
@@ -37,6 +42,7 @@ class MainActivity : ComponentActivity() {
         advertisingController = AndroidAdvertisingController(
             context = applicationContext,
         )
+        restoredPostMatch = advertisingController.restorePendingPostMatch()
 
         enableEdgeToEdge()
         enableImmersiveMode()
@@ -48,30 +54,45 @@ class MainActivity : ComponentActivity() {
                 advertisingController.adsReady.collectAsState()
 
             DominoPernambucanoTheme {
-                DominoPernambucanoApp(
-                    onMatchFinished = {
-                        advertisingController.recordMatchFinished()
-                    },
-                    onMatchFinishedTransition = { continuation ->
-                        advertisingController.runAfterMatchFinishedTransition(
-                            activity = this@MainActivity,
-                            continuation = continuation,
-                        )
-                    },
-                    onOfflineMatchExitTransition = { continuation ->
-                        advertisingController.runAfterOfflineMatchExitTransition(
-                            activity = this@MainActivity,
-                            continuation = continuation,
-                        )
-                    },
-                    privacyOptionsRequired = privacyOptionsRequired,
-                    bannerAdsReady = adsReady,
-                    onPrivacyOptionsClick = {
-                        advertisingController.showPrivacyOptions(
-                            activity = this@MainActivity,
-                        )
-                    },
-                )
+                val restoredReceipt = restoredPostMatch
+                if (restoredReceipt != null) {
+                    PostMatchRecoveryScreen(
+                        receipt = restoredReceipt,
+                        onContinue = {
+                            advertisingController.runAfterMatchFinishedTransition(
+                                activity = this@MainActivity,
+                                continuation = {
+                                    restoredPostMatch = null
+                                },
+                            )
+                        },
+                    )
+                } else {
+                    DominoPernambucanoApp(
+                        onMatchFinished = { receipt ->
+                            advertisingController.recordMatchFinished(receipt)
+                        },
+                        onMatchFinishedTransition = { continuation ->
+                            advertisingController.runAfterMatchFinishedTransition(
+                                activity = this@MainActivity,
+                                continuation = continuation,
+                            )
+                        },
+                        onOfflineMatchExitTransition = { continuation ->
+                            advertisingController.runAfterOfflineMatchExitTransition(
+                                activity = this@MainActivity,
+                                continuation = continuation,
+                            )
+                        },
+                        privacyOptionsRequired = privacyOptionsRequired,
+                        bannerAdsReady = adsReady,
+                        onPrivacyOptionsClick = {
+                            advertisingController.showPrivacyOptions(
+                                activity = this@MainActivity,
+                            )
+                        },
+                    )
+                }
             }
         }
 
