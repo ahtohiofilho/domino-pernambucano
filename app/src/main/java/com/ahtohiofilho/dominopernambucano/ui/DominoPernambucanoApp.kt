@@ -88,6 +88,7 @@ import com.ahtohiofilho.dominopernambucano.ui.account.RankedTableIdentityConfirm
 import com.ahtohiofilho.dominopernambucano.ui.account.RankedTableIdentityConfirmationStore
 import com.ahtohiofilho.dominopernambucano.ui.audio.AndroidMenuMusicController
 import com.ahtohiofilho.dominopernambucano.ui.game.DominoGameRoute
+import com.ahtohiofilho.dominopernambucano.ui.game.PostMatchRecoverySnapshot
 import com.ahtohiofilho.dominopernambucano.ui.personalization.HandAppearanceTone
 import com.ahtohiofilho.dominopernambucano.ui.personalization.SharedPreferencesHandAppearanceStore
 import com.ahtohiofilho.dominopernambucano.ui.info.RulesHelpScreen
@@ -122,7 +123,7 @@ fun DominoPernambucanoApp(
     onlineAppConfig: OnlineAppConfig = OnlineAppEnvironment.Current,
     googleSignInConfig: GoogleSignInConfig =
         GoogleSignInEnvironment.Current,
-    onMatchFinished: () -> Unit = {},
+    onMatchFinished: (PostMatchRecoverySnapshot) -> Unit = { _ -> },
     onMatchFinishedTransition: ((() -> Unit) -> Unit) = { continuation ->
         continuation()
     },
