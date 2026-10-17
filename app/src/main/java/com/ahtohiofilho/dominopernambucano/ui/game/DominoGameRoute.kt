@@ -133,23 +133,6 @@ fun DominoGameRoute(
     }
 
     LaunchedEffect(
-        matchCoordinator,
-        runtimeState.phase,
-    ) {
-        if (
-            runtimeState.phase == DominoMatchPhase.MatchFinished &&
-            matchCoordinator is OnlineDominoMatchCoordinator
-        ) {
-            /*
-             * The authoritative terminal state has reached the Compose
-             * presentation. From this point a later process restart must not
-             * reopen this already-seen result.
-             */
-            matchCoordinator.acknowledgeCompletedMatchPresented()
-        }
-    }
-
-    LaunchedEffect(
         runtimeState.phase,
         gameState.gameWinnerTeamIndex,
         runtimeState.localPlayerIndex,
@@ -245,9 +228,17 @@ fun DominoGameRoute(
             postMatchStatistics = postMatchStatisticsState.value,
     )
 
-    LaunchedEffect(runtimeState.phase) {
+    LaunchedEffect(matchCoordinator, runtimeState.phase) {
         if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
-            onMatchFinished(createPostMatchRecoverySnapshot(finalUiState))
+            try {
+                // Persist the authentic post-match receipt BEFORE consuming
+                // the already-presented online participation binding.
+                onMatchFinished(createPostMatchRecoverySnapshot(finalUiState))
+            } finally {
+                if (matchCoordinator is OnlineDominoMatchCoordinator) {
+                    matchCoordinator.acknowledgeCompletedMatchPresented()
+                }
+            }
         }
     }
 
