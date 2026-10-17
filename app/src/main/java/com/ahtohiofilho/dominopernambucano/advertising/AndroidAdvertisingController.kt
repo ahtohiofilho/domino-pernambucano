@@ -90,6 +90,7 @@ class AndroidAdvertisingController(
     private var interstitialLoadInProgress = false
     private var interstitialAd: InterstitialAd? = null
     private var pendingMatchOpportunity = false
+    private var restoredMatchOpportunity = false
     private var transitionInFlight = false
 
     fun start(
@@ -151,12 +152,14 @@ class AndroidAdvertisingController(
             return null
         }
         pendingMatchOpportunity = true
+        restoredMatchOpportunity = true
         return receipt
     }
 
     fun recordMatchFinished(receipt: PostMatchRecoverySnapshot) {
         runOnMainThread {
             transitionInFlight = false
+            restoredMatchOpportunity = false
             pendingMatchOpportunity =
                 frequencyGate.recordCompletedMatch()
 
@@ -185,9 +188,14 @@ class AndroidAdvertisingController(
             }
 
             val shouldAttemptInterstitial =
-                pendingMatchOpportunity
+                pendingMatchOpportunity &&
+                (
+                    !restoredMatchOpportunity ||
+                        postMatchRecoveryStore.readValid() != null
+                )
 
             pendingMatchOpportunity = false
+            restoredMatchOpportunity = false
 
             runAfterInterstitialTransitionOnMainThread(
                 activity = activity,
