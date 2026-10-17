@@ -34,7 +34,7 @@ fun DominoGameRoute(
     handAppearanceTone: HandAppearanceTone =
         HandAppearanceTone.TONE_1,
     onBackToMenuClick: () -> Unit,
-    onMatchFinished: () -> Unit = {},
+    onMatchFinished: (PostMatchRecoverySnapshot) -> Unit = { _ -> },
     onMatchFinishedTransition: ((() -> Unit) -> Unit) = { continuation ->
         continuation()
     },
@@ -166,14 +166,6 @@ fun DominoGameRoute(
         }
     }
 
-    LaunchedEffect(
-        runtimeState.phase,
-    ) {
-        if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
-            onMatchFinished()
-        }
-    }
-
     /*
      * O fluxo visual normal continua solicitando a decisão do bot após
      * BotDecisionDelayMillis dentro de DominoGameScreen. Este watchdog é uma
@@ -236,8 +228,7 @@ fun DominoGameRoute(
         emptyList()
     }
 
-    DominoGameScreen(
-        uiState = DominoGameUiState(
+    val finalUiState = DominoGameUiState(
             gameState = gameState,
             roundNumber = runtimeState.roundNumber,
             localPlayerIndex = runtimeState.localPlayerIndex,
@@ -252,7 +243,16 @@ fun DominoGameRoute(
             onlinePresentationId = onlineUiTraceContext?.presentationId,
             onlineSnapshotRevision = onlineUiTraceContext?.snapshotRevision,
             postMatchStatistics = postMatchStatisticsState.value,
-        ),
+    )
+
+    LaunchedEffect(runtimeState.phase) {
+        if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
+            onMatchFinished(createPostMatchRecoverySnapshot(finalUiState))
+        }
+    }
+
+    DominoGameScreen(
+        uiState = finalUiState,
         handAppearanceTone = handAppearanceTone,
         onBackToMenuClick = {
             if (runtimeState.phase == DominoMatchPhase.MatchFinished) {
