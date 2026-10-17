@@ -486,7 +486,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             secondHumanQueued.participantCodes,
         )
 
-        now = 44_999L
+        now = 39_999L
         assertFalse(store.advanceAuthoritativeTime())
         assertEquals(
             PublicRankedQueueStatus.QUEUED,
@@ -495,7 +495,7 @@ class PublicRankedSyntheticFallbackAuthorityTest {
             ).status,
         )
 
-        now = 45_000L
+        now = 40_000L
         assertTrue(store.advanceAuthoritativeTime())
 
         val matched = store.getPublicRankedQueueStatus(
