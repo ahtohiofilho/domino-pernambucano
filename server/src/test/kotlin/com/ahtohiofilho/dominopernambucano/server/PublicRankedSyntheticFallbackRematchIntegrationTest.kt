@@ -14,8 +14,8 @@ class PublicRankedSyntheticFallbackRematchIntegrationTest {
         var accountSequence = 0
 
         val policy = OnlineServerStoreResourcePolicy(
-            publicRankedSyntheticFallbackInitialDelayMillis = 20_000L,
-            publicRankedSyntheticFallbackAdditionalSeatDelayMillis = 20_000L,
+            publicRankedSyntheticFallbackInitialDelayMillis = 15_000L,
+            publicRankedSyntheticFallbackAdditionalSeatDelayMillis = 15_000L,
             publicRankedExactCohortCooldownMillis =
                 30L * 60L * 1_000L,
             pruneIntervalMillis = 1_000L,
@@ -64,13 +64,13 @@ class PublicRankedSyntheticFallbackRematchIntegrationTest {
             humanAccount = humanAccount,
         )
 
-        now = 21_000L
+        now = 16_000L
         assertTrue(firstStore.advanceAuthoritativeTime())
 
-        now = 41_000L
+        now = 31_000L
         assertTrue(firstStore.advanceAuthoritativeTime())
 
-        now = 61_000L
+        now = 46_000L
         assertTrue(firstStore.advanceAuthoritativeTime())
 
         val firstMatch = firstStore.getPublicRankedQueueStatus(
@@ -112,20 +112,20 @@ class PublicRankedSyntheticFallbackRematchIntegrationTest {
             state = rematchState,
         )
 
-        now = 61_001L
+        now = 46_001L
         enqueueCohort(
             store = secondStore,
             syntheticAccounts = syntheticAccounts,
             humanAccount = humanAccount,
         )
 
-        now = 81_001L
+        now = 61_001L
         assertTrue(secondStore.advanceAuthoritativeTime())
 
-        now = 101_001L
+        now = 76_001L
         assertTrue(secondStore.advanceAuthoritativeTime())
 
-        now = 121_001L
+        now = 91_001L
         assertTrue(secondStore.advanceAuthoritativeTime())
 
         val secondMatch = secondStore.getPublicRankedQueueStatus(
