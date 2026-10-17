@@ -1,6 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.advertising
 
 import android.content.SharedPreferences
+import com.ahtohiofilho.dominopernambucano.match.DominoMatchMode
 import com.ahtohiofilho.dominopernambucano.ui.game.PostMatchRecoveryPlayer
 import com.ahtohiofilho.dominopernambucano.ui.game.PostMatchRecoverySnapshot
 import com.ahtohiofilho.dominopernambucano.ui.game.isPostMatchRecoveryActive
@@ -30,12 +31,13 @@ internal class PostMatchRecoveryStore(
             )
         }
         val balances = JSONArray()
-        receipt.teamBalanceDeltaByTeam.forEach(balances::put)
+        receipt.teamBalanceDeltaByTeam.forEach { balance -> balances.put(balance) }
 
         val json = JSONObject()
             .put("version", 1)
             .put("time", receipt.recordedAtEpochMillis)
-            .put("ranked", receipt.isRanked)
+            .put("mode", receipt.matchMode.name)
+            .put("localTeam", receipt.localTeamIndex)
             .put("won", receipt.localTeamWon ?: JSONObject.NULL)
             .put("localScore", receipt.localScore)
             .put("opponentScore", receipt.opponentScore)
@@ -88,7 +90,8 @@ internal class PostMatchRecoveryStore(
 
         val snapshot = PostMatchRecoverySnapshot(
             recordedAtEpochMillis = json.getLong("time"),
-            isRanked = json.getBoolean("ranked"),
+            matchMode = DominoMatchMode.valueOf(json.getString("mode")),
+            localTeamIndex = json.getInt("localTeam"),
             localTeamWon = if (json.isNull("won")) null else json.getBoolean("won"),
             localScore = json.getInt("localScore"),
             opponentScore = json.getInt("opponentScore"),
@@ -97,6 +100,7 @@ internal class PostMatchRecoveryStore(
             teamBalanceDeltaByTeam = (0 until 2).map(balanceArray::getInt),
             mvpSeatIndex = if (json.isNull("mvp")) null else json.getInt("mvp"),
         )
+        require(snapshot.localTeamIndex in 0..1)
         require(snapshot.localScore >= 0 && snapshot.opponentScore >= 0)
         require(snapshot.completedRounds >= 0)
         require(snapshot.mvpSeatIndex == null || snapshot.mvpSeatIndex in 0..3)
