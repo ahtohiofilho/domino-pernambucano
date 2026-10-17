@@ -69,28 +69,28 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     DominoPernambucanoApp(
-                    onMatchFinished = { receipt ->
-                        advertisingController.recordMatchFinished(receipt)
-                    },
-                    onMatchFinishedTransition = { continuation ->
-                        advertisingController.runAfterMatchFinishedTransition(
-                            activity = this@MainActivity,
-                            continuation = continuation,
-                        )
-                    },
-                    onOfflineMatchExitTransition = { continuation ->
-                        advertisingController.runAfterOfflineMatchExitTransition(
-                            activity = this@MainActivity,
-                            continuation = continuation,
-                        )
-                    },
-                    privacyOptionsRequired = privacyOptionsRequired,
-                    bannerAdsReady = adsReady,
-                    onPrivacyOptionsClick = {
-                        advertisingController.showPrivacyOptions(
-                            activity = this@MainActivity,
-                        )
-                    },
+                        onMatchFinished = { receipt ->
+                            advertisingController.recordMatchFinished(receipt)
+                        },
+                        onMatchFinishedTransition = { continuation ->
+                            advertisingController.runAfterMatchFinishedTransition(
+                                activity = this@MainActivity,
+                                continuation = continuation,
+                            )
+                        },
+                        onOfflineMatchExitTransition = { continuation ->
+                            advertisingController.runAfterOfflineMatchExitTransition(
+                                activity = this@MainActivity,
+                                continuation = continuation,
+                            )
+                        },
+                        privacyOptionsRequired = privacyOptionsRequired,
+                        bannerAdsReady = adsReady,
+                        onPrivacyOptionsClick = {
+                            advertisingController.showPrivacyOptions(
+                                activity = this@MainActivity,
+                            )
+                        },
                     )
                 }
             }
