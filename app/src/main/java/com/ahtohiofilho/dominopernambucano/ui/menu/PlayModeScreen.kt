@@ -29,6 +29,7 @@ internal const val PlayModeStatusTag = "play_mode_status"
 fun PlayModeScreen(
     onBackClick: () -> Unit,
     onlineActionInProgress: Boolean = false,
+    onlineParticipationPending: Boolean = false,
     onlineFeedbackMessage: String? = null,
     onRankedGameClick: () -> Unit,
     onLocalGameClick: () -> Unit,
@@ -61,7 +62,7 @@ fun PlayModeScreen(
                 stringResource(R.string.play_mode_ranked_support)
             },
             onClick = onRankedGameClick,
-            enabled = !onlineActionInProgress,
+            enabled = !onlineActionInProgress && !onlineParticipationPending,
             leadingContent = {
                 BrandGlyph("▶")
             },
@@ -83,6 +84,7 @@ fun PlayModeScreen(
             ),
             supportingText = null,
             accent = DominoBrandAccent.Green,
+            enabled = !onlineParticipationPending,
             onClick = onCreateOnlineRoomClick,
             leadingContent = {
                 BrandGlyph("+")
@@ -95,6 +97,7 @@ fun PlayModeScreen(
             ),
             supportingText = null,
             accent = DominoBrandAccent.Red,
+            enabled = !onlineParticipationPending,
             onClick = onJoinOnlineRoomClick,
             leadingContent = {
                 BrandGlyph("#")

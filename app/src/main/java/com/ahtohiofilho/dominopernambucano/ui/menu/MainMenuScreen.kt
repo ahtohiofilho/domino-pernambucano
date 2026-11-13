@@ -211,15 +211,6 @@ fun MainMenuScreen(
         resumePendingOnlineMatchAvailable &&
                 pendingOnlineMatchResumeFeedbackMessage != null
 
-    /*
-     * A persisted recoverable participation owns continuity until it is
-     * restored, proved obsolete, or explicitly discarded after rejection.
-     */
-    val continuityGateActive =
-        pendingOnlineParticipation is
-            OnlinePendingParticipationLocalResolution
-                .ReadyForRemoteReconciliation
-
     val menuActionInProgress =
         inspectionInProgress || pendingOnlineMatchResumeInProgress
 
@@ -421,9 +412,7 @@ fun MainMenuScreen(
                     title = stringResource(R.string.main_menu_play),
                     supportingText = null,
                     onClick = onPlayClick,
-                    enabled =
-                        !menuActionInProgress &&
-                            !continuityGateActive,
+                    enabled = !menuActionInProgress,
                     leadingContent = {
                         BrandGlyph("▶")
                     },
@@ -441,9 +430,7 @@ fun MainMenuScreen(
                     ),
                     accent = DominoBrandAccent.Red,
                     onClick = onRankingClick,
-                    enabled =
-                        !menuActionInProgress &&
-                            !continuityGateActive,
+                    enabled = !menuActionInProgress,
                     elevated = true,
                     leadingContent = {
                         BrandGlyph("★")
@@ -464,9 +451,7 @@ fun MainMenuScreen(
                         ),
                         accent = DominoBrandAccent.Yellow,
                         onClick = onAchievementGalleryClick,
-                        enabled =
-                            !menuActionInProgress &&
-                                !continuityGateActive,
+                        enabled = !menuActionInProgress,
                         leadingContent = {
                             BrandGlyph("◆")
                         },

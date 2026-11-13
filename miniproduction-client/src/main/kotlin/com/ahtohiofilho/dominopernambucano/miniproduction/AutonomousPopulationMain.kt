@@ -34,10 +34,11 @@ fun main() {
             )
             readinessProbe.awaitServerReadiness()
 
-            val credentials = SyntheticIdentityProvisioner(
+            val provisioner = SyntheticIdentityProvisioner(
                 gateway = gateway,
                 store = store,
-            ).provision(profiles)
+            )
+            val credentials = provisioner.provision(profiles)
 
             AutonomousSyntheticPopulation(
                 config = config,
@@ -46,6 +47,7 @@ fun main() {
                 credentials = credentials,
                 running = running,
                 heartbeat = heartbeat::record,
+                recoverCredential = provisioner::recoverActiveCredential,
             ).run()
         }
     } catch (failure: Throwable) {

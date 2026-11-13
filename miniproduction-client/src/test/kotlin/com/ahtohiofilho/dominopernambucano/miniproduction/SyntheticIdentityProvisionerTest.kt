@@ -87,6 +87,34 @@ class SyntheticIdentityProvisionerTest {
         assertEquals(1, gateway.syntheticSessionsRecovered)
         assertEquals(recovered, store.load().single())
     }
+    @Test
+    fun runtime_401_recovers_only_affected_account_and_persists_new_token() {
+        val root = Files.createTempDirectory("synthetic-401-runtime-persistence")
+        val gateway = FakeProvisioningGateway()
+        val store = SyntheticIdentityStore(
+            stateDirectory = root,
+            baseUrl = "https://domino.example",
+        )
+        val profiles = syntheticRoster.take(2)
+        val provisioner = SyntheticIdentityProvisioner(
+            gateway = gateway,
+            store = store,
+            nowEpochMillis = { 1_000L },
+        )
+        val first = provisioner.provision(profiles)
+        val renewed = provisioner.recoverActiveCredential(
+            account = first.first(),
+            profile = profiles.first(),
+        )
+
+        assertEquals(first.first().accountId, renewed.accountId)
+        assertEquals(first.first().playerId, renewed.playerId)
+        assertEquals("recovered-token-1", renewed.accessToken)
+        assertEquals(renewed, store.load().first())
+        assertEquals(first[1], store.load()[1])
+        assertEquals(2, gateway.anonymousSessionsCreated)
+        assertEquals(1, gateway.syntheticSessionsRecovered)
+    }
 }
 
 private class FakeProvisioningGateway(

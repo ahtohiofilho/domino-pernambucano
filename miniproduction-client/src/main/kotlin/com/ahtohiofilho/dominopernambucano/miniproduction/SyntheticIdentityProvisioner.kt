@@ -31,6 +31,35 @@ internal class SyntheticIdentityProvisioner(
         }
     }
 
+    /**
+     * Revalida apenas a identidade que recebeu 401 durante o runtime.
+     * Nunca troca accountId/playerId nem recria contas na recuperação.
+     */
+    fun recoverActiveCredential(
+        account: SyntheticAccountCredential,
+        profile: SyntheticProfile,
+    ): SyntheticAccountCredential {
+        require(account.profileIndex == profile.index)
+
+        val persisted = store.load()
+        val existing = persisted.singleOrNull { stored ->
+            stored.profileIndex == profile.index
+        } ?: error("Identidade sintética não encontrada no armazenamento.")
+
+        require(
+            existing.accountId == account.accountId &&
+                existing.playerId == account.playerId
+        ) {
+            "Identidade sintética persistida diverge do runtime."
+        }
+
+        val renewed = recover(existing, profile)
+        store.save(persisted.map { stored ->
+            if (stored.profileIndex == profile.index) renewed else stored
+        })
+        return renewed
+    }
+
     private fun restore(
         account: SyntheticAccountCredential,
         profile: SyntheticProfile,

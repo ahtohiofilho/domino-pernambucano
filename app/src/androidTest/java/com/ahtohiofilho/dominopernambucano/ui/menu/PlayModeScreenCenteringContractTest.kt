@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -109,7 +110,7 @@ class PlayModeScreenCenteringContractTest {
         }
 
         composeRule
-            .onNodeWithText(backLabel)
+            .onNodeWithContentDescription(backLabel)
             .performScrollTo()
             .assertIsDisplayed()
     }

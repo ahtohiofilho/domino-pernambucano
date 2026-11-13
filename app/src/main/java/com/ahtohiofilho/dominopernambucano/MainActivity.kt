@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
@@ -23,6 +24,7 @@ import com.ahtohiofilho.dominopernambucano.ui.theme.DominoPernambucanoTheme
 class MainActivity : ComponentActivity() {
     private lateinit var advertisingController: AndroidAdvertisingController
     private var restoredPostMatch by mutableStateOf<PostMatchRecoverySnapshot?>(null)
+    private var foregroundEpoch by mutableIntStateOf(0)
 
     override fun attachBaseContext(
         newBase: Context,
@@ -69,6 +71,7 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     DominoPernambucanoApp(
+                        foregroundEpoch = foregroundEpoch,
                         onMatchFinished = { receipt ->
                             advertisingController.recordMatchFinished(receipt)
                         },
@@ -103,6 +106,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        foregroundEpoch += 1
 
         AndroidMenuMusicController.setAppForeground(
             context = applicationContext,

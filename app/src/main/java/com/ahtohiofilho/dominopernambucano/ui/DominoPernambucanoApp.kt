@@ -106,8 +106,10 @@ import com.ahtohiofilho.dominopernambucano.ui.settings.SettingsScreen
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 
 internal fun launchAccountProfileSyncAfterAuthentication(
@@ -133,6 +135,7 @@ fun DominoPernambucanoApp(
     privacyOptionsRequired: Boolean = false,
     onPrivacyOptionsClick: () -> Unit = {},
     bannerAdsReady: Boolean = false,
+    foregroundEpoch: Int = 0,
 ) {
     val context = LocalContext.current
     val accountProfileStrings = OnlineAccountProfileStrings(
@@ -2287,78 +2290,106 @@ fun DominoPernambucanoApp(
                     }
             }
 
-            val automaticRecoveryAction =
-                resolvePendingOnlineParticipationAutomaticRecoveryAction(
-                    pendingParticipation =
-                        state.pendingOnlineParticipation,
-                    inspectionState =
-                        state.pendingOnlineParticipationInspection,
-                    sessionRejection =
-                        state.pendingOnlineParticipationSessionRejection,
-                )
-
             /*
-             * Do not key this effect by inspection state.
-             *
-             * inspectPendingOnlineParticipation() owns the transition
-             * NotRequested -> InProgress -> Completed. If InProgress is an
-             * effect key, Compose cancels this coroutine because of the state
-             * change caused by the coroutine itself. The coordinator then
-             * rolls cancellation back to NotRequested, creating a visible
-             * inspect/cancel/retry oscillation.
-             *
-             * One coroutine now owns the complete automatic sequence:
-             * inspect once, re-read the authoritative MainMenu state, and
-             * resume only if that completed inspection is recoverable.
+             * A bounded, single-owner reconciliation loop replaces the one-shot
+             * startup attempt. It tolerates foreground/network changes without
+             * spinning or assuming that a local timeout invalidates a server match.
              */
             LaunchedEffect(
                 state.pendingOnlineParticipation,
                 state.pendingOnlineParticipationSessionRejection,
+                foregroundEpoch,
             ) {
-                when (automaticRecoveryAction) {
-                    PendingOnlineParticipationAutomaticRecoveryAction
-                        .INSPECT -> {
-                        sessionCoordinator
-                            .inspectPendingOnlineParticipation()
+                var attempts = 0
+                while (attempts < PendingOnlineRecoveryRetryPolicy.MaxAutomaticAttempts) {
+                    val current = sessionCoordinator.currentState
+                        as? DominoSessionState.MainMenu ?: break
+                    val action =
+                        resolvePendingOnlineParticipationAutomaticRecoveryAction(
+                            pendingParticipation = current.pendingOnlineParticipation,
+                            inspectionState =
+                                current.pendingOnlineParticipationInspection,
+                            sessionRejection =
+                                current.pendingOnlineParticipationSessionRejection,
+                        )
 
-                        val refreshedMainMenuState =
-                            sessionCoordinator.currentState as?
-                                DominoSessionState.MainMenu
-                                ?: return@LaunchedEffect
+                    when (action) {
+                        PendingOnlineParticipationAutomaticRecoveryAction.INSPECT -> {
+                            withTimeoutOrNull(12_000L) {
+                                sessionCoordinator.inspectPendingOnlineParticipation()
+                            }
 
-                        val refreshedAction =
-                            resolvePendingOnlineParticipationAutomaticRecoveryAction(
-                                pendingParticipation =
-                                    refreshedMainMenuState
-                                        .pendingOnlineParticipation,
-                                inspectionState =
-                                    refreshedMainMenuState
-                                        .pendingOnlineParticipationInspection,
-                                sessionRejection =
-                                    refreshedMainMenuState
-                                        .pendingOnlineParticipationSessionRejection,
-                            )
+                            val inspected = sessionCoordinator.currentState
+                                as? DominoSessionState.MainMenu ?: break
+                            if (
+                                resolvePendingOnlineParticipationAutomaticRecoveryAction(
+                                    pendingParticipation = inspected.pendingOnlineParticipation,
+                                    inspectionState =
+                                        inspected.pendingOnlineParticipationInspection,
+                                    sessionRejection =
+                                        inspected.pendingOnlineParticipationSessionRejection,
+                                ) == PendingOnlineParticipationAutomaticRecoveryAction.RESUME
+                            ) {
+                                withTimeoutOrNull(12_000L) {
+                                    resumePendingOnlineParticipationFromMainMenu(inspected)
+                                }
+                            }
+                        }
 
-                        if (
-                            refreshedAction ==
-                                PendingOnlineParticipationAutomaticRecoveryAction
-                                    .RESUME
-                        ) {
-                            resumePendingOnlineParticipationFromMainMenu(
-                                state = refreshedMainMenuState,
-                            )
+                        PendingOnlineParticipationAutomaticRecoveryAction.RESUME -> {
+                            withTimeoutOrNull(12_000L) {
+                                resumePendingOnlineParticipationFromMainMenu(current)
+                            }
+                        }
+
+                        PendingOnlineParticipationAutomaticRecoveryAction.NONE -> {
+                            val result = (
+                                current.pendingOnlineParticipationInspection as?
+                                    OnlinePendingParticipationInspectionState.Completed
+                            )?.result
+                            if (
+                                result !is OnlinePendingParticipationRemoteInspection
+                                    .TemporarilyUnavailable &&
+                                result !is OnlinePendingParticipationRemoteInspection
+                                    .NotAttempted
+                            ) {
+                                break
+                            }
                         }
                     }
 
-                    PendingOnlineParticipationAutomaticRecoveryAction
-                        .RESUME -> {
-                        resumePendingOnlineParticipationFromMainMenu(
-                            state = state,
-                        )
+                    val after = sessionCoordinator.currentState
+                        as? DominoSessionState.MainMenu ?: break
+                    if (
+                        after.pendingOnlineParticipation !is
+                            OnlinePendingParticipationLocalResolution
+                                .ReadyForRemoteReconciliation ||
+                        after.pendingOnlineParticipationSessionRejection !is
+                            OnlinePendingParticipationSessionRejection.NotRejected
+                    ) {
+                        break
                     }
 
-                    PendingOnlineParticipationAutomaticRecoveryAction
-                        .NONE -> Unit
+                    attempts++
+                    val retryDelay =
+                        PendingOnlineRecoveryRetryPolicy.delayBeforeRetryMillis(attempts)
+                            ?: break
+                    delay(retryDelay)
+
+                    val latest = sessionCoordinator.currentState
+                        as? DominoSessionState.MainMenu ?: break
+                    val lastInspection = (
+                        latest.pendingOnlineParticipationInspection as?
+                            OnlinePendingParticipationInspectionState.Completed
+                    )?.result
+                    if (
+                        lastInspection is OnlinePendingParticipationRemoteInspection
+                            .TemporarilyUnavailable ||
+                        lastInspection is OnlinePendingParticipationRemoteInspection
+                            .NotAttempted
+                    ) {
+                        sessionCoordinator.refreshPendingOnlineParticipationFromLocalState()
+                    }
                 }
             }
 
@@ -2536,27 +2567,16 @@ fun DominoPernambucanoApp(
                     }
                 },
                 onPlayClick = {
-                    if (
-                        !pendingOnlineMatchResumeInProgress &&
-                        state.pendingOnlineParticipation !is
-                            OnlinePendingParticipationLocalResolution
-                                .ReadyForRemoteReconciliation &&
-                        state.pendingOnlineParticipationInspection
-                                !is OnlinePendingParticipationInspectionState
-                        .InProgress
-                    ) {
+                    if (!pendingOnlineMatchResumeInProgress) {
+                        // Offline play stays available; online entry is gated
+                        // independently while a server-owned binding is unresolved.
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.OpenPlayModeSelection,
                         )
                     }
                 },
                 onRankingClick = {
-                    if (
-                        !pendingOnlineMatchResumeInProgress &&
-                        state.pendingOnlineParticipation !is
-                            OnlinePendingParticipationLocalResolution
-                                .ReadyForRemoteReconciliation
-                    ) {
+                    if (!pendingOnlineMatchResumeInProgress) {
                         sessionCoordinator.dispatch(
                             DominoSessionCommand.OpenPublicRanking,
                         )
@@ -2572,8 +2592,9 @@ fun DominoPernambucanoApp(
                 onInspectPendingOnlineParticipationClick = {
                     if (!pendingOnlineMatchResumeInProgress) {
                         menuCoroutineScope.launch {
-                            sessionCoordinator
-                                .inspectPendingOnlineParticipation()
+                            withTimeoutOrNull(12_000L) {
+                                sessionCoordinator.inspectPendingOnlineParticipation()
+                            }
                         }
                     }
                 },
@@ -2585,9 +2606,11 @@ fun DominoPernambucanoApp(
                 },
                 onResumePendingOnlineMatchClick = {
                     menuCoroutineScope.launch {
-                        resumePendingOnlineParticipationFromMainMenu(
-                            state = state,
-                        )
+                        withTimeoutOrNull(12_000L) {
+                            resumePendingOnlineParticipationFromMainMenu(
+                                state = state,
+                            )
+                        }
                     }
                 },                onConnectGoogleAccountClick = {
                     connectOnlineGoogleAccount()
@@ -2627,6 +2650,8 @@ fun DominoPernambucanoApp(
 
         DominoSessionState.PlayModeSelection -> {
             PlayModeScreen(
+                onlineParticipationPending =
+                    onlineParticipationBindingRepository.getValidBindingOrNull() != null,
                 onBackClick = {
                     sessionCoordinator.dispatch(
                         DominoSessionCommand.BackToMainMenu,
