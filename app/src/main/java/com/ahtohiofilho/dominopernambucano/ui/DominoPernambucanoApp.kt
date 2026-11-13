@@ -2592,8 +2592,9 @@ fun DominoPernambucanoApp(
                 onInspectPendingOnlineParticipationClick = {
                     if (!pendingOnlineMatchResumeInProgress) {
                         menuCoroutineScope.launch {
-                            sessionCoordinator
-                                .inspectPendingOnlineParticipation()
+                            withTimeoutOrNull(12_000L) {
+                                sessionCoordinator.inspectPendingOnlineParticipation()
+                            }
                         }
                     }
                 },
@@ -2605,9 +2606,11 @@ fun DominoPernambucanoApp(
                 },
                 onResumePendingOnlineMatchClick = {
                     menuCoroutineScope.launch {
-                        resumePendingOnlineParticipationFromMainMenu(
-                            state = state,
-                        )
+                        withTimeoutOrNull(12_000L) {
+                            resumePendingOnlineParticipationFromMainMenu(
+                                state = state,
+                            )
+                        }
                     }
                 },                onConnectGoogleAccountClick = {
                     connectOnlineGoogleAccount()
