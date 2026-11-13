@@ -72,6 +72,34 @@ jobs:
             app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
 
+  synthetic-image-build-preflight:
+    name: Synthetic image build (no push, no deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restrict container build context
+        run: cp Dockerfile.synthetic-population.dockerignore .dockerignore
+      - name: Build candidate image without credentials or registry publishing
+        run: |
+          docker build --file Dockerfile.synthetic-population \
+            --tag dp-synthetic:pr-readiness .
+      - name: Verify image runtime contract offline
+        run: |
+          set -euo pipefail
+          image=dp-synthetic:pr-readiness
+          user=$(docker image inspect --format '{{.Config.User}}' "$image")
+          test "$user" = '10002:10002'
+          ports=$(docker image inspect --format '{{json .Config.ExposedPorts}}' "$image")
+          test "$ports" = 'null' || test "$ports" = '{}'
+          entry=$(docker image inspect --format '{{json .Config.Entrypoint}}' "$image")
+          test "$entry" = '["/opt/domino-synthetic/bin/miniproduction-client"]'
+          docker run --rm --network none --entrypoint /bin/sh "$image" \
+            -c 'test -x /opt/domino-synthetic/bin/miniproduction-client && test -d /state'
+          echo 'SYNTHETIC_IMAGE_BUILD_PREFLIGHT=PASS'
+          echo 'REGISTRY_PUSH=NONE'
+          echo 'PRODUCTION_CHANGES=NONE'
+
   release-readiness-powershell:
     runs-on: windows-latest
     timeout-minutes: 10
