@@ -73,7 +73,7 @@ jobs:
           if-no-files-found: ignore
 
   android-instrumentation:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
