@@ -8,7 +8,8 @@ param(
   [string]$RepoRoot = (Join-Path $PSScriptRoot '..'),
   [string]$RemoteHost = 'ubuntu@56.124.45.216',
   [string]$SshKey = (Join-Path $HOME '.ssh\lightsail-sa-east-1.pem'),
-  [switch]$SkipRemote
+  [switch]$SkipRemote,
+  [switch]$CheckTransportOnly
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -30,10 +31,12 @@ if (-not $match.Success) { throw 'VERSION_CODE_MISSING' }
 Record "CANDIDATE_VERSION_CODE=$($match.Groups[1].Value)"
 if ($match.Groups[1].Value -ne '37') { throw 'CANDIDATE_NOT_37' }
 Record 'PLAY_HIGHEST_VERSION=VERIFY_MANUALLY'
-if (-not $SkipRemote) {
-  if ($RemoteHost -notmatch '^[A-Za-z0-9_-]+@[A-Za-z0-9.-]+$') { throw 'REMOTE_HOST_INVALID' }
+if (-not $SkipRemote -or $CheckTransportOnly) {
+  if (-not $CheckTransportOnly) {
+    if ($RemoteHost -notmatch '^[A-Za-z0-9_-]+@[A-Za-z0-9.-]+$') { throw 'REMOTE_HOST_INVALID' }
   if (-not (Test-Path -LiteralPath $SshKey -PathType Leaf)) { throw 'SSH_KEY_MISSING' }
   $ssh = (Get-Command ssh.exe -ErrorAction Stop).Source
+  }
   $remote = @'
 set -eu
 echo '=== DP REMOTE READ ONLY ==='
@@ -69,6 +72,9 @@ echo 'REMOTE_READ_ONLY=PASS'
     throw 'REMOTE_SCRIPT_ENCODING_INVALID'
   }
   Record 'SSH_SCRIPT_ENCODING=UTF8_LF_BASE64_PASS'
+  if ($CheckTransportOnly) {
+    Record 'REMOTE_TRANSPORT_CHECK=PASS'
+  } else {
   $remoteCommand = "printf '%s' '$encoded' | base64 --decode | bash"
   # Do not send a PowerShell pipeline into SSH stdin. Capture the native exit
   # status even if SSH emits stderr (PowerShell 5.1 + Stop can throw early).
@@ -84,6 +90,7 @@ echo 'REMOTE_READ_ONLY=PASS'
   if ($exitCode -ne 0) {
     $report | Out-File -LiteralPath $evidence -Encoding UTF8
     throw "REMOTE_PREFLIGHT_FAILED=$exitCode; EVIDENCE=$evidence"
+  }
   }
 } else { Record 'REMOTE_PREFLIGHT=SKIPPED' }
 Record 'PRODUCTION_CHANGES=NONE'
