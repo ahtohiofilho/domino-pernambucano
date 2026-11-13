@@ -52,8 +52,34 @@ curl --fail --silent --show-error --max-time 12 -o /dev/null https://api.dominop
 echo 'PUBLIC_READY=PASS'
 echo 'REMOTE_READ_ONLY=PASS'
 '@
-  $output = @($remote | & $ssh -i $SshKey -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=12 $RemoteHost 'bash -s' 2>&1)
-  $exitCode = $LASTEXITCODE
+  # Windows PowerShell 5.1 pipes strings to native stdin with Windows-specific
+  # encoding/newlines. Sending the here-string to 'bash -s' can corrupt
+  # 'set -eu' on its first line. Encode UTF-8 + LF and decode remotely instead.
+  # Base64 is data, not a secret, and avoids all shell-quoting/CRLF ambiguity.
+  $linuxScript = (($remote -replace "`r`n", "`n") -replace "`r", "`n") + "`n"
+  $encoded = [Convert]::ToBase64String(
+    [Text.Encoding]::UTF8.GetBytes($linuxScript)
+  )
+  $decoded = [Text.Encoding]::UTF8.GetString(
+    [Convert]::FromBase64String($encoded)
+  )
+  if ($decoded -cne $linuxScript -or
+      $decoded.Contains("`r") -or
+      -not $decoded.StartsWith("set -eu`n", [StringComparison]::Ordinal)) {
+    throw 'REMOTE_SCRIPT_ENCODING_INVALID'
+  }
+  Record 'SSH_SCRIPT_ENCODING=UTF8_LF_BASE64_PASS'
+  $remoteCommand = "printf '%s' '$encoded' | base64 --decode | bash"
+  # Do not send a PowerShell pipeline into SSH stdin. Capture the native exit
+  # status even if SSH emits stderr (PowerShell 5.1 + Stop can throw early).
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $output = @(& $ssh -i $SshKey -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=12 $RemoteHost $remoteCommand 2>&1)
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
   foreach ($item in $output) { Record ([string]$item) }
   if ($exitCode -ne 0) {
     $report | Out-File -LiteralPath $evidence -Encoding UTF8
