@@ -1,7 +1,7 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [int]$VersionCode = 36,
+    [int]$VersionCode = 37,
     [switch]$Build
 )
 $ErrorActionPreference = 'Stop'
