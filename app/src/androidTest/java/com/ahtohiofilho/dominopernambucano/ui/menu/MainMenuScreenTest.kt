@@ -115,7 +115,7 @@ class MainMenuScreenTest {
     }
 
     @Test
-    fun champions_gallery_respects_pending_participation_gate() {
+    fun champions_gallery_remains_available_during_pending_participation() {
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation = readyParticipation(),
@@ -133,7 +133,7 @@ class MainMenuScreenTest {
         composeRule
             .onNodeWithTag(MainMenuAchievementGalleryActionTag)
             .assertIsDisplayed()
-            .assertIsNotEnabled()
+            .assertIsEnabled()
     }
 
     @Test
