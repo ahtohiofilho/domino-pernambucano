@@ -109,6 +109,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 
 internal fun launchAccountProfileSyncAfterAuthentication(
@@ -134,6 +135,7 @@ fun DominoPernambucanoApp(
     privacyOptionsRequired: Boolean = false,
     onPrivacyOptionsClick: () -> Unit = {},
     bannerAdsReady: Boolean = false,
+    foregroundEpoch: Int = 0,
 ) {
     val context = LocalContext.current
     val accountProfileStrings = OnlineAccountProfileStrings(
@@ -2296,6 +2298,7 @@ fun DominoPernambucanoApp(
             LaunchedEffect(
                 state.pendingOnlineParticipation,
                 state.pendingOnlineParticipationSessionRejection,
+                foregroundEpoch,
             ) {
                 var attempts = 0
                 while (attempts < PendingOnlineRecoveryRetryPolicy.MaxAutomaticAttempts) {
@@ -2312,7 +2315,9 @@ fun DominoPernambucanoApp(
 
                     when (action) {
                         PendingOnlineParticipationAutomaticRecoveryAction.INSPECT -> {
-                            sessionCoordinator.inspectPendingOnlineParticipation()
+                            withTimeoutOrNull(12_000L) {
+                                sessionCoordinator.inspectPendingOnlineParticipation()
+                            }
 
                             val inspected = sessionCoordinator.currentState
                                 as? DominoSessionState.MainMenu ?: break
@@ -2325,12 +2330,16 @@ fun DominoPernambucanoApp(
                                         inspected.pendingOnlineParticipationSessionRejection,
                                 ) == PendingOnlineParticipationAutomaticRecoveryAction.RESUME
                             ) {
-                                resumePendingOnlineParticipationFromMainMenu(inspected)
+                                withTimeoutOrNull(12_000L) {
+                                    resumePendingOnlineParticipationFromMainMenu(inspected)
+                                }
                             }
                         }
 
                         PendingOnlineParticipationAutomaticRecoveryAction.RESUME -> {
-                            resumePendingOnlineParticipationFromMainMenu(current)
+                            withTimeoutOrNull(12_000L) {
+                                resumePendingOnlineParticipationFromMainMenu(current)
+                            }
                         }
 
                         PendingOnlineParticipationAutomaticRecoveryAction.NONE -> {
