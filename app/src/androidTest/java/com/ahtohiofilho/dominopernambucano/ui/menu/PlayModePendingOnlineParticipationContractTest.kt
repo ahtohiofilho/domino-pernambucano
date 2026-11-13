@@ -1,5 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.ui.test.localizedUiText
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithText
@@ -30,10 +32,10 @@ class PlayModePendingOnlineParticipationContractTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Jogar online").assertIsNotEnabled()
-        composeRule.onNodeWithText("Criar sala").assertIsNotEnabled()
-        composeRule.onNodeWithText("Entrar em sala").assertIsNotEnabled()
-        composeRule.onNodeWithText("Jogar offline").assertIsEnabled().performClick()
+        composeRule.onNodeWithText(localizedUiText(R.string.play_mode_ranked)).assertIsNotEnabled()
+        composeRule.onNodeWithText(localizedUiText(R.string.play_mode_create_room)).assertIsNotEnabled()
+        composeRule.onNodeWithText(localizedUiText(R.string.play_mode_join_room)).assertIsNotEnabled()
+        composeRule.onNodeWithText(localizedUiText(R.string.play_mode_local)).assertIsEnabled().performClick()
         composeRule.runOnIdle {
             assertEquals(1, offlineClicks)
             assertEquals(0, onlineClicks)
@@ -54,9 +56,9 @@ class PlayModePendingOnlineParticipationContractTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Jogar online").assertIsEnabled()
-        composeRule.onNodeWithText("Criar sala").assertIsEnabled()
-        composeRule.onNodeWithText("Entrar em sala").assertIsEnabled()
-        composeRule.onNodeWithText("Jogar offline").assertIsEnabled()
+        composeRule.onNodeWithText(localizedUiText(R.string.play_mode_ranked)).assertIsEnabled()
+        composeRule.onNodeWithText(localizedUiText(R.string.play_mode_create_room)).assertIsEnabled()
+        composeRule.onNodeWithText(localizedUiText(R.string.play_mode_join_room)).assertIsEnabled()
+        composeRule.onNodeWithText(localizedUiText(R.string.play_mode_local)).assertIsEnabled()
     }
 }

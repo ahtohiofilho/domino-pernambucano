@@ -1,5 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.ui.test.localizedUiText
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -129,11 +131,11 @@ class AccountGoogleHandoffTest {
         }
 
         composeRule
-            .onNodeWithText("Conectando...")
+            .onNodeWithText(localizedUiText(R.string.account_connecting))
             .assertIsDisplayed()
 
         composeRule
-            .onNodeWithText("Jogar online")
+            .onNodeWithText(localizedUiText(R.string.play_mode_ranked))
             .assertIsNotEnabled()
     }
 }

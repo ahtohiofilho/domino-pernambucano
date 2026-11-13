@@ -1,5 +1,7 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import com.ahtohiofilho.dominopernambucano.R
+import com.ahtohiofilho.dominopernambucano.ui.test.localizedUiText
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -101,7 +103,7 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText(
-                "Conquistas oficiais de ciclos encerrados.",
+                localizedUiText(R.string.main_menu_achievement_gallery_support),
             )
             .assertIsDisplayed()
 
@@ -152,15 +154,15 @@ class MainMenuScreenTest {
         }
 
         composeRule
-            .onAllNodesWithText("Verificar participação online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_check_participation))
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Retomar partida online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_resume_match))
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsEnabled()
 
         composeRule
@@ -191,21 +193,21 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText(
-                "Não foi possível verificar agora. Tente novamente.",
+                localizedUiText(R.string.main_menu_try_again),
             )
             .assertIsDisplayed()
 
         composeRule
-            .onNodeWithText("Verificar participação online")
+            .onNodeWithText(localizedUiText(R.string.main_menu_check_participation))
             .assertIsDisplayed()
             .assertIsEnabled()
 
         composeRule
-            .onAllNodesWithText("Retomar partida online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_resume_match))
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsEnabled()
 
         composeRule
@@ -228,19 +230,19 @@ class MainMenuScreenTest {
         }
 
         composeRule
-            .onNodeWithText("Participação online confirmada.")
+            .onNodeWithText(localizedUiText(R.string.main_menu_participation_confirmed))
             .assertIsDisplayed()
 
         composeRule
-            .onAllNodesWithText("Retomar partida online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_resume_match))
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Verificar participação online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_check_participation))
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsEnabled()
 
         composeRule
@@ -264,25 +266,24 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText(
-                "Participação online confirmada. " +
-                        "A sala ainda está aguardando jogadores.",
+                localizedUiText(R.string.main_menu_participation_confirmed_waiting),
             )
             .assertIsDisplayed()
 
         composeRule
-            .onAllNodesWithText("Retomar sala online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_resume_room))
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Retomar partida online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_resume_match))
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Verificar participação online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_check_participation))
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsEnabled()
 
         composeRule
@@ -325,16 +326,16 @@ class MainMenuScreenTest {
             .assertIsDisplayed()
 
         composeRule
-            .onAllNodesWithText("Participa\u00e7\u00e3o online confirmada.")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_participation_confirmed))
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Retomar partida online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_resume_match))
             .assertCountEquals(0)
 
         composeRule
             .onNodeWithText(
-                "Remover participa\u00e7\u00e3o online rejeitada",
+                localizedUiText(R.string.main_menu_remove_rejected_participation),
             )
             .assertIsDisplayed()
             .assertIsEnabled()
@@ -372,28 +373,27 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText(
-                "Não foi possível verificar a participação: " +
-                        "a sessão online deste dispositivo foi rejeitada.",
+                localizedUiText(R.string.main_menu_session_rejected),
             )
             .assertIsDisplayed()
 
         composeRule
-            .onAllNodesWithText("Retomar partida online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_resume_match))
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Verificar participação online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_check_participation))
             .assertCountEquals(0)
 
         composeRule
             .onNodeWithText(
-                "Remover participação online rejeitada",
+                localizedUiText(R.string.main_menu_remove_rejected_participation),
             )
             .assertIsDisplayed()
             .assertIsEnabled()
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsEnabled()
 
         composeRule
@@ -429,16 +429,16 @@ class MainMenuScreenTest {
 
         composeRule
             .onAllNodesWithText(
-                "Remover participação online rejeitada",
+                localizedUiText(R.string.main_menu_remove_rejected_participation),
             )
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Verificar participação online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_check_participation))
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsEnabled()
 
         composeRule
@@ -471,21 +471,21 @@ class MainMenuScreenTest {
         }
 
         composeRule
-            .onAllNodesWithText("Retomar partida online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_resume_match))
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Verificar participação online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_check_participation))
             .assertCountEquals(0)
 
         composeRule
             .onAllNodesWithText(
-                "A participação online anterior não está mais disponível.",
+                localizedUiText(R.string.main_menu_participation_unavailable),
             )
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsEnabled()
 
         composeRule
@@ -520,7 +520,7 @@ class MainMenuScreenTest {
             .assertIsDisplayed()
 
         composeRule
-            .onNodeWithText("Retomar partida online")
+            .onNodeWithText(localizedUiText(R.string.main_menu_resume_match))
             .assertIsDisplayed()
             .assertIsEnabled()
             .performClick()
@@ -533,7 +533,7 @@ class MainMenuScreenTest {
         }
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsEnabled()
 
         composeRule
@@ -556,15 +556,15 @@ class MainMenuScreenTest {
         }
 
         composeRule
-            .onAllNodesWithText("Retomar partida online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_resume_match))
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Verificar participação online")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_check_participation))
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsNotEnabled()
 
         composeRule
@@ -593,12 +593,12 @@ class MainMenuScreenTest {
             .assertIsDisplayed()
 
         composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .assertIsDisplayed()
             .assertIsEnabled()
 
         composeRule
-            .onNodeWithText("Ranking")
+            .onNodeWithText(localizedUiText(R.string.main_menu_ranking))
             .assertIsDisplayed()
             .assertIsEnabled()
 
@@ -613,7 +613,7 @@ class MainMenuScreenTest {
             .assertIsEnabled()
 
         composeRule
-            .onNodeWithText("Entrar")
+            .onNodeWithText(localizedUiText(R.string.identity_profile_sign_in))
             .assertIsDisplayed()
 
         composeRule
@@ -625,7 +625,7 @@ class MainMenuScreenTest {
             .assertCountEquals(0)
 
         composeRule
-            .onAllNodesWithText("Conta")
+            .onAllNodesWithText(localizedUiText(R.string.main_menu_account))
             .assertCountEquals(0)
 
         composeRule
@@ -676,10 +676,10 @@ class MainMenuScreenTest {
             .onNodeWithTag(MainMenuActionsGroupTag)
             .getUnclippedBoundsInRoot()
         val playBounds = composeRule
-            .onNodeWithText("Jogar")
+            .onNodeWithText(localizedUiText(R.string.main_menu_play))
             .getUnclippedBoundsInRoot()
         val rankingBounds = composeRule
-            .onNodeWithText("Ranking")
+            .onNodeWithText(localizedUiText(R.string.main_menu_ranking))
             .getUnclippedBoundsInRoot()
 
 

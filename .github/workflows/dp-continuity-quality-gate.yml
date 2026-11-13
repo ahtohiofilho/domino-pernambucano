@@ -102,7 +102,7 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
-          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -prop persist.sys.locale=pt-BR
+          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect
           disable-animations: true
           script: bash ./gradlew :app:connectedDebugAndroidTest --stacktrace
       - name: Publish instrumentation results

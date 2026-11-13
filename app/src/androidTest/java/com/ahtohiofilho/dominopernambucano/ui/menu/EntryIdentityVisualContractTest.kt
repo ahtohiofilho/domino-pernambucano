@@ -1,5 +1,6 @@
 package com.ahtohiofilho.dominopernambucano.ui.menu
 
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -98,7 +99,7 @@ class EntryIdentityVisualContractTest {
             .assertCountEquals(0)
 
         composeRule
-            .onNodeWithText(backLabel)
+            .onNodeWithContentDescription(backLabel)
             .assertIsDisplayed()
             .performClick()
 
@@ -206,7 +207,7 @@ class EntryIdentityVisualContractTest {
         composeRule.onNodeWithText(localLabel).assertIsDisplayed()
         composeRule.onNodeWithText(createRoomLabel).assertIsDisplayed()
         composeRule.onNodeWithText(joinRoomLabel).assertIsDisplayed()
-        composeRule.onNodeWithText(backLabel).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(backLabel).assertIsDisplayed()
     }
 
     @Test
