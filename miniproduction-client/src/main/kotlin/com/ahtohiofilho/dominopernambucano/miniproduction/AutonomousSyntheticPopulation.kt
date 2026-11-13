@@ -159,6 +159,8 @@ internal class AutonomousSyntheticPopulation(
     private val nowEpochMillis: () -> Long = System::currentTimeMillis,
     private val sleeper: (Long) -> Unit = Thread::sleep,
     private val heartbeat: (Long) -> Unit = {},
+    private val recoverCredential:
+        ((SyntheticAccountCredential, SyntheticProfile) -> SyntheticAccountCredential)? = null,
 ) {
     init {
         require(profiles.size == credentials.size) {
@@ -182,6 +184,8 @@ internal class AutonomousSyntheticPopulation(
     private var acceptedActions = 0L
     private var rejectedActions = 0L
     private var transientFailures = 0L
+    private var authenticationRecoveries = 0L
+    private var authenticationRecoveryFailures = 0L
     private val liveness = SyntheticRuntimeLiveness(
         maxSilenceMillis = config.maxSilenceMillis,
         heartbeat = heartbeat,
@@ -267,6 +271,20 @@ internal class AutonomousSyntheticPopulation(
                     ?: (now + nextDelayMillis)
         } catch (failure: MiniProductionHttpException) {
             when {
+                failure.statusCode == 401 -> {
+                    recoverAuthenticationFor(player, now)
+                }
+
+                failure.statusCode == 403 -> {
+                    // Authorization denied is distinct from an expired credential.
+                    // Isolate the participant; do not terminate all 60 actors.
+                    authenticationRecoveryFailures++
+                    player.nextStepAtEpochMillis = now + 60_000L
+                    println(
+                        "POPULATION_ACCOUNT_AUTH_BLOCKED profileIndex=${player.profile.index} status=403",
+                    )
+                }
+
                 failure.statusCode == 404 && player.matchId != null -> {
                     player.clearMatch()
                     player.nextStepAtEpochMillis = now + 1_000L
@@ -282,6 +300,40 @@ internal class AutonomousSyntheticPopulation(
         } catch (failure: java.io.IOException) {
             transientFailures++
             player.nextStepAtEpochMillis = now + 2_000L
+        }
+    }
+
+    private fun recoverAuthenticationFor(
+        player: SyntheticPlayerRuntime,
+        now: Long,
+    ) {
+        try {
+            val renewed = requireNotNull(recoverCredential) {
+                "A recuperação de sessão sintética não foi configurada."
+            }.invoke(player.credential, player.profile)
+
+            check(
+                renewed.accountId == player.credential.accountId &&
+                    renewed.playerId == player.credential.playerId &&
+                    renewed.profileIndex == player.profile.index
+            ) {
+                "A recuperação de sessão alterou a identidade sintética."
+            }
+
+            player.credential = renewed
+            authenticationRecoveries++
+            player.nextStepAtEpochMillis = now + 1_000L
+            println(
+                "POPULATION_ACCOUNT_RECOVERED profileIndex=${player.profile.index}",
+            )
+        } catch (error: Exception) {
+            // Retry only this account; a single 401 must not stop the entire population.
+            authenticationRecoveryFailures++
+            player.nextStepAtEpochMillis = now + 30_000L
+            println(
+                "POPULATION_ACCOUNT_RECOVERY_FAILED profileIndex=${player.profile.index} " +
+                    "type=${error::class.simpleName}",
+            )
         }
     }
 
@@ -456,13 +508,15 @@ internal class AutonomousSyntheticPopulation(
                 "completedObservations=$completedMatches " +
                 "acceptedActions=$acceptedActions " +
                 "rejectedActions=$rejectedActions " +
-                "transientFailures=$transientFailures",
+                "transientFailures=$transientFailures " +
+                "authenticationRecoveries=$authenticationRecoveries " +
+                "authenticationRecoveryFailures=$authenticationRecoveryFailures",
         )
     }
 
     private data class SyntheticPlayerRuntime(
         val profile: SyntheticProfile,
-        val credential: SyntheticAccountCredential,
+        var credential: SyntheticAccountCredential,
         var matchId: String? = null,
         var localSeatIndex: Int? = null,
         var nextStepAtEpochMillis: Long = 0L,
