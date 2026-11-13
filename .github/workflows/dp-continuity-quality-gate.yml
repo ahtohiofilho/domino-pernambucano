@@ -102,6 +102,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path (Join-Path $HOME 'Downloads') | Out-Null
           & .\scripts\Invoke-DPReleaseReadiness.ps1 -SkipRemote
+      - name: Verify SSH Bash payload on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\Invoke-DPReleaseReadiness.ps1 -CheckTransportOnly
+          if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+            throw 'POWERSHELL51_REMOTE_PAYLOAD_CHECK_FAILED'
+          }
 
   android-instrumentation:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
