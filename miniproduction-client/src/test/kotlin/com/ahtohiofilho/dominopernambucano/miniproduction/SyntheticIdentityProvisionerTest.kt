@@ -112,7 +112,7 @@ class SyntheticIdentityProvisionerTest {
         assertEquals("recovered-token-1", renewed.accessToken)
         assertEquals(renewed, store.load().first())
         assertEquals(first[1], store.load()[1])
-        assertEquals(1, gateway.anonymousSessionsCreated - 1)
+        assertEquals(2, gateway.anonymousSessionsCreated)
         assertEquals(1, gateway.syntheticSessionsRecovered)
     }
 }
