@@ -3,8 +3,6 @@ name: DP Continuity Quality Gate
 on:
   pull_request:
     branches: [ main ]
-  push:
-    branches: [ fix/dp-continuity-self-healing-20261113 ]
   workflow_dispatch:
 
 permissions:
