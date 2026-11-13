@@ -17,6 +17,40 @@ class MainMenuScreenLocalSessionBlockTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun unresolved_remote_participation_does_not_block_safe_main_menu_navigation() {
+        val binding = OnlineParticipationBinding(
+            roomId = "room-1",
+            matchId = "match-1",
+            playerId = "player-1",
+            localSeatIndex = 0,
+        )
+
+        composeRule.setContent {
+            MainMenuScreen(
+                pendingOnlineParticipation =
+                    OnlinePendingParticipationLocalResolution.ReadyForRemoteReconciliation(
+                        binding = binding,
+                    ),
+                pendingOnlineParticipationInspection =
+                    OnlinePendingParticipationInspectionState.Completed(
+                        result =
+                            com.ahtohiofilho.dominopernambucano.online
+                                .OnlinePendingParticipationRemoteInspection
+                                .TemporarilyUnavailable("network unavailable"),
+                    ),
+                pendingOnlineMatchResumeInProgress = false,
+                onPlayClick = {},
+                onRankingClick = {},
+                onInspectPendingOnlineParticipationClick = {},
+                onResumePendingOnlineMatchClick = {},
+            )
+        }
+
+        // Play routes to offline selection; competing online entry stays gated there.
+        composeRule.onNodeWithText("Jogar").assertIsDisplayed().assertIsEnabled()
+    }
+
+    @Test
     fun missing_valid_session_hides_resume_and_keeps_play_available() {
         val binding = OnlineParticipationBinding(
             roomId = "room-1",
