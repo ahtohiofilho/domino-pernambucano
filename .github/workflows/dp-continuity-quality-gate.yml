@@ -72,6 +72,37 @@ jobs:
             app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
 
+  release-readiness-powershell:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse PowerShell operational scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($script in @(
+              'scripts/Invoke-DPReleaseReadiness.ps1',
+              'scripts/Release-DominoPE.ps1',
+              'scripts/Invoke-DPContinuityQa.ps1'
+          )) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script).Path, [ref]$tokens, [ref]$parseErrors
+            )
+            if ($parseErrors.Count -ne 0) {
+              $parseErrors | ForEach-Object { Write-Error $_.Message }
+              throw "PS_PARSE_FAILED=$script"
+            }
+          }
+      - name: Execute safe offline release readiness check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path (Join-Path $HOME 'Downloads') | Out-Null
+          & .\scripts\Invoke-DPReleaseReadiness.ps1 -SkipRemote
+
   android-instrumentation:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
