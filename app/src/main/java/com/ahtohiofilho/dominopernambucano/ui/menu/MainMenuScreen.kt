@@ -421,9 +421,7 @@ fun MainMenuScreen(
                     title = stringResource(R.string.main_menu_play),
                     supportingText = null,
                     onClick = onPlayClick,
-                    enabled =
-                        !menuActionInProgress &&
-                            !continuityGateActive,
+                    enabled = !menuActionInProgress,
                     leadingContent = {
                         BrandGlyph("▶")
                     },
@@ -441,9 +439,7 @@ fun MainMenuScreen(
                     ),
                     accent = DominoBrandAccent.Red,
                     onClick = onRankingClick,
-                    enabled =
-                        !menuActionInProgress &&
-                            !continuityGateActive,
+                    enabled = !menuActionInProgress,
                     elevated = true,
                     leadingContent = {
                         BrandGlyph("★")
