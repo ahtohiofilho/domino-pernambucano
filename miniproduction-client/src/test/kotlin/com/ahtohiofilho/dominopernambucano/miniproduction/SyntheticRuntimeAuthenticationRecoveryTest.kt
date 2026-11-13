@@ -25,7 +25,7 @@ class SyntheticRuntimeAuthenticationRecoveryTest {
             gateway = gateway,
             recovery = { account, _ ->
                 recoveries++
-                account.copy(accessToken = "renewed-token-0")
+                account.copy(accessToken = "renewed-token-1")
             },
         )
         assertEquals(1, recoveries)
@@ -97,11 +97,11 @@ class SyntheticRuntimeAuthenticationRecoveryTest {
             accessToken: String,
             tableCode: String,
         ): PublicRankedQueueHttpResponseDto {
-            if (accessToken == "old-token-0") {
+            if (accessToken == "old-token-1") {
                 throw MiniProductionHttpException(401, "ranked-queue", "")
             }
-            if (accessToken == "renewed-token-0") acceptedRenewedToken = true
-            if (accessToken == "old-token-1") healthyAccountsPolled = true
+            if (accessToken == "renewed-token-1") acceptedRenewedToken = true
+            if (accessToken == "old-token-2") healthyAccountsPolled = true
             return PublicRankedQueueHttpResponseDto(
                 status = PublicRankedQueueHttpStatus.WAITING,
                 queuePosition = 1,
