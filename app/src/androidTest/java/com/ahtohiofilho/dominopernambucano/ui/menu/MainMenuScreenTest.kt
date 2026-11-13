@@ -161,11 +161,11 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText("Jogar")
-            .assertIsNotEnabled()
+            .assertIsEnabled()
 
         composeRule
             .onNodeWithTag(MainMenuRankingActionTag)
-            .assertIsNotEnabled()
+            .assertIsEnabled()
     }
 
     @Test
@@ -206,11 +206,11 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText("Jogar")
-            .assertIsNotEnabled()
+            .assertIsEnabled()
 
         composeRule
             .onNodeWithTag(MainMenuRankingActionTag)
-            .assertIsNotEnabled()
+            .assertIsEnabled()
     }
     @Test
     fun completed_recoverable_inspection_uses_automatic_resume_without_manual_card() {
@@ -241,11 +241,11 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText("Jogar")
-            .assertIsNotEnabled()
+            .assertIsEnabled()
 
         composeRule
             .onNodeWithTag(MainMenuRankingActionTag)
-            .assertIsNotEnabled()
+            .assertIsEnabled()
     }
     @Test
     fun completed_recoverable_waiting_inspection_uses_automatic_room_return_without_manual_card() {
@@ -283,11 +283,11 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText("Jogar")
-            .assertIsNotEnabled()
+            .assertIsEnabled()
 
         composeRule
             .onNodeWithTag(MainMenuRankingActionTag)
-            .assertIsNotEnabled()
+            .assertIsEnabled()
     }
     @Test
     fun remote_session_rejected_resume_feedback_hides_resume_and_shows_explicit_discard() {
@@ -346,7 +346,7 @@ class MainMenuScreenTest {
     }
 
     @Test
-    fun remote_session_rejected_inspection_requires_explicit_discard_and_blocks_primary_actions() {
+    fun remote_session_rejected_inspection_keeps_safe_navigation_available() {
         composeRule.setContent {
             MainMenuScreen(
                 pendingOnlineParticipation = readyParticipation(),
@@ -394,11 +394,11 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText("Jogar")
-            .assertIsNotEnabled()
+            .assertIsEnabled()
 
         composeRule
             .onNodeWithTag(MainMenuRankingActionTag)
-            .assertIsNotEnabled()
+            .assertIsEnabled()
     }
     @Test
     fun rejected_binding_discard_is_hidden_when_rejection_does_not_match_pending_participation() {
@@ -439,11 +439,11 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText("Jogar")
-            .assertIsNotEnabled()
+            .assertIsEnabled()
 
         composeRule
             .onNodeWithTag(MainMenuRankingActionTag)
-            .assertIsNotEnabled()
+            .assertIsEnabled()
     }
     @Test
     fun completed_non_recoverable_inspection_releases_continuity_gate() {
@@ -534,11 +534,11 @@ class MainMenuScreenTest {
 
         composeRule
             .onNodeWithText("Jogar")
-            .assertIsNotEnabled()
+            .assertIsEnabled()
 
         composeRule
             .onNodeWithTag(MainMenuRankingActionTag)
-            .assertIsNotEnabled()
+            .assertIsEnabled()
     }
     @Test
     fun automatic_resume_in_progress_blocks_primary_actions_without_manual_resume_card() {
