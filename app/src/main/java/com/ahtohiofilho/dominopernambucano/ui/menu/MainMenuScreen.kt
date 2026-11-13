@@ -211,15 +211,6 @@ fun MainMenuScreen(
         resumePendingOnlineMatchAvailable &&
                 pendingOnlineMatchResumeFeedbackMessage != null
 
-    /*
-     * A persisted recoverable participation owns continuity until it is
-     * restored, proved obsolete, or explicitly discarded after rejection.
-     */
-    val continuityGateActive =
-        pendingOnlineParticipation is
-            OnlinePendingParticipationLocalResolution
-                .ReadyForRemoteReconciliation
-
     val menuActionInProgress =
         inspectionInProgress || pendingOnlineMatchResumeInProgress
 
@@ -460,9 +451,7 @@ fun MainMenuScreen(
                         ),
                         accent = DominoBrandAccent.Yellow,
                         onClick = onAchievementGalleryClick,
-                        enabled =
-                            !menuActionInProgress &&
-                                !continuityGateActive,
+                        enabled = !menuActionInProgress,
                         leadingContent = {
                             BrandGlyph("◆")
                         },
