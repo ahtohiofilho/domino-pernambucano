@@ -102,6 +102,19 @@ def api_health() -> None:
                 raise GateError("API_UNHEALTHY") from None
 
 
+def wait_healthy(r: Runner, seconds: int = 180) -> None:
+    start = time.monotonic()
+    while time.monotonic() - start < seconds:
+        demand(r.inspect(NAME)["State"]["Status"] == "running",
+               "SERVER_STOPPED_DURING_HEALTH_CHECK")
+        try:
+            api_health()
+            return
+        except GateError:
+            time.sleep(3)
+    raise GateError("SERVER_HEALTH_TIMEOUT")
+
+
 def validate_contract(container: dict, image: dict) -> tuple[dict, Path, Path, dict]:
     cfg, host = container["Config"], container["HostConfig"]
     demand(container["Image"] == IMAGE and image["Id"] == IMAGE, "IMAGE_DRIFT")
@@ -269,7 +282,7 @@ def rollback(r: Runner, stopped: bool, renamed: bool,
         r.docker("start", NAME)
         demand(r.inspect(NAME)["State"]["Status"] == "running",
                "ROLLBACK_SERVER_NOT_RUNNING")
-        api_health()
+        wait_healthy(r)
         log("SERVER_ROLLBACK_HEALTH=PASS")
     else:
         log("ORIGINAL_SERVER_UNCHANGED=YES")
@@ -315,7 +328,7 @@ def execute(r: Runner, original: dict, env: dict, source: Path, state_file: Path
         r.docker("start", NAME)
         demand(r.inspect(NAME)["State"]["Status"] == "running",
                "NEW_SERVER_NOT_RUNNING")
-        api_health()
+        wait_healthy(r)
         demand(parse_env(r.inspect(NAME)["Config"]["Env"])[ENV_KEY] == NEW_ALLOWED,
                "NEW_SERVER_ALLOWLIST_DRIFT")
         r.docker("update", "--restart", "no", PARKED)
