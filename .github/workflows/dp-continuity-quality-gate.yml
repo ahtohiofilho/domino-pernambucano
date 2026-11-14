@@ -149,6 +149,9 @@ jobs:
           set -euo pipefail
           python3 -m py_compile deploy/release/dp_synthetic_cutover.py
           python3 -m unittest discover -s tests/ops -p 'test_dp_synthetic_cutover.py' -v
+          python3 -m py_compile deploy/release/dp_server_v37_allowlist_cutover.py
+          python3 -m unittest discover -s tests/ops -p 'test_dp_server_v37_allowlist_cutover.py' -v
+          echo 'SERVER_ALLOWLIST_OFFLINE_ROLLBACK=PASS'
           echo 'CUTOVER_MOCK_REHEARSAL=PASS'
           echo 'PRODUCTION_CHANGES=NONE'
 
@@ -165,7 +168,8 @@ jobs:
               'scripts/Invoke-DPReleaseReadiness.ps1',
               'scripts/Release-DominoPE.ps1',
               'scripts/Invoke-DPContinuityQa.ps1',
-              'scripts/Invoke-DPSyntheticCutover.ps1'
+              'scripts/Invoke-DPSyntheticCutover.ps1',
+              'scripts/Invoke-DPServerV37AllowlistCutover.ps1'
           )) {
             $tokens = $null
             $parseErrors = $null
