@@ -106,8 +106,19 @@ if (-not $keytool) {
     $keytool = Join-Path ${env:ProgramFiles} 'Android\Android Studio\jbr\bin\keytool.exe'
 }
 $keytool = Resolve-Executable $keytool
-$keyInfo = @(& $keytool -list -v -keystore $keystore -alias $cfg.uploadKeyAlias '-storepass:env' DOMINO_UPLOAD_STORE_PASSWORD 2>&1)
-Assert-That ($LASTEXITCODE -eq 0) 'KEYSTORE_VERIFICACAO_FALHOU'
+# On Windows PowerShell 5.1, a native tool's stderr is surfaced as an ErrorRecord.
+# With ErrorActionPreference=Stop, even a harmless keytool warning aborts before
+# LASTEXITCODE can be evaluated. Capture its real exit status before restoring Stop.
+$keytoolExit = -1
+$nativePreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    $keyInfo = @(& $keytool -list -v -keystore $keystore -alias $cfg.uploadKeyAlias '-storepass:env' DOMINO_UPLOAD_STORE_PASSWORD 2>&1)
+    $keytoolExit = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $nativePreference
+}
+Assert-That ($keytoolExit -eq 0) 'KEYSTORE_VERIFICACAO_FALHOU'
 $shaLines = @($keyInfo | ForEach-Object { [string]$_ } | Where-Object { $_ -match 'SHA256:\s*([0-9A-Fa-f:]+)' })
 Assert-That ($shaLines.Count -eq 1) 'CERTIFICADO_SHA_NAO_LOCALIZADO'
 $sha = ([regex]::Match($shaLines[0], 'SHA256:\s*([0-9A-Fa-f:]+)')).Groups[1].Value.Replace(':','').ToLowerInvariant()
@@ -115,18 +126,33 @@ Assert-Equal $sha (([string]$cfg.uploadCertSha256).ToLowerInvariant()) 'ASSINATU
 Write-Host 'ASSINATURA_UPLOAD_PASS'
 
 $gradle = Resolve-Executable (Join-Path $repo 'gradlew.bat')
+$gradleExit = -1
+$nativePreference = $ErrorActionPreference
 Push-Location $repo
 try {
+    $ErrorActionPreference = 'Continue'
     & $gradle :app:assembleRelease :app:bundleRelease --no-daemon --console=plain
-    Assert-That ($LASTEXITCODE -eq 0) 'GRADLE_BUILD_FAIL'
-} finally { Pop-Location }
+    $gradleExit = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $nativePreference
+    Pop-Location
+}
+Assert-That ($gradleExit -eq 0) 'GRADLE_BUILD_FAIL'
 $apk = Resolve-Executable (Join-Path $repo 'app\build\outputs\apk\release\app-release.apk')
 $aab = Resolve-Executable (Join-Path $repo 'app\build\outputs\bundle\release\app-release.aab')
 $signer = Get-ChildItem (Join-Path $sdk 'build-tools') -Filter apksigner.bat -Recurse -File |
     Sort-Object { [version]$_.Directory.Name } -Descending | Select-Object -First 1 -ExpandProperty FullName
 $signer = Resolve-Executable $signer
-$signResult = @(& $signer verify --print-certs $apk)
-Assert-That ($LASTEXITCODE -eq 0) 'APK_ASSINATURA_INVALIDA'
+$signExit = -1
+$nativePreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    $signResult = @(& $signer verify --print-certs $apk 2>&1)
+    $signExit = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $nativePreference
+}
+Assert-That ($signExit -eq 0) 'APK_ASSINATURA_INVALIDA'
 $shaApk = @($signResult | Where-Object { $_ -match 'certificate SHA-256 digest:\s*([0-9a-f]+)' })
 Assert-That ($shaApk.Count -ge 1) 'APK_CERTIFICADO_AUSENTE'
 $actualApk = [regex]::Match($shaApk[0], 'digest:\s*([0-9a-f]+)').Groups[1].Value
@@ -137,8 +163,16 @@ Check-IdsInPackage $aab $cfg
 # jarsigner is an independent signature check of the AAB upload artifact.
 $jarsigner = Join-Path (Split-Path $keytool -Parent) 'jarsigner.exe'
 $jarsigner = Resolve-Executable $jarsigner
-& $jarsigner -verify $aab | Out-Null
-Assert-That ($LASTEXITCODE -eq 0) 'AAB_ASSINATURA_INVALIDA'
+$jarsignerExit = -1
+$nativePreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    & $jarsigner -verify $aab 2>&1 | Out-Null
+    $jarsignerExit = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $nativePreference
+}
+Assert-That ($jarsignerExit -eq 0) 'AAB_ASSINATURA_INVALIDA'
 Write-Host "RELEASE_ARTIFACTS_PASS versionCode=$VersionCode"
 Write-Host "APK=$apk"
 Write-Host "AAB=$aab"
