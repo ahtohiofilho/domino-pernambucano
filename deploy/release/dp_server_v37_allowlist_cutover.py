@@ -30,6 +30,7 @@ OLD_ALLOWED = "32,33,34,35,36"
 NEW_ALLOWED = "32,33,34,35,36,37"
 ENV_KEY = "DOMINO_PRODUCTION_ALLOWED_CLIENT_VERSION_CODES"
 BACKUP_ROOT = Path("/var/backups/domino-pe/server")
+ENV_TMP_ROOT = Path("/run")
 APPROVAL = "AUTORIZO-CORRECAO-ALLOWLIST-V37"
 
 
@@ -297,7 +298,7 @@ def execute(r: Runner, original: dict, env: dict, source: Path, state_file: Path
     try:
         expected_env = dict(env)
         expected_env[ENV_KEY] = NEW_ALLOWED
-        handle, name = tempfile.mkstemp(prefix="dp-server-v37-env-", dir="/run")
+        handle, name = tempfile.mkstemp(prefix="dp-server-v37-env-", dir=ENV_TMP_ROOT)
         try:
             os.fchmod(handle, 0o600)
             with os.fdopen(handle, "w", encoding="utf-8") as out:
