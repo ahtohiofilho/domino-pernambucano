@@ -138,6 +138,20 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
+  synthetic-cutover-offline:
+    name: Synthetic cutover rollback rehearsal (offline only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and test cutover transaction without Docker or AWS
+        run: |
+          set -euo pipefail
+          python3 -m py_compile deploy/release/dp_synthetic_cutover.py
+          python3 -m unittest discover -s tests/ops -p 'test_dp_synthetic_cutover.py' -v
+          echo 'CUTOVER_MOCK_REHEARSAL=PASS'
+          echo 'PRODUCTION_CHANGES=NONE'
+
   release-readiness-powershell:
     runs-on: windows-latest
     timeout-minutes: 10
@@ -150,7 +164,8 @@ jobs:
           foreach ($script in @(
               'scripts/Invoke-DPReleaseReadiness.ps1',
               'scripts/Release-DominoPE.ps1',
-              'scripts/Invoke-DPContinuityQa.ps1'
+              'scripts/Invoke-DPContinuityQa.ps1',
+              'scripts/Invoke-DPSyntheticCutover.ps1'
           )) {
             $tokens = $null
             $parseErrors = $null
