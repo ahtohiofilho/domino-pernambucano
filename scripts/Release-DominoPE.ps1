@@ -31,7 +31,8 @@ function Get-DexValues([string]$Package, [string]$Regex) {
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead($Package)
-    $matches = New-Object 'System.Collections.Generic.List[string]'
+    # Avoid $Matches: PowerShell automatically overwrites it on -match/-notmatch.
+    $dexValues = New-Object 'System.Collections.Generic.List[string]'
     try {
         foreach ($entry in $archive.Entries) {
             if ($entry.FullName -notmatch '(^|/)classes[0-9]*\.dex$' -and $entry.FullName -notmatch '(^|/)classes\.dex$') { continue }
@@ -40,11 +41,11 @@ function Get-DexValues([string]$Package, [string]$Regex) {
             try {
                 $stream.CopyTo($mem)
                 $body = [Text.Encoding]::ASCII.GetString($mem.ToArray())
-                foreach ($hit in [regex]::Matches($body, $Regex)) { $matches.Add($hit.Value) }
+                foreach ($hit in [regex]::Matches($body, $Regex)) { [void]$dexValues.Add($hit.Value) }
             } finally { $stream.Dispose(); $mem.Dispose() }
         }
     } finally { $archive.Dispose() }
-    return @($matches | Sort-Object -Unique)
+    return @($dexValues | Sort-Object -Unique)
 }
 function Check-IdsInPackage([string]$Package, $Cfg) {
     $oauth = @(Get-DexValues $Package '[0-9]{10,}-[a-zA-Z0-9]+\.apps\.googleusercontent\.com')
