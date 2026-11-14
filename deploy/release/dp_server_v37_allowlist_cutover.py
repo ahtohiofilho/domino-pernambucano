@@ -244,7 +244,8 @@ def assert_prepared(r: Runner, original: dict, expected_env: dict,
 
 def backup_state(path: Path) -> tuple[Path, str]:
     BACKUP_ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
-    demand(BACKUP_ROOT.stat().st_uid == 0, "BACKUP_DIRECTORY_OWNER_DRIFT")
+    demand(BACKUP_ROOT.stat().st_uid == os.geteuid() and
+           not BACKUP_ROOT.is_symlink(), "BACKUP_DIRECTORY_OWNER_DRIFT")
     os.chmod(BACKUP_ROOT, 0o700)
     handle, name = tempfile.mkstemp(prefix="state-v37-allowlist-", suffix=".json", dir=BACKUP_ROOT)
     output = Path(name)
