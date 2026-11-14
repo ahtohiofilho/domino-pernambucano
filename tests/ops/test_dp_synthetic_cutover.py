@@ -1,0 +1,318 @@
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deploy" / "release"))
+import unittest
+from unittest import mock
+
+import dp_synthetic_cutover as c
+
+
+def identity_state(n=60):
+    return {'schemaVersion': 1, 'baseUrl': 'https://api.dominope.com.br', 'accounts': [
+        {'profileIndex': i, 'accountId': f'account-{i}', 'playerId': f'player-{i}',
+         'accessToken': f'secret-{i}', 'expiresAtEpochMillis': 1770000000000} for i in range(1, n+1)
+    ]}
+
+
+def baseline(secret_path):
+    env = {
+        'PATH': '/usr/bin', 'HOME': '/opt/domino-synthetic', 'LANG': 'C.UTF-8',
+        'JAVA_OPTS': '-XX:MaxRAMPercentage=50.0',
+        'HOSTNAME': 'aab', 'TERM': 'xterm', 'JAVA_HOME': '/opt/java',
+        'DOMINO_SYNTHETIC_RUNTIME_TARGET': 'REMOTE_PRODUCTION',
+        'DOMINO_SYNTHETIC_BASE_URL': 'https://api.dominope.com.br',
+        'DOMINO_SYNTHETIC_CLIENT_STATE_DIR': '/state',
+        'DOMINO_SYNTHETIC_POPULATION_SIZE': '60',
+        'DOMINO_SYNTHETIC_STANDBY_POOL_SIZE': '6',
+        'DOMINO_SYNTHETIC_STANDBY_POLL_INTERVAL_MILLIS': '5000',
+        'DOMINO_SYNTHETIC_POLL_INTERVAL_MILLIS': '750',
+        'DOMINO_SYNTHETIC_HEARTBEAT_FILE': '/state/runtime-heartbeat',
+        'DOMINO_SYNTHETIC_MAX_SILENCE_MILLIS': '180000',
+        'DOMINO_SYNTHETIC_PROVISIONING_SECRET_FILE': '/run/secrets/synthetic_provisioning_secret',
+    }
+    check = {'Test': ['CMD-SHELL', 'true'], 'Interval': 30000000000}
+    cfg = {'User':'10002:10002','WorkingDir':'/opt/domino-synthetic','StopSignal':'SIGTERM',
+           'Entrypoint':['/opt/domino-synthetic/bin/miniproduction-client'],
+           'Healthcheck':check,'Env':[k+'='+v for k,v in env.items()]}
+    host = {'ReadonlyRootfs': True, 'Privileged':False, 'Init':True,'AutoRemove':False,
+            'CapDrop':['ALL'], 'CapAdd':None, 'SecurityOpt':['no-new-privileges:true'],
+            'NetworkMode':'bridge','RestartPolicy':{'Name':'unless-stopped'},
+            'LogConfig':{'Type':'local'}, 'PortBindings':{},'Devices':None,'Ulimits':None,
+            'IpcMode':'private','PidMode':'','Memory':0,'CpuShares':0,'NanoCpus':0,
+            'PidsLimit':None,'Tmpfs':{'/tmp':'size=16777216,mode=1777'}}
+    obj = {'Image':c.OLD_IMAGE,'Config':cfg,'HostConfig':host,
+           'State':{'Status':'running','Health':{'Status':'healthy'}},
+           'NetworkSettings':{'Networks':{'bridge':{}}},
+           'Mounts':[
+               {'Destination':'/state','Type':'volume','Name':c.STATE_VOLUME,'RW':True},
+               {'Destination':'/run/secrets/synthetic_provisioning_secret',
+                'Type':'bind','RW':False,'Source':str(secret_path)}]}
+    old={'Id':c.OLD_IMAGE,'Config':{'Healthcheck':check}}
+    new={'Id':c.NEW_IMAGE,'Config':{'Healthcheck':check,'User':'10002:10002',
+                                 'Entrypoint':cfg['Entrypoint']},'Os':'linux','Architecture':'amd64'}
+    return obj,old,new,env
+
+
+class GateTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.secret = self.root/'secret'
+        self.secret.write_text('private')
+        self.obj,self.old,self.new,self.env = baseline(self.secret)
+
+    def test_cli_success_exit_code_does_not_trigger_failure_handler(self):
+        # Previously, SystemExit(0) was caught by except BaseException
+        # and turned into exit 1 even after CUTOVER_PREFLIGHT=PASS.
+        with mock.patch.object(c, 'main', return_value=0):
+            self.assertEqual(c.cli(), 0)
+
+    def test_cli_success_process_exit_status(self):
+        # Exercise the true OS process exit code without connecting to Docker/AWS.
+        code = (
+            'import sys; sys.path.insert(0, ' + repr(str(Path(c.__file__).parent)) + '); '
+            'import dp_synthetic_cutover as c; c.main = lambda: 0; '
+            'raise SystemExit(c.cli())'
+        )
+        completed = subprocess.run(
+            [sys.executable, '-c', code], capture_output=True, text=True, check=False
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertNotIn('CUTOVER_FAILED=', completed.stderr)
+
+    def test_cli_rejected_approval_returns_failure_without_docker(self):
+        completed = subprocess.run(
+            [sys.executable, str(Path(c.__file__)), '--approval', 'UNAUTHORIZED'],
+            capture_output=True, text=True, check=False
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn('APPROVAL_WITHOUT_EXECUTE', completed.stderr)
+        self.assertNotIn('Traceback', completed.stderr)
+
+    def test_valid_contract(self):
+        env,secret,tmpfs = c.validate_contract(self.obj,self.old,self.new)
+        self.assertEqual(env,self.env)
+        self.assertEqual(secret,str(self.secret))
+        self.assertEqual(tmpfs['/tmp'],'size=16777216,mode=1777')
+
+    def test_local_log_options_preserved_during_preflight(self):
+        # Log rotation is part of the effective production runtime contract.
+        options = {'max-size':'10m', 'max-file':'5', 'compress':'true',
+                   'mode':'non-blocking', 'max-buffer-size':'4m'}
+        self.obj['HostConfig']['LogConfig']['Config'] = options.copy()
+        env, secret, tmpfs = c.validate_contract(self.obj,self.old,self.new)
+        self.assertEqual(len(env),17)
+        argv = c.create_argv(Path('/run/safe.env'),secret,tmpfs,log_options=options)
+        passed = dict(
+            item.split('=',1)
+            for i,item in enumerate(argv)
+            if i > 0 and argv[i-1] == '--log-opt'
+        )
+        self.assertEqual(passed,options)
+        self.assertEqual(argv.count('--log-opt'),len(options))
+
+    def test_unsupported_local_log_opt_rejected_without_leak(self):
+        self.obj['HostConfig']['LogConfig']['Config'] = {'api-token':'do-not-log'}
+        with self.assertRaisesRegex(c.GateError, '^LOG_OPTIONS_UNSUPPORTED$'):
+            c.validate_contract(self.obj,self.old,self.new)
+
+    def test_invalid_local_log_opt_value_rejected(self):
+        self.obj['HostConfig']['LogConfig']['Config'] = {'max-file':'0'}
+        with self.assertRaisesRegex(c.GateError, '^LOG_OPTION_INVALID$'):
+            c.validate_contract(self.obj,self.old,self.new)
+
+    def test_new_log_config_drift_rejected_before_start(self):
+        options = {'max-size':'10m', 'max-file':'5'}
+        candidate = {
+            'Image': c.NEW_IMAGE,
+            'Config': {'Env': self.obj['Config']['Env'], 'User':'10002:10002'},
+            'HostConfig': {
+                'ReadonlyRootfs':True, 'Init':True, 'NetworkMode':'bridge',
+                'RestartPolicy':{'Name':'unless-stopped'},
+                'LogConfig':{'Type':'local','Config':{'max-size':'20m'}},
+                'CapDrop':['ALL'], 'SecurityOpt':['no-new-privileges:true'],
+                'Tmpfs':{'/tmp':'size=16777216,mode=1777'}
+            },
+            'Mounts':[
+                {'Destination':'/state','Name':c.STATE_VOLUME,'RW':True},
+                {'Destination':'/run/secrets/synthetic_provisioning_secret','RW':False}
+            ]
+        }
+        with mock.patch.object(c.Runner, 'inspect', return_value=candidate):
+            with self.assertRaisesRegex(c.GateError,'NEW_LOG_OPTIONS_DIFFERENT'):
+                c.assert_new_container(c.Runner(),self.env,log_options=options)
+
+    def test_old_image_drift_rejected(self):
+        self.obj['Image']='sha256:other'
+        with self.assertRaisesRegex(c.GateError,'OLD_IMAGE_DRIFT'):
+            c.validate_contract(self.obj,self.old,self.new)
+
+    def test_extra_mount_rejected(self):
+        self.obj['Mounts'].append({'Destination':'/etc','Type':'bind'})
+        with self.assertRaisesRegex(c.GateError,'MOUNT_DRIFT'):
+            c.validate_contract(self.obj,self.old,self.new)
+
+    def test_secret_rw_rejected(self):
+        self.obj['Mounts'][1]['RW']=True
+        with self.assertRaisesRegex(c.GateError,'SECRET_MOUNT_DRIFT'):
+            c.validate_contract(self.obj,self.old,self.new)
+
+    def test_caps_rejected(self):
+        self.obj['HostConfig']['CapDrop']=None
+        with self.assertRaisesRegex(c.GateError,'CAP_DROP_DRIFT'):
+            c.validate_contract(self.obj,self.old,self.new)
+
+    def test_unexpected_credential_environment_rejected(self):
+        self.obj['Config']['Env'].append('TOKEN=secret')
+        with self.assertRaisesRegex(c.GateError,'ENV_CONTRACT_DRIFT'):
+            c.validate_contract(self.obj,self.old,self.new)
+
+    def test_new_healthcheck_drift_rejected(self):
+        self.new['Config']['Healthcheck']={'Test':['CMD-SHELL','false']}
+        with self.assertRaisesRegex(c.GateError,'NEW_HEALTHCHECK_DRIFT'):
+            c.validate_contract(self.obj,self.old,self.new)
+
+    def test_valid_sixty_accounts(self):
+        file = self.root/'state.json';file.write_text(json.dumps(identity_state()))
+        self.assertEqual(len(c.identities(file)),60)
+
+    def test_missing_account_rejected(self):
+        file = self.root/'state.json';file.write_text(json.dumps(identity_state(59)))
+        with self.assertRaisesRegex(c.GateError,'STATE_ACCOUNT_COUNT_INVALID'):
+            c.identities(file)
+
+    def test_duplicate_player_id_rejected(self):
+        state=identity_state();state['accounts'][1]['playerId']=state['accounts'][0]['playerId']
+        file=self.root/'state.json';file.write_text(json.dumps(state))
+        with self.assertRaisesRegex(c.GateError,'STATE_DUPLICATE'):
+            c.identities(file)
+
+    def test_env_file_avoids_command_line_secrets(self):
+        args=c.create_argv(Path('/run/secret.env'), str(self.secret), {'/tmp':'size=16777216,mode=1777'})
+        self.assertIn('--env-file',args)
+        self.assertNotIn('secret-1', ' '.join(args))
+        self.assertIn('--read-only',args)
+        self.assertIn('--cap-drop',args)
+        self.assertIn(c.STATE_VOLUME+':/state:rw',args)
+        self.assertNotIn('start',args)
+
+    def test_approval_explicit(self):
+        with self.assertRaisesRegex(c.GateError,'HUMAN_APPROVAL_REQUIRED'):
+            c.main(['--execute'])
+        with self.assertRaisesRegex(c.GateError,'APPROVAL_WITHOUT_EXECUTE'):
+            c.main(['--approval','AUTORIZO-CUTOVER-SINTETICOS-V37'])
+
+    def test_consistent_backup_copy(self):
+        state_dir=self.root/'state';state_dir.mkdir()
+        state_dir.joinpath('synthetic-identities.json').write_text(json.dumps(identity_state()))
+        with mock.patch.object(c,'BACKUP_ROOT',self.root/'backups'):
+            path,digest=c.consistent_backup(state_dir)
+            self.assertEqual(len(c.identities(path)),60)
+            self.assertEqual(c.hash_file(path),digest)
+            self.assertEqual(path.stat().st_mode&0o777,0o600)
+
+    def test_old_running_until_prepared_and_verified(self):
+        runner = SyntheticFakeRunner(self.obj)
+        with mock.patch.object(c, 'ENV_TMP_ROOT', self.root), \
+             mock.patch.object(c, 'consistent_backup', return_value=(self.root/'consistent.json', 'a'*64)), \
+             mock.patch.object(c, 'assert_new_container') as check_new, \
+             mock.patch.object(c, 'health_smoke') as health:
+            c.cutover(runner, self.env, str(self.secret), {'/tmp':'size=16777216,mode=1777'}, self.root)
+        self.assertTrue(health.called)
+        self.assertTrue(check_new.called)
+        self.assertEqual(runner.names[c.NAME], 'new')
+        self.assertEqual(runner.names[c.OLD_PARKED], 'old')
+        self.assertEqual(runner.states['old'], 'exited')
+        self.assertEqual(runner.states['new'], 'running')
+        self.assertLess(runner.ops.index('create'), runner.ops.index('stop'))
+        self.assertLess(runner.ops.index('inspect-prepared'), runner.ops.index('stop'))
+
+    def test_rollback_if_new_start_fails(self):
+        runner = SyntheticFakeRunner(self.obj, fail_new_start=True)
+        with mock.patch.object(c, 'ENV_TMP_ROOT', self.root), \
+             mock.patch.object(c, 'consistent_backup', return_value=(self.root/'consistent.json', 'a'*64)), \
+             mock.patch.object(c, 'assert_new_container'), \
+             mock.patch.object(c, 'health_smoke'):
+            with self.assertRaises(c.GateError):
+                c.cutover(runner, self.env, str(self.secret), {'/tmp':'size=16777216,mode=1777'}, self.root)
+        self.assertEqual(runner.names[c.NAME], 'old')
+        self.assertEqual(runner.states['old'], 'running')
+        self.assertEqual(runner.names[c.FAILED_PARKED], 'new')
+        self.assertEqual(runner.states['new'], 'created')
+
+    def test_rollback_if_new_smoke_fails(self):
+        runner = SyntheticFakeRunner(self.obj)
+        with mock.patch.object(c, 'ENV_TMP_ROOT', self.root), \
+             mock.patch.object(c, 'consistent_backup', return_value=(self.root/'consistent.json', 'a'*64)), \
+             mock.patch.object(c, 'assert_new_container'), \
+             mock.patch.object(c, 'health_smoke', side_effect=c.GateError('SMOKE_FAILED')):
+            with self.assertRaises(c.GateError):
+                c.cutover(runner, self.env, str(self.secret), {'/tmp':'size=16777216,mode=1777'}, self.root)
+        self.assertEqual(runner.names[c.NAME], 'old')
+        self.assertEqual(runner.states['old'], 'running')
+        self.assertEqual(runner.names[c.FAILED_PARKED], 'new')
+        self.assertEqual(runner.states['new'], 'exited')
+        self.assertLess(runner.ops.index('stop-new'), runner.ops.index('start-old'))
+
+    def test_rollback_if_final_backup_fails(self):
+        runner = SyntheticFakeRunner(self.obj)
+        with mock.patch.object(c, 'ENV_TMP_ROOT', self.root), \
+             mock.patch.object(c, 'consistent_backup', side_effect=c.GateError('BACKUP_FAILED')), \
+             mock.patch.object(c, 'assert_new_container'):
+            with self.assertRaises(c.GateError):
+                c.cutover(runner, self.env, str(self.secret), {'/tmp':'size=16777216,mode=1777'}, self.root)
+        self.assertEqual(runner.names[c.NAME], 'old')
+        self.assertEqual(runner.states['old'], 'running')
+        self.assertEqual(runner.names[c.FAILED_PARKED], 'new')
+        self.assertEqual(runner.states['new'], 'created')
+
+
+class SyntheticFakeRunner:
+    def __init__(self, old_config, fail_new_start=False):
+        self.names={c.NAME:'old'}
+        self.states={'old':'running'}
+        self.ops=[]
+        self.fail_new_start=fail_new_start
+        self.old_config=old_config
+
+    def inspect(self,name,kind='container'):
+        self.ops.append('inspect-prepared' if name == c.NEW_PREPARED else 'inspect-other')
+        token=self.names[name]
+        return {'State':{'Status':self.states[token],
+                         'Health':{'Status':'healthy' if token=='old' else 'starting'}},
+                'HostConfig':self.old_config['HostConfig'] if token=='old' else {}}
+
+    def docker(self,*args):
+        if args[0]=='create':
+            name=args[args.index('--name')+1]
+            assert name not in self.names
+            self.names[name]='new'
+            self.states['new']='created'
+            self.ops.append('create')
+        elif args[0]=='stop':
+            target=args[-1]
+            token=self.names[target]
+            self.states[token]='exited'
+            self.ops.append('stop-new' if token=='new' else 'stop')
+        elif args[0]=='start':
+            target=args[-1]
+            token=self.names[target]
+            if token == 'new' and self.fail_new_start:
+                raise c.GateError('FAKE_START_NEW_FAILED')
+            self.states[token]='running'
+            self.ops.append('start-new' if token=='new' else 'start-old')
+        elif args[0]=='rename':
+            _,src,dst=args
+            self.names[dst]=self.names.pop(src)
+            self.ops.append('rename-'+src)
+        else:
+            raise AssertionError(args)
+        return ''
+
+
+if __name__=='__main__':
+    unittest.main()

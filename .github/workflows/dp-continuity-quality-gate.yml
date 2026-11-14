@@ -72,6 +72,135 @@ jobs:
             app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
 
+  synthetic-image-build-preflight:
+    name: Synthetic image build (no push, no deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The pull_request default checks out GitHub's synthetic merge commit.
+          # Pin the artifact to the exact reviewed head SHA instead.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Restrict container build context
+        run: cp Dockerfile.synthetic-population.dockerignore .dockerignore
+      - name: Build candidate image without credentials or registry publishing
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          image="dp-synthetic:sha-${sha:0:12}"
+          docker build --file Dockerfile.synthetic-population --tag "$image" .
+      - name: Verify image runtime contract offline
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          image="dp-synthetic:sha-${sha:0:12}"
+          user=$(docker image inspect --format '{{.Config.User}}' "$image")
+          test "$user" = '10002:10002'
+          ports=$(docker image inspect --format '{{json .Config.ExposedPorts}}' "$image")
+          test "$ports" = 'null' || test "$ports" = '{}'
+          entry=$(docker image inspect --format '{{json .Config.Entrypoint}}' "$image")
+          test "$entry" = '["/opt/domino-synthetic/bin/miniproduction-client"]'
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" = 'linux/amd64'
+          docker run --rm --network none --entrypoint /bin/sh "$image" \
+            -c 'test -x /opt/domino-synthetic/bin/miniproduction-client && test -d /state'
+          echo 'SYNTHETIC_IMAGE_BUILD_PREFLIGHT=PASS'
+          echo 'REGISTRY_PUSH=NONE'
+          echo 'PRODUCTION_CHANGES=NONE'
+      - name: Export integrity-checked candidate for controlled AWS staging
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          image="dp-synthetic:sha-${sha:0:12}"
+          mkdir -p dist
+          archive="dp-synthetic-${sha:0:12}.docker.tar.gz"
+          docker save "$image" | gzip -n -1 > "dist/$archive"
+          gzip -t "dist/$archive"
+          {
+            printf 'SOURCE_COMMIT=%s\n' "$sha"
+            printf 'IMAGE_TAG=%s\n' "$image"
+            printf 'IMAGE_ID=%s\n' "$(docker image inspect --format '{{.Id}}' "$image")"
+            printf 'IMAGE_PLATFORM=%s\n' "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")"
+          } > dist/manifest.txt
+          ( cd dist && sha256sum "$archive" > SHA256SUMS )
+          echo 'CANDIDATE_ARCHIVE_VERIFIED=PASS'
+          echo 'NO_AWS_OR_REGISTRY_DEPLOY=PASS'
+      - name: Verify archived image using the staging PowerShell contract
+        shell: pwsh
+        run: |
+          & ./scripts/Stage-DPSyntheticCandidate.ps1 -ArtifactDirectory ./dist
+      - name: Publish immutable build candidate artifact (7 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dp-synthetic-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+
+  synthetic-cutover-offline:
+    name: Synthetic cutover rollback rehearsal (offline only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and test cutover transaction without Docker or AWS
+        run: |
+          set -euo pipefail
+          python3 -m py_compile deploy/release/dp_synthetic_cutover.py
+          python3 -m unittest discover -s tests/ops -p 'test_dp_synthetic_cutover.py' -v
+          python3 -m py_compile deploy/release/dp_server_v37_allowlist_cutover.py
+          python3 -m unittest discover -s tests/ops -p 'test_dp_server_v37_allowlist_cutover.py' -v
+          echo 'SERVER_ALLOWLIST_OFFLINE_ROLLBACK=PASS'
+          echo 'CUTOVER_MOCK_REHEARSAL=PASS'
+          echo 'PRODUCTION_CHANGES=NONE'
+
+  release-readiness-powershell:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse PowerShell operational scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($script in @(
+              'scripts/Invoke-DPReleaseReadiness.ps1',
+              'scripts/Release-DominoPE.ps1',
+              'scripts/Invoke-DPContinuityQa.ps1',
+              'scripts/Invoke-DPSyntheticCutover.ps1',
+              'scripts/Invoke-DPServerV37AllowlistCutover.ps1'
+          )) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script).Path, [ref]$tokens, [ref]$parseErrors
+            )
+            if ($parseErrors.Count -ne 0) {
+              $parseErrors | ForEach-Object { Write-Error $_.Message }
+              throw "PS_PARSE_FAILED=$script"
+            }
+          }
+      - name: Execute safe offline release readiness check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path (Join-Path $HOME 'Downloads') | Out-Null
+          & .\scripts\Invoke-DPReleaseReadiness.ps1 -SkipRemote
+      - name: Verify SSH Bash payload on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\scripts\Invoke-DPReleaseReadiness.ps1 -CheckTransportOnly
+          if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+            throw 'POWERSHELL51_REMOTE_PAYLOAD_CHECK_FAILED'
+          }
+      - name: Test release DEX scanning on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\tests\ops\Test-DPReleaseDexScan.ps1
+
   android-instrumentation:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
