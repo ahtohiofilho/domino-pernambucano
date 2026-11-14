@@ -125,6 +125,10 @@ jobs:
           ( cd dist && sha256sum "$archive" > SHA256SUMS )
           echo 'CANDIDATE_ARCHIVE_VERIFIED=PASS'
           echo 'NO_AWS_OR_REGISTRY_DEPLOY=PASS'
+      - name: Verify archived image using the staging PowerShell contract
+        shell: pwsh
+        run: |
+          & ./scripts/Stage-DPSyntheticCandidate.ps1 -ArtifactDirectory ./dist
       - name: Publish immutable build candidate artifact (7 days)
         uses: actions/upload-artifact@v4
         with:
