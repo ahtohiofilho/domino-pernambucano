@@ -126,6 +126,32 @@ def assert_public_api() -> None:
             raise GateError("API_NOT_READY") from None
 
 
+def validated_log_options(log_config: dict) -> dict[str, str]:
+    """Preserve supported Docker local-driver options without printing their values.
+
+    Local driver: max-size, max-file, compress. Docker generic delivery options:
+    mode and max-buffer-size. Unknown or malformed options are a hard gate.
+    """
+    options = log_config.get("Config") or {}
+    demand(isinstance(options, dict), "LOG_OPTIONS_UNSUPPORTED")
+    allowed = {"max-size", "max-file", "compress", "mode", "max-buffer-size"}
+    demand(set(options).issubset(allowed), "LOG_OPTIONS_UNSUPPORTED")
+    result = {}
+    for key, value in options.items():
+        demand(isinstance(value, str), "LOG_OPTION_INVALID")
+        if key in ("max-size", "max-buffer-size"):
+            demand(re.fullmatch(r"[1-9][0-9]*(?:[kKmMgGtTpP](?:[iI]?[bB])?)?", value) is not None,
+                   "LOG_OPTION_INVALID")
+        elif key == "max-file":
+            demand(re.fullmatch(r"[1-9][0-9]*", value) is not None, "LOG_OPTION_INVALID")
+        elif key == "compress":
+            demand(value in ("true", "false"), "LOG_OPTION_INVALID")
+        elif key == "mode":
+            demand(value in ("blocking", "non-blocking"), "LOG_OPTION_INVALID")
+        result[key] = value
+    return result
+
+
 def validate_contract(container: dict, old_image: dict, new_image: dict) -> tuple[dict, str, dict]:
     cfg = container["Config"]
     host = container["HostConfig"]
@@ -148,7 +174,7 @@ def validate_contract(container: dict, old_image: dict, new_image: dict) -> tupl
     demand(set((container["NetworkSettings"].get("Networks") or {}).keys()) == {"bridge"}, "NETWORKS_DRIFT")
     demand((host.get("RestartPolicy") or {}).get("Name") == "unless-stopped", "RESTART_POLICY_DRIFT")
     demand((host.get("LogConfig") or {}).get("Type") == "local", "LOG_DRIVER_DRIFT")
-    demand(not ((host.get("LogConfig") or {}).get("Config") or {}), "LOG_OPTIONS_UNSUPPORTED")
+    validated_log_options(host.get("LogConfig") or {})
     demand(host.get("PortBindings") in (None, {}), "PORT_BINDINGS_DRIFT")
     demand(not host.get("Devices"), "DEVICES_DRIFT")
     demand(not host.get("Ulimits"), "ULIMITS_DRIFT")
@@ -249,9 +275,10 @@ def consistent_backup(state_dir: Path) -> tuple[Path, str]:
         raise
 
 
-def create_argv(env_file: Path, secret_source: str, tmpfs: dict, container_name: str = NEW_PREPARED) -> list[str]:
+def create_argv(env_file: Path, secret_source: str, tmpfs: dict,
+                container_name: str = NEW_PREPARED, log_options: dict | None = None) -> list[str]:
     # Never include environment values in command-line args; env_file is root-only.
-    return [
+    argv = [
         "create", "--name", container_name,
         "--network", "bridge", "--init", "--read-only",
         "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
@@ -262,11 +289,14 @@ def create_argv(env_file: Path, secret_source: str, tmpfs: dict, container_name:
         "--volume", STATE_VOLUME + ":/state:rw",
         "--mount", "type=bind,src=" + secret_source + ",dst=/run/secrets/synthetic_provisioning_secret,readonly",
         "--env-file", str(env_file),
-        NEW_TAG,
     ]
+    for key, value in sorted((log_options or {}).items()):
+        argv.extend(("--log-opt", key + "=" + value))
+    return argv + [NEW_TAG]
 
 
-def assert_new_container(r: Runner, old_env: dict, name: str = NEW_PREPARED) -> None:
+def assert_new_container(r: Runner, old_env: dict, name: str = NEW_PREPARED,
+                         log_options: dict | None = None) -> None:
     new = r.inspect(name)
     demand(new["Image"] == NEW_IMAGE, "NEW_CONTAINER_IMAGE_MISMATCH")
     keys = {}
@@ -282,6 +312,8 @@ def assert_new_container(r: Runner, old_env: dict, name: str = NEW_PREPARED) -> 
     demand(new["HostConfig"]["NetworkMode"] == "bridge", "NEW_NETWORK_INVALID")
     demand(new["HostConfig"]["RestartPolicy"]["Name"] == "unless-stopped", "NEW_RESTART_INVALID")
     demand(new["HostConfig"]["LogConfig"]["Type"] == "local", "NEW_LOG_DRIVER_INVALID")
+    demand((new["HostConfig"]["LogConfig"].get("Config") or {}) == (log_options or {}),
+           "NEW_LOG_OPTIONS_DIFFERENT")
     demand(new["HostConfig"].get("CapDrop") == ["ALL"], "NEW_CAP_DROP_INVALID")
     demand(new["HostConfig"].get("SecurityOpt") == ["no-new-privileges:true"], "NEW_SECURITY_INVALID")
     demand(set((new["HostConfig"].get("Tmpfs") or {}).keys()) == {"/tmp"}, "NEW_TMPFS_INVALID")
@@ -348,6 +380,10 @@ def cutover(r: Runner, env: dict, secret: str, tmpfs: dict, state_dir: Path) -> 
     prepared_exists = False
     new_named = False
     try:
+        # Preserve the actual logging options from the still-running container.
+        log_config = r.inspect(NAME)["HostConfig"].get("LogConfig") or {}
+        demand(log_config.get("Type") == "local", "LOG_DRIVER_DRIFT")
+        log_options = validated_log_options(log_config)
         # Create and inspect the new configuration BEFORE touching active actors.
         fd, name = tempfile.mkstemp(prefix="dp-synthetic-env-", dir=ENV_TMP_ROOT)
         try:
@@ -355,11 +391,11 @@ def cutover(r: Runner, env: dict, secret: str, tmpfs: dict, state_dir: Path) -> 
             with os.fdopen(fd, "w", encoding="utf-8") as out:
                 for key, value in sorted(env.items()):
                     out.write(key + "=" + value + "\n")
-            r.docker(*create_argv(Path(name), secret, tmpfs))
+            r.docker(*create_argv(Path(name), secret, tmpfs, log_options=log_options))
             prepared_exists = True
         finally:
             Path(name).unlink(missing_ok=True)
-        assert_new_container(r, env)
+        assert_new_container(r, env, log_options=log_options)
         demand(r.inspect(NEW_PREPARED)["State"]["Status"] == "created", "NEW_STARTED_UNEXPECTEDLY")
         stdout("NEW_CONTAINER_PREPARED_NOT_STARTED=PASS")
 
