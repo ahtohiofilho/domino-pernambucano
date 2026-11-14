@@ -191,6 +191,11 @@ jobs:
           if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
             throw 'POWERSHELL51_REMOTE_PAYLOAD_CHECK_FAILED'
           }
+      - name: Test release DEX scanning on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\tests\ops\Test-DPReleaseDexScan.ps1
 
   android-instrumentation:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
