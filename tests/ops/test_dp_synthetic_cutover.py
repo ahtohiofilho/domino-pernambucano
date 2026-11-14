@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -63,6 +64,34 @@ class GateTests(unittest.TestCase):
         self.secret = self.root/'secret'
         self.secret.write_text('private')
         self.obj,self.old,self.new,self.env = baseline(self.secret)
+
+    def test_cli_success_exit_code_does_not_trigger_failure_handler(self):
+        # Previously, SystemExit(0) was caught by except BaseException
+        # and turned into exit 1 even after CUTOVER_PREFLIGHT=PASS.
+        with mock.patch.object(c, 'main', return_value=0):
+            self.assertEqual(c.cli(), 0)
+
+    def test_cli_success_process_exit_status(self):
+        # Exercise the true OS process exit code without connecting to Docker/AWS.
+        code = (
+            'import sys; sys.path.insert(0, ' + repr(str(Path(c.__file__).parent)) + '); '
+            'import dp_synthetic_cutover as c; c.main = lambda: 0; '
+            'raise SystemExit(c.cli())'
+        )
+        completed = subprocess.run(
+            [sys.executable, '-c', code], capture_output=True, text=True, check=False
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertNotIn('CUTOVER_FAILED=', completed.stderr)
+
+    def test_cli_rejected_approval_returns_failure_without_docker(self):
+        completed = subprocess.run(
+            [sys.executable, str(Path(c.__file__)), '--approval', 'UNAUTHORIZED'],
+            capture_output=True, text=True, check=False
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn('APPROVAL_WITHOUT_EXECUTE', completed.stderr)
+        self.assertNotIn('Traceback', completed.stderr)
 
     def test_valid_contract(self):
         env,secret,tmpfs = c.validate_contract(self.obj,self.old,self.new)

@@ -449,12 +449,18 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def cli() -> int:
+    """Return a process exit code; never catch normal SystemExit(0) as a failure."""
     try:
-        raise SystemExit(main())
+        return main()
     except GateError as exc:
         print("CUTOVER_GATE_FAILED=" + str(exc), file=sys.stderr)
-        raise SystemExit(1)
-    except BaseException:
+        return 1
+    except Exception:
+        # Docker inspect/environment may contain secrets; never print tracebacks here.
         print("CUTOVER_FAILED=CHECK_REMOTE_TRANSACTION_LOG", file=sys.stderr)
-        raise SystemExit(1)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(cli())
